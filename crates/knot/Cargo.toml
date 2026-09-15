@@ -10,6 +10,7 @@ default-run = "knot"
 [dependencies]
 knot-core = { path = "../knot-core" }
 knot-agents = { path = "../knot-agents" }
+knot-git = { path = "../knot-git" }
 knot-activity = { path = "../knot-activity" }
 knot-discovery = { path = "../knot-discovery" }
 knot-messaging = { path = "../knot-messaging" }

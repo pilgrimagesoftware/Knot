@@ -3,6 +3,8 @@
 //!
 //! The `settings` module implements `openspec/specs/settings-persistence/spec.md`.
 
+rust_i18n::i18n!("locales", fallback = "en");
+
 pub mod consts;
 pub mod error;
 pub mod l10n;
