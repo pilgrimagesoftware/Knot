@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+mod dashboard;
+
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -24,6 +26,7 @@ use gpui_kit::{
     rgb, size,
 };
 use knot_activity::EventSink;
+use knot_git::Repository;
 use knot_mcp::ToolCatalog;
 use knot_messaging::{DeliveryEvent, QueuedNotifier};
 use knot_terminal::{PtyTransport, SessionConfig, SessionPlan, TerminalSession};
@@ -193,7 +196,7 @@ struct AgentRow {
 
 /// User-facing label for the agent's automatic state-machine state, matching
 /// the Swift reference's raw strings (not the Rust enum names).
-fn state_label(state: knot_agents::AgentState) -> &'static str {
+pub(crate) fn state_label(state: knot_agents::AgentState) -> &'static str {
     match state {
         knot_agents::AgentState::Idle => "Idle",
         knot_agents::AgentState::Running => "Working",
@@ -205,7 +208,7 @@ fn state_label(state: knot_agents::AgentState) -> &'static str {
 /// Status-dot color for the agent's automatic state. Diverges from the
 /// Swift reference (which uses red for both input and error) by giving
 /// "awaiting input" its own blue, since it isn't a failure state.
-fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
+pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
     match state {
         knot_agents::AgentState::Idle => rgb(0x22C55E).into(),
         knot_agents::AgentState::Running => rgb(0xF97316).into(),
@@ -948,6 +951,14 @@ fn manager_window_options(cx: &App) -> WindowOptions {
 }
 
 fn workspace_window_options(cx: &App) -> WindowOptions {
+    WindowOptions {
+        window_bounds: Some(WindowBounds::centered(size(px(960.), px(640.)), cx)),
+        window_min_size: Some(size(px(760.), px(520.))),
+        ..TitleBar::window_options()
+    }
+}
+
+fn command_center_window_options(cx: &App) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(WindowBounds::centered(size(px(960.), px(640.)), cx)),
         window_min_size: Some(size(px(760.), px(520.))),
@@ -2487,11 +2498,23 @@ impl Render for SettingsWindow {
     }
 }
 
+/// Which peer view a `WorkspaceWindow` currently shows - the dashboard is a
+/// toggleable view of the same window's content, not a dialog or a
+/// separate window (see `openspec/changes/dashboard-view/design.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum WorkspaceViewMode {
+    #[default]
+    Terminal,
+    Dashboard,
+}
+
 struct WorkspaceWindow {
     store: Arc<Mutex<knot_agents::AgentStore>>,
     settings: knot_core::Settings,
     workspace_id: Uuid,
     selected_agent: Option<Uuid>,
+    view_mode: WorkspaceViewMode,
+    dashboard_sort: dashboard::DashboardSort,
     new_agent_name_input: Entity<InputState>,
     new_agent_folder_input: Entity<InputState>,
     show_new_agent: bool,
@@ -2503,7 +2526,21 @@ impl WorkspaceWindow {
         store: Arc<Mutex<knot_agents::AgentStore>>,
         settings: knot_core::Settings,
         workspace_id: Uuid,
-        cx: &mut Context<WorkspaceManager>,
+        cx: &mut App,
+    ) {
+        Self::open_with_selection(store, settings, workspace_id, None, cx);
+    }
+
+    /// Like `open`, but overrides the agent that would otherwise be picked
+    /// by `agent_selection_for_workspace` - used when a caller (e.g. a
+    /// Command Center card) already knows which agent the user wants to
+    /// land on.
+    fn open_with_selection(
+        store: Arc<Mutex<knot_agents::AgentStore>>,
+        settings: knot_core::Settings,
+        workspace_id: Uuid,
+        select_agent: Option<Uuid>,
+        cx: &mut App,
     ) {
         let workspace_name = store
             .lock()
@@ -2527,15 +2564,19 @@ impl WorkspaceWindow {
                 cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
             let new_agent_folder_input =
                 cx.new(|cx| InputState::new(window, cx).placeholder("Agent folder path"));
-            let selected_agent = store
-                .lock()
-                .ok()
-                .and_then(|store| agent_selection_for_workspace(&store, workspace_id));
+            let selected_agent = select_agent.or_else(|| {
+                store
+                    .lock()
+                    .ok()
+                    .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
+            });
             let view = cx.new(|_| WorkspaceWindow {
                 store,
                 settings,
                 workspace_id,
                 selected_agent,
+                view_mode: WorkspaceViewMode::Terminal,
+                dashboard_sort: dashboard::DashboardSort::default(),
                 new_agent_name_input,
                 new_agent_folder_input,
                 show_new_agent: false,
@@ -2596,49 +2637,69 @@ impl WorkspaceWindow {
     }
 
     fn open_new_agent_dialog(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let store = Arc::clone(&self.store);
-        let settings = self.settings.clone();
-        let workspace_id = self.workspace_id;
-        let options = agent_window_options(cx);
-        let _ = cx.open_window(options, move |window, cx| {
-            let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Name"));
-            let shell_command_input =
-                cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
-            let avatar_input = cx.new(|cx| InputState::new(window, cx).default_value("🤖"));
-            let view = cx.new(|cx| {
-                let avatar_subscription = cx.subscribe_in(
-                    &avatar_input,
-                    window,
-                    |this: &mut AgentEditor, avatar_input, event, window, cx| {
-                        if matches!(event, InputEvent::Change) {
-                            this.clamp_avatar_to_one_character(avatar_input, window, cx);
-                        }
-                    },
-                );
-                let name_subscription =
-                    cx.subscribe(&name_input, |_: &mut AgentEditor, _, event, cx| {
-                        if matches!(event, InputEvent::Change) {
-                            cx.notify();
-                        }
-                    });
-                AgentEditor {
-                    store,
-                    settings,
-                    workspace_id,
-                    name_input,
-                    shell_command_input,
-                    avatar_input,
-                    _avatar_subscription: avatar_subscription,
-                    _name_subscription: name_subscription,
-                    folder_path: String::new(),
-                    agent_type: "claude".to_string(),
-                    persona_id: None,
-                    error: None,
-                }
-            });
-            cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-        });
+        open_agent_editor(
+            Arc::clone(&self.store),
+            self.settings.clone(),
+            self.workspace_id,
+            None,
+            None,
+            cx,
+        );
     }
+}
+
+/// Opens the agent-creation dialog, optionally prefilled the way the Swift
+/// reference's `addAgent(to:)` does when launched from a dashboard's "Add
+/// Agent" tile: folder copied from an existing agent in the workspace, new
+/// agent inserted after the workspace's last agent.
+fn open_agent_editor(
+    store: Arc<Mutex<knot_agents::AgentStore>>,
+    settings: knot_core::Settings,
+    workspace_id: Uuid,
+    prefill_folder: Option<String>,
+    insert_after: Option<Uuid>,
+    cx: &mut App,
+) {
+    let options = agent_window_options(cx);
+    let _ = cx.open_window(options, move |window, cx| {
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Name"));
+        let shell_command_input =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
+        let avatar_input = cx.new(|cx| InputState::new(window, cx).default_value("🤖"));
+        let view = cx.new(|cx| {
+            let avatar_subscription = cx.subscribe_in(
+                &avatar_input,
+                window,
+                |this: &mut AgentEditor, avatar_input, event, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.clamp_avatar_to_one_character(avatar_input, window, cx);
+                    }
+                },
+            );
+            let name_subscription =
+                cx.subscribe(&name_input, |_: &mut AgentEditor, _, event, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        cx.notify();
+                    }
+                });
+            AgentEditor {
+                store,
+                settings,
+                workspace_id,
+                name_input,
+                shell_command_input,
+                avatar_input,
+                _avatar_subscription: avatar_subscription,
+                _name_subscription: name_subscription,
+                folder_path: prefill_folder.unwrap_or_default(),
+                agent_type: "claude".to_string(),
+                persona_id: None,
+                insert_after,
+                error: None,
+            }
+        });
+        cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+    });
 }
 
 struct AgentEditor {
@@ -2653,6 +2714,7 @@ struct AgentEditor {
     folder_path: String,
     agent_type: String,
     persona_id: Option<Uuid>,
+    insert_after: Option<Uuid>,
     error: Option<String>,
 }
 
@@ -2692,6 +2754,7 @@ impl AgentEditor {
                     agent_type: (!agent_type.is_empty()).then_some(agent_type),
                     shell_command: (!shell_command.is_empty()).then_some(shell_command),
                     persona_id: self.persona_id,
+                    insert_after: self.insert_after,
                     ..Default::default()
                 },
             );
@@ -3030,6 +3093,8 @@ impl Render for WorkspaceWindow {
             (workspace.name.clone(), agents)
         };
 
+        let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
+
         let agent_rows = agents.into_iter().map(
             |(id, avatar, name, folder, state, is_shell, header_title, persona_name)| {
                 let folder_name = PathBuf::from(&folder)
@@ -3117,6 +3182,147 @@ impl Render for WorkspaceWindow {
             })
             .unwrap_or_else(|| "Choose an agent from the sidebar".to_string());
 
+        let dashboard_workspace = is_dashboard.then(|| {
+            let store = self.store.lock().unwrap();
+            let workspace = store
+                .workspaces()
+                .iter()
+                .find(|workspace| workspace.id == self.workspace_id);
+            let (name, color_hex, dash_agents) = match workspace {
+                Some(workspace) => {
+                    let dash_agents = workspace
+                        .agent_ids
+                        .iter()
+                        .filter_map(|id| store.agent(*id))
+                        .filter(|agent| !agent.is_companion)
+                        .map(|agent| {
+                            let folder_name = PathBuf::from(&agent.folder)
+                                .file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| agent.folder.clone());
+                            let git_stats = Repository::open(&agent.folder).diff_stats().ok();
+                            dashboard::DashboardAgent {
+                                id: agent.id,
+                                avatar: agent
+                                    .avatar
+                                    .graphemes(true)
+                                    .next()
+                                    .unwrap_or("🤖")
+                                    .to_string(),
+                                name: agent.name.clone(),
+                                folder_name,
+                                state: agent.state,
+                                is_shell: agent.is_shell(),
+                                header_title: agent.header_title().to_string(),
+                                git_stats,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    (
+                        workspace.name.clone(),
+                        workspace.color_hex.clone(),
+                        dash_agents,
+                    )
+                }
+                None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
+            };
+            dashboard::DashboardWorkspace {
+                id: self.workspace_id,
+                name,
+                color_hex,
+                agents: self.dashboard_sort.sorted(dash_agents),
+            }
+        });
+
+        let weak = cx.entity().downgrade();
+
+        let dashboard_content = dashboard_workspace.map(|dashboard_workspace| {
+            let on_agent_tap = {
+                let weak = weak.clone();
+                move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                    if let Some(entity) = weak.upgrade() {
+                        entity.update(app, |view, cx| {
+                            view.selected_agent = Some(id);
+                            view.view_mode = WorkspaceViewMode::Terminal;
+                            cx.notify();
+                        });
+                    }
+                }
+            };
+            let on_workspace_nav = |_id: Uuid, _window: &mut Window, _app: &mut gpui_kit::App| {};
+            let on_add_agent = {
+                let weak = weak.clone();
+                let store = Arc::clone(&self.store);
+                move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                    let (folder, insert_after) = store
+                        .lock()
+                        .ok()
+                        .and_then(|store| {
+                            store
+                                .workspaces()
+                                .iter()
+                                .find(|workspace| workspace.id == workspace_id)
+                                .map(|workspace| {
+                                    let folder = workspace
+                                        .agent_ids
+                                        .iter()
+                                        .filter_map(|id| store.agent(*id))
+                                        .next()
+                                        .map(|agent| agent.folder.clone());
+                                    (folder, workspace.agent_ids.last().copied())
+                                })
+                        })
+                        .unwrap_or((None, None));
+                    if let Some(entity) = weak.upgrade() {
+                        entity.update(app, |view, cx| {
+                            open_agent_editor(
+                                Arc::clone(&view.store),
+                                view.settings.clone(),
+                                workspace_id,
+                                folder,
+                                insert_after,
+                                cx,
+                            );
+                        });
+                    }
+                }
+            };
+
+            v_flex()
+                .size_full()
+                .child(
+                    h_flex()
+                        .h(px(56.))
+                        .px_5()
+                        .items_center()
+                        .justify_between()
+                        .border_b_1()
+                        .border_color(cx.theme().border)
+                        .child(div().text_lg().child(knot_core::l10n::t("dashboard.title")))
+                        .child(dashboard::sort_picker(self.dashboard_sort, {
+                            let weak = weak.clone();
+                            move |sort, _window, app| {
+                                if let Some(entity) = weak.upgrade() {
+                                    entity.update(app, |view, cx| {
+                                        view.dashboard_sort = sort;
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                        })),
+                )
+                .child(div().size_full().p_6().overflow_hidden().child(
+                    dashboard::workspace_section(
+                        dashboard_workspace,
+                        false,
+                        on_agent_tap,
+                        on_workspace_nav,
+                        on_add_agent,
+                    ),
+                ))
+                .into_any_element()
+        });
+
         v_flex()
             .size_full()
             .child(
@@ -3166,13 +3372,25 @@ impl Render for WorkspaceWindow {
                                             )),
                                     )
                                     .child(
-                                        // Not yet wired - see the `dashboard-view`
-                                        // OpenSpec change for the real dashboard.
                                         SettingsWindow::icon_button(
                                             "workspace-dashboard",
                                             "icons/layout-dashboard.svg",
                                             "Dashboard",
                                             false,
+                                        )
+                                        .selected(is_dashboard)
+                                        .on_click(
+                                            cx.listener(|view, _: &ClickEvent, _window, cx| {
+                                                view.view_mode = match view.view_mode {
+                                                    WorkspaceViewMode::Terminal => {
+                                                        WorkspaceViewMode::Dashboard
+                                                    }
+                                                    WorkspaceViewMode::Dashboard => {
+                                                        WorkspaceViewMode::Terminal
+                                                    }
+                                                };
+                                                cx.notify();
+                                            }),
                                         ),
                                     ),
                             ),
@@ -3180,40 +3398,262 @@ impl Render for WorkspaceWindow {
                     .child(
                         v_flex()
                             .flex_1()
-                            .child(
-                                h_flex()
-                                    .h(px(56.))
-                                    .px_5()
-                                    .items_center()
-                                    .border_b_1()
-                                    .border_color(cx.theme().border)
-                                    .child(
-                                        v_flex()
-                                            .gap_1()
-                                            .child(div().text_lg().child(selected_title))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Terminal"),
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                div()
+                            .child(dashboard_content.unwrap_or_else(|| {
+                                v_flex()
                                     .size_full()
-                                    .p_6()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .bg(cx.theme().muted)
+                                    .child(
+                                        h_flex()
+                                            .h(px(56.))
+                                            .px_5()
+                                            .items_center()
+                                            .border_b_1()
+                                            .border_color(cx.theme().border)
+                                            .child(
+                                                v_flex()
+                                                    .gap_1()
+                                                    .child(div().text_lg().child(selected_title))
+                                                    .child(
+                                                        div()
+                                                            .text_sm()
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .child("Terminal"),
+                                                    ),
+                                            ),
+                                    )
                                     .child(
                                         div()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Terminal display will appear here"),
-                                    ),
-                            ),
+                                            .size_full()
+                                            .p_6()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .bg(cx.theme().muted)
+                                            .child(
+                                                div()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child("Terminal display will appear here"),
+                                            ),
+                                    )
+                                    .into_any_element()
+                            })),
                     ),
+            )
+    }
+}
+
+/// The global dashboard window - shows every workspace's agents, reusing
+/// the same grid as the workspace-scoped in-place view (see
+/// `openspec/changes/dashboard-view/design.md`).
+struct CommandCenterWindow {
+    store: Arc<Mutex<knot_agents::AgentStore>>,
+    settings: knot_core::Settings,
+    dashboard_sort: dashboard::DashboardSort,
+}
+
+impl CommandCenterWindow {
+    fn open(
+        store: Arc<Mutex<knot_agents::AgentStore>>,
+        settings: knot_core::Settings,
+        cx: &mut App,
+    ) {
+        let options = command_center_window_options(cx);
+        if let Err(error) = cx.open_window(options, move |window, cx| {
+            window.set_window_title(&knot_core::l10n::t("dashboard.command_center"));
+            let view = cx.new(|_| CommandCenterWindow {
+                store,
+                settings,
+                dashboard_sort: dashboard::DashboardSort::default(),
+            });
+            cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+        }) {
+            eprintln!("failed to open command center window: {error}");
+        }
+    }
+
+    /// Folder + insert-after prefill for a workspace's "Add Agent" tile,
+    /// matching the Swift reference's `addAgent(to:)`.
+    fn add_agent_prefill(&self, workspace_id: Uuid) -> (Option<String>, Option<Uuid>) {
+        self.store
+            .lock()
+            .ok()
+            .and_then(|store| {
+                store
+                    .workspaces()
+                    .iter()
+                    .find(|workspace| workspace.id == workspace_id)
+                    .map(|workspace| {
+                        let folder = workspace
+                            .agent_ids
+                            .iter()
+                            .filter_map(|id| store.agent(*id))
+                            .next()
+                            .map(|agent| agent.folder.clone());
+                        (folder, workspace.agent_ids.last().copied())
+                    })
+            })
+            .unwrap_or((None, None))
+    }
+}
+
+impl Render for CommandCenterWindow {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dashboard_workspaces = {
+            let store = self.store.lock().unwrap();
+            store
+                .workspaces()
+                .iter()
+                .map(|workspace| {
+                    let dash_agents = workspace
+                        .agent_ids
+                        .iter()
+                        .filter_map(|id| store.agent(*id))
+                        .filter(|agent| !agent.is_companion)
+                        .map(|agent| {
+                            let folder_name = PathBuf::from(&agent.folder)
+                                .file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| agent.folder.clone());
+                            let git_stats = Repository::open(&agent.folder).diff_stats().ok();
+                            dashboard::DashboardAgent {
+                                id: agent.id,
+                                avatar: agent
+                                    .avatar
+                                    .graphemes(true)
+                                    .next()
+                                    .unwrap_or("🤖")
+                                    .to_string(),
+                                name: agent.name.clone(),
+                                folder_name,
+                                state: agent.state,
+                                is_shell: agent.is_shell(),
+                                header_title: agent.header_title().to_string(),
+                                git_stats,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    dashboard::DashboardWorkspace {
+                        id: workspace.id,
+                        name: workspace.name.clone(),
+                        color_hex: workspace.color_hex.clone(),
+                        agents: self.dashboard_sort.sorted(dash_agents),
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let weak = cx.entity().downgrade();
+
+        let sections = dashboard_workspaces.into_iter().map(|workspace| {
+            let on_agent_tap = {
+                let weak = weak.clone();
+                move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                    let Some(entity) = weak.upgrade() else {
+                        return;
+                    };
+                    entity.update(app, |view, cx| {
+                        let Some(workspace_id) = view.store.lock().ok().and_then(|store| {
+                            store
+                                .workspaces()
+                                .iter()
+                                .find(|workspace| workspace.agent_ids.contains(&id))
+                                .map(|workspace| workspace.id)
+                        }) else {
+                            return;
+                        };
+                        WorkspaceWindow::open_with_selection(
+                            Arc::clone(&view.store),
+                            view.settings.clone(),
+                            workspace_id,
+                            Some(id),
+                            cx,
+                        );
+                    });
+                }
+            };
+            let on_workspace_nav = {
+                let weak = weak.clone();
+                move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                    let Some(entity) = weak.upgrade() else {
+                        return;
+                    };
+                    entity.update(app, |view, cx| {
+                        WorkspaceWindow::open(
+                            Arc::clone(&view.store),
+                            view.settings.clone(),
+                            workspace_id,
+                            cx,
+                        );
+                    });
+                }
+            };
+            let on_add_agent = {
+                let weak = weak.clone();
+                move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                    let Some(entity) = weak.upgrade() else {
+                        return;
+                    };
+                    entity.update(app, |view, cx| {
+                        let (folder, insert_after) = view.add_agent_prefill(workspace_id);
+                        open_agent_editor(
+                            Arc::clone(&view.store),
+                            view.settings.clone(),
+                            workspace_id,
+                            folder,
+                            insert_after,
+                            cx,
+                        );
+                    });
+                }
+            };
+
+            dashboard::workspace_section(
+                workspace,
+                true,
+                on_agent_tap,
+                on_workspace_nav,
+                on_add_agent,
+            )
+        });
+
+        v_flex()
+            .size_full()
+            .bg(cx.theme().background)
+            .child(
+                TitleBar::new()
+                    .border_color(gpui_kit::transparent_black())
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(app_titlebar_icon())
+                            .child(knot_core::l10n::t("dashboard.command_center")),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .px_5()
+                    .items_center()
+                    .justify_end()
+                    .child(dashboard::sort_picker(self.dashboard_sort, {
+                        let weak = weak.clone();
+                        move |sort, _window, app| {
+                            let Some(entity) = weak.upgrade() else {
+                                return;
+                            };
+                            entity.update(app, |view, cx| {
+                                view.dashboard_sort = sort;
+                                cx.notify();
+                            });
+                        }
+                    })),
+            )
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_6()
+                    .p_6()
+                    .overflow_hidden()
+                    .children(sections),
             )
     }
 }
@@ -3505,15 +3945,37 @@ impl Render for WorkspaceManager {
                     .gap_4()
                     .p_4()
                     .child(
-                        h_flex().justify_end().child(
-                            Button::new("new-workspace")
-                                .icon(IconName::Plus)
-                                .primary()
-                                .tooltip("New workspace")
-                                .on_click(cx.listener(|manager, _: &ClickEvent, window, cx| {
-                                    manager.open_workspace_dialog(None, window, cx);
-                                })),
-                        ),
+                        h_flex()
+                            .justify_end()
+                            .gap_1()
+                            .child(
+                                SettingsWindow::icon_button(
+                                    "open-command-center",
+                                    "icons/layout-dashboard.svg",
+                                    "Command Center",
+                                    false,
+                                )
+                                .on_click(cx.listener(
+                                    |manager, _: &ClickEvent, _window, cx| {
+                                        CommandCenterWindow::open(
+                                            Arc::clone(&manager.store),
+                                            manager.settings.clone(),
+                                            cx,
+                                        );
+                                    },
+                                )),
+                            )
+                            .child(
+                                Button::new("new-workspace")
+                                    .icon(IconName::Plus)
+                                    .primary()
+                                    .tooltip("New workspace")
+                                    .on_click(cx.listener(
+                                        |manager, _: &ClickEvent, window, cx| {
+                                            manager.open_workspace_dialog(None, window, cx);
+                                        },
+                                    )),
+                            ),
                     )
                     .child(v_flex().gap_2().children(rows))
                     .children(self.error.as_ref().map(|error| div().child(error.clone())))

@@ -1,0 +1,16 @@
+app:
+  name: "Knot"
+
+dashboard:
+  title: "Dashboard"
+  command_center: "Command Center"
+  no_agents: "No agents"
+  add_agent: "+ Add Agent"
+  sort:
+    manual: "Workspace Order"
+    name: "Name"
+    status: "Status"
+
+count:
+  file: "file"
+  files: "files"
