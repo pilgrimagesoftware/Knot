@@ -93,7 +93,13 @@ pub struct InitializeParams {
 pub struct InitializeResult {
     #[serde(rename = "protocolVersion")]
     pub protocol_version: u32,
-    #[serde(default)]
+    // The real field is "agentCapabilities", not "capabilities" -
+    // confirmed against a live `gemini --acp` handshake (task 1.2); the
+    // previous key silently defaulted to Default::default() (false/empty)
+    // on every real agent instead of erroring, since #[serde(default)]
+    // masks a rename mistake the same way it masks a genuinely absent
+    // field.
+    #[serde(default, rename = "agentCapabilities")]
     pub capabilities:     AgentCapabilities,
 }
 
@@ -139,36 +145,53 @@ pub enum SessionUpdate {
 
 impl SessionUpdate {
     pub fn from_params(params: Value) -> Self {
-        let kind = params.get("sessionUpdate").and_then(Value::as_str);
+        // The real wire format nests the typed update under an "update"
+        // envelope (`{"sessionId": ..., "update": {"sessionUpdate": ...,
+        // ...}}`), confirmed against a live `gemini --acp` handshake -
+        // `params` itself is accepted too, for callers that already
+        // unwrapped it (and for existing tests).
+        let update = params.get("update")
+                           .cloned()
+                           .unwrap_or_else(|| params.clone());
+        let kind = update.get("sessionUpdate").and_then(Value::as_str);
         match kind {
             Some("agent_message_chunk") | Some("text_delta") => {
-                SessionUpdate::TextDelta { text: params.get("text")
-                                                       .and_then(Value::as_str)
-                                                       .unwrap_or_default()
-                                                       .to_owned(), }
+                SessionUpdate::TextDelta { text: text_content(&update), }
             }
             Some("tool_call") => {
-                SessionUpdate::ToolCallStart { tool_call_id: field_str(&params, "toolCallId"),
-                                               kind:         field_str(&params, "kind"), }
+                SessionUpdate::ToolCallStart { tool_call_id: field_str(&update, "toolCallId"),
+                                               kind:         field_str(&update, "kind"), }
             }
             Some("tool_call_update") => {
-                SessionUpdate::ToolCallUpdate { tool_call_id: field_str(&params, "toolCallId"),
-                                                status:       field_str(&params, "status"), }
+                SessionUpdate::ToolCallUpdate { tool_call_id: field_str(&update, "toolCallId"),
+                                                status:       field_str(&update, "status"), }
             }
             Some("tool_call_result") => {
-                SessionUpdate::ToolCallResult { tool_call_id: field_str(&params, "toolCallId"),
-                                                output:       params.get("output")
+                SessionUpdate::ToolCallResult { tool_call_id: field_str(&update, "toolCallId"),
+                                                output:       update.get("output")
                                                                     .cloned()
                                                                     .unwrap_or(Value::Null), }
             }
-            Some("diff") => SessionUpdate::Diff { path: field_str(&params, "path"),
-                                                  diff: field_str(&params, "diff"), },
+            Some("diff") => SessionUpdate::Diff { path: field_str(&update, "path"),
+                                                  diff: field_str(&update, "diff"), },
             Some("turn_end") => {
-                SessionUpdate::TurnEnd { stop_reason: field_str(&params, "stopReason"), }
+                SessionUpdate::TurnEnd { stop_reason: field_str(&update, "stopReason"), }
             }
             _ => SessionUpdate::Unknown { raw: params },
         }
     }
+}
+
+/// A text update's content, per ACP's content-block shape
+/// (`{"content": {"type": "text", "text": "..."}}`), falling back to a
+/// flat `text` field for other/older producers.
+fn text_content(update: &Value) -> String {
+    update.get("content")
+          .and_then(|content| content.get("text"))
+          .or_else(|| update.get("text"))
+          .and_then(Value::as_str)
+          .unwrap_or_default()
+          .to_owned()
 }
 
 fn field_str(value: &Value, key: &str) -> String {
@@ -198,4 +221,48 @@ pub struct PermissionOption {
 pub enum PermissionDecision {
     Allow,
     Deny,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_delta_parses_from_the_real_nested_update_envelope() {
+        // Captured against a live `gemini --acp` handshake (task 1.2):
+        // the notification's params nest the typed update, and the text
+        // itself is a content block, not a flat field.
+        let params = serde_json::json!({
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": { "type": "text", "text": "pong" }
+            }
+        });
+
+        let update = SessionUpdate::from_params(params);
+
+        assert!(matches!(update, SessionUpdate::TextDelta { text } if text == "pong"));
+    }
+
+    #[test]
+    fn text_delta_still_parses_the_flat_legacy_shape() {
+        let params = serde_json::json!({ "sessionUpdate": "text_delta", "text": "hi" });
+
+        let update = SessionUpdate::from_params(params);
+
+        assert!(matches!(update, SessionUpdate::TextDelta { text } if text == "hi"));
+    }
+
+    #[test]
+    fn unrecognized_nested_update_kind_is_unknown() {
+        let params = serde_json::json!({
+            "sessionId": "s1",
+            "update": { "sessionUpdate": "available_commands_update", "availableCommands": [] }
+        });
+
+        let update = SessionUpdate::from_params(params.clone());
+
+        assert!(matches!(update, SessionUpdate::Unknown { raw } if raw == params));
+    }
 }

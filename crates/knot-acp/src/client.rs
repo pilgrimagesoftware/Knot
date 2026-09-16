@@ -150,8 +150,12 @@ impl AcpClient {
     }
 
     pub async fn session_new(&self, cwd: &str) -> Result<String> {
+        // `mcpServers` is required by at least the Gemini CLI adapter (it
+        // rejects the request with an invalid_type validation error
+        // without it, confirmed against a live `gemini --acp` handshake);
+        // an empty array is the correct "no MCP config yet" value.
         let raw = self.transport
-                      .request("session/new", Some(json!({ "cwd": cwd })))
+                      .request("session/new", Some(json!({ "cwd": cwd, "mcpServers": [] })))
                       .await?;
         session_id_from(&raw)
     }
@@ -165,7 +169,8 @@ impl AcpClient {
         }
         let raw = self.transport
                       .request("session/load",
-                               Some(json!({ "sessionId": session_id, "cwd": cwd })))
+                               Some(json!({ "sessionId": session_id, "cwd": cwd,
+                                          "mcpServers": [] })))
                       .await?;
         session_id_from(&raw)
     }
@@ -243,7 +248,7 @@ mod tests {
               id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
               method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
               case "$method" in
-                initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{protocol_version},\"capabilities\":{{\"loadSession\":{supports_resume}}}}}}}" ;;
+                initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{protocol_version},\"agentCapabilities\":{{\"loadSession\":{supports_resume}}}}}}}" ;;
                 session/new) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"sessionId\":\"sess-1\"}}}}" ;;
                 *) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}" ;;
               esac
