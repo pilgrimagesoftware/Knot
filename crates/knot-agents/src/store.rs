@@ -169,6 +169,15 @@ impl AgentStore {
         }
     }
 
+    /// Sets the terminal-reported title (the running program's own OSC
+    /// title, e.g. via shell integration) - overridden by `status_text`
+    /// in `Agent::header_title`'s precedence.
+    pub fn set_terminal_title(&mut self, id: Uuid, title: String) {
+        if let Some(agent) = self.agent_mut(id) {
+            agent.terminal_title = title;
+        }
+    }
+
     pub fn add_workspace(&mut self, workspace: Workspace) {
         self.workspaces.push(workspace);
     }
@@ -1019,6 +1028,16 @@ mod tests {
         let agent = s.agent(id).unwrap();
         assert_eq!(agent.status_text, "Running tests");
         assert_eq!(agent.state, AgentState::Idle);
+    }
+
+    #[test]
+    fn set_terminal_title_updates_terminal_title() {
+        let mut s = store();
+        let id = s.create("/tmp/a", CreateOptions::default());
+
+        s.set_terminal_title(id, "zsh".to_string());
+
+        assert_eq!(s.agent(id).unwrap().terminal_title, "zsh");
     }
 
     #[test]

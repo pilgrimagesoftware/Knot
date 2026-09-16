@@ -124,18 +124,20 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
     where
         Output: Fn(&[u8]) + Send + Sync + 'static,
     {
-        Self::spawn_pty_with_exit(config, sink, on_output, |_| {})
+        Self::spawn_pty_with_exit(config, sink, on_output, |_| {}, |_| {})
     }
 
-    pub fn spawn_pty_with_exit<Output, Exit>(
+    pub fn spawn_pty_with_exit<Output, Exit, GridEventFn>(
         config: &SessionConfig<'_>,
         sink: EventSink,
         on_output: Output,
         on_exit: Exit,
+        on_grid_event: GridEventFn,
     ) -> Result<TerminalSession<PtyTransport>>
     where
         Output: Fn(&[u8]) + Send + Sync + 'static,
         Exit: Fn(Option<i32>) + Send + Sync + 'static,
+        GridEventFn: Fn(GridEvent) + Send + Sync + 'static,
     {
         let tracker_slot: Arc<Mutex<Option<Arc<Tracker>>>> = Arc::new(Mutex::new(None));
         let output_tracker = Arc::clone(&tracker_slot);
@@ -154,6 +156,9 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
                 }
                 if let Ok(mut grid) = output_grid.lock() {
                     grid.feed(bytes);
+                    for event in grid.drain_events() {
+                        on_grid_event(event);
+                    }
                 }
                 on_output(bytes);
             },
@@ -399,6 +404,7 @@ mod tests {
             move |status| {
                 let _ = exit_tx.send(status);
             },
+            |_| {},
         )
         .unwrap();
 
@@ -519,6 +525,55 @@ mod tests {
                 "pty size was never reported as 40 rows x 100 cols"
             );
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn title_escape_sequences_reach_the_grid_event_callback() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut agent = agent();
+        agent.folder = folder.path().to_string_lossy().into_owned();
+        let settings = Settings::default();
+        let config = SessionConfig {
+            settings: &settings,
+            agent: &agent,
+            persona: None,
+            plugin_root: None,
+        };
+        let (title_tx, title_rx) = std::sync::mpsc::channel();
+        let mut session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
+            &config,
+            EventSink::default(),
+            |_| {},
+            |_| {},
+            move |event| {
+                if let GridEvent::Title(title) = event {
+                    let _ = title_tx.send(title);
+                }
+            },
+        )
+        .unwrap();
+
+        session
+            .start(&SessionPlan {
+                agent_command: String::new(),
+                initialization_command: "printf '\\e]0;my session\\a'\n".to_string(),
+            })
+            .unwrap();
+
+        // The shell itself may set its own title (e.g. via prompt
+        // integration) before our command runs, so keep reading until the
+        // expected title arrives rather than asserting on the first one.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match title_rx.recv_timeout(std::time::Duration::from_millis(200)) {
+                Ok(title) if title == "my session" => break,
+                Ok(_) => continue,
+                Err(_) => assert!(
+                    std::time::Instant::now() < deadline,
+                    "expected title was never received"
+                ),
+            }
         }
     }
 }

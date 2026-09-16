@@ -2177,14 +2177,27 @@ impl WorkspaceWindow {
             })),
             ..Default::default()
         };
+        let title_store = Arc::clone(&self.store);
 
         let _runtime_guard = self.runtime.enter();
-        let session = TerminalSession::<PtyTransport>::spawn_pty(&config, status_sink, |_| {})
-            .and_then(|mut session| {
-                let plan = SessionPlan::build(&config);
-                session.start(&plan)?;
-                Ok(session)
-            });
+        let session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
+            &config,
+            status_sink,
+            |_| {},
+            |_| {},
+            move |event| {
+                if let knot_terminal::GridEvent::Title(title) = event
+                    && let Ok(mut store) = title_store.lock()
+                {
+                    store.set_terminal_title(id, title);
+                }
+            },
+        )
+        .and_then(|mut session| {
+            let plan = SessionPlan::build(&config);
+            session.start(&plan)?;
+            Ok(session)
+        });
         match session {
             Ok(session) => {
                 self.sessions.insert(id, Arc::new(Mutex::new(session)));

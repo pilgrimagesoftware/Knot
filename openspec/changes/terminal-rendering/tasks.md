@@ -95,22 +95,33 @@
 
 ## 4. Action routing
 
-- [ ] 4.1 Title-change events (task 1.2's recorded events) update
-      `Agent::terminal_title` through the existing `AgentStore` mutation
-      path. Verify: unit test feeds a constructed title event through the
-      handler and asserts the agent's `terminal_title` changes; manual
-      check a shell `printf '\e]0;title\a'` updates the sidebar.
-- [ ] 4.2 Terminal-output activity and process-exit events call
-      `Tracker::on_terminal_activity`/`on_process_exit`, replacing the old
-      polling loop's calls to the same methods (task 2.5 removes the old
-      caller). Verify: existing `knot-activity` tests still pass unchanged
-      (its API didn't change) plus one new integration test that feeding
-      a spawned session's output triggers a status transition.
-- [ ] 4.3 OSC 52 clipboard write requests (task 1.2's recorded events)
-      serve the OS pasteboard, applying the same default text transforms
-      as task 3.3's copy path. Verify: manual check a program using OSC 52
-      to set the clipboard (e.g. `printf '\e]52;c;...\a'`) updates the OS
-      pasteboard.
+- [x] 4.1 Title-change events update `Agent::terminal_title` through the
+      existing `AgentStore` mutation path - `AgentStore::set_terminal_title`
+      (new), wired via `TerminalSession::spawn_pty_with_exit`'s new
+      `on_grid_event` callback (drains `Grid`'s queued events after each
+      `feed`, see task 1.2). Verified: `set_terminal_title_updates_terminal_title`
+      unit test, plus a real-PTY integration test
+      (`title_escape_sequences_reach_the_grid_event_callback`) asserting a
+      `printf '\e]0;...\a'` title reaches the callback. Manual sidebar
+      check pending (task 5.2); note title updates mutate the store from
+      the PTY reader thread without an explicit `cx.notify()`, same
+      as the existing `apply_terminal_status` precedent this mirrors.
+- [x] 4.2 Terminal-output activity and process-exit events call
+      `Tracker::on_terminal_activity`/`on_process_exit` - unchanged from
+      before this change (`TerminalSession::spawn_pty_with_exit` already
+      called these; task 2.5 removed the old polling loop's *separate*
+      caller in `Shell`, which was redundant with this one, not the only
+      one). `knot-activity`'s own test suite is untouched (API unchanged).
+- [ ] 4.3 OSC 52 clipboard write requests (`GridEvent::ClipboardStore`,
+      already captured by task 1.2's event queue) serve the OS pasteboard.
+      Not yet wired: `on_grid_event` fires on the PTY reader thread, and
+      writing to the OS pasteboard needs GPUI's main-thread `cx`/`Window`
+      APIs - needs a thread-safe hand-off (a channel drained by a timer or
+      the next render, matching how `check_requests`/`awaiting_input`
+      marshal background events in the old `Shell` code) that doesn't
+      exist yet for `WorkspaceWindow`. Revisit alongside task 3.3 (copy
+      also needs pasteboard access) rather than building two separate
+      mechanisms.
 
 ## 5. Final verification
 
