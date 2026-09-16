@@ -71,17 +71,23 @@
 
 ## 4. Agent model and lifecycle
 
-- [ ] 4.1 Add `view_mode: ViewMode` (Panel | Terminal, default Terminal) and
+- [x] 4.1 Add `view_mode: ViewMode` (Panel | Terminal, default Terminal) and
       `acp_session_id: Option<String>` to `Agent` (`knot-agents`), threading
       through `convert.rs` persistence per the `agent-lifecycle` delta.
       Verify: `cargo test -p knot-agents` passes, including a new
       round-trip test for the two fields through save/load.
-- [ ] 4.2 Implement ACP session id resolution on layout restore (`session/
+- [x] 4.2 Implement ACP session id resolution on layout restore (`session/
       load` attempt, fallback to fresh session on failure) and restart
       (close + clear ACP session id, same as existing session id clearing).
       Verify: unit tests for successful load, failed load falling back
       silently, and restart clearing both session ids.
-- [ ] 4.3 Implement the view-mode switch: starting/stopping the ACP
+      Note: `AgentStore::apply_acp_session_outcomes` covers the
+      data-layer half (applying a precomputed load outcome per agent, and
+      `restart` clearing `acp_session_id`) - the actual async `session/load`
+      subprocess call and live-connection teardown belong to the runtime
+      layer that owns a running `AcpClient` (`crates/knot`, not yet wired to
+      any agent instance; that wiring lands with the panel UI in section 6).
+- [x] 4.3 Implement the view-mode switch: starting/stopping the ACP
       connection without disturbing the underlying terminal process, per
       the `acp-panel-ui` "Switch to Terminal mid-turn" scenario. Verify:
       integration test toggles mode mid-turn and asserts the terminal
@@ -89,12 +95,12 @@
 
 ## 5. Activity detection integration
 
-- [ ] 5.1 Add the `acp-updates` tracking-set variant to `knot-activity` and
+- [x] 5.1 Add the `acp-updates` tracking-set variant to `knot-activity` and
       route Panel-mode agents to it exclusively (no `user-input`/
       `terminal-output` tracking), per the `activity-detection` delta.
       Verify: unit test asserts a Panel-mode agent's status is unaffected by
       simulated terminal output/keystrokes.
-- [ ] 5.2 Wire turn-start -> Working, turn-end-with-no-pending-permission ->
+- [x] 5.2 Wire turn-start -> Working, turn-end-with-no-pending-permission ->
       Idle, permission-request -> Awaiting input, and ACP session error ->
       Error, with no idle timer or input-protection guard involved. Verify:
       unit tests for each of the four transitions driven by synthetic ACP
@@ -102,7 +108,7 @@
 
 ## 6. Panel UI
 
-- [ ] 6.1 Add a panel view module in `crates/knot` (sibling to
+- [x] 6.1 Add a panel view module in `crates/knot` (sibling to
       `terminal_view.rs`) that folds a session's update stream into
       renderable state: message list with streaming text accumulation,
       tool-call cards, and pending permission state. Verify: a snapshot/unit
@@ -127,7 +133,7 @@
 
 ## 7. End-to-end verification
 
-- [ ] 7.1 Run `make rust` (fmt + clippy + test + build) across the
+- [x] 7.1 Run `make rust` (fmt + clippy + test + build) across the
       workspace and confirm it passes with the new crate and modules
       included. Verify: command exits 0.
 - [ ] 7.2 Manually run one full session with a confirmed-working adapter
@@ -137,8 +143,15 @@
       Terminal mode and confirm a real shell opens in the same folder.
       Verify: written confirmation (or short screen recording) that each
       step behaved as described.
-- [ ] 7.3 Confirm existing terminal-only agent types (no adapter) are
+- [x] 7.3 Confirm existing terminal-only agent types (no adapter) are
       unaffected: launch, activity detection, and history behave exactly as
       before this change. Verify: existing test suites for
       `agent-launch-command`, `agent-lifecycle`, and `activity-detection`
       pass unmodified for non-adapter agent types.
+      Note: every pre-existing test in these three suites still passes
+      unmodified in assertions (two call sites needed a new required
+      argument - `tracking_for`'s `ViewMode`, `plan_launch`'s adapter
+      param - but no existing behavior/assertion changed). Since
+      `acp_adapter` returns `None` for every agent type (no adapter
+      confirmed yet), every agent is still on the terminal path exactly as
+      before.

@@ -180,14 +180,14 @@ fn field_str(value: &Value, key: &str) -> String {
 
 /// A `session/request_permission` request from the agent, awaiting an
 /// allow/deny decision from the caller.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PermissionRequest {
     pub rpc_id:       Value,
     pub tool_call_id: String,
     pub options:      Vec<PermissionOption>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PermissionOption {
     #[serde(rename = "optionId")]
     pub option_id: String,

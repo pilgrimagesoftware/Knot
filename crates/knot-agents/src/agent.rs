@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use knot_core::ViewMode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -37,6 +38,7 @@ pub struct Agent {
     pub is_companion:  bool,
     pub shell_command: Option<String>,
     pub persona_id:    Option<Uuid>,
+    pub view_mode:     ViewMode,
 
     // Runtime-only
     pub state:             AgentState,
@@ -48,6 +50,12 @@ pub struct Agent {
     pub session_id:        Option<String>,
     pub resume_session_id: Option<String>,
     pub fork_session:      bool,
+    /// The ACP session id for a Panel-mode agent (`None` outside Panel
+    /// mode, or before the first ACP session is created). Distinct from
+    /// `session_id`, which is the terminal-resume identifier - ACP's
+    /// `session/load` and a CLI's own `--resume <id>` are not always the
+    /// same identifier space.
+    pub acp_session_id:    Option<String>,
     pub metadata:          BTreeMap<String, String>,
 
     // Panel state, set by the `display-markdown` / `view-mermaid` MCP
@@ -120,6 +128,7 @@ mod tests {
                 is_companion:       false,
                 shell_command:      None,
                 persona_id:         None,
+                view_mode:          ViewMode::Terminal,
                 state:              AgentState::Idle,
                 status_text:        String::new(),
                 is_registered:      false,
@@ -129,6 +138,7 @@ mod tests {
                 session_id:         None,
                 resume_session_id:  None,
                 fork_session:       false,
+                acp_session_id:     None,
                 metadata:           BTreeMap::new(),
                 markdown_file:      None,
                 markdown_maximized: false,

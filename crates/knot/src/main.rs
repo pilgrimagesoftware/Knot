@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod dashboard;
+mod panel_state;
 mod terminal_view;
 
 use std::cell::RefCell;

@@ -8,6 +8,7 @@ rust-version.workspace = true
 default-run = "knot"
 
 [dependencies]
+knot-acp = { path = "../knot-acp" }
 knot-core = { path = "../knot-core" }
 knot-agents = { path = "../knot-agents" }
 knot-git = { path = "../knot-git" }
@@ -21,6 +22,7 @@ alacritty_terminal = "0.26.0"
 knot-history = { path = "../knot-history" }
 tokio.workspace = true
 uuid.workspace = true
+serde_json.workspace = true
 gpui-kit = "0.6"
 unicode-segmentation = "1.13"
 

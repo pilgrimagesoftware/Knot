@@ -12,6 +12,9 @@ pub enum ActivitySource {
     UserInput,
     /// A hook reported the status authoritatively.
     Hook,
+    /// An ACP session/update or permission-request event drove the status,
+    /// for a Panel-mode agent.
+    Acp,
 }
 
 /// A significant keystroke, mapped by the terminal integration.
