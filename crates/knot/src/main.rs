@@ -2203,14 +2203,16 @@ impl WorkspaceWindow {
                             }
                             cx.update(|app| {
                                   notify_view.update(app, |view, cx| {
-                                      let grid_dirty =
-                                          view.selected_agent
-                                              .and_then(|id| view.sessions.get(&id))
-                                              .and_then(|session| session.lock().ok()?.grid())
-                                              .is_some_and(|grid| {
-                                                  grid.lock().unwrap().take_dirty()
-                                              });
-                                      let panel_dirty =
+                                                 let grid_dirty =
+                                                     view.selected_agent
+                                                         .and_then(|id| view.sessions.get(&id))
+                                                         .and_then(|session| {
+                                                             session.lock().ok()?.grid()
+                                                         })
+                                                         .is_some_and(|grid| {
+                                                             grid.lock().unwrap().take_dirty()
+                                                         });
+                                                 let panel_dirty =
                                           view.selected_agent
                                               .and_then(|id| view.panel_sessions.get(&id))
                                               .is_some_and(|slot| {
@@ -2220,10 +2222,10 @@ impl WorkspaceWindow {
                                                           if handle.take_dirty()
                                                   )
                                               });
-                                      if grid_dirty || panel_dirty {
-                                          cx.notify();
-                                      }
-                                  });
+                                                 if grid_dirty || panel_dirty {
+                                                     cx.notify();
+                                                 }
+                                             });
                               });
                         }
                     })
