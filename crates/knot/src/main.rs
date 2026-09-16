@@ -2189,6 +2189,40 @@ impl WorkspaceWindow {
         }
     }
 
+    /// Resizes `id`'s session grid/PTY to match the content pane's current
+    /// size, if it changed. Cell dimensions are an approximation for the
+    /// "SF Mono" 13px font `terminal_view` renders with, not a real glyph
+    /// measurement - close enough for a usable grid, revisit if layout
+    /// drifts noticeably from the actual rendered cell size.
+    fn resize_session_to_pane(&mut self, id: Uuid, window: &Window) {
+        const SIDEBAR_WIDTH: f32 = 250.;
+        const HEADER_HEIGHT: f32 = 56.;
+        const CELL_WIDTH: f32 = 8.;
+        const CELL_HEIGHT: f32 = 18.;
+
+        let Some(session) = self.sessions.get(&id) else {
+            return;
+        };
+        let viewport = window.viewport_size();
+        let pane_width = (f32::from(viewport.width) - SIDEBAR_WIDTH).max(CELL_WIDTH);
+        let pane_height = (f32::from(viewport.height) - HEADER_HEIGHT).max(CELL_HEIGHT);
+        let size = knot_terminal::GridSize {
+            columns: (pane_width / CELL_WIDTH) as usize,
+            rows: (pane_height / CELL_HEIGHT) as usize,
+        };
+
+        let current = session
+            .lock()
+            .ok()
+            .and_then(|session| session.grid())
+            .map(|grid| grid.lock().unwrap().size());
+        if current != Some(size)
+            && let Ok(mut session) = session.lock()
+        {
+            let _ = session.resize(size);
+        }
+    }
+
     fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let folder = self
             .new_agent_folder_input
@@ -2654,7 +2688,7 @@ impl Render for AgentEditor {
     }
 }
 impl Render for WorkspaceWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (workspace_name, agents) = {
             let store = self.store.lock().unwrap();
             let Some(workspace) = store
@@ -2695,6 +2729,10 @@ impl Render for WorkspaceWindow {
         };
 
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
+
+        if !is_dashboard && let Some(id) = self.selected_agent {
+            self.resize_session_to_pane(id, window);
+        }
 
         let agent_rows = agents.into_iter().map(
             |(id, avatar, name, folder, state, is_shell, header_title, persona_name)| {

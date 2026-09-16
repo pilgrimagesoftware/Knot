@@ -57,10 +57,12 @@
       dead code (unreachable from `main`), not a behavior change.
       Verified: `cargo build --workspace`/`test --workspace` pass with it
       removed; `grep` confirms no remaining references.
-- [ ] 2.6 Window resize calls the grid's resize (task 1.4) so the PTY and
-      rendered grid track the content pane's size. Verify: manual check
-      resizing the window reflows a running program's output (e.g.
-      `htop`'s layout adapts).
+- [x] 2.6 Window resize calls the grid's resize (task 1.4) so the PTY and
+      rendered grid track the content pane's size, via
+      `resize_session_to_pane` reading `window.viewport_size()` each
+      render and diffing against the grid's current size. Cell dimensions
+      are an approximation (not a real glyph measurement) - revisit if
+      layout drifts noticeably. Verify: manual check (task 5.2).
 
 ## 3. Input dispatch
 
