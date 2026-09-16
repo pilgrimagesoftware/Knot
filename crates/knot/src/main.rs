@@ -53,19 +53,36 @@ mod native_font_panel {
     use objc2_foundation::NSString;
     use std::sync::Mutex;
 
-    static LAST_SEEN_FAMILY: Mutex<Option<String>> = Mutex::new(None);
+    /// Which setting a font panel session is editing - the OS font panel is
+    /// a single shared singleton, so only one target can own it at a time;
+    /// `poll_selection` attributes the next change to whichever target's
+    /// `open` was called most recently.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub enum Target {
+        Ui,
+        Title,
+        Terminal,
+    }
 
-    /// Opens the system font panel pre-selected to `current_family`. No-op
-    /// off the main thread.
-    pub fn open(current_family: &str) {
+    static LAST_SEEN: Mutex<Option<(Target, String, i64)>> = Mutex::new(None);
+
+    fn size_key(size: f64) -> i64 {
+        (size * 100.0).round() as i64
+    }
+
+    /// Opens the system font panel pre-selected to `current_family` at
+    /// `current_size`, for `target`. No-op off the main thread.
+    pub fn open(target: Target, current_family: &str, current_size: f64) {
         let Some(mtm) = MainThreadMarker::new() else {
             return;
         };
-        *LAST_SEEN_FAMILY.lock().unwrap() = Some(current_family.to_string());
+        *LAST_SEEN.lock().unwrap() =
+            Some((target, current_family.to_string(), size_key(current_size)));
         let manager = NSFontManager::sharedFontManager(mtm);
-        if let Some(font) =
-            objc2_app_kit::NSFont::fontWithName_size(&NSString::from_str(current_family), 13.0)
-        {
+        if let Some(font) = objc2_app_kit::NSFont::fontWithName_size(
+            &NSString::from_str(current_family),
+            current_size,
+        ) {
             manager.setSelectedFont_isMultiple(&font, false);
         }
         if let Some(panel) = manager.fontPanel(true) {
@@ -73,20 +90,23 @@ mod native_font_panel {
         }
     }
 
-    /// Returns the newly chosen family name if it differs from the last
-    /// value seen (by `open` or a prior poll). No-op off the main thread.
-    pub fn poll_selection() -> Option<String> {
+    /// Returns the newly chosen `(target, family, size)` if it differs from
+    /// the last value seen (by `open` or a prior poll). No-op off the main
+    /// thread or before any target has opened the panel.
+    pub fn poll_selection() -> Option<(Target, String, f64)> {
         let mtm = MainThreadMarker::new()?;
         let manager = NSFontManager::sharedFontManager(mtm);
         let selected = manager.selectedFont()?;
         let converted = manager.convertFont(&selected);
         let family = converted.familyName()?.to_string();
-        let mut last_seen = LAST_SEEN_FAMILY.lock().unwrap();
-        if last_seen.as_deref() == Some(family.as_str()) {
+        let size = converted.pointSize();
+        let mut last_seen = LAST_SEEN.lock().unwrap();
+        let (target, _, _) = last_seen.clone()?;
+        if *last_seen == Some((target, family.clone(), size_key(size))) {
             return None;
         }
-        *last_seen = Some(family.clone());
-        Some(family)
+        *last_seen = Some((target, family.clone(), size_key(size)));
+        Some((target, family, size))
     }
 }
 
@@ -109,11 +129,24 @@ mod native_character_picker {
     }
 }
 
-/// Embedded UI font (SIL OFL licensed; see `assets/fonts/ADAMINA-LICENSE.txt`),
-/// so the app looks the same regardless of what's installed on the system.
-/// Adamina ships one weight only; the renderer synthesizes bold for
-/// `font_semibold`/`font_bold` text.
+/// Embedded fonts (all SIL OFL licensed; see the matching `*-LICENSE.txt`
+/// under `assets/fonts/`), so the app looks the same regardless of what's
+/// installed on the system:
+/// - Adamina: single weight, used only for "title" text (the workspace
+///   name in the title bar, agent names) - the renderer synthesizes bold
+///   for `font_semibold`/`font_bold` text set in it.
+/// - Manrope: the general UI font (header text, agent cell content).
+/// - JetBrains Mono: the default terminal font (`terminal_font_name`'s
+///   default) - a real monospace coding font, not a mono variant of the UI
+///   font, and reliably resolvable regardless of what's installed on the
+///   system.
 const ADAMINA_REGULAR: &[u8] = include_bytes!("../assets/fonts/Adamina-Regular.ttf");
+const MANROPE_REGULAR: &[u8] = include_bytes!("../assets/fonts/Manrope-Regular.ttf");
+const MANROPE_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Manrope-Medium.ttf");
+const MANROPE_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/Manrope-SemiBold.ttf");
+const MANROPE_BOLD: &[u8] = include_bytes!("../assets/fonts/Manrope-Bold.ttf");
+const JETBRAINS_MONO_REGULAR: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
+const JETBRAINS_MONO_BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
 
 const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app-icon-32.png");
 
@@ -131,9 +164,6 @@ fn app_titlebar_icon() -> impl IntoElement {
         .flex_shrink_0()
 }
 
-/// Registers the embedded Adamina family and sets it as the UI font, plus a
-/// distinct accent color, so the app doesn't rely on the platform's generic
-/// UI font and neutral-gray default theme.
 /// Replaces a `$HOME` prefix with `~` - matches the Swift reference's
 /// `AgentTerminalView.shortenPath`.
 fn shorten_path(path: &str) -> String {
@@ -143,16 +173,27 @@ fn shorten_path(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-fn apply_visual_identity(cx: &mut App) {
-    if let Err(error) = cx
-        .text_system()
-        .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR)])
-    {
-        eprintln!("failed to register Adamina font: {error}");
+/// Registers the embedded font families and sets Manrope as the UI font
+/// (Adamina stays registered for "title" text set explicitly), plus a
+/// distinct accent color, so the app doesn't rely on the platform's generic
+/// UI font and neutral-gray default theme.
+fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
+    if let Err(error) = cx.text_system().add_fonts(vec![
+        std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
+        std::borrow::Cow::Borrowed(MANROPE_REGULAR),
+        std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
+        std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
+        std::borrow::Cow::Borrowed(MANROPE_BOLD),
+        std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
+        std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),
+    ]) {
+        eprintln!("failed to register embedded fonts: {error}");
     }
 
     let theme = cx.global_mut::<Theme>();
-    theme.font_family = "Adamina".into();
+    theme.font_family = settings.ui_font_name.clone().into();
+    theme.mono_font_family = "JetBrains Mono".into();
+    theme.font_size = px(settings.ui_font_size as f32);
     let accent: gpui_kit::Hsla = rgb(0x3B82F6).into();
     let accent_hover: gpui_kit::Hsla = rgb(0x2563EB).into();
     let accent_active: gpui_kit::Hsla = rgb(0x1D4ED8).into();
@@ -575,11 +616,6 @@ fn open_settings_window(
                 .placeholder("Port")
                 .default_value(settings.mcp_server_port.to_string())
         });
-        let terminal_font_size_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Size")
-                .default_value(settings.terminal_font_size.to_string())
-        });
         let view = cx.new(|cx| {
             let agent_options_subscription = cx.subscribe(
                 &agent_options_input,
@@ -613,14 +649,6 @@ fn open_settings_window(
                     }
                 },
             );
-            let terminal_font_size_subscription = cx.subscribe(
-                &terminal_font_size_input,
-                |this: &mut SettingsWindow, _, event, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.save_terminal_font_size(cx);
-                    }
-                },
-            );
             SettingsWindow {
                 settings,
                 selected_tab: SettingsTab::General,
@@ -630,12 +658,10 @@ fn open_settings_window(
                 ai_api_key_input,
                 autopilot_custom_prompt_input,
                 mcp_port_input,
-                terminal_font_size_input,
                 _agent_options_subscription: agent_options_subscription,
                 _ai_api_key_subscription: ai_api_key_subscription,
                 _autopilot_custom_prompt_subscription: autopilot_custom_prompt_subscription,
                 _mcp_port_subscription: mcp_port_subscription,
-                _terminal_font_size_subscription: terminal_font_size_subscription,
             }
         });
         #[cfg(target_os = "macos")]
@@ -646,10 +672,26 @@ fn open_settings_window(
                     cx.background_executor()
                         .timer(Duration::from_millis(300))
                         .await;
-                    if let Some(family) = native_font_panel::poll_selection() {
+                    if let Some((target, family, size)) = native_font_panel::poll_selection() {
                         cx.update(|app| {
                             settings_window.update(app, |view, cx| {
-                                view.settings.terminal_font_name = family;
+                                match target {
+                                    native_font_panel::Target::Ui => {
+                                        view.settings.ui_font_name = family.clone();
+                                        view.settings.ui_font_size = size;
+                                        let theme = cx.global_mut::<Theme>();
+                                        theme.font_family = family.into();
+                                        theme.font_size = px(size as f32);
+                                    }
+                                    native_font_panel::Target::Title => {
+                                        view.settings.title_font_name = family;
+                                        view.settings.title_font_size = size;
+                                    }
+                                    native_font_panel::Target::Terminal => {
+                                        view.settings.terminal_font_name = family;
+                                        view.settings.terminal_font_size = size;
+                                    }
+                                }
                                 view.persist();
                                 cx.notify();
                             });
@@ -696,7 +738,7 @@ impl SettingsTab {
             SettingsTab::Autopilot => "Autopilot",
             SettingsTab::Voice => "Voice",
             SettingsTab::Mcp => "MCP",
-            SettingsTab::Terminal => "Terminal",
+            SettingsTab::Terminal => "Appearance",
         }
     }
 }
@@ -710,12 +752,10 @@ struct SettingsWindow {
     ai_api_key_input: Entity<InputState>,
     autopilot_custom_prompt_input: Entity<InputState>,
     mcp_port_input: Entity<InputState>,
-    terminal_font_size_input: Entity<InputState>,
     _agent_options_subscription: Subscription,
     _ai_api_key_subscription: Subscription,
     _autopilot_custom_prompt_subscription: Subscription,
     _mcp_port_subscription: Subscription,
-    _terminal_font_size_subscription: Subscription,
 }
 
 impl SettingsWindow {
@@ -1015,37 +1055,6 @@ impl SettingsWindow {
     fn select_mcp_agent_type(&mut self, agent_type: &str, cx: &mut Context<Self>) {
         self.mcp_selected_agent_type = agent_type.to_string();
         cx.notify();
-    }
-
-    /// Monospace font shortlist ported from the Swift reference's
-    /// `TerminalSettingsView.monospaceFonts`, without the availability
-    /// filter (no font-enumeration API is surfaced through `gpui-kit`).
-    const TERMINAL_FONTS: [&'static str; 11] = [
-        "SF Mono",
-        "Menlo",
-        "Monaco",
-        "Courier New",
-        "Andale Mono",
-        "JetBrains Mono",
-        "Fira Code",
-        "Source Code Pro",
-        "IBM Plex Mono",
-        "Hack",
-        "Inconsolata",
-    ];
-
-    fn select_terminal_font(&mut self, font_name: &str, cx: &mut Context<Self>) {
-        self.settings.terminal_font_name = font_name.to_string();
-        self.persist();
-        cx.notify();
-    }
-
-    fn save_terminal_font_size(&mut self, cx: &mut Context<Self>) {
-        let value = self.terminal_font_size_input.read(cx).value().to_string();
-        if let Ok(size) = value.parse::<f64>() {
-            self.settings.terminal_font_size = size;
-            self.persist();
-        }
     }
 
     /// Truncates `instructions` to `max_chars`, appending an ellipsis when
@@ -1839,25 +1848,54 @@ impl SettingsWindow {
             )
     }
 
-    fn render_terminal(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        let terminal_font_name = self.settings.terminal_font_name.clone();
+    /// A single "Family, Npt" button that opens the OS font panel
+    /// (`NSFontPanel`) pre-selected to the current font/size for `target` -
+    /// one control picks both, since the panel itself has a size field.
+    /// The choice comes back asynchronously via `native_font_panel::poll_selection`.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+    fn font_picker_button(
+        id: &'static str,
+        target: native_font_panel::Target,
+        name: String,
+        size: f64,
+    ) -> Button {
+        Button::new(id)
+            .label(format!("{name}, {size:.0}pt"))
+            .on_click(move |_, _, _| {
+                #[cfg(target_os = "macos")]
+                native_font_panel::open(target, &name, size);
+            })
+    }
 
+    fn render_appearance(&self, _cx: &mut Context<Self>) -> impl IntoElement {
         v_flex().gap_3().child(
-            Self::group("Font")
+            Self::group("Fonts")
                 .child(Self::row(
-                    "Font",
-                    Button::new("terminal-font-picker")
-                        .label(terminal_font_name.clone())
-                        .on_click(move |_, _, _| {
-                            // Opens the OS font panel (NSFontPanel); the choice
-                            // comes back asynchronously via `poll_selection`.
-                            #[cfg(target_os = "macos")]
-                            native_font_panel::open(&terminal_font_name);
-                        }),
+                    "UI",
+                    Self::font_picker_button(
+                        "ui-font-picker",
+                        native_font_panel::Target::Ui,
+                        self.settings.ui_font_name.clone(),
+                        self.settings.ui_font_size,
+                    ),
                 ))
                 .child(Self::row(
-                    "Size",
-                    Input::new(&self.terminal_font_size_input).w(px(60.)),
+                    "Title",
+                    Self::font_picker_button(
+                        "title-font-picker",
+                        native_font_panel::Target::Title,
+                        self.settings.title_font_name.clone(),
+                        self.settings.title_font_size,
+                    ),
+                ))
+                .child(Self::row(
+                    "Terminal",
+                    Self::font_picker_button(
+                        "terminal-font-picker",
+                        native_font_panel::Target::Terminal,
+                        self.settings.terminal_font_name.clone(),
+                        self.settings.terminal_font_size,
+                    ),
                 )),
         )
     }
@@ -2011,7 +2049,7 @@ impl Render for SettingsWindow {
             SettingsTab::Autopilot => self.render_autopilot(cx).into_any_element(),
             SettingsTab::Voice => self.render_voice(cx).into_any_element(),
             SettingsTab::Mcp => self.render_mcp(cx).into_any_element(),
-            SettingsTab::Terminal => self.render_terminal(cx).into_any_element(),
+            SettingsTab::Terminal => self.render_appearance(cx).into_any_element(),
         };
 
         // Personas manages its own scroll region (only the list scrolls, the
@@ -2056,10 +2094,12 @@ const TERMINAL_HEADER_HEIGHT: f32 = 56.;
 /// the pane, so content the running program draws near what it thinks is
 /// the bottom (an input box, a status line) ends up laid out below the
 /// visible container and never appears.
-fn terminal_cell_size(cx: &App, font_size: gpui_kit::Pixels) -> (f32, f32) {
-    let font_id = cx
-        .text_system()
-        .resolve_font(&gpui_kit::font(cx.theme().mono_font_family.clone()));
+fn terminal_cell_size(
+    cx: &App,
+    font_family: gpui_kit::SharedString,
+    font_size: gpui_kit::Pixels,
+) -> (f32, f32) {
+    let font_id = cx.text_system().resolve_font(&gpui_kit::font(font_family));
     let width = cx
         .text_system()
         .em_advance(font_id, font_size)
@@ -2342,8 +2382,11 @@ impl WorkspaceWindow {
         let Some(session) = self.sessions.get(&id) else {
             return;
         };
-        let (cell_width, cell_height) =
-            terminal_cell_size(cx, px(self.settings.terminal_font_size as f32));
+        let (cell_width, cell_height) = terminal_cell_size(
+            cx,
+            self.settings.terminal_font_name.clone().into(),
+            px(self.settings.terminal_font_size as f32),
+        );
         let viewport = window.viewport_size();
         let pane_width = (f32::from(viewport.width) - TERMINAL_SIDEBAR_WIDTH).max(cell_width);
         let pane_height = (f32::from(viewport.height) - TERMINAL_HEADER_HEIGHT).max(cell_height);
@@ -2399,8 +2442,11 @@ impl WorkspaceWindow {
         position: gpui_kit::Point<gpui_kit::Pixels>,
         cx: &App,
     ) -> (usize, usize) {
-        let (cell_width, cell_height) =
-            terminal_cell_size(cx, px(self.settings.terminal_font_size as f32));
+        let (cell_width, cell_height) = terminal_cell_size(
+            cx,
+            self.settings.terminal_font_name.clone().into(),
+            px(self.settings.terminal_font_size as f32),
+        );
         let x = (f32::from(position.x) - TERMINAL_SIDEBAR_WIDTH).max(0.);
         let y = (f32::from(position.y) - TERMINAL_HEADER_HEIGHT).max(0.);
         ((x / cell_width) as usize, (y / cell_height) as usize)
@@ -3003,9 +3049,45 @@ impl Render for AgentEditor {
             )
     }
 }
+
+/// The selected agent's title-bar header content: identity (avatar, name,
+/// shortened folder, header title) for the left side, and - for a non-shell
+/// agent - state plus git stats for the right side, matching the Swift
+/// reference's `AgentFullHeader`.
+struct SelectedAgentHeader {
+    avatar: String,
+    name: String,
+    folder: String,
+    header_title: String,
+    state: Option<(knot_agents::AgentState, Option<knot_git::DiffStats>)>,
+}
+
+impl WorkspaceWindow {
+    fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
+        let id = self.selected_agent?;
+        let store = self.store.lock().ok()?;
+        let agent = store.agent(id)?;
+        let state = (!agent.is_shell()).then(|| {
+            (
+                agent.state,
+                Repository::open(&agent.folder).diff_stats().ok(),
+            )
+        });
+        Some(SelectedAgentHeader {
+            avatar: agent.avatar.clone(),
+            name: agent.name.clone(),
+            folder: shorten_path(&agent.folder),
+            header_title: agent.header_title().to_string(),
+            state,
+        })
+    }
+}
+
 impl Render for WorkspaceWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (workspace_name, agents) = {
+        let title_font_name = self.settings.title_font_name.clone();
+        let title_font_size = px(self.settings.title_font_size as f32);
+        let (_workspace_name, agents) = {
             let store = self.store.lock().unwrap();
             let Some(workspace) = store
                 .workspaces()
@@ -3097,7 +3179,13 @@ impl Render for WorkspaceWindow {
                                     .flex_1()
                                     .min_w_0()
                                     .gap_0p5()
-                                    .child(div().font_semibold().child(name))
+                                    .child(
+                                        div()
+                                            .font_family(title_font_name.clone())
+                                            .text_size(title_font_size)
+                                            .font_semibold()
+                                            .child(name),
+                                    )
                                     .children(persona_name.map(|persona_name| {
                                         div()
                                             .text_xs()
@@ -3141,22 +3229,7 @@ impl Render for WorkspaceWindow {
             },
         );
 
-        // Matches the Swift reference's `AgentTerminalView.leftVariant`:
-        // avatar, bold name, shortened working folder, then a "●" separator
-        // and the header title (status text, falling back to the terminal
-        // title) when non-empty.
-        let selected_header = self.selected_agent.and_then(|id| {
-            self.store.lock().ok().and_then(|store| {
-                store.agent(id).map(|agent| {
-                    (
-                        agent.avatar.clone(),
-                        agent.name.clone(),
-                        shorten_path(&agent.folder),
-                        agent.header_title().to_string(),
-                    )
-                })
-            })
-        });
+        let selected_header = self.selected_agent_header();
 
         let dashboard_workspace = is_dashboard.then(|| {
             let store = self.store.lock().unwrap();
@@ -3269,27 +3342,6 @@ impl Render for WorkspaceWindow {
 
             v_flex()
                 .size_full()
-                .child(
-                    h_flex()
-                        .h(px(56.))
-                        .px_5()
-                        .items_center()
-                        .justify_between()
-                        .border_b_1()
-                        .border_color(cx.theme().border)
-                        .child(div().text_lg().child(knot_core::l10n::t("dashboard.title")))
-                        .child(dashboard::sort_picker(self.dashboard_sort, {
-                            let weak = weak.clone();
-                            move |sort, _window, app| {
-                                if let Some(entity) = weak.upgrade() {
-                                    entity.update(app, |view, cx| {
-                                        view.dashboard_sort = sort;
-                                        cx.notify();
-                                    });
-                                }
-                            }
-                        })),
-                )
                 .child(div().size_full().p_6().overflow_hidden().child(
                     dashboard::workspace_section(
                         dashboard_workspace,
@@ -3302,17 +3354,140 @@ impl Render for WorkspaceWindow {
                 .into_any_element()
         });
 
+        // Matches the Swift reference's title bar: it shows the selected
+        // agent's identity directly (not a separate workspace-name strip
+        // above a second header row) so the header abuts the traffic
+        // lights with no redundant band, and a right-hand state/git-stats
+        // indicator (`AgentFullHeader`) when a non-shell agent is selected.
+        let title_bar_left = if is_dashboard {
+            div()
+                .text_lg()
+                .child(knot_core::l10n::t("dashboard.title"))
+                .into_any_element()
+        } else {
+            match &selected_header {
+                Some(header) => h_flex()
+                    .items_center()
+                    .gap_3()
+                    .child(div().text_2xl().child(header.avatar.clone()))
+                    .child(
+                        div()
+                            .font_family(title_font_name.clone())
+                            .text_size(title_font_size)
+                            .font_semibold()
+                            .child(header.name.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_lg()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(header.folder.clone()),
+                    )
+                    .when(!header.header_title.is_empty(), |row| {
+                        row.child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("●"),
+                        )
+                        .child(
+                            div()
+                                .text_lg()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(header.header_title.clone()),
+                        )
+                    })
+                    .into_any_element(),
+                None => div()
+                    .text_lg()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Choose an agent from the sidebar")
+                    .into_any_element(),
+            }
+        };
+        let title_bar_right = if is_dashboard {
+            dashboard::sort_picker(self.dashboard_sort, {
+                let weak = weak.clone();
+                move |sort, _window, app| {
+                    if let Some(entity) = weak.upgrade() {
+                        entity.update(app, |view, cx| {
+                            view.dashboard_sort = sort;
+                            cx.notify();
+                        });
+                    }
+                }
+            })
+            .into_any_element()
+        } else {
+            match selected_header
+                .as_ref()
+                .and_then(|header| header.state.as_ref())
+            {
+                Some((state, git_stats)) => v_flex()
+                    .items_end()
+                    .gap_0p5()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .w(px(10.))
+                                    .h(px(10.))
+                                    .rounded_full()
+                                    .bg(state_color(*state)),
+                            )
+                            .child(
+                                div()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(state_label(*state)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(match git_stats {
+                                Some(stats) => {
+                                    format!(
+                                        "+{} -{} ({} {})",
+                                        stats.insertions,
+                                        stats.deletions,
+                                        stats.files_changed,
+                                        if stats.files_changed == 1 {
+                                            "file"
+                                        } else {
+                                            "files"
+                                        }
+                                    )
+                                }
+                                None => "Getting stats...".to_string(),
+                            }),
+                    )
+                    .into_any_element(),
+                None => div().into_any_element(),
+            }
+        };
+
         v_flex()
             .size_full()
             .child(
                 TitleBar::new()
                     .border_color(gpui_kit::transparent_black())
+                    .bg(cx.theme().background)
                     .child(
                         h_flex()
-                            .gap_2()
+                            .w_full()
                             .items_center()
-                            .child(app_titlebar_icon())
-                            .child(workspace_name.clone()),
+                            .justify_between()
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .items_center()
+                                    .child(app_titlebar_icon())
+                                    .child(title_bar_left),
+                            )
+                            .child(title_bar_right),
                     ),
             )
             .child(
@@ -3330,8 +3505,14 @@ impl Render for WorkspaceWindow {
                             // `muted`) so there's no visible seam where the
                             // borderless title bar meets the sidebar.
                             .bg(cx.theme().title_bar)
-                            .children(agent_rows)
-                            .child(div().flex_1())
+                            .child(
+                                div()
+                                    .id("workspace-agent-list")
+                                    .flex_1()
+                                    .min_h_0()
+                                    .overflow_y_scroll()
+                                    .child(v_flex().gap_1().children(agent_rows)),
+                            )
                             .children(
                                 self.error
                                     .as_ref()
@@ -3380,67 +3561,6 @@ impl Render for WorkspaceWindow {
                             .child(dashboard_content.unwrap_or_else(|| {
                                 v_flex()
                                     .size_full()
-                                    .child(
-                                        h_flex()
-                                            .h(px(56.))
-                                            .px_5()
-                                            .items_center()
-                                            .gap_3()
-                                            .border_b_1()
-                                            .border_color(cx.theme().border)
-                                            .when(selected_header.is_none(), |row| {
-                                                row.child(
-                                                    div()
-                                                        .text_lg()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child("Choose an agent from the sidebar"),
-                                                )
-                                            })
-                                            .children(selected_header.map(
-                                                |(avatar, name, folder, header_title)| {
-                                                    h_flex()
-                                                        .items_center()
-                                                        .gap_3()
-                                                        .child(
-                                                            div().text_2xl().child(avatar),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_lg()
-                                                                .font_semibold()
-                                                                .child(name),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_lg()
-                                                                .text_color(
-                                                                    cx.theme().muted_foreground,
-                                                                )
-                                                                .child(folder),
-                                                        )
-                                                        .when(!header_title.is_empty(), |row| {
-                                                            row.child(
-                                                                div()
-                                                                    .text_sm()
-                                                                    .text_color(
-                                                                        cx.theme()
-                                                                            .muted_foreground,
-                                                                    )
-                                                                    .child("●"),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .text_lg()
-                                                                    .text_color(
-                                                                        cx.theme()
-                                                                            .muted_foreground,
-                                                                    )
-                                                                    .child(header_title),
-                                                            )
-                                                        })
-                                                },
-                                            )),
-                                    )
                                     .child(
                                         self.selected_agent
                                             .and_then(|id| {
@@ -3510,6 +3630,10 @@ impl Render for WorkspaceWindow {
                                                                 let (_, cell_height) =
                                                                     terminal_cell_size(
                                                                         cx,
+                                                                        view.settings
+                                                                            .terminal_font_name
+                                                                            .clone()
+                                                                            .into(),
                                                                         px(view
                                                                             .settings
                                                                             .terminal_font_size
@@ -3541,7 +3665,10 @@ impl Render for WorkspaceWindow {
                                                         ))
                                                         .child(terminal_view::render_grid(
                                                             &grid.lock().unwrap(),
-                                                            cx.theme().mono_font_family.clone(),
+                                                            self.settings
+                                                                .terminal_font_name
+                                                                .clone()
+                                                                .into(),
                                                             px(self.settings.terminal_font_size
                                                                 as f32),
                                                         ))
@@ -4422,7 +4549,7 @@ fn main() {
         .run(move |cx| {
             gpui_kit::init(cx);
             Theme::change(cx.window_appearance(), None, cx);
-            apply_visual_identity(cx);
+            apply_visual_identity(&settings, cx);
 
             cx.on_action(quit);
             cx.on_action(about_knot);
@@ -5083,26 +5210,6 @@ mod tests {
     }
 
     #[test]
-    fn terminal_fonts_matches_swift_reference_monospace_list() {
-        assert_eq!(
-            SettingsWindow::TERMINAL_FONTS,
-            [
-                "SF Mono",
-                "Menlo",
-                "Monaco",
-                "Courier New",
-                "Andale Mono",
-                "JetBrains Mono",
-                "Fira Code",
-                "Source Code Pro",
-                "IBM Plex Mono",
-                "Hack",
-                "Inconsolata",
-            ]
-        );
-    }
-
-    #[test]
     fn restore_conversation_toggle_enabled_only_with_layout_restore() {
         assert!(SettingsWindow::restore_conversation_toggle_enabled(true));
         assert!(!SettingsWindow::restore_conversation_toggle_enabled(false));
@@ -5139,7 +5246,7 @@ mod tests {
                 "Autopilot",
                 "Voice",
                 "MCP",
-                "Terminal"
+                "Appearance"
             ]
         );
     }

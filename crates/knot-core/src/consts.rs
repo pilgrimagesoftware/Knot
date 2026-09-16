@@ -13,9 +13,17 @@ pub const DEFAULT_AVATAR: &str = "\u{1f916}";
 
 pub const DEFAULT_AGENT_TYPE: &str = "claude";
 
-pub const TERMINAL_FONT_DEFAULT: &str = "SF Mono";
+pub const TERMINAL_FONT_DEFAULT: &str = "JetBrains Mono";
 
 pub const TERMINAL_FONT_SIZE_DEFAULT: f64 = 13.0;
+
+pub const UI_FONT_DEFAULT: &str = "Manrope";
+
+pub const UI_FONT_SIZE_DEFAULT: f64 = 14.0;
+
+pub const TITLE_FONT_DEFAULT: &str = "Adamina";
+
+pub const TITLE_FONT_SIZE_DEFAULT: f64 = 16.0;
 
 pub const APPEARANCE_MODE_DEFAULT: &str = "auto";
 

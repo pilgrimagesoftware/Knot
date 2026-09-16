@@ -10,14 +10,15 @@ use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
 
 const DEFAULT_FOREGROUND: u32 = 0xE0E0E0;
-const DEFAULT_BACKGROUND: u32 = 0x1A1A1A;
+const DEFAULT_BACKGROUND: u32 = 0x262626;
 
 /// Renders every visible row of `grid` as a monospace text grid, with the
 /// cursor cell shown by swapping its foreground/background. `font_family`
-/// should come from `cx.theme().mono_font_family` (or the user's
-/// `terminal_font_name` setting) - a name GPUI has actually registered, not
-/// a literal like `"SF Mono"` which silently falls back to the app's
-/// (proportional) UI font if it isn't a font GPUI knows about.
+/// should come from the user's `terminal_font_name` setting - a name GPUI
+/// has actually registered (the default, "JetBrains Mono", is embedded and
+/// registered in `apply_visual_identity`), not an arbitrary system font
+/// name, which silently falls back to the app's (proportional) UI font if
+/// GPUI can't resolve it.
 pub(crate) fn render_grid(
     grid: &Grid,
     font_family: gpui_kit::SharedString,
