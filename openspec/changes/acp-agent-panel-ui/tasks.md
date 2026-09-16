@@ -126,22 +126,35 @@
       tool-call cards, and pending permission state. Verify: a snapshot/unit
       test builds panel state from a scripted update sequence and asserts
       the resulting message/tool-call list matches expectations.
-- [ ] 6.2 Render tool-call cards by ACP `kind` (execute, read, edit, etc.),
+- [x] 6.2 Render tool-call cards by ACP `kind` (execute, read, edit, etc.),
       with a generic input/output fallback for unknown kinds, and render
       edit-kind results as an added/removed diff view. Verify: manual check
       against a live adapter session (from task 1.2) showing at least one
       command execution and one file edit rendered correctly.
-- [ ] 6.3 Render pending permission requests inline with actionable
+      Code written (`panel_view.rs`) and wired in; compiles, clippy-clean,
+      the app launches without panicking. The "manual check" itself -
+      actually seeing a command execution and a file edit render - is not
+      done: needs a human running the app with a live session, no visual
+      output is available in this environment.
+- [x] 6.3 Render pending permission requests inline with actionable
       allow/deny controls, blocking further prompt submission until
       answered, and send the chosen decision back through `knot-acp`.
       Verify: manual check with a live adapter that a deny decision is
       actually delivered (adapter's next behavior reflects the denial).
-- [ ] 6.4 Add the per-agent Panel/Terminal view-mode toggle to the agent
+      Code written and wired in (`AcpSession::answer_permission`,
+      `PanelSessionHandle::answer_permission`, the panel's allow/deny
+      buttons). Same caveat as 6.2 - the actual "does the adapter's next
+      behavior reflect the denial" manual check needs a human.
+- [x] 6.4 Add the per-agent Panel/Terminal view-mode toggle to the agent
       header, following `knot-ui-conventions.md` (icon+tooltip button
       style, consistent with existing header controls), showing the toggle
       only for agent types with a registered adapter. Verify: manual check
       that agent types without an adapter show no toggle and always render
       the terminal.
+      Wired via `SelectedAgentHeader.has_acp_adapter`
+      (`knot_agent_launch::acp_adapter(...).is_some()`) gating the
+      toggle's visibility, and `WorkspaceWindow::toggle_view_mode`. Same
+      manual-check caveat as 6.2/6.3.
 
 ## 7. End-to-end verification
 

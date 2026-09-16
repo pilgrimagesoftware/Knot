@@ -53,7 +53,12 @@ impl Transport {
                  -> Result<(std::sync::Arc<Self>, mpsc::UnboundedReceiver<TransportEvent>)> {
         command.stdin(Stdio::piped())
                .stdout(Stdio::piped())
-               .stderr(Stdio::null());
+               .stderr(Stdio::null())
+               // Without this, dropping the `Child` (e.g. the owning
+               // window closing without an explicit `close()`/`stop()`
+               // call) leaves the adapter subprocess running as an orphan
+               // instead of terminating it.
+               .kill_on_drop(true);
         let mut child = command.spawn()?;
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");

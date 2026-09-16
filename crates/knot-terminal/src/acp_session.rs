@@ -4,7 +4,9 @@
 //! `openspec/specs/acp-panel-ui/spec.md`'s "Switch to Terminal mid-turn"
 //! scenario.
 
-use knot_acp::{AcpClient, Result as AcpResult, SessionEvent};
+use knot_acp::{
+    AcpClient, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
+};
 use knot_agent_launch::AdapterLaunch;
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -55,6 +57,13 @@ impl AcpSession {
 
     pub async fn cancel(&self) -> AcpResult<()> {
         self.client.session_cancel(&self.session_id).await
+    }
+
+    /// Answers a pending `session/request_permission` request surfaced via
+    /// a `SessionEvent::PermissionRequest` from this session's event
+    /// stream.
+    pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
+        self.client.answer_permission(request, decision);
     }
 
     /// Closes the ACP connection. Never touches any terminal transport -
