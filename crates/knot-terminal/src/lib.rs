@@ -12,7 +12,7 @@ mod keys;
 mod mouse;
 mod pty;
 
-pub use grid::{Cell, Grid, GridEvent, GridSize};
+pub use grid::{Cell, ClipboardType, Grid, GridEvent, GridSize};
 pub use keys::{KeyInput, key_to_bytes};
 pub use mouse::{MouseButton, MouseInput, mouse_to_bytes};
 

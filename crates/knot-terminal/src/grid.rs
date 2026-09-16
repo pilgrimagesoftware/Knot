@@ -12,6 +12,7 @@ use alacritty_terminal::term::{Config as TermConfig, Term};
 use alacritty_terminal::vte::ansi::Processor;
 
 pub use alacritty_terminal::event::Event as GridEvent;
+pub use alacritty_terminal::term::ClipboardType;
 pub use alacritty_terminal::term::cell::Cell;
 
 /// A terminal's fixed size, in columns and (visible) rows. `alacritty_terminal`

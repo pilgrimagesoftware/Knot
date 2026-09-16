@@ -112,16 +112,18 @@
       called these; task 2.5 removed the old polling loop's *separate*
       caller in `Shell`, which was redundant with this one, not the only
       one). `knot-activity`'s own test suite is untouched (API unchanged).
-- [ ] 4.3 OSC 52 clipboard write requests (`GridEvent::ClipboardStore`,
+- [x] 4.3 OSC 52 clipboard write requests (`GridEvent::ClipboardStore`,
       already captured by task 1.2's event queue) serve the OS pasteboard.
-      Not yet wired: `on_grid_event` fires on the PTY reader thread, and
-      writing to the OS pasteboard needs GPUI's main-thread `cx`/`Window`
-      APIs - needs a thread-safe hand-off (a channel drained by a timer or
-      the next render, matching how `check_requests`/`awaiting_input`
-      marshal background events in the old `Shell` code) that doesn't
-      exist yet for `WorkspaceWindow`. Revisit alongside task 3.3 (copy
-      also needs pasteboard access) rather than building two separate
-      mechanisms.
+      `WorkspaceWindow::clipboard_writes` (an `Arc<Mutex<Vec<String>>>`)
+      is filled from `ensure_session`'s `on_grid_event` (PTY reader
+      thread) and drained every 100ms by a `cx.spawn` poll loop that
+      calls `App::write_to_clipboard` on the main thread - the same
+      background-to-main-thread hand-off pattern `SettingsWindow` already
+      uses for the native font panel. Only `ClipboardType::Clipboard` is
+      handled; `Selection` (X11 primary-selection semantics) isn't
+      meaningful on macOS. Verify: manual check a program using OSC 52
+      (e.g. `printf '\e]52;c;%s\a' "$(echo -n hello | base64)"`) updates
+      the OS pasteboard (task 5.2).
 
 ## 5. Final verification
 
