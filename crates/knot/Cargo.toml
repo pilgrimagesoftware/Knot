@@ -17,6 +17,7 @@ knot-messaging = { path = "../knot-messaging" }
 knot-mcp = { path = "../knot-mcp" }
 knot-mcp-tools = { path = "../knot-mcp-tools" }
 knot-terminal = { path = "../knot-terminal" }
+alacritty_terminal = "0.26.0"
 knot-history = { path = "../knot-history" }
 tokio.workspace = true
 uuid.workspace = true
