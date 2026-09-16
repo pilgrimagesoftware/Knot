@@ -249,7 +249,7 @@ fn make_tracker<T: TerminalTransport + 'static>(config: &SessionConfig<'_>,
                                                     supports_inline_registration(&config.agent
                                                                                         .agent_type),
                                                 ..TrackerConfig::default() },
-                                tracking_for(&config.agent.agent_type),
+                                tracking_for(&config.agent.agent_type, config.agent.view_mode),
                                 sink));
     if config.settings.mcp_server_enabled && !supports_inline_registration(&config.agent.agent_type)
     {

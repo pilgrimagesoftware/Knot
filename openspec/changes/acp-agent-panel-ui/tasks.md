@@ -95,12 +95,12 @@
 
 ## 5. Activity detection integration
 
-- [ ] 5.1 Add the `acp-updates` tracking-set variant to `knot-activity` and
+- [x] 5.1 Add the `acp-updates` tracking-set variant to `knot-activity` and
       route Panel-mode agents to it exclusively (no `user-input`/
       `terminal-output` tracking), per the `activity-detection` delta.
       Verify: unit test asserts a Panel-mode agent's status is unaffected by
       simulated terminal output/keystrokes.
-- [ ] 5.2 Wire turn-start -> Working, turn-end-with-no-pending-permission ->
+- [x] 5.2 Wire turn-start -> Working, turn-end-with-no-pending-permission ->
       Idle, permission-request -> Awaiting input, and ACP session error ->
       Error, with no idle timer or input-protection guard involved. Verify:
       unit tests for each of the four transitions driven by synthetic ACP

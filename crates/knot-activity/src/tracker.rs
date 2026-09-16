@@ -18,6 +18,7 @@ enum Command {
     UserInput(KeyEvent),
     ProcessExit(Option<i32>),
     HookStatus(AgentState, Option<String>),
+    AcpStatus(AgentState, Option<String>),
     SetTracking(ActivityTracking),
     SetRegistrationPrompt(String),
     Shutdown,
@@ -63,6 +64,11 @@ impl Tracker {
         let _ = self.tx.send(Command::HookStatus(status, message));
     }
 
+    /// An ACP session event drove the status, for a Panel-mode agent.
+    pub fn apply_acp_status(&self, status: AgentState, message: Option<String>) {
+        let _ = self.tx.send(Command::AcpStatus(status, message));
+    }
+
     /// Change the tracked activity sources at runtime.
     pub fn set_tracking(&self, tracking: ActivityTracking) {
         let _ = self.tx.send(Command::SetTracking(tracking));
@@ -104,6 +110,9 @@ async fn run(mut rx: UnboundedReceiver<Command>, mut state: ActivityState, mut s
                     }
                     Command::HookStatus(status, message) => {
                         apply(&mut sink, state.apply_hook_status(Instant::now(), status, message));
+                    }
+                    Command::AcpStatus(status, message) => {
+                        apply(&mut sink, state.apply_acp_status(Instant::now(), status, message));
                     }
                     Command::SetTracking(tracking) => state.set_tracking(tracking),
                     Command::SetRegistrationPrompt(prompt) => state.set_registration_prompt(prompt),
@@ -165,7 +174,9 @@ mod tests {
         let log = Arc::new(Mutex::new(Vec::new()));
         let cfg = TrackerConfig { is_hook_based,
                                   ..TrackerConfig::for_agent_type("claude") };
-        let tracker = Tracker::spawn(cfg, tracking_for("claude"), log_sink(&log));
+        let tracker = Tracker::spawn(cfg,
+                                     tracking_for("claude", knot_core::ViewMode::Terminal),
+                                     log_sink(&log));
         tokio::task::yield_now().await;
         (tracker, log)
     }

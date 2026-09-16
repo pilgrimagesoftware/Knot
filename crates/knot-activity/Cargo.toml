@@ -10,6 +10,7 @@ rust-version.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 knot-agents = { path = "../knot-agents" }
+knot-core = { path = "../knot-core" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

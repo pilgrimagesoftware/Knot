@@ -3761,6 +3761,7 @@ name = "knot-activity"
 version = "0.1.0"
 dependencies = [
  "knot-agents",
+ "knot-core",
  "thiserror 2.0.20",
  "tokio",
 ]

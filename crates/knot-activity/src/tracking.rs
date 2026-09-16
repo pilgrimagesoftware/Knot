@@ -11,10 +11,16 @@ impl ActivityTracking {
     /// Set when a user keystroke is observed.
     pub const USER_INPUT: Self = Self(1 << 1);
 
+    /// Set for a Panel-mode (ACP-managed) agent: status is driven directly
+    /// by ACP session events, never by terminal output or keystrokes -
+    /// mutually exclusive with `TERMINAL_OUTPUT`/`USER_INPUT` in practice
+    /// (a Panel-mode agent tracks only this).
+    pub const ACP_UPDATES: Self = Self(1 << 2);
+
     /// No sources tracked; the agent stays Idle (shell agents).
     pub const NONE: Self = Self(0);
 
-    /// Both sources tracked.
+    /// Both terminal sources tracked (the non-Panel-mode, non-shell default).
     pub const ALL: Self = Self(0b11);
 
     /// Whether `other` is a subset of this set.
@@ -44,11 +50,16 @@ impl Default for ActivityTracking {
     }
 }
 
-/// Tracking preset for `agent_type`: shell agents track neither terminal
-/// output nor user input; all other agents track both.
-pub fn tracking_for(agent_type: &str) -> ActivityTracking {
+/// Tracking preset for `agent_type` in `view_mode`: shell agents track
+/// nothing; a Panel-mode agent tracks only ACP updates (terminal output and
+/// keystrokes are ignored even if its terminal still exists); every other
+/// agent tracks both terminal sources.
+pub fn tracking_for(agent_type: &str, view_mode: knot_core::ViewMode) -> ActivityTracking {
     if agent_type == "shell" {
         ActivityTracking::NONE
+    }
+    else if view_mode == knot_core::ViewMode::Panel {
+        ActivityTracking::ACP_UPDATES
     }
     else {
         ActivityTracking::ALL
@@ -61,20 +72,36 @@ mod tests {
 
     #[test]
     fn shell_tracks_nothing() {
-        assert_eq!(tracking_for("shell"), ActivityTracking::NONE);
-        assert!(tracking_for("shell").is_empty());
+        assert_eq!(tracking_for("shell", knot_core::ViewMode::Terminal),
+                   ActivityTracking::NONE);
+        assert!(tracking_for("shell", knot_core::ViewMode::Terminal).is_empty());
+        // Shell agents never leave Idle regardless of view mode.
+        assert_eq!(tracking_for("shell", knot_core::ViewMode::Panel),
+                   ActivityTracking::NONE);
     }
 
     #[test]
-    fn non_shell_tracks_both() {
+    fn non_shell_tracks_both_in_terminal_mode() {
         for t in ["claude", "codex", "opencode", "gemini"] {
-            assert_eq!(tracking_for(t), ActivityTracking::ALL);
+            assert_eq!(tracking_for(t, knot_core::ViewMode::Terminal),
+                       ActivityTracking::ALL);
         }
     }
 
     #[test]
-    fn unknown_agent_type_tracks_both() {
-        assert_eq!(tracking_for("unknown-type"), ActivityTracking::ALL);
+    fn unknown_agent_type_tracks_both_in_terminal_mode() {
+        assert_eq!(tracking_for("unknown-type", knot_core::ViewMode::Terminal),
+                   ActivityTracking::ALL);
+    }
+
+    #[test]
+    fn panel_mode_tracks_only_acp_updates() {
+        assert_eq!(tracking_for("claude", knot_core::ViewMode::Panel),
+                   ActivityTracking::ACP_UPDATES);
+        assert!(!tracking_for("claude", knot_core::ViewMode::Panel)
+            .contains(ActivityTracking::TERMINAL_OUTPUT));
+        assert!(!tracking_for("claude", knot_core::ViewMode::Panel)
+            .contains(ActivityTracking::USER_INPUT));
     }
 
     #[test]

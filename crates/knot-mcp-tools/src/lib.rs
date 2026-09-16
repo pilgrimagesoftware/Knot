@@ -131,9 +131,12 @@ impl McpToolCatalog {
                 }) as Box<dyn FnMut(Option<String>) + Send>
                                                                 }),
                                ..Default::default() };
+        // Hook-reported status is exclusively a Terminal-mode path - a
+        // Panel-mode agent's status is driven by ACP session events
+        // instead, never by this hook tracker.
         let tracker = Tracker::spawn(TrackerConfig { is_hook_based: true,
                                                      ..TrackerConfig::for_agent_type(agent_type) },
-                                     tracking_for(agent_type),
+                                     tracking_for(agent_type, knot_core::ViewMode::Terminal),
                                      sink);
         trackers.insert(id, tracker);
         true
