@@ -171,6 +171,15 @@ impl Settings {
 
         let mut settings: Self = serde_json::from_value(value).unwrap_or_default();
         settings.store_path = store;
+        // "SF Mono" was the terminal font default before JetBrains Mono
+        // replaced it; a persisted document from before that change still
+        // carries the old value, and SF Mono isn't reliably resolvable
+        // through GPUI's font lookup (unlike AppKit, which special-cases
+        // it), silently falling back to the UI font. Upgrade it once,
+        // the same way a never-customized document already would default.
+        if settings.terminal_font_name == "SF Mono" {
+            settings.terminal_font_name = TERMINAL_FONT_DEFAULT.to_string();
+        }
         Ok(settings)
     }
 
@@ -405,6 +414,24 @@ mod tests {
         let s = Settings::load_from(&path).unwrap();
         assert!(s.restore_layout_on_launch);
         assert!(!s.restore_conversation_on_launch);
+    }
+
+    #[test]
+    fn persisted_sf_mono_upgrades_to_the_new_terminal_font_default() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, r#"{"terminalFontName":"SF Mono"}"#).unwrap();
+        let s = Settings::load_from(&path).unwrap();
+        assert_eq!(s.terminal_font_name, "JetBrains Mono");
+    }
+
+    #[test]
+    fn persisted_custom_terminal_font_is_not_overridden() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, r#"{"terminalFontName":"Fira Code"}"#).unwrap();
+        let s = Settings::load_from(&path).unwrap();
+        assert_eq!(s.terminal_font_name, "Fira Code");
     }
 
     #[test]

@@ -2217,7 +2217,22 @@ impl WorkspaceWindow {
                     show_new_agent: false,
                     error: None,
                 };
-                if let Some(id) = selected_agent {
+                // Matches the Swift reference: every agent in the
+                // workspace starts its session when the workspace window
+                // opens, not just the one initially selected.
+                let agent_ids: Vec<Uuid> = window
+                    .store
+                    .lock()
+                    .ok()
+                    .and_then(|store| {
+                        store
+                            .workspaces()
+                            .iter()
+                            .find(|workspace| workspace.id == workspace_id)
+                            .map(|workspace| workspace.agent_ids.clone())
+                    })
+                    .unwrap_or_default();
+                for id in agent_ids {
                     window.ensure_session(id);
                 }
                 window
@@ -3473,21 +3488,37 @@ impl Render for WorkspaceWindow {
             .size_full()
             .child(
                 TitleBar::new()
+                    .h(px(64.))
                     .border_color(gpui_kit::transparent_black())
-                    .bg(cx.theme().background)
                     .child(
                         h_flex()
-                            .w_full()
-                            .items_center()
-                            .justify_between()
+                            .size_full()
+                            .child(
+                                // Traffic lights live within this column's
+                                // width, matching the sidebar below it - the
+                                // agent header starts where the content
+                                // pane does, not immediately after the
+                                // lights.
+                                h_flex()
+                                    .w(px(250.))
+                                    .h_full()
+                                    .flex_shrink_0()
+                                    .items_center()
+                                    .px_4()
+                                    .bg(cx.theme().title_bar)
+                                    .child(app_titlebar_icon()),
+                            )
                             .child(
                                 h_flex()
-                                    .gap_2()
+                                    .flex_1()
+                                    .h_full()
                                     .items_center()
-                                    .child(app_titlebar_icon())
-                                    .child(title_bar_left),
-                            )
-                            .child(title_bar_right),
+                                    .justify_between()
+                                    .px_5()
+                                    .bg(cx.theme().background)
+                                    .child(title_bar_left)
+                                    .child(title_bar_right),
+                            ),
                     ),
             )
             .child(
@@ -3520,6 +3551,10 @@ impl Render for WorkspaceWindow {
                             )
                             .child(
                                 h_flex()
+                                    .flex_shrink_0()
+                                    .h(px(32.))
+                                    .w_full()
+                                    .items_center()
                                     .gap_1()
                                     .child(
                                         Button::new("workspace-new-agent")

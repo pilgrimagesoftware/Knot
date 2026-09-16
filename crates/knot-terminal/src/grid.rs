@@ -205,6 +205,26 @@ mod tests {
     }
 
     #[test]
+    fn alternate_screen_content_and_cursor_are_reflected() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"primary screen text");
+        // Enter the alternate screen buffer (what full-screen TUIs like
+        // Claude Code's use), clear it, and draw new content plus move the
+        // cursor - both should read from the now-active alt screen, not the
+        // primary one still holding "primary screen text".
+        grid.feed(b"\x1b[?1049h\x1b[2J\x1b[H");
+        grid.feed(b"alt screen line");
+        grid.feed(b"\x1b[3;1Hprompt row");
+        assert_eq!(grid.row_text(0), "alt screen line");
+        assert_eq!(grid.row_text(2), "prompt row");
+        assert_eq!(grid.cursor(), (10, 2));
+
+        // Leaving the alt screen restores the primary content untouched.
+        grid.feed(b"\x1b[?1049l");
+        assert_eq!(grid.row_text(0), "primary screen text");
+    }
+
+    #[test]
     fn tracks_cursor_position_after_writes() {
         let mut grid = grid(20, 5);
         grid.feed(b"hi");
