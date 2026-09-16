@@ -16,33 +16,33 @@
 
 ## 2. `knot-acp` crate: transport and protocol types
 
-- [ ] 2.1 Scaffold `crates/knot-acp` (lib crate, workspace member, deps:
+- [x] 2.1 Scaffold `crates/knot-acp` (lib crate, workspace member, deps:
       `knot-core`, `serde`, `serde_json`, `tokio`). Verify: `cargo build -p
       knot-acp` succeeds with an empty lib.
-- [ ] 2.2 Implement JSON-RPC 2.0 framing over a subprocess's stdio (spawn,
+- [x] 2.2 Implement JSON-RPC 2.0 framing over a subprocess's stdio (spawn,
       write requests, read/parse both single messages and batched arrays,
       match responses to requests by id). Verify: unit test spawns a fake
       subprocess (e.g. `cat` echoing crafted JSON-RPC) and asserts correct
       request/response pairing.
-- [ ] 2.3 Add the `initialize` request/response types and capability
+- [x] 2.3 Add the `initialize` request/response types and capability
       negotiation, failing closed on an unsupported protocol version per the
       `acp-client` spec. Verify: unit tests for matching-version success and
       mismatched-version error.
-- [ ] 2.4 Add session lifecycle methods (`session/new`, `session/load`,
+- [x] 2.4 Add session lifecycle methods (`session/new`, `session/load`,
       `session/prompt`, `session/cancel`, close) with typed errors for
       "resume not supported" per capability flags. Verify: unit tests cover
       each method's request shape and the resume-unsupported error path.
-- [ ] 2.5 Add the `session/update` notification stream as an ordered channel
+- [x] 2.5 Add the `session/update` notification stream as an ordered channel
       distinguishing text delta, tool-call start/update/result, diff, and
       turn-end-with-stop-reason. Verify: unit test feeds a sequence of
       update notifications and asserts the channel yields them in order with
       correct variant decoding.
-- [ ] 2.6 Add `session/request_permission` handling: surface the request,
+- [x] 2.6 Add `session/request_permission` handling: surface the request,
       block the agent-facing response until the caller answers, and
       auto-decline any request still pending when the session closes.
       Verify: unit tests for normal answer flow and the close-while-pending
       auto-decline.
-- [ ] 2.7 Add subprocess exit / broken-pipe / JSON-RPC-error handling that
+- [x] 2.7 Add subprocess exit / broken-pipe / JSON-RPC-error handling that
       ends the session with a reported cause instead of panicking, resolving
       any pending prompt/permission futures with an error. Verify: unit test
       kills the fake subprocess mid-turn and asserts the pending future
