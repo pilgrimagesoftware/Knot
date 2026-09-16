@@ -143,8 +143,15 @@
       Terminal mode and confirm a real shell opens in the same folder.
       Verify: written confirmation (or short screen recording) that each
       step behaved as described.
-- [ ] 7.3 Confirm existing terminal-only agent types (no adapter) are
+- [x] 7.3 Confirm existing terminal-only agent types (no adapter) are
       unaffected: launch, activity detection, and history behave exactly as
       before this change. Verify: existing test suites for
       `agent-launch-command`, `agent-lifecycle`, and `activity-detection`
       pass unmodified for non-adapter agent types.
+      Note: every pre-existing test in these three suites still passes
+      unmodified in assertions (two call sites needed a new required
+      argument - `tracking_for`'s `ViewMode`, `plan_launch`'s adapter
+      param - but no existing behavior/assertion changed). Since
+      `acp_adapter` returns `None` for every agent type (no adapter
+      confirmed yet), every agent is still on the terminal path exactly as
+      before.
