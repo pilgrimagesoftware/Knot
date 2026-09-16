@@ -7,10 +7,10 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInfo {
-    pub id: String,
-    pub name: String,
-    pub folder: String,
-    pub status: String,
+    pub id:            String,
+    pub name:          String,
+    pub folder:        String,
+    pub status:        String,
     pub is_registered: bool,
 }
 
@@ -32,22 +32,22 @@ pub struct CheckMessagesResponse {
 
 #[derive(Debug, Serialize)]
 pub struct MessageInfo {
-    pub id: String,
-    pub from: String,
-    pub content: String,
+    pub id:        String,
+    pub from:      String,
+    pub content:   String,
     pub timestamp: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BroadcastResponse {
-    pub success: bool,
+    pub success:         bool,
     pub recipient_count: usize,
 }
 
 #[derive(Debug, Serialize)]
 pub struct RepoInfoResponse {
-    pub name: String,
+    pub name:      String,
     pub worktrees: Vec<WorktreeInfoResponse>,
 }
 
@@ -72,10 +72,10 @@ pub struct ListWorktreesResponse {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentResponse {
-    pub success: bool,
+    pub success:  bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
-    pub message: String,
+    pub message:  String,
 }
 
 #[derive(Debug, Serialize)]
@@ -87,10 +87,10 @@ pub struct CloseAgentResponse {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterAgentResponse {
-    pub success: bool,
-    pub message: String,
+    pub success:              bool,
+    pub message:              String,
     pub unread_message_count: usize,
-    pub knot_members: Vec<AgentInfo>,
+    pub knot_members:         Vec<AgentInfo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,7 +98,7 @@ pub struct RegisterAgentResponse {
 pub struct CreateWorktreeResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub path:    Option<String>,
     pub message: String,
 }
 

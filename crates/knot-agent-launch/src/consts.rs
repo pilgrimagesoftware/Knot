@@ -8,10 +8,8 @@
 pub const REGISTRATION_USER_PROMPT: &str = "List other agents names and project (no ID) in a table based on context then set your status to indicate you are ready to get going. If you don't see yourself in the table, register with the knot.";
 
 /// Messaging tools Copilot's `--allow-tool` flags are generated for.
-pub const COPILOT_ALLOWED_TOOLS: &[&str] = &[
-    "register-agent",
-    "list-agents",
-    "send-message",
-    "check-messages",
-    "broadcast-message",
-];
+pub const COPILOT_ALLOWED_TOOLS: &[&str] = &["register-agent",
+                                             "list-agents",
+                                             "send-message",
+                                             "check-messages",
+                                             "broadcast-message"];

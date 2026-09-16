@@ -1,7 +1,8 @@
 //! Shared types, error model, constants, localization lookup, and the durable
 //! settings store for the Knot Rust port.
 //!
-//! The `settings` module implements `openspec/specs/settings-persistence/spec.md`.
+//! The `settings` module implements
+//! `openspec/specs/settings-persistence/spec.md`.
 
 rust_i18n::i18n!("locales", fallback = "en");
 

@@ -16,36 +16,36 @@ pub const PROTOCOL_VERSION: u32 = 1;
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonRpcRequest {
     pub jsonrpc: &'static str,
-    pub id: i64,
-    pub method: String,
+    pub id:      i64,
+    pub method:  String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<Value>,
+    pub params:  Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonRpcNotification {
     pub jsonrpc: &'static str,
-    pub method: String,
+    pub method:  String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<Value>,
+    pub params:  Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: &'static str,
-    pub id: Value,
+    pub id:      Value,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<Value>,
+    pub result:  Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<JsonRpcErrorPayload>,
+    pub error:   Option<JsonRpcErrorPayload>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcErrorPayload {
-    pub code: i64,
+    pub code:    i64,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
+    pub data:    Option<Value>,
 }
 
 /// A message read off the subprocess's stdout: an id-bearing response to a
@@ -55,7 +55,7 @@ pub struct JsonRpcErrorPayload {
 #[derive(Debug, Clone, Deserialize)]
 pub struct IncomingMessage {
     #[serde(default)]
-    pub id: Option<Value>,
+    pub id:     Option<Value>,
     #[serde(default)]
     pub method: Option<String>,
     #[serde(default)]
@@ -63,7 +63,7 @@ pub struct IncomingMessage {
     #[serde(default)]
     pub result: Option<Value>,
     #[serde(default)]
-    pub error: Option<JsonRpcErrorPayload>,
+    pub error:  Option<JsonRpcErrorPayload>,
 }
 
 impl IncomingMessage {
@@ -94,13 +94,13 @@ pub struct InitializeResult {
     #[serde(rename = "protocolVersion")]
     pub protocol_version: u32,
     #[serde(default)]
-    pub capabilities: AgentCapabilities,
+    pub capabilities:     AgentCapabilities,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AgentCapabilities {
     #[serde(default, rename = "loadSession")]
-    pub supports_resume: bool,
+    pub supports_resume:  bool,
     #[serde(default, rename = "permissionModes")]
     pub permission_modes: Vec<String>,
 }
@@ -115,15 +115,15 @@ pub enum SessionUpdate {
     },
     ToolCallStart {
         tool_call_id: String,
-        kind: String,
+        kind:         String,
     },
     ToolCallUpdate {
         tool_call_id: String,
-        status: String,
+        status:       String,
     },
     ToolCallResult {
         tool_call_id: String,
-        output: Value,
+        output:       Value,
     },
     Diff {
         path: String,
@@ -141,59 +141,57 @@ impl SessionUpdate {
     pub fn from_params(params: Value) -> Self {
         let kind = params.get("sessionUpdate").and_then(Value::as_str);
         match kind {
-            Some("agent_message_chunk") | Some("text_delta") => SessionUpdate::TextDelta {
-                text: params
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned(),
-            },
-            Some("tool_call") => SessionUpdate::ToolCallStart {
-                tool_call_id: field_str(&params, "toolCallId"),
-                kind: field_str(&params, "kind"),
-            },
-            Some("tool_call_update") => SessionUpdate::ToolCallUpdate {
-                tool_call_id: field_str(&params, "toolCallId"),
-                status: field_str(&params, "status"),
-            },
-            Some("tool_call_result") => SessionUpdate::ToolCallResult {
-                tool_call_id: field_str(&params, "toolCallId"),
-                output: params.get("output").cloned().unwrap_or(Value::Null),
-            },
-            Some("diff") => SessionUpdate::Diff {
-                path: field_str(&params, "path"),
-                diff: field_str(&params, "diff"),
-            },
-            Some("turn_end") => SessionUpdate::TurnEnd {
-                stop_reason: field_str(&params, "stopReason"),
-            },
+            Some("agent_message_chunk") | Some("text_delta") => {
+                SessionUpdate::TextDelta { text: params.get("text")
+                                                       .and_then(Value::as_str)
+                                                       .unwrap_or_default()
+                                                       .to_owned(), }
+            }
+            Some("tool_call") => {
+                SessionUpdate::ToolCallStart { tool_call_id: field_str(&params, "toolCallId"),
+                                               kind:         field_str(&params, "kind"), }
+            }
+            Some("tool_call_update") => {
+                SessionUpdate::ToolCallUpdate { tool_call_id: field_str(&params, "toolCallId"),
+                                                status:       field_str(&params, "status"), }
+            }
+            Some("tool_call_result") => {
+                SessionUpdate::ToolCallResult { tool_call_id: field_str(&params, "toolCallId"),
+                                                output:       params.get("output")
+                                                                    .cloned()
+                                                                    .unwrap_or(Value::Null), }
+            }
+            Some("diff") => SessionUpdate::Diff { path: field_str(&params, "path"),
+                                                  diff: field_str(&params, "diff"), },
+            Some("turn_end") => {
+                SessionUpdate::TurnEnd { stop_reason: field_str(&params, "stopReason"), }
+            }
             _ => SessionUpdate::Unknown { raw: params },
         }
     }
 }
 
 fn field_str(value: &Value, key: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+    value.get(key)
+         .and_then(Value::as_str)
+         .unwrap_or_default()
+         .to_owned()
 }
 
 /// A `session/request_permission` request from the agent, awaiting an
 /// allow/deny decision from the caller.
 #[derive(Debug, Clone)]
 pub struct PermissionRequest {
-    pub rpc_id: Value,
+    pub rpc_id:       Value,
     pub tool_call_id: String,
-    pub options: Vec<PermissionOption>,
+    pub options:      Vec<PermissionOption>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PermissionOption {
     #[serde(rename = "optionId")]
     pub option_id: String,
-    pub name: String,
+    pub name:      String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

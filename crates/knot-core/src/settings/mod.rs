@@ -12,14 +12,13 @@
 
 mod records;
 
-pub use records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, Workspace};
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use directories::{BaseDirs, ProjectDirs};
+pub use records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, Workspace};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -40,47 +39,47 @@ use crate::error::{Error, Result};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
-    pub appearance_mode: String,
-    pub restore_layout_on_launch: bool,
+    pub appearance_mode:                String,
+    pub restore_layout_on_launch:       bool,
     pub restore_conversation_on_launch: bool,
-    pub keep_in_menu_bar: bool,
-    pub mcp_server_enabled: bool,
-    pub mcp_server_port: u16,
-    pub source_base_folder: String,
+    pub keep_in_menu_bar:               bool,
+    pub mcp_server_enabled:             bool,
+    pub mcp_server_port:                u16,
+    pub source_base_folder:             String,
     #[serde(rename = "sourceBaseFolderInitialized")]
-    pub source_folder_detected: bool,
-    pub desktop_notifications_enabled: bool,
-    pub markdown_font_size: i32,
-    pub mermaid_theme: String,
-    pub mermaid_scale: f64,
-    pub agent_commands: BTreeMap<String, String>,
-    pub agent_options: BTreeMap<String, String>,
-    pub terminal_font_name: String,
-    pub terminal_font_size: f64,
-    pub ui_font_name: String,
-    pub ui_font_size: f64,
-    pub title_font_name: String,
-    pub title_font_size: f64,
-    pub autopilot_enabled: bool,
-    pub ai_provider: String,
-    pub ai_api_key: String,
-    pub autopilot_action: String,
-    pub autopilot_custom_prompt: String,
-    pub voice_enabled: bool,
-    pub voice_engine: String,
-    pub voice_push_to_talk_key: i32,
-    pub voice_auto_insert: bool,
+    pub source_folder_detected:         bool,
+    pub desktop_notifications_enabled:  bool,
+    pub markdown_font_size:             i32,
+    pub mermaid_theme:                  String,
+    pub mermaid_scale:                  f64,
+    pub agent_commands:                 BTreeMap<String, String>,
+    pub agent_options:                  BTreeMap<String, String>,
+    pub terminal_font_name:             String,
+    pub terminal_font_size:             f64,
+    pub ui_font_name:                   String,
+    pub ui_font_size:                   f64,
+    pub title_font_name:                String,
+    pub title_font_size:                f64,
+    pub autopilot_enabled:              bool,
+    pub ai_provider:                    String,
+    pub ai_api_key:                     String,
+    pub autopilot_action:               String,
+    pub autopilot_custom_prompt:        String,
+    pub voice_enabled:                  bool,
+    pub voice_engine:                   String,
+    pub voice_push_to_talk_key:         i32,
+    pub voice_auto_insert:              bool,
 
     #[serde(deserialize_with = "de_tolerant_vec")]
-    pub saved_agents: Vec<SavedAgent>,
+    pub saved_agents:     Vec<SavedAgent>,
     #[serde(deserialize_with = "de_tolerant_vec")]
     pub saved_workspaces: Vec<Workspace>,
     #[serde(deserialize_with = "de_tolerant_vec")]
-    pub personas: Vec<Persona>,
+    pub personas:         Vec<Persona>,
     #[serde(deserialize_with = "de_tolerant_vec")]
-    pub bench_agents: Vec<BenchAgent>,
+    pub bench_agents:     Vec<BenchAgent>,
     #[serde(deserialize_with = "de_tolerant_vec")]
-    pub recent_repos: Vec<String>,
+    pub recent_repos:     Vec<String>,
 
     #[serde(skip)]
     store_path: Option<PathBuf>,
@@ -88,43 +87,41 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self {
-            appearance_mode: APPEARANCE_MODE_DEFAULT.to_string(),
-            restore_layout_on_launch: true,
-            restore_conversation_on_launch: false,
-            keep_in_menu_bar: false,
-            mcp_server_enabled: true,
-            mcp_server_port: MCP_PORT_DEFAULT,
-            source_base_folder: String::new(),
-            source_folder_detected: false,
-            desktop_notifications_enabled: true,
-            markdown_font_size: MARKDOWN_FONT_SIZE_DEFAULT,
-            mermaid_theme: MERMAID_THEME_DEFAULT.to_string(),
-            mermaid_scale: 1.0,
-            agent_commands: BTreeMap::new(),
-            agent_options: BTreeMap::new(),
-            terminal_font_name: TERMINAL_FONT_DEFAULT.to_string(),
-            terminal_font_size: TERMINAL_FONT_SIZE_DEFAULT,
-            ui_font_name: UI_FONT_DEFAULT.to_string(),
-            ui_font_size: UI_FONT_SIZE_DEFAULT,
-            title_font_name: TITLE_FONT_DEFAULT.to_string(),
-            title_font_size: TITLE_FONT_SIZE_DEFAULT,
-            autopilot_enabled: false,
-            ai_provider: AI_PROVIDER_DEFAULT.to_string(),
-            ai_api_key: String::new(),
-            autopilot_action: AUTOPILOT_ACTION_DEFAULT.to_string(),
-            autopilot_custom_prompt: String::new(),
-            voice_enabled: false,
-            voice_engine: VOICE_ENGINE_DEFAULT.to_string(),
-            voice_push_to_talk_key: VOICE_PUSH_TO_TALK_KEY_DEFAULT,
-            voice_auto_insert: true,
-            saved_agents: Vec::new(),
-            saved_workspaces: Vec::new(),
-            personas: Vec::new(),
-            bench_agents: Vec::new(),
-            recent_repos: Vec::new(),
-            store_path: None,
-        }
+        Self { appearance_mode:                APPEARANCE_MODE_DEFAULT.to_string(),
+               restore_layout_on_launch:       true,
+               restore_conversation_on_launch: false,
+               keep_in_menu_bar:               false,
+               mcp_server_enabled:             true,
+               mcp_server_port:                MCP_PORT_DEFAULT,
+               source_base_folder:             String::new(),
+               source_folder_detected:         false,
+               desktop_notifications_enabled:  true,
+               markdown_font_size:             MARKDOWN_FONT_SIZE_DEFAULT,
+               mermaid_theme:                  MERMAID_THEME_DEFAULT.to_string(),
+               mermaid_scale:                  1.0,
+               agent_commands:                 BTreeMap::new(),
+               agent_options:                  BTreeMap::new(),
+               terminal_font_name:             TERMINAL_FONT_DEFAULT.to_string(),
+               terminal_font_size:             TERMINAL_FONT_SIZE_DEFAULT,
+               ui_font_name:                   UI_FONT_DEFAULT.to_string(),
+               ui_font_size:                   UI_FONT_SIZE_DEFAULT,
+               title_font_name:                TITLE_FONT_DEFAULT.to_string(),
+               title_font_size:                TITLE_FONT_SIZE_DEFAULT,
+               autopilot_enabled:              false,
+               ai_provider:                    AI_PROVIDER_DEFAULT.to_string(),
+               ai_api_key:                     String::new(),
+               autopilot_action:               AUTOPILOT_ACTION_DEFAULT.to_string(),
+               autopilot_custom_prompt:        String::new(),
+               voice_enabled:                  false,
+               voice_engine:                   VOICE_ENGINE_DEFAULT.to_string(),
+               voice_push_to_talk_key:         VOICE_PUSH_TO_TALK_KEY_DEFAULT,
+               voice_auto_insert:              true,
+               saved_agents:                   Vec::new(),
+               saved_workspaces:               Vec::new(),
+               personas:                       Vec::new(),
+               bench_agents:                   Vec::new(),
+               recent_repos:                   Vec::new(),
+               store_path:                     None, }
     }
 }
 
@@ -149,10 +146,8 @@ impl Settings {
 
     /// An empty settings value bound to an explicit store path.
     pub fn with_store_path(path: impl Into<PathBuf>) -> Self {
-        Self {
-            store_path: Some(path.into()),
-            ..Self::default()
-        }
+        Self { store_path: Some(path.into()),
+               ..Self::default() }
     }
 
     fn load_at(path: &Path, store: Option<PathBuf>) -> Result<Self> {
@@ -184,15 +179,15 @@ impl Settings {
     }
 
     fn bound(store: Option<PathBuf>) -> Self {
-        Self {
-            store_path: store,
-            ..Self::default()
-        }
+        Self { store_path: store,
+               ..Self::default() }
     }
 
     fn platform_store_path() -> Option<PathBuf> {
-        ProjectDirs::from(ORG_QUALIFIER, ORG_NAME, APP_NAME)
-            .map(|dirs| dirs.config_dir().join(SETTINGS_FILE))
+        ProjectDirs::from(ORG_QUALIFIER, ORG_NAME, APP_NAME).map(|dirs| {
+                                                                dirs.config_dir()
+                                                                    .join(SETTINGS_FILE)
+                                                            })
     }
 
     /// The resolved path this value writes to.
@@ -203,9 +198,8 @@ impl Settings {
     /// Write the document to [`Settings::store_path`], creating the parent
     /// directory as needed.
     pub fn persist(&self) -> Result<()> {
-        let path = self
-            .store_path()
-            .ok_or_else(|| Error::Config("no config directory available".to_string()))?;
+        let path = self.store_path()
+                       .ok_or_else(|| Error::Config("no config directory available".to_string()))?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -221,10 +215,9 @@ impl Settings {
         if self.source_folder_detected {
             return Ok(());
         }
-        let expanded: Vec<PathBuf> = SOURCE_FOLDER_CANDIDATES
-            .iter()
-            .map(|c| expand_tilde(c))
-            .collect();
+        let expanded: Vec<PathBuf> = SOURCE_FOLDER_CANDIDATES.iter()
+                                                             .map(|c| expand_tilde(c))
+                                                             .collect();
         let refs: Vec<&Path> = expanded.iter().map(PathBuf::as_path).collect();
         if let Some(found) = detect_source_base_folder(&refs) {
             self.source_base_folder = found.to_string_lossy().into_owned();
@@ -252,11 +245,10 @@ impl Settings {
 
     /// Personas excluding soft-deleted ones, sorted case-insensitively by name.
     pub fn active_personas(&self) -> Vec<&Persona> {
-        let mut personas: Vec<&Persona> = self
-            .personas
-            .iter()
-            .filter(|p| p.state != PersonaState::Deleted)
-            .collect();
+        let mut personas: Vec<&Persona> = self.personas
+                                              .iter()
+                                              .filter(|p| p.state != PersonaState::Deleted)
+                                              .collect();
         personas.sort_by_key(|p| p.name.to_lowercase());
         personas
     }
@@ -279,16 +271,13 @@ impl Settings {
     }
 
     /// Add a new user persona, enabled by default.
-    pub fn add_persona(
-        &mut self, name: impl Into<String>, instructions: impl Into<String>,
-    ) -> Result<&Persona> {
-        let persona = Persona {
-            id: Uuid::new_v4(),
-            name: name.into(),
-            instructions: instructions.into(),
-            persona_type: PersonaType::User,
-            state: PersonaState::Enabled,
-        };
+    pub fn add_persona(&mut self, name: impl Into<String>, instructions: impl Into<String>)
+                       -> Result<&Persona> {
+        let persona = Persona { id:           Uuid::new_v4(),
+                                name:         name.into(),
+                                instructions: instructions.into(),
+                                persona_type: PersonaType::User,
+                                state:        PersonaState::Enabled, };
         self.personas.push(persona);
         self.persist()?;
         Ok(self.personas.last().expect("just pushed"))
@@ -296,10 +285,11 @@ impl Settings {
 
     /// Rewrite name/instructions for an existing persona of any type. A no-op
     /// if `id` is not present.
-    pub fn update_persona(
-        &mut self, id: Uuid, name: impl Into<String>, instructions: impl Into<String>,
-    ) -> Result<()> {
-        let Some(persona) = self.personas.iter_mut().find(|p| p.id == id) else {
+    pub fn update_persona(&mut self, id: Uuid, name: impl Into<String>,
+                          instructions: impl Into<String>)
+                          -> Result<()> {
+        let Some(persona) = self.personas.iter_mut().find(|p| p.id == id)
+        else {
             return Ok(());
         };
         persona.name = name.into();
@@ -316,12 +306,14 @@ impl Settings {
     /// for a system persona, hard delete (record removed) for a user persona.
     /// A no-op if `id` is not present.
     pub fn remove_persona(&mut self, id: Uuid) -> Result<()> {
-        let Some(index) = self.personas.iter().position(|p| p.id == id) else {
+        let Some(index) = self.personas.iter().position(|p| p.id == id)
+        else {
             return Ok(());
         };
         if self.personas[index].persona_type == PersonaType::System {
             self.personas[index].state = PersonaState::Deleted;
-        } else {
+        }
+        else {
             self.personas.remove(index);
         }
         self.persist()
@@ -344,29 +336,29 @@ impl Settings {
 
 /// Return the first candidate that is an existing directory.
 pub fn detect_source_base_folder(candidates: &[&Path]) -> Option<PathBuf> {
-    candidates
-        .iter()
-        .find(|path| path.is_dir())
-        .map(|path| path.to_path_buf())
+    candidates.iter()
+              .find(|path| path.is_dir())
+              .map(|path| path.to_path_buf())
 }
 
 /// The six personas shipped with the app, keyed by fixed ids.
 fn default_personas() -> Vec<Persona> {
-    DEFAULT_PERSONAS
-        .iter()
-        .map(|(id, name, instructions)| Persona {
+    DEFAULT_PERSONAS.iter()
+                    .map(|(id, name, instructions)| {
+                        Persona {
             id: Uuid::parse_str(id).expect("default persona id is a valid uuid"),
             name: (*name).to_string(),
             instructions: (*instructions).to_string(),
             persona_type: PersonaType::System,
             state: PersonaState::Enabled,
-        })
-        .collect()
+        }
+                    })
+                    .collect()
 }
 
 fn expand_tilde(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/")
-        && let Some(base) = BaseDirs::new()
+       && let Some(base) = BaseDirs::new()
     {
         return base.home_dir().join(rest);
     }
@@ -374,18 +366,17 @@ fn expand_tilde(path: &str) -> PathBuf {
 }
 
 fn de_tolerant_vec<'de, D, T>(deserializer: D) -> std::result::Result<Vec<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: DeserializeOwned,
-{
+    where D: Deserializer<'de>,
+          T: DeserializeOwned {
     let value = Value::deserialize(deserializer)?;
     Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::tempdir;
+
+    use super::*;
 
     fn agent_id() -> Uuid {
         Uuid::new_v4()
@@ -517,9 +508,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut s = Settings::with_store_path(dir.path().join("settings.json"));
         s.add_bench_agent(BenchAgent::new(agent_id(), "old", None, "/repo"))
-            .unwrap();
+         .unwrap();
         s.add_bench_agent(BenchAgent::new(agent_id(), "new", None, "/repo"))
-            .unwrap();
+         .unwrap();
         assert_eq!(s.bench_agents.len(), 1);
         assert_eq!(s.bench_agents[0].name, "new");
     }
@@ -528,34 +519,25 @@ mod tests {
     fn active_personas_excludes_deleted_and_sorts_ci() {
         let dir = tempdir().unwrap();
         let mut s = Settings::with_store_path(dir.path().join("settings.json"));
-        s.personas = vec![
-            Persona {
-                id: agent_id(),
-                name: "beta".to_string(),
-                instructions: String::new(),
-                persona_type: PersonaType::User,
-                state: PersonaState::Enabled,
-            },
-            Persona {
-                id: agent_id(),
-                name: "Alpha".to_string(),
-                instructions: String::new(),
-                persona_type: PersonaType::User,
-                state: PersonaState::Enabled,
-            },
-            Persona {
-                id: agent_id(),
-                name: "gone".to_string(),
-                instructions: String::new(),
-                persona_type: PersonaType::System,
-                state: PersonaState::Deleted,
-            },
-        ];
-        let names: Vec<&str> = s
-            .active_personas()
-            .iter()
-            .map(|p| p.name.as_str())
-            .collect();
+        s.personas = vec![Persona { id:           agent_id(),
+                                    name:         "beta".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::User,
+                                    state:        PersonaState::Enabled, },
+                          Persona { id:           agent_id(),
+                                    name:         "Alpha".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::User,
+                                    state:        PersonaState::Enabled, },
+                          Persona { id:           agent_id(),
+                                    name:         "gone".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::System,
+                                    state:        PersonaState::Deleted, },];
+        let names: Vec<&str> = s.active_personas()
+                                .iter()
+                                .map(|p| p.name.as_str())
+                                .collect();
         assert_eq!(names, vec!["Alpha", "beta"]);
     }
 
@@ -590,13 +572,11 @@ mod tests {
     fn persona_lookup_excludes_deleted() {
         let dir = tempdir().unwrap();
         let mut s = Settings::with_store_path(dir.path().join("settings.json"));
-        s.personas = vec![Persona {
-            id: agent_id(),
-            name: "gone".to_string(),
-            instructions: String::new(),
-            persona_type: PersonaType::System,
-            state: PersonaState::Deleted,
-        }];
+        s.personas = vec![Persona { id:           agent_id(),
+                                    name:         "gone".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::System,
+                                    state:        PersonaState::Deleted, }];
         assert!(s.persona(s.personas[0].id).is_none());
     }
 
@@ -606,29 +586,21 @@ mod tests {
         let mut s = Settings::with_store_path(dir.path().join("settings.json"));
         let system_id = agent_id();
         let user_id = agent_id();
-        s.personas = vec![
-            Persona {
-                id: system_id,
-                name: "System".to_string(),
-                instructions: String::new(),
-                persona_type: PersonaType::System,
-                state: PersonaState::Enabled,
-            },
-            Persona {
-                id: user_id,
-                name: "User".to_string(),
-                instructions: String::new(),
-                persona_type: PersonaType::User,
-                state: PersonaState::Enabled,
-            },
-        ];
+        s.personas = vec![Persona { id:           system_id,
+                                    name:         "System".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::System,
+                                    state:        PersonaState::Enabled, },
+                          Persona { id:           user_id,
+                                    name:         "User".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::User,
+                                    state:        PersonaState::Enabled, },];
 
         s.remove_persona(system_id).unwrap();
         assert_eq!(s.personas.len(), 2);
-        assert_eq!(
-            s.personas.iter().find(|p| p.id == system_id).unwrap().state,
-            PersonaState::Deleted
-        );
+        assert_eq!(s.personas.iter().find(|p| p.id == system_id).unwrap().state,
+                   PersonaState::Deleted);
 
         s.remove_persona(user_id).unwrap();
         assert_eq!(s.personas.len(), 1);
@@ -644,22 +616,16 @@ mod tests {
         let mut s = Settings::with_store_path(dir.path().join("settings.json"));
         let (id, name, instructions) = DEFAULT_PERSONAS[0];
         let id = Uuid::parse_str(id).unwrap();
-        s.personas = vec![
-            Persona {
-                id,
-                name: "Renamed".to_string(),
-                instructions: "different".to_string(),
-                persona_type: PersonaType::System,
-                state: PersonaState::Disabled,
-            },
-            Persona {
-                id: agent_id(),
-                name: "Mine".to_string(),
-                instructions: "keep me".to_string(),
-                persona_type: PersonaType::User,
-                state: PersonaState::Enabled,
-            },
-        ];
+        s.personas = vec![Persona { id,
+                                    name: "Renamed".to_string(),
+                                    instructions: "different".to_string(),
+                                    persona_type: PersonaType::System,
+                                    state: PersonaState::Disabled },
+                          Persona { id:           agent_id(),
+                                    name:         "Mine".to_string(),
+                                    instructions: "keep me".to_string(),
+                                    persona_type: PersonaType::User,
+                                    state:        PersonaState::Enabled, },];
 
         s.restore_default_personas().unwrap();
 
@@ -676,21 +642,17 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut s = Settings::with_store_path(dir.path().join("settings.json"));
         let (id, _, _) = DEFAULT_PERSONAS[0];
-        s.personas = vec![Persona {
-            id: Uuid::parse_str(id).unwrap(),
-            name: "custom".to_string(),
-            instructions: String::new(),
-            persona_type: PersonaType::System,
-            state: PersonaState::Deleted,
-        }];
+        s.personas = vec![Persona { id:           Uuid::parse_str(id).unwrap(),
+                                    name:         "custom".to_string(),
+                                    instructions: String::new(),
+                                    persona_type: PersonaType::System,
+                                    state:        PersonaState::Deleted, }];
         s.install_default_personas().unwrap();
         assert_eq!(s.personas.len(), 6);
-        assert_eq!(
-            s.personas
-                .iter()
-                .filter(|p| p.state == PersonaState::Deleted)
-                .count(),
-            1
-        );
+        assert_eq!(s.personas
+                    .iter()
+                    .filter(|p| p.state == PersonaState::Deleted)
+                    .count(),
+                   1);
     }
 }

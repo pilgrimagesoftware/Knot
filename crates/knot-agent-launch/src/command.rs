@@ -13,13 +13,13 @@ use crate::registration::{inline_registration_arguments, mcp_arguments};
 /// (commands, options, MCP config) comes from `Settings` instead.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchRequest<'a> {
-    pub agent_type: &'a str,
-    pub agent_id: Option<Uuid>,
-    pub shell_command: Option<&'a str>,
+    pub agent_type:        &'a str,
+    pub agent_id:          Option<Uuid>,
+    pub shell_command:     Option<&'a str>,
     pub resume_session_id: Option<&'a str>,
-    pub fork_session: bool,
-    pub persona: Option<&'a Persona>,
-    pub plugin_root: Option<&'a Path>,
+    pub fork_session:      bool,
+    pub persona:           Option<&'a Persona>,
+    pub plugin_root:       Option<&'a Path>,
 }
 
 /// The configured base command for `agent_type`: the stored override if
@@ -56,14 +56,15 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
     let mut full = cmd;
 
     if let Some(session_id) = request.resume_session_id
-        && can_resume(request.agent_type)
+       && can_resume(request.agent_type)
     {
         let fork = request.fork_session && can_fork(request.agent_type);
         match request.agent_type {
             "codex" => {
                 if fork {
                     full.push_str(&format!(" fork {session_id}"));
-                } else {
+                }
+                else {
                     full.push_str(&format!(" resume {session_id}"));
                 }
             }
@@ -77,28 +78,22 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
     }
 
     if let Some(opts) = settings.agent_options.get(request.agent_type)
-        && !opts.is_empty()
+       && !opts.is_empty()
     {
         full.push(' ');
         full.push_str(opts);
     }
 
     if settings.mcp_server_enabled {
-        full.push_str(&mcp_arguments(
-            request.agent_type,
-            &mcp_url(settings),
-            request.plugin_root,
-        ));
+        full.push_str(&mcp_arguments(request.agent_type, &mcp_url(settings), request.plugin_root));
 
         if let Some(agent_id) = request.agent_id
-            && supports_inline_registration(request.agent_type)
+           && supports_inline_registration(request.agent_type)
         {
-            full.push_str(&inline_registration_arguments(
-                request.agent_type,
-                agent_id,
-                request.resume_session_id.is_some(),
-                request.persona,
-            ));
+            full.push_str(&inline_registration_arguments(request.agent_type,
+                                                         agent_id,
+                                                         request.resume_session_id.is_some(),
+                                                         request.persona));
         }
     }
 
@@ -108,15 +103,13 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
 /// Build the terminal initialization command: `cd` into `folder`, clear the
 /// screen, then (for a non-empty `agent_command`) set `KNOT_AGENT_ID` and
 /// run it. The leading space suppresses shell history under `ignorespace`.
-pub fn build_initialization_command(
-    folder: &str, agent_command: &str, agent_id: Option<Uuid>,
-) -> String {
+pub fn build_initialization_command(folder: &str, agent_command: &str, agent_id: Option<Uuid>)
+                                    -> String {
     if agent_command.is_empty() {
         return format!(" cd '{folder}' && clear");
     }
-    let env_prefix = agent_id
-        .map(|id| format!("KNOT_AGENT_ID={id} "))
-        .unwrap_or_default();
+    let env_prefix = agent_id.map(|id| format!("KNOT_AGENT_ID={id} "))
+                             .unwrap_or_default();
     format!(" cd '{folder}' && clear && {env_prefix}{agent_command}")
 }
 
@@ -132,10 +125,8 @@ mod tests {
     fn missing_command_yields_nothing() {
         let mut s = settings();
         s.agent_commands.insert("claude".to_string(), String::new());
-        let req = LaunchRequest {
-            agent_type: "claude",
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "claude",
+                                  ..Default::default() };
         assert_eq!(build_agent_command(&s, &req), "");
     }
 
@@ -143,31 +134,25 @@ mod tests {
     fn default_command_falls_back_to_agent_type() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest {
-            agent_type: "claude",
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "claude",
+                                  ..Default::default() };
         assert_eq!(build_agent_command(&s, &req), "claude");
     }
 
     #[test]
     fn shell_agent_custom_command() {
         let s = settings();
-        let req = LaunchRequest {
-            agent_type: "shell",
-            shell_command: Some("htop"),
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "shell",
+                                  shell_command: Some("htop"),
+                                  ..Default::default() };
         assert_eq!(build_agent_command(&s, &req), "htop");
     }
 
     #[test]
     fn shell_agent_no_custom_command_is_empty() {
         let s = settings();
-        let req = LaunchRequest {
-            agent_type: "shell",
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "shell",
+                                  ..Default::default() };
         assert_eq!(build_agent_command(&s, &req), "");
     }
 
@@ -175,28 +160,22 @@ mod tests {
     fn claude_resume_with_fork() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest {
-            agent_type: "claude",
-            resume_session_id: Some("abc123"),
-            fork_session: true,
-            ..Default::default()
-        };
-        assert_eq!(
-            build_agent_command(&s, &req),
-            "claude --resume abc123 --fork-session"
-        );
+        let req = LaunchRequest { agent_type: "claude",
+                                  resume_session_id: Some("abc123"),
+                                  fork_session: true,
+                                  ..Default::default() };
+        assert_eq!(build_agent_command(&s, &req),
+                   "claude --resume abc123 --fork-session");
     }
 
     #[test]
     fn codex_fork_uses_subcommand() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest {
-            agent_type: "codex",
-            resume_session_id: Some("abc123"),
-            fork_session: true,
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "codex",
+                                  resume_session_id: Some("abc123"),
+                                  fork_session: true,
+                                  ..Default::default() };
         let cmd = build_agent_command(&s, &req);
         assert!(cmd.contains("fork abc123"));
         assert!(!cmd.contains("--resume"));
@@ -206,22 +185,18 @@ mod tests {
     fn mcp_disabled_omits_all_mcp_and_registration_args() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest {
-            agent_type: "claude",
-            agent_id: Some(Uuid::nil()),
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "claude",
+                                  agent_id: Some(Uuid::nil()),
+                                  ..Default::default() };
         assert_eq!(build_agent_command(&s, &req), "claude");
     }
 
     #[test]
     fn mcp_enabled_appends_registration() {
         let s = settings();
-        let req = LaunchRequest {
-            agent_type: "claude",
-            agent_id: Some(Uuid::nil()),
-            ..Default::default()
-        };
+        let req = LaunchRequest { agent_type: "claude",
+                                  agent_id: Some(Uuid::nil()),
+                                  ..Default::default() };
         let cmd = build_agent_command(&s, &req);
         assert!(cmd.contains("--mcp-config"));
         assert!(cmd.contains("--append-system-prompt"));
@@ -230,13 +205,9 @@ mod tests {
     #[test]
     fn env_var_precedes_agent_command() {
         let cmd = build_initialization_command("/tmp/repo", "claude", Some(Uuid::nil()));
-        assert_eq!(
-            cmd,
-            format!(
-                " cd '/tmp/repo' && clear && KNOT_AGENT_ID={} claude",
-                Uuid::nil()
-            )
-        );
+        assert_eq!(cmd,
+                   format!(" cd '/tmp/repo' && clear && KNOT_AGENT_ID={} claude",
+                           Uuid::nil()));
     }
 
     #[test]

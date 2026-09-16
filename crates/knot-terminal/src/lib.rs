@@ -14,8 +14,6 @@ mod pty;
 
 pub use grid::{Cell, ClipboardType, Grid, GridEvent, GridSize};
 pub use keys::{KeyInput, key_to_bytes};
-pub use mouse::{MouseButton, MouseInput, mouse_to_bytes};
-
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};
 use knot_agent_launch::{
     LaunchRequest, build_agent_command, build_initialization_command, registration_prompt,
@@ -23,9 +21,9 @@ use knot_agent_launch::{
 };
 use knot_agents::Agent;
 use knot_core::{Persona, Settings};
-use thiserror::Error;
-
+pub use mouse::{MouseButton, MouseInput, mouse_to_bytes};
 pub use pty::PtyTransport;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum TerminalError {
@@ -48,66 +46,56 @@ pub trait TerminalTransport: Send {
 }
 
 pub struct SessionConfig<'a> {
-    pub settings: &'a Settings,
-    pub agent: &'a Agent,
-    pub persona: Option<&'a Persona>,
+    pub settings:    &'a Settings,
+    pub agent:       &'a Agent,
+    pub persona:     Option<&'a Persona>,
     pub plugin_root: Option<&'a Path>,
 }
 
 pub struct SessionPlan {
-    pub agent_command: String,
+    pub agent_command:          String,
     pub initialization_command: String,
 }
 
 impl SessionPlan {
     pub fn build(config: &SessionConfig<'_>) -> Self {
-        let request = LaunchRequest {
-            agent_type: &config.agent.agent_type,
-            agent_id: Some(config.agent.id),
-            shell_command: config.agent.shell_command.as_deref(),
-            resume_session_id: config.agent.resume_session_id.as_deref(),
-            fork_session: config.agent.fork_session,
-            persona: config.persona,
-            plugin_root: config.plugin_root,
-        };
+        let request = LaunchRequest { agent_type:        &config.agent.agent_type,
+                                      agent_id:          Some(config.agent.id),
+                                      shell_command:     config.agent.shell_command.as_deref(),
+                                      resume_session_id: config.agent.resume_session_id.as_deref(),
+                                      fork_session:      config.agent.fork_session,
+                                      persona:           config.persona,
+                                      plugin_root:       config.plugin_root, };
         let agent_command = build_agent_command(config.settings, &request);
-        let initialization_command = build_initialization_command(
-            &config.agent.folder,
-            &agent_command,
-            Some(config.agent.id),
-        );
-        Self {
-            agent_command,
-            initialization_command,
-        }
+        let initialization_command = build_initialization_command(&config.agent.folder,
+                                                                  &agent_command,
+                                                                  Some(config.agent.id));
+        Self { agent_command,
+               initialization_command }
     }
 }
 
 /// Default grid size for a freshly spawned session, before the UI resizes
 /// it to match the actual terminal pane (task 2.6 in the terminal-rendering
 /// change) - matches the traditional VT100 default.
-const DEFAULT_GRID_SIZE: GridSize = GridSize {
-    columns: 80,
-    rows: 24,
-};
+const DEFAULT_GRID_SIZE: GridSize = GridSize { columns: 80,
+                                               rows:    24, };
 
 pub struct TerminalSession<T> {
     transport: Arc<Mutex<T>>,
-    tracker: Arc<Tracker>,
-    grid: Option<Arc<Mutex<Grid>>>,
-    started: bool,
+    tracker:   Arc<Tracker>,
+    grid:      Option<Arc<Mutex<Grid>>>,
+    started:   bool,
 }
 
 impl<T: TerminalTransport + 'static> TerminalSession<T> {
     pub fn new(config: &SessionConfig<'_>, transport: T, sink: EventSink) -> Self {
         let transport = Arc::new(Mutex::new(transport));
         let tracker = make_tracker(config, Arc::clone(&transport), sink);
-        Self {
-            transport,
-            tracker,
-            grid: None,
-            started: false,
-        }
+        Self { transport,
+               tracker,
+               grid: None,
+               started: false }
     }
 
     /// The session's parsed terminal grid, if it has one - only sessions
@@ -116,65 +104,56 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
         self.grid.clone()
     }
 
-    pub fn spawn_pty<Output>(
-        config: &SessionConfig<'_>, sink: EventSink, on_output: Output,
-    ) -> Result<TerminalSession<PtyTransport>>
-    where
-        Output: Fn(&[u8]) + Send + Sync + 'static,
-    {
+    pub fn spawn_pty<Output>(config: &SessionConfig<'_>, sink: EventSink, on_output: Output)
+                             -> Result<TerminalSession<PtyTransport>>
+        where Output: Fn(&[u8]) + Send + Sync + 'static {
         Self::spawn_pty_with_exit(config, sink, on_output, |_| {}, |_| {})
     }
 
     pub fn spawn_pty_with_exit<Output, Exit, GridEventFn>(
         config: &SessionConfig<'_>, sink: EventSink, on_output: Output, on_exit: Exit,
-        on_grid_event: GridEventFn,
-    ) -> Result<TerminalSession<PtyTransport>>
-    where
-        Output: Fn(&[u8]) + Send + Sync + 'static,
-        Exit: Fn(Option<i32>) + Send + Sync + 'static,
-        GridEventFn: Fn(GridEvent) + Send + Sync + 'static,
-    {
+        on_grid_event: GridEventFn)
+        -> Result<TerminalSession<PtyTransport>>
+        where Output: Fn(&[u8]) + Send + Sync + 'static,
+              Exit: Fn(Option<i32>) + Send + Sync + 'static,
+              GridEventFn: Fn(GridEvent) + Send + Sync + 'static {
         let tracker_slot: Arc<Mutex<Option<Arc<Tracker>>>> = Arc::new(Mutex::new(None));
         let output_tracker = Arc::clone(&tracker_slot);
         let exit_tracker = Arc::clone(&tracker_slot);
         let grid = Arc::new(Mutex::new(Grid::new(DEFAULT_GRID_SIZE)));
         let output_grid = Arc::clone(&grid);
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        let transport = PtyTransport::spawn(
-            &config.agent.folder,
-            shell,
-            move |bytes| {
-                if let Ok(tracker) = output_tracker.lock()
-                    && let Some(tracker) = tracker.as_ref()
-                {
-                    tracker.on_terminal_activity();
-                }
-                if let Ok(mut grid) = output_grid.lock() {
-                    grid.feed(bytes);
-                    for event in grid.drain_events() {
-                        on_grid_event(event);
-                    }
-                }
-                on_output(bytes);
-            },
-            move |status| {
-                if let Ok(tracker) = exit_tracker.lock()
-                    && let Some(tracker) = tracker.as_ref()
-                {
-                    tracker.on_process_exit(status);
-                }
-                on_exit(status);
-            },
-        )?;
+        let transport = PtyTransport::spawn(&config.agent.folder,
+                                            shell,
+                                            move |bytes| {
+                                                if let Ok(tracker) = output_tracker.lock()
+                                                   && let Some(tracker) = tracker.as_ref()
+                                                {
+                                                    tracker.on_terminal_activity();
+                                                }
+                                                if let Ok(mut grid) = output_grid.lock() {
+                                                    grid.feed(bytes);
+                                                    for event in grid.drain_events() {
+                                                        on_grid_event(event);
+                                                    }
+                                                }
+                                                on_output(bytes);
+                                            },
+                                            move |status| {
+                                                if let Ok(tracker) = exit_tracker.lock()
+                                                   && let Some(tracker) = tracker.as_ref()
+                                                {
+                                                    tracker.on_process_exit(status);
+                                                }
+                                                on_exit(status);
+                                            })?;
         let transport = Arc::new(Mutex::new(transport));
         let tracker = make_tracker(config, Arc::clone(&transport), sink);
         *tracker_slot.lock().unwrap() = Some(Arc::clone(&tracker));
-        Ok(TerminalSession {
-            transport,
-            tracker,
-            grid: Some(grid),
-            started: false,
-        })
+        Ok(TerminalSession { transport,
+                             tracker,
+                             grid: Some(grid),
+                             started: false })
     }
 
     pub fn start(&mut self, plan: &SessionPlan) -> Result<()> {
@@ -218,7 +197,7 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
     /// device to match.
     pub fn resize(&mut self, size: GridSize) -> Result<()> {
         if let Some(grid) = &self.grid
-            && let Ok(mut grid) = grid.lock()
+           && let Ok(mut grid) = grid.lock()
         {
             grid.resize(size);
         }
@@ -243,30 +222,33 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
     }
 }
 
-fn make_tracker<T: TerminalTransport + 'static>(
-    config: &SessionConfig<'_>, transport: Arc<Mutex<T>>, mut sink: EventSink,
-) -> Arc<Tracker> {
+fn make_tracker<T: TerminalTransport + 'static>(config: &SessionConfig<'_>,
+                                                transport: Arc<Mutex<T>>, mut sink: EventSink)
+                                                -> Arc<Tracker> {
     let mut caller_inject = sink.on_inject_registration.take();
     sink.on_inject_registration = Some(Box::new(move |prompt| {
-        if let Ok(mut transport) = transport.lock() {
-            let _ = transport.send_text(&prompt);
-            let _ = transport.send_return();
-        }
-        if let Some(caller_inject) = caller_inject.as_mut() {
-            caller_inject(prompt);
-        }
-    }));
-    let tracker = Arc::new(Tracker::spawn(
-        TrackerConfig {
-            agent_type: config.agent.agent_type.clone(),
-            is_hook_based: matches!(config.agent.agent_type.as_str(), "claude" | "codex"),
-            mcp_enabled: config.settings.mcp_server_enabled,
-            inline_registration: supports_inline_registration(&config.agent.agent_type),
-            ..TrackerConfig::default()
-        },
-        tracking_for(&config.agent.agent_type),
-        sink,
-    ));
+                                           if let Ok(mut transport) = transport.lock() {
+                                               let _ = transport.send_text(&prompt);
+                                               let _ = transport.send_return();
+                                           }
+                                           if let Some(caller_inject) = caller_inject.as_mut() {
+                                               caller_inject(prompt);
+                                           }
+                                       }));
+    let tracker =
+        Arc::new(Tracker::spawn(TrackerConfig { agent_type: config.agent.agent_type.clone(),
+                                                is_hook_based: matches!(config.agent
+                                                                              .agent_type
+                                                                              .as_str(),
+                                                                        "claude" | "codex"),
+                                                mcp_enabled: config.settings
+                                                                   .mcp_server_enabled,
+                                                inline_registration:
+                                                    supports_inline_registration(&config.agent
+                                                                                        .agent_type),
+                                                ..TrackerConfig::default() },
+                                tracking_for(&config.agent.agent_type),
+                                sink));
     if config.settings.mcp_server_enabled && !supports_inline_registration(&config.agent.agent_type)
     {
         tracker.set_registration_prompt(registration_prompt(config.agent.id));
@@ -278,14 +260,15 @@ fn make_tracker<T: TerminalTransport + 'static>(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use super::*;
     use knot_activity::ActivitySource;
     use knot_agents::{AgentState, AgentStore, CreateOptions};
 
+    use super::*;
+
     #[derive(Default)]
     struct FakeTransport {
-        sent: Vec<String>,
-        returns: usize,
+        sent:       Vec<String>,
+        returns:    usize,
         terminated: bool,
     }
 
@@ -307,27 +290,24 @@ mod tests {
     }
 
     fn agent() -> Agent {
-        AgentStore::new()
-            .agents()
-            .first()
-            .cloned()
-            .unwrap_or_else(|| {
-                let mut store = AgentStore::new();
-                let id = store.create("/tmp/project", CreateOptions::default());
-                store.agent(id).unwrap().clone()
-            })
+        AgentStore::new().agents()
+                         .first()
+                         .cloned()
+                         .unwrap_or_else(|| {
+                             let mut store = AgentStore::new();
+                             let id = store.create("/tmp/project", CreateOptions::default());
+                             store.agent(id).unwrap().clone()
+                         })
     }
 
     #[tokio::test]
     async fn session_builds_and_sends_initialization_command() {
         let agent = agent();
         let settings = Settings::default();
-        let config = SessionConfig {
-            settings: &settings,
-            agent: &agent,
-            persona: None,
-            plugin_root: None,
-        };
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
         let plan = SessionPlan::build(&config);
         let mut session =
             TerminalSession::new(&config, FakeTransport::default(), EventSink::default());
@@ -342,23 +322,18 @@ mod tests {
     async fn command_and_lifecycle_events_reach_transport_and_tracker() {
         let agent = agent();
         let settings = Settings::default();
-        let config = SessionConfig {
-            settings: &settings,
-            agent: &agent,
-            persona: None,
-            plugin_root: None,
-        };
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
         let statuses = Arc::new(Mutex::new(Vec::new()));
         let status_log = Arc::clone(&statuses);
-        let sink = EventSink {
-            on_status: Some(Box::new(move |event| {
-                status_log
-                    .lock()
-                    .unwrap()
-                    .push((event.status, event.source));
-            })),
-            ..Default::default()
-        };
+        let sink = EventSink { on_status: Some(Box::new(move |event| {
+                                                   status_log.lock()
+                                                             .unwrap()
+                                                             .push((event.status, event.source));
+                                               })),
+                               ..Default::default() };
         let mut session = TerminalSession::new(&config, FakeTransport::default(), sink);
 
         session.send_command("printf ready").unwrap();
@@ -369,9 +344,10 @@ mod tests {
         session.shutdown().unwrap();
 
         let statuses = statuses.lock().unwrap();
-        assert!(statuses.iter().any(|(state, source)| {
-            *state == AgentState::Running && *source == ActivitySource::Terminal
-        }));
+        assert!(statuses.iter()
+                        .any(|(state, source)| {
+                            *state == AgentState::Running && *source == ActivitySource::Terminal
+                        }));
     }
 
     #[tokio::test]
@@ -380,12 +356,10 @@ mod tests {
         let mut agent = agent();
         agent.folder = folder.path().to_string_lossy().into_owned();
         let settings = Settings::default();
-        let config = SessionConfig {
-            settings: &settings,
-            agent: &agent,
-            persona: None,
-            plugin_root: None,
-        };
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
         let (output_tx, output_rx) = std::sync::mpsc::channel();
         let (exit_tx, exit_rx) = std::sync::mpsc::channel();
         let mut session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
@@ -401,12 +375,9 @@ mod tests {
         )
         .unwrap();
 
-        session
-            .start(&SessionPlan {
-                agent_command: String::new(),
-                initialization_command: "printf ready; exit 0\n".to_string(),
-            })
-            .unwrap();
+        session.start(&SessionPlan { agent_command:          String::new(),
+                              initialization_command: "printf ready; exit 0\n".to_string(), })
+        .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let mut output = Vec::new();
         while std::time::Instant::now() < deadline {
@@ -416,15 +387,14 @@ mod tests {
                 if String::from_utf8_lossy(&output).contains("ready") {
                     break;
                 }
-            } else {
+            }
+            else {
                 break;
             }
         }
         assert!(String::from_utf8_lossy(&output).contains("ready"));
-        assert_eq!(
-            exit_rx.recv_timeout(std::time::Duration::from_secs(5)),
-            Ok(Some(0))
-        );
+        assert_eq!(exit_rx.recv_timeout(std::time::Duration::from_secs(5)),
+                   Ok(Some(0)));
     }
 
     #[tokio::test]
@@ -433,35 +403,28 @@ mod tests {
         let mut agent = agent();
         agent.folder = folder.path().to_string_lossy().into_owned();
         let settings = Settings::default();
-        let config = SessionConfig {
-            settings: &settings,
-            agent: &agent,
-            persona: None,
-            plugin_root: None,
-        };
-        let mut session =
-            TerminalSession::<PtyTransport>::spawn_pty(&config, EventSink::default(), |_| {})
-                .unwrap();
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
+        let mut session = TerminalSession::<PtyTransport>::spawn_pty(&config,
+                                                                     EventSink::default(),
+                                                                     |_| {}).unwrap();
         let grid = session.grid().expect("pty session has a grid");
 
-        session
-            .start(&SessionPlan {
-                agent_command: String::new(),
-                initialization_command: "printf ready\n".to_string(),
-            })
-            .unwrap();
+        session.start(&SessionPlan { agent_command:          String::new(),
+                                     initialization_command: "printf ready\n".to_string(), })
+               .unwrap();
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if grid.lock().unwrap().row_text(0).contains("ready")
-                || (1..24).any(|row| grid.lock().unwrap().row_text(row).contains("ready"))
+               || (1..24).any(|row| grid.lock().unwrap().row_text(row).contains("ready"))
             {
                 break;
             }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "grid never showed the expected output"
-            );
+            assert!(std::time::Instant::now() < deadline,
+                    "grid never showed the expected output");
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     }
@@ -472,51 +435,36 @@ mod tests {
         let mut agent = agent();
         agent.folder = folder.path().to_string_lossy().into_owned();
         let settings = Settings::default();
-        let config = SessionConfig {
-            settings: &settings,
-            agent: &agent,
-            persona: None,
-            plugin_root: None,
-        };
-        let mut session =
-            TerminalSession::<PtyTransport>::spawn_pty(&config, EventSink::default(), |_| {})
-                .unwrap();
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
+        let mut session = TerminalSession::<PtyTransport>::spawn_pty(&config,
+                                                                     EventSink::default(),
+                                                                     |_| {}).unwrap();
         let grid = session.grid().expect("pty session has a grid");
 
-        session
-            .resize(GridSize {
-                columns: 100,
-                rows: 40,
-            })
-            .unwrap();
+        session.resize(GridSize { columns: 100,
+                                  rows:    40, })
+               .unwrap();
 
-        assert_eq!(
-            grid.lock().unwrap().size(),
-            GridSize {
-                columns: 100,
-                rows: 40
-            }
-        );
+        assert_eq!(grid.lock().unwrap().size(),
+                   GridSize { columns: 100,
+                              rows:    40, });
 
-        session
-            .start(&SessionPlan {
-                agent_command: String::new(),
-                initialization_command: "stty size\n".to_string(),
-            })
-            .unwrap();
+        session.start(&SessionPlan { agent_command:          String::new(),
+                                     initialization_command: "stty size\n".to_string(), })
+               .unwrap();
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            let rows: Vec<String> = (0..20)
-                .map(|row| grid.lock().unwrap().row_text(row))
-                .collect();
+            let rows: Vec<String> = (0..20).map(|row| grid.lock().unwrap().row_text(row))
+                                           .collect();
             if rows.iter().any(|row| row.contains("40 100")) {
                 break;
             }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "pty size was never reported as 40 rows x 100 cols"
-            );
+            assert!(std::time::Instant::now() < deadline,
+                    "pty size was never reported as 40 rows x 100 cols");
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     }
@@ -527,12 +475,10 @@ mod tests {
         let mut agent = agent();
         agent.folder = folder.path().to_string_lossy().into_owned();
         let settings = Settings::default();
-        let config = SessionConfig {
-            settings: &settings,
-            agent: &agent,
-            persona: None,
-            plugin_root: None,
-        };
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
         let (title_tx, title_rx) = std::sync::mpsc::channel();
         let mut session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
             &config,
@@ -547,12 +493,10 @@ mod tests {
         )
         .unwrap();
 
-        session
-            .start(&SessionPlan {
-                agent_command: String::new(),
-                initialization_command: "printf '\\e]0;my session\\a'\n".to_string(),
-            })
-            .unwrap();
+        session.start(&SessionPlan { agent_command:          String::new(),
+                                     initialization_command:
+                                         "printf '\\e]0;my session\\a'\n".to_string(), })
+               .unwrap();
 
         // The shell itself may set its own title (e.g. via prompt
         // integration) before our command runs, so keep reading until the
@@ -562,10 +506,8 @@ mod tests {
             match title_rx.recv_timeout(std::time::Duration::from_millis(200)) {
                 Ok(title) if title == "my session" => break,
                 Ok(_) => continue,
-                Err(_) => assert!(
-                    std::time::Instant::now() < deadline,
-                    "expected title was never received"
-                ),
+                Err(_) => assert!(std::time::Instant::now() < deadline,
+                                  "expected title was never received"),
             }
         }
     }

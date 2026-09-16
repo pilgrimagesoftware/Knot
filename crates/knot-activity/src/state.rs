@@ -19,44 +19,42 @@ use crate::tracking::ActivityTracking;
 #[derive(Debug, Clone)]
 pub struct TrackerConfig {
     /// Agent type this tracker is attached to.
-    pub agent_type: String,
+    pub agent_type:              String,
     /// Idle timeout after terminal output for non-hook agents.
-    pub idle_timeout: Duration,
+    pub idle_timeout:            Duration,
     /// Idle timeout after a user keystroke, and the guard window.
     pub user_input_idle_timeout: Duration,
     /// Terminal-output idle timeout for hook-managed agents.
-    pub hook_fallback_timeout: Duration,
+    pub hook_fallback_timeout:   Duration,
     /// Hook-managed agent: keystrokes do not drive the state machine.
-    pub is_hook_based: bool,
+    pub is_hook_based:           bool,
     /// MCP server enabled. When false, no registration gating.
-    pub mcp_enabled: bool,
+    pub mcp_enabled:             bool,
     /// Agent registers through CLI arguments; skip deferred registration.
-    pub inline_registration: bool,
+    pub inline_registration:     bool,
     /// Slow-starting agent: use the long first-idle registration delay.
-    pub slow_startup: bool,
+    pub slow_startup:            bool,
     /// Registration delay after the first idle for fast-starting agents.
-    pub first_idle_delay_short: Duration,
+    pub first_idle_delay_short:  Duration,
     /// Registration delay after the first idle for slow-starting agents.
-    pub first_idle_delay_long: Duration,
+    pub first_idle_delay_long:   Duration,
     /// Registration delay after subsequent idles.
-    pub subsequent_idle_delay: Duration,
+    pub subsequent_idle_delay:   Duration,
 }
 
 impl Default for TrackerConfig {
     fn default() -> Self {
-        Self {
-            agent_type: String::new(),
-            idle_timeout: DEFAULT_IDLE_TIMEOUT,
-            user_input_idle_timeout: USER_INPUT_IDLE_TIMEOUT,
-            hook_fallback_timeout: HOOK_FALLBACK_IDLE_TIMEOUT,
-            is_hook_based: false,
-            mcp_enabled: true,
-            inline_registration: false,
-            slow_startup: false,
-            first_idle_delay_short: REGISTRATION_FIRST_IDLE_DELAY_SHORT,
-            first_idle_delay_long: REGISTRATION_FIRST_IDLE_DELAY_LONG,
-            subsequent_idle_delay: REGISTRATION_SUBSEQUENT_IDLE_DELAY,
-        }
+        Self { agent_type:              String::new(),
+               idle_timeout:            DEFAULT_IDLE_TIMEOUT,
+               user_input_idle_timeout: USER_INPUT_IDLE_TIMEOUT,
+               hook_fallback_timeout:   HOOK_FALLBACK_IDLE_TIMEOUT,
+               is_hook_based:           false,
+               mcp_enabled:             true,
+               inline_registration:     false,
+               slow_startup:            false,
+               first_idle_delay_short:  REGISTRATION_FIRST_IDLE_DELAY_SHORT,
+               first_idle_delay_long:   REGISTRATION_FIRST_IDLE_DELAY_LONG,
+               subsequent_idle_delay:   REGISTRATION_SUBSEQUENT_IDLE_DELAY, }
     }
 }
 
@@ -64,58 +62,54 @@ impl TrackerConfig {
     /// Defaults for `agent_type`. Hook flags and MCP wiring are set by the
     /// caller once they are known.
     pub fn for_agent_type(agent_type: impl Into<String>) -> Self {
-        Self {
-            agent_type: agent_type.into(),
-            ..Self::default()
-        }
+        Self { agent_type: agent_type.into(),
+               ..Self::default() }
     }
 }
 
 /// An armed idle timer: when to fire and the window it was armed with.
 #[derive(Debug, Clone)]
 struct IdleTimer {
-    at: Instant,
+    at:     Instant,
     window: Duration,
 }
 
 /// The automatic status model for one agent.
 #[derive(Debug, Clone)]
 pub struct ActivityState {
-    cfg: TrackerConfig,
-    tracking: ActivityTracking,
-    status: AgentState,
-    changed_at: Instant,
-    last_activity_at: Option<Instant>,
-    last_activity_source: ActivitySource,
-    idle_due: Option<IdleTimer>,
-    guard_until: Option<Instant>,
-    has_become_idle: bool,
-    idle_count: u64,
-    registration_ready_at: Option<Instant>,
-    registration_attempted: bool,
-    registration_prompt: Option<String>,
+    cfg:                     TrackerConfig,
+    tracking:                ActivityTracking,
+    status:                  AgentState,
+    changed_at:              Instant,
+    last_activity_at:        Option<Instant>,
+    last_activity_source:    ActivitySource,
+    idle_due:                Option<IdleTimer>,
+    guard_until:             Option<Instant>,
+    has_become_idle:         bool,
+    idle_count:              u64,
+    registration_ready_at:   Option<Instant>,
+    registration_attempted:  bool,
+    registration_prompt:     Option<String>,
     did_inject_registration: bool,
 }
 
 impl ActivityState {
     /// Starts in Idle with nothing tracked.
     pub fn new(cfg: TrackerConfig, tracking: ActivityTracking) -> Self {
-        Self {
-            cfg,
-            tracking,
-            status: AgentState::Idle,
-            changed_at: Instant::now(),
-            last_activity_at: None,
-            last_activity_source: ActivitySource::Terminal,
-            idle_due: None,
-            guard_until: None,
-            has_become_idle: false,
-            idle_count: 0,
-            registration_ready_at: None,
-            registration_attempted: false,
-            registration_prompt: None,
-            did_inject_registration: false,
-        }
+        Self { cfg,
+               tracking,
+               status: AgentState::Idle,
+               changed_at: Instant::now(),
+               last_activity_at: None,
+               last_activity_source: ActivitySource::Terminal,
+               idle_due: None,
+               guard_until: None,
+               has_become_idle: false,
+               idle_count: 0,
+               registration_ready_at: None,
+               registration_attempted: false,
+               registration_prompt: None,
+               did_inject_registration: false }
     }
 
     /// The current status.
@@ -141,9 +135,8 @@ impl ActivityState {
     /// When the registration prompt may next be evaluated, if scheduled and
     /// not yet consumed.
     pub fn registration_deadline(&self) -> Option<Instant> {
-        (!self.registration_attempted)
-            .then_some(self.registration_ready_at)
-            .flatten()
+        (!self.registration_attempted).then_some(self.registration_ready_at)
+                                      .flatten()
     }
 
     /// Schedule deferred registration, gated on MCP being enabled and the
@@ -168,24 +161,20 @@ impl ActivityState {
         // being tracked or the agent is awaiting input.
         self.idle_due = None;
         if self.status == AgentState::Input
-            || !self.tracking.contains(ActivityTracking::TERMINAL_OUTPUT)
+           || !self.tracking.contains(ActivityTracking::TERMINAL_OUTPUT)
         {
             return Vec::new();
         }
         self.last_activity_at = Some(now);
         self.last_activity_source = ActivitySource::Terminal;
         let window = self.terminal_idle_timeout();
-        self.idle_due = Some(IdleTimer {
-            at: now + window,
-            window,
-        });
+        self.idle_due = Some(IdleTimer { at: now + window,
+                                         window });
         let mut effects = Vec::new();
-        self.set_status(
-            AgentState::Running,
-            ActivitySource::Terminal,
-            now,
-            &mut effects,
-        );
+        self.set_status(AgentState::Running,
+                        ActivitySource::Terminal,
+                        now,
+                        &mut effects);
         effects
     }
 
@@ -204,12 +193,10 @@ impl ActivityState {
             match key {
                 KeyEvent::Return => {
                     self.idle_due = None;
-                    self.set_status(
-                        AgentState::Running,
-                        ActivitySource::UserInput,
-                        now,
-                        &mut effects,
-                    );
+                    self.set_status(AgentState::Running,
+                                    ActivitySource::UserInput,
+                                    now,
+                                    &mut effects);
                 }
                 KeyEvent::Escape => {
                     self.idle_due = None;
@@ -217,33 +204,31 @@ impl ActivityState {
                 }
                 KeyEvent::Other => {}
             }
-        } else if !self.cfg.is_hook_based {
+        }
+        else if !self.cfg.is_hook_based {
             let window = self.cfg.user_input_idle_timeout;
-            self.idle_due = Some(IdleTimer {
-                at: now + window,
-                window,
-            });
-            self.set_status(
-                AgentState::Running,
-                ActivitySource::UserInput,
-                now,
-                &mut effects,
-            );
+            self.idle_due = Some(IdleTimer { at: now + window,
+                                             window });
+            self.set_status(AgentState::Running,
+                            ActivitySource::UserInput,
+                            now,
+                            &mut effects);
         }
         effects
     }
 
     /// A hook reported a status authoritatively, carrying an optional message
     /// for the awaiting-input notification.
-    pub fn apply_hook_status(
-        &mut self, now: Instant, status: AgentState, message: Option<String>,
-    ) -> Vec<Effect> {
+    pub fn apply_hook_status(&mut self, now: Instant, status: AgentState,
+                             message: Option<String>)
+                             -> Vec<Effect> {
         // Any hook status cancels the input-protection guard.
         self.guard_until = None;
         let mut effects = Vec::new();
         if status == AgentState::Idle {
             self.mark_idle(now, ActivitySource::Hook, &mut effects);
-        } else {
+        }
+        else {
             self.set_status(status, ActivitySource::Hook, now, &mut effects);
             if status == AgentState::Input {
                 effects.push(Effect::AwaitingInput(message));
@@ -275,7 +260,8 @@ impl ActivityState {
             self.idle_due = None;
             return Vec::new();
         }
-        let Some(IdleTimer { at, window }) = self.idle_due.take() else {
+        let Some(IdleTimer { at, window }) = self.idle_due.take()
+        else {
             return Vec::new();
         };
         let since = self.last_activity_at.unwrap_or(at);
@@ -284,19 +270,19 @@ impl ActivityState {
             let mut effects = Vec::new();
             self.mark_idle(now, self.last_activity_source, &mut effects);
             effects
-        } else {
+        }
+        else {
             // Newer activity exists; reschedule for the remaining interval.
-            self.idle_due = Some(IdleTimer {
-                at: since + window,
-                window,
-            });
+            self.idle_due = Some(IdleTimer { at: since + window,
+                                             window });
             Vec::new()
         }
     }
 
     /// The input-protection guard expired.
     pub fn guard_expired(&mut self, now: Instant) -> Vec<Effect> {
-        let Some(until) = self.guard_until else {
+        let Some(until) = self.guard_until
+        else {
             return Vec::new();
         };
         if now < until {
@@ -313,7 +299,8 @@ impl ActivityState {
 
     /// The scheduled registration time arrived.
     pub fn registration_ready_fired(&mut self, now: Instant) -> Vec<Effect> {
-        let Some(ready) = self.registration_ready_at else {
+        let Some(ready) = self.registration_ready_at
+        else {
             return Vec::new();
         };
         if now < ready || self.registration_attempted {
@@ -326,7 +313,8 @@ impl ActivityState {
     fn terminal_idle_timeout(&self) -> Duration {
         if self.cfg.is_hook_based {
             self.cfg.hook_fallback_timeout
-        } else {
+        }
+        else {
             self.cfg.idle_timeout
         }
     }
@@ -334,7 +322,8 @@ impl ActivityState {
     fn first_idle_delay(&self) -> Duration {
         if self.cfg.slow_startup {
             self.cfg.first_idle_delay_long
-        } else {
+        }
+        else {
             self.cfg.first_idle_delay_short
         }
     }
@@ -383,7 +372,8 @@ impl ActivityState {
             self.idle_count += 1;
             let delay = if self.idle_count == 1 {
                 self.first_idle_delay()
-            } else {
+            }
+            else {
                 self.cfg.subsequent_idle_delay
             };
             self.schedule_registration(delay, now);
@@ -391,28 +381,25 @@ impl ActivityState {
         effects.push(Effect::CheckMessages);
     }
 
-    fn set_status(
-        &mut self, status: AgentState, source: ActivitySource, now: Instant,
-        effects: &mut Vec<Effect>,
-    ) {
+    fn set_status(&mut self, status: AgentState, source: ActivitySource, now: Instant,
+                  effects: &mut Vec<Effect>) {
         if self.status == status {
             return;
         }
         self.status = status;
         self.changed_at = now;
-        effects.push(Effect::Status(StatusEvent {
-            status,
-            source,
-            changed_at: now,
-        }));
+        effects.push(Effect::Status(StatusEvent { status,
+                                                  source,
+                                                  changed_at: now }));
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant as StdInstant;
+
     use super::*;
     use crate::tracking::tracking_for;
-    use std::time::Instant as StdInstant;
 
     fn at(offset: Duration) -> Instant {
         Instant::from_std(StdInstant::now()) + offset
@@ -423,13 +410,12 @@ mod tests {
     }
 
     fn status_effects(effects: &[Effect]) -> Vec<AgentState> {
-        effects
-            .iter()
-            .filter_map(|e| match e {
-                Effect::Status(event) => Some(event.status),
-                _ => None,
-            })
-            .collect()
+        effects.iter()
+               .filter_map(|e| match e {
+                   Effect::Status(event) => Some(event.status),
+                   _ => None,
+               })
+               .collect()
     }
 
     fn has_effect(effects: &[Effect], kind: EffectKind) -> bool {
@@ -510,10 +496,8 @@ mod tests {
         let effects = state.on_terminal_activity(t0 + Duration::from_secs(1));
         assert!(status_effects(&effects).is_empty());
         assert_eq!(state.status(), AgentState::Running);
-        assert!(
-            state.idle_due.is_none(),
-            "output with tracking removed cancels idle timer"
-        );
+        assert!(state.idle_due.is_none(),
+                "output with tracking removed cancels idle timer");
     }
 
     #[test]
@@ -553,17 +537,11 @@ mod tests {
         let t0 = at(Duration::ZERO);
         let effects = state.apply_hook_status(t0, AgentState::Input, Some("grant access?".into()));
         assert_eq!(state.status(), AgentState::Input);
-        assert_eq!(
-            effects,
-            vec![
-                Effect::Status(StatusEvent {
-                    status: AgentState::Input,
-                    source: ActivitySource::Hook,
-                    changed_at: t0,
-                }),
-                Effect::AwaitingInput(Some("grant access?".into())),
-            ]
-        );
+        assert_eq!(effects,
+                   vec![Effect::Status(StatusEvent { status:     AgentState::Input,
+                                                     source:     ActivitySource::Hook,
+                                                     changed_at: t0, }),
+                        Effect::AwaitingInput(Some("grant access?".into())),]);
     }
 
     #[test]
@@ -642,10 +620,8 @@ mod tests {
         let t_idle = t0 + Duration::from_secs(4);
         state.idle_timer_fired(t_idle);
         let effects = state.registration_ready_fired(t_idle + Duration::from_secs(2));
-        assert_eq!(
-            effects,
-            vec![Effect::InjectRegistration("Register with the knot".into())]
-        );
+        assert_eq!(effects,
+                   vec![Effect::InjectRegistration("Register with the knot".into())]);
         let effects = state.registration_ready_fired(t_idle + Duration::from_secs(3));
         assert!(effects.is_empty(), "injected only once");
     }

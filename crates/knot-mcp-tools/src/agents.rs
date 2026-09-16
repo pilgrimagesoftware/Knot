@@ -10,23 +10,22 @@ use crate::responses::{
 };
 
 fn agent_info(agent: &Agent) -> AgentInfo {
-    AgentInfo {
-        id: agent.id.to_string(),
-        name: agent.name.clone(),
-        folder: agent.folder.clone(),
-        status: state_string(agent.state),
-        is_registered: agent.is_registered,
-    }
+    AgentInfo { id:            agent.id.to_string(),
+                name:          agent.name.clone(),
+                folder:        agent.folder.clone(),
+                status:        state_string(agent.state),
+                is_registered: agent.is_registered, }
 }
 
 /// `list-agents`, scoped to the caller's own workspace: companions are
 /// excluded unless the caller created them.
 fn list_agents_response(store: &AgentStore, caller_id: Uuid) -> Vec<AgentInfo> {
-    workspace_members(store, caller_id)
-        .into_iter()
-        .filter(|a| !a.is_companion || a.created_by == Some(caller_id))
-        .map(|a| agent_info(&a))
-        .collect()
+    workspace_members(store, caller_id).into_iter()
+                                       .filter(|a| {
+                                           !a.is_companion || a.created_by == Some(caller_id)
+                                       })
+                                       .map(|a| agent_info(&a))
+                                       .collect()
 }
 
 pub fn register_agent(store: &mut AgentStore, arguments: &serde_json::Value) -> ToolCallResult {
@@ -34,7 +33,8 @@ pub fn register_agent(store: &mut AgentStore, arguments: &serde_json::Value) -> 
         Ok(v) => v,
         Err(err) => return err,
     };
-    let Ok(agent_id) = Uuid::parse_str(agent_id_str) else {
+    let Ok(agent_id) = Uuid::parse_str(agent_id_str)
+    else {
         return agent_not_found(store, agent_id_str);
     };
     if store.agent(agent_id).is_none() {
@@ -60,7 +60,8 @@ pub fn list_agents(store: &AgentStore, arguments: &serde_json::Value) -> ToolCal
         Ok(v) => v,
         Err(err) => return err,
     };
-    let Some(caller) = find_by_name_or_id(store, agent_id_str) else {
+    let Some(caller) = find_by_name_or_id(store, agent_id_str)
+    else {
         return agent_not_found(store, agent_id_str);
     };
 
@@ -72,53 +73,77 @@ pub fn list_agents(store: &AgentStore, arguments: &serde_json::Value) -> ToolCal
 /// whichever of name/icon/agentType/repoPath/command/personaId weren't
 /// passed explicitly.
 struct ResolvedCreateFields {
-    name: Option<String>,
-    icon: Option<String>,
-    agent_type: Option<String>,
-    repo_path: Option<String>,
+    name:          Option<String>,
+    icon:          Option<String>,
+    agent_type:    Option<String>,
+    repo_path:     Option<String>,
     shell_command: Option<String>,
-    persona_id: Option<Uuid>,
+    persona_id:    Option<Uuid>,
 }
 
-fn resolve_create_agent_fields(
-    arguments: &serde_json::Value, bench: Option<&BenchAgent>,
-) -> ResolvedCreateFields {
-    ResolvedCreateFields {
-        name: optional_str(arguments, "name")
-            .map(str::to_string)
-            .or_else(|| bench.map(|b| b.name.clone())),
-        icon: optional_str(arguments, "icon")
-            .map(str::to_string)
-            .or_else(|| bench.map(|b| b.avatar.clone())),
-        agent_type: optional_str(arguments, "agentType")
-            .map(str::to_string)
-            .or_else(|| bench.map(|b| b.agent_type.clone())),
-        repo_path: optional_str(arguments, "repoPath")
-            .map(str::to_string)
-            .or_else(|| bench.map(|b| b.folder.clone())),
-        shell_command: optional_str(arguments, "command")
-            .map(str::to_string)
-            .or_else(|| bench.and_then(|b| b.shell_command.clone())),
-        persona_id: optional_str(arguments, "personaId")
-            .and_then(|s| Uuid::parse_str(s).ok())
-            .or_else(|| bench.and_then(|b| b.persona_id)),
-    }
+fn resolve_create_agent_fields(arguments: &serde_json::Value, bench: Option<&BenchAgent>)
+                               -> ResolvedCreateFields {
+    ResolvedCreateFields { name:          optional_str(arguments, "name").map(str::to_string)
+                                                                         .or_else(|| {
+                                                                             bench.map(|b| {
+                                                                                      b.name.clone()
+                                                                                  })
+                                                                         }),
+                           icon:          optional_str(arguments, "icon").map(str::to_string)
+                                                                         .or_else(|| {
+                                                                             bench.map(|b| {
+                                                                                      b.avatar
+                                                                                       .clone()
+                                                                                  })
+                                                                         }),
+                           agent_type:    optional_str(arguments, "agentType").map(str::to_string)
+                                                                              .or_else(|| {
+                                                                                  bench.map(|b| {
+                                                                                      b.agent_type
+                                                                                       .clone()
+                                                                                  })
+                                                                              }),
+                           repo_path:     optional_str(arguments, "repoPath").map(str::to_string)
+                                                                             .or_else(|| {
+                                                                                 bench.map(|b| {
+                                                                                          b.folder
+                                                                                           .clone()
+                                                                                      })
+                                                                             }),
+                           shell_command: optional_str(arguments, "command").map(str::to_string)
+                                                                            .or_else(|| {
+                                                                                bench.and_then(|b| {
+                                                                              b.shell_command
+                                                                               .clone()
+                                                                          })
+                                                                            }),
+                           persona_id:
+                               optional_str(arguments, "personaId").and_then(|s| {
+                                                                       Uuid::parse_str(s).ok()
+                                                                   })
+                                                                   .or_else(|| {
+                                                                       bench.and_then(|b| {
+                                                                                b.persona_id
+                                                                            })
+                                                                   }), }
 }
 
-pub fn create_agent(
-    store: &mut AgentStore, arguments: &serde_json::Value, bench_agents: &[BenchAgent],
-) -> ToolCallResult {
+pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
+                    bench_agents: &[BenchAgent])
+                    -> ToolCallResult {
     let agent_id_str = match require_str(arguments, "agentId") {
         Ok(v) => v,
         Err(err) => return err,
     };
-    let Ok(created_by) = Uuid::parse_str(agent_id_str) else {
+    let Ok(created_by) = Uuid::parse_str(agent_id_str)
+    else {
         return agent_not_found(store, agent_id_str);
     };
 
     let bench = match optional_str(arguments, "benchAgentId") {
         Some(id_str) => {
-            let Ok(bench_id) = Uuid::parse_str(id_str) else {
+            let Ok(bench_id) = Uuid::parse_str(id_str)
+            else {
                 return ToolCallResult::error(format!("Bench agent not found: {id_str}"));
             };
             match bench_agents.iter().find(|b| b.id == bench_id) {
@@ -142,10 +167,8 @@ pub fn create_agent(
         missing.push("repoPath");
     }
     if !missing.is_empty() {
-        return ToolCallResult::error(format!(
-            "Missing required parameters: {}. Provide these or use benchAgentId to deploy from a template.",
-            missing.join(", ")
-        ));
+        return ToolCallResult::error(format!("Missing required parameters: {}. Provide these or use benchAgentId to deploy from a template.",
+                                             missing.join(", ")));
     }
 
     let create_worktree = optional_bool(arguments, "createWorktree").unwrap_or(false);
@@ -164,29 +187,24 @@ pub fn create_agent(
             Ok(path) => path.to_string_lossy().into_owned(),
             Err(error) => return ToolCallResult::error(error),
         }
-    } else {
+    }
+    else {
         repo_path
     };
 
-    let id = store.create(
-        folder,
-        CreateOptions {
-            name: fields.name,
-            avatar: fields.icon,
-            agent_type: fields.agent_type,
-            shell_command: fields.shell_command,
-            persona_id: fields.persona_id,
-            created_by: Some(created_by),
-            is_companion: companion,
-            insert_after: None,
-        },
-    );
+    let id = store.create(folder,
+                          CreateOptions { name:          fields.name,
+                                          avatar:        fields.icon,
+                                          agent_type:    fields.agent_type,
+                                          shell_command: fields.shell_command,
+                                          persona_id:    fields.persona_id,
+                                          created_by:    Some(created_by),
+                                          is_companion:  companion,
+                                          insert_after:  None, });
 
-    success(&CreateAgentResponse {
-        success: true,
-        agent_id: Some(id.to_string()),
-        message: "Agent created successfully".to_string(),
-    })
+    success(&CreateAgentResponse { success:  true,
+                                   agent_id: Some(id.to_string()),
+                                   message:  "Agent created successfully".to_string(), })
 }
 
 pub fn close_agent(store: &mut AgentStore, arguments: &serde_json::Value) -> ToolCallResult {
@@ -199,18 +217,18 @@ pub fn close_agent(store: &mut AgentStore, arguments: &serde_json::Value) -> Too
         Err(err) => return err,
     };
 
-    let Ok(caller_id) = Uuid::parse_str(agent_id_str) else {
+    let Ok(caller_id) = Uuid::parse_str(agent_id_str)
+    else {
         return agent_not_found(store, agent_id_str);
     };
     if store.agent(caller_id).is_none() {
         return agent_not_found(store, agent_id_str);
     }
 
-    let Some(target) = crate::lookup::find_in_workspace(store, caller_id, target_str) else {
-        return success(&CloseAgentResponse {
-            success: false,
-            message: format!("Target agent not found: {target_str}"),
-        });
+    let Some(target) = crate::lookup::find_in_workspace(store, caller_id, target_str)
+    else {
+        return success(&CloseAgentResponse { success: false,
+                                             message: format!("Target agent not found: {target_str}"), });
     };
 
     if target.created_by != Some(caller_id) {
@@ -222,10 +240,8 @@ pub fn close_agent(store: &mut AgentStore, arguments: &serde_json::Value) -> Too
 
     let name = target.name.clone();
     store.remove(target.id);
-    success(&CloseAgentResponse {
-        success: true,
-        message: format!("Agent '{name}' closed successfully"),
-    })
+    success(&CloseAgentResponse { success: true,
+                                  message: format!("Agent '{name}' closed successfully"), })
 }
 
 pub fn set_status(store: &mut AgentStore, arguments: &serde_json::Value) -> ToolCallResult {
@@ -238,7 +254,8 @@ pub fn set_status(store: &mut AgentStore, arguments: &serde_json::Value) -> Tool
         Err(err) => return err,
     };
 
-    let Some(agent) = find_by_name_or_id(store, agent_id_str) else {
+    let Some(agent) = find_by_name_or_id(store, agent_id_str)
+    else {
         return agent_not_found(store, agent_id_str);
     };
     let id = agent.id;
@@ -271,22 +288,14 @@ mod tests {
     fn list_agents_excludes_unowned_companions() {
         let mut store = AgentStore::new();
         let owner = store.create("/tmp/owner", CreateOptions::default());
-        let other = store.create(
-            "/tmp/other",
-            CreateOptions {
-                insert_after: Some(owner),
-                ..Default::default()
-            },
-        );
-        store.create(
-            "/tmp/comp",
-            CreateOptions {
-                is_companion: true,
-                created_by: Some(owner),
-                insert_after: Some(owner),
-                ..Default::default()
-            },
-        );
+        let other = store.create("/tmp/other",
+                                 CreateOptions { insert_after: Some(owner),
+                                                 ..Default::default() });
+        store.create("/tmp/comp",
+                     CreateOptions { is_companion: true,
+                                     created_by: Some(owner),
+                                     insert_after: Some(owner),
+                                     ..Default::default() });
 
         let result = list_agents(&store, &json!({"agentId": other.to_string()}));
 
@@ -306,16 +315,14 @@ mod tests {
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
 
-        let result = create_agent(
-            &mut store,
-            &json!({
-                "agentId": caller.to_string(),
-                "name": "worker",
-                "agentType": "claude",
-                "repoPath": "/tmp/worker",
-            }),
-            &[],
-        );
+        let result = create_agent(&mut store,
+                                  &json!({
+                                      "agentId": caller.to_string(),
+                                      "name": "worker",
+                                      "agentType": "claude",
+                                      "repoPath": "/tmp/worker",
+                                  }),
+                                  &[]);
 
         assert_eq!(result.is_error, None);
         let created = store.agents().iter().find(|a| a.name == "worker").unwrap();
@@ -327,28 +334,23 @@ mod tests {
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
         let bench_id = Uuid::new_v4();
-        let bench = BenchAgent {
-            id: bench_id,
-            name: "Bench Worker".to_string(),
-            avatar: "🤖".to_string(),
-            folder: "/tmp/bench".to_string(),
-            agent_type: "codex".to_string(),
-            shell_command: None,
-            persona_id: None,
-        };
+        let bench = BenchAgent { id:            bench_id,
+                                 name:          "Bench Worker".to_string(),
+                                 avatar:        "🤖".to_string(),
+                                 folder:        "/tmp/bench".to_string(),
+                                 agent_type:    "codex".to_string(),
+                                 shell_command: None,
+                                 persona_id:    None, };
 
-        let result = create_agent(
-            &mut store,
-            &json!({"agentId": caller.to_string(), "benchAgentId": bench_id.to_string()}),
-            &[bench],
-        );
+        let result = create_agent(&mut store,
+                                  &json!({"agentId": caller.to_string(), "benchAgentId": bench_id.to_string()}),
+                                  &[bench]);
 
         assert_eq!(result.is_error, None);
-        let created = store
-            .agents()
-            .iter()
-            .find(|a| a.name == "Bench Worker")
-            .unwrap();
+        let created = store.agents()
+                           .iter()
+                           .find(|a| a.name == "Bench Worker")
+                           .unwrap();
         assert_eq!(created.folder, "/tmp/bench");
         assert_eq!(created.agent_type, "codex");
     }
@@ -358,17 +360,15 @@ mod tests {
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
 
-        let result = create_agent(
-            &mut store,
-            &json!({
-                "agentId": caller.to_string(),
-                "name": "worker",
-                "agentType": "claude",
-                "repoPath": "/tmp/worker",
-                "createWorktree": true,
-            }),
-            &[],
-        );
+        let result = create_agent(&mut store,
+                                  &json!({
+                                      "agentId": caller.to_string(),
+                                      "name": "worker",
+                                      "agentType": "claude",
+                                      "repoPath": "/tmp/worker",
+                                      "createWorktree": true,
+                                  }),
+                                  &[]);
 
         assert_eq!(result.is_error, Some(true));
         assert!(result.content[0].text.contains("branchName"));
@@ -379,17 +379,15 @@ mod tests {
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
 
-        let result = create_agent(
-            &mut store,
-            &json!({
-                "agentId": caller.to_string(),
-                "name": "companion",
-                "agentType": "claude",
-                "repoPath": "/tmp/companion",
-                "companion": true,
-            }),
-            &[],
-        );
+        let result = create_agent(&mut store,
+                                  &json!({
+                                      "agentId": caller.to_string(),
+                                      "name": "companion",
+                                      "agentType": "claude",
+                                      "repoPath": "/tmp/companion",
+                                      "companion": true,
+                                  }),
+                                  &[]);
 
         assert_eq!(result.is_error, Some(true));
         assert!(result.content[0].text.contains("agentType=shell"));
@@ -406,30 +404,26 @@ mod tests {
         run(&["config", "user.name", "Test"]);
         std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
         run(&["add", "-A"]);
-        run(&[
-            "-c",
-            "commit.gpgsign=false",
-            "-c",
-            "gpg.format=openpgp",
-            "commit",
-            "-qm",
-            "init",
-        ]);
+        run(&["-c",
+              "commit.gpgsign=false",
+              "-c",
+              "gpg.format=openpgp",
+              "commit",
+              "-qm",
+              "init"]);
 
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
-        let result = create_agent(
-            &mut store,
-            &json!({
-                "agentId": caller.to_string(),
-                "name": "worker",
-                "agentType": "claude",
-                "repoPath": repo,
-                "createWorktree": true,
-                "branchName": "feature/worker",
-            }),
-            &[],
-        );
+        let result = create_agent(&mut store,
+                                  &json!({
+                                      "agentId": caller.to_string(),
+                                      "name": "worker",
+                                      "agentType": "claude",
+                                      "repoPath": repo,
+                                      "createWorktree": true,
+                                      "branchName": "feature/worker",
+                                  }),
+                                  &[]);
 
         assert_eq!(result.is_error, None);
         let created = store.agents().iter().find(|a| a.name == "worker").unwrap();
@@ -454,19 +448,13 @@ mod tests {
     fn close_agent_by_creator_succeeds() {
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
-        let target = store.create(
-            "/tmp/target",
-            CreateOptions {
-                created_by: Some(caller),
-                insert_after: Some(caller),
-                ..Default::default()
-            },
-        );
+        let target = store.create("/tmp/target",
+                                  CreateOptions { created_by: Some(caller),
+                                                  insert_after: Some(caller),
+                                                  ..Default::default() });
 
-        let result = close_agent(
-            &mut store,
-            &json!({"agentId": caller.to_string(), "target": target.to_string()}),
-        );
+        let result = close_agent(&mut store,
+                                 &json!({"agentId": caller.to_string(), "target": target.to_string()}));
 
         assert_eq!(result.is_error, None);
         assert!(store.agent(target).is_none());
@@ -476,18 +464,12 @@ mod tests {
     fn close_agent_rejects_non_creator() {
         let mut store = AgentStore::new();
         let caller = store.create("/tmp/caller", CreateOptions::default());
-        let target = store.create(
-            "/tmp/target",
-            CreateOptions {
-                insert_after: Some(caller),
-                ..Default::default()
-            },
-        );
+        let target = store.create("/tmp/target",
+                                  CreateOptions { insert_after: Some(caller),
+                                                  ..Default::default() });
 
-        let result = close_agent(
-            &mut store,
-            &json!({"agentId": caller.to_string(), "target": target.to_string()}),
-        );
+        let result = close_agent(&mut store,
+                                 &json!({"agentId": caller.to_string(), "target": target.to_string()}));
 
         assert!(result.content[0].text.contains("Permission denied"));
         assert!(store.agent(target).is_some());
@@ -499,10 +481,8 @@ mod tests {
         let id = store.create("/tmp/a", CreateOptions::default());
         store.set_status_text(id, "busy".to_string());
 
-        let result = set_status(
-            &mut store,
-            &json!({"agentId": id.to_string(), "status": ""}),
-        );
+        let result = set_status(&mut store,
+                                &json!({"agentId": id.to_string(), "status": ""}));
 
         assert_eq!(result.is_error, None);
         let agent = store.agent(id).unwrap();
