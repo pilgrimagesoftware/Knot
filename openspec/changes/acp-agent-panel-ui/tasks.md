@@ -71,16 +71,22 @@
 
 ## 4. Agent model and lifecycle
 
-- [ ] 4.1 Add `view_mode: ViewMode` (Panel | Terminal, default Terminal) and
+- [x] 4.1 Add `view_mode: ViewMode` (Panel | Terminal, default Terminal) and
       `acp_session_id: Option<String>` to `Agent` (`knot-agents`), threading
       through `convert.rs` persistence per the `agent-lifecycle` delta.
       Verify: `cargo test -p knot-agents` passes, including a new
       round-trip test for the two fields through save/load.
-- [ ] 4.2 Implement ACP session id resolution on layout restore (`session/
+- [x] 4.2 Implement ACP session id resolution on layout restore (`session/
       load` attempt, fallback to fresh session on failure) and restart
       (close + clear ACP session id, same as existing session id clearing).
       Verify: unit tests for successful load, failed load falling back
       silently, and restart clearing both session ids.
+      Note: `AgentStore::apply_acp_session_outcomes` covers the
+      data-layer half (applying a precomputed load outcome per agent, and
+      `restart` clearing `acp_session_id`) - the actual async `session/load`
+      subprocess call and live-connection teardown belong to the runtime
+      layer that owns a running `AcpClient` (`crates/knot`, not yet wired to
+      any agent instance; that wiring lands with the panel UI in section 6).
 - [ ] 4.3 Implement the view-mode switch: starting/stopping the ACP
       connection without disturbing the underlying terminal process, per
       the `acp-panel-ui` "Switch to Terminal mid-turn" scenario. Verify:

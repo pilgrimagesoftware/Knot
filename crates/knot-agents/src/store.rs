@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use knot_core::{BenchAgent, SavedAgent, Workspace};
+use knot_core::{BenchAgent, SavedAgent, ViewMode, Workspace};
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -118,6 +118,23 @@ impl AgentStore {
     pub fn set_session_id(&mut self, id: Uuid, session_id: String) {
         if let Some(agent) = self.agent_mut(id) {
             agent.session_id = Some(session_id);
+        }
+    }
+
+    /// Applies the outcome of an ACP `session/load` attempt made per agent
+    /// by the caller (the actual attempt is async subprocess/JSON-RPC work
+    /// that belongs to `knot-acp` and the runtime layer that owns it, not
+    /// this runtime-agnostic store). `outcomes` maps agent id to `Some(id)`
+    /// for a load that succeeded, or `None` for one that failed - both
+    /// leave the agent to start a fresh ACP session with no error
+    /// surfaced, per the `agent-lifecycle` layout-restore requirement. An
+    /// agent id absent from `outcomes` (not in Panel mode, or with no
+    /// persisted ACP session id to attempt) is left untouched.
+    pub fn apply_acp_session_outcomes(&mut self, outcomes: &BTreeMap<Uuid, Option<String>>) {
+        for agent in &mut self.agents {
+            if let Some(outcome) = outcomes.get(&agent.id) {
+                agent.acp_session_id = outcome.clone();
+            }
         }
     }
 
@@ -280,6 +297,7 @@ impl AgentStore {
                             is_companion: opts.is_companion,
                             shell_command: opts.shell_command,
                             persona_id: opts.persona_id,
+                            view_mode: ViewMode::Terminal,
                             state: AgentState::Idle,
                             status_text: String::new(),
                             is_registered: false,
@@ -289,6 +307,7 @@ impl AgentStore {
                             session_id: None,
                             resume_session_id: None,
                             fork_session: false,
+                            acp_session_id: None,
                             metadata: BTreeMap::new(),
                             markdown_file: None,
                             markdown_maximized: false,
@@ -389,7 +408,7 @@ impl AgentStore {
     }
 
     /// Preserves id, regenerates the restart token, and clears session
-    /// identity: session id, resume-session id, fork flag.
+    /// identity: session id, ACP session id, resume-session id, fork flag.
     pub fn restart(&mut self, id: Uuid) -> Result<()> {
         {
             let agent = self.agents
@@ -397,6 +416,7 @@ impl AgentStore {
                             .find(|a| a.id == id)
                             .ok_or(AgentError::NotFound(id))?;
             agent.session_id = None;
+            agent.acp_session_id = None;
             agent.resume_session_id = None;
             agent.fork_session = false;
         }
@@ -786,6 +806,7 @@ mod tests {
         {
             let agent = s.agents.iter_mut().find(|x| x.id == a).unwrap();
             agent.session_id = Some("s1".to_string());
+            agent.acp_session_id = Some("acp-1".to_string());
             agent.is_registered = true;
         }
         let old_token = s.agent(a).unwrap().restart_token;
@@ -796,6 +817,7 @@ mod tests {
         assert_eq!(agent.id, a);
         assert_ne!(agent.restart_token, old_token);
         assert_eq!(agent.session_id, None);
+        assert_eq!(agent.acp_session_id, None);
         assert!(!agent.is_registered);
         assert_eq!(agent.state, AgentState::Idle);
     }
@@ -1046,5 +1068,43 @@ mod tests {
         s.resolve_resume_sessions(&BTreeMap::new(), |_, _| None);
 
         assert!(s.agent(id).unwrap().resume_session_id.is_none());
+    }
+
+    #[test]
+    fn apply_acp_session_outcomes_sets_id_on_successful_load() {
+        let mut saved = SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
+        saved.view_mode = knot_core::ViewMode::Panel;
+        let id = saved.id;
+        let mut s = AgentStore::from_saved(&[saved], Vec::new());
+
+        s.apply_acp_session_outcomes(&BTreeMap::from([(id, Some("acp-1".to_string()))]));
+
+        assert_eq!(s.agent(id).unwrap().acp_session_id.as_deref(),
+                   Some("acp-1"));
+    }
+
+    #[test]
+    fn apply_acp_session_outcomes_falls_back_silently_on_failed_load() {
+        let mut saved = SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
+        saved.view_mode = knot_core::ViewMode::Panel;
+        let id = saved.id;
+        let mut s = AgentStore::from_saved(&[saved], Vec::new());
+
+        s.apply_acp_session_outcomes(&BTreeMap::from([(id, None)]));
+
+        assert!(s.agent(id).unwrap().acp_session_id.is_none());
+    }
+
+    #[test]
+    fn apply_acp_session_outcomes_leaves_agents_absent_from_the_map_untouched() {
+        let saved = SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
+        let id = saved.id;
+        let mut s = AgentStore::from_saved(&[saved], Vec::new());
+        s.agent_mut(id).unwrap().acp_session_id = Some("acp-1".to_string());
+
+        s.apply_acp_session_outcomes(&BTreeMap::new());
+
+        assert_eq!(s.agent(id).unwrap().acp_session_id.as_deref(),
+                   Some("acp-1"));
     }
 }

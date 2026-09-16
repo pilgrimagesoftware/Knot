@@ -21,6 +21,7 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
             is_companion:  saved.is_companion,
             shell_command: saved.shell_command.clone(),
             persona_id:    saved.persona_id,
+            view_mode:     saved.view_mode,
 
             state:              AgentState::Idle,
             status_text:        String::new(),
@@ -31,6 +32,7 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
             session_id:         None,
             resume_session_id:  None,
             fork_session:       false,
+            acp_session_id:     None,
             metadata:           BTreeMap::new(),
             markdown_file:      None,
             markdown_maximized: false,
@@ -40,21 +42,25 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
 }
 
 /// Extract the durable subset of a runtime agent for persistence.
-/// `remember_conversation` gates session id: only carried into the saved
-/// record when true (`restore-conversation-on-launch` enabled), otherwise
-/// always persisted as `None` regardless of the agent's runtime session id.
+/// `remember_conversation` gates session id and ACP session id: only
+/// carried into the saved record when true (`restore-conversation-on-launch`
+/// enabled), otherwise always persisted as `None` regardless of the agent's
+/// runtime values.
 pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
-    SavedAgent { id:            agent.id,
-                 name:          agent.name.clone(),
-                 avatar:        agent.avatar.clone(),
-                 folder:        agent.folder.clone(),
-                 agent_type:    agent.agent_type.clone(),
-                 created_by:    agent.created_by,
-                 is_companion:  agent.is_companion,
-                 shell_command: agent.shell_command.clone(),
-                 persona_id:    agent.persona_id,
-                 session_id:    remember_conversation.then(|| agent.session_id.clone())
-                                                     .flatten(), }
+    SavedAgent { id:             agent.id,
+                 name:           agent.name.clone(),
+                 avatar:         agent.avatar.clone(),
+                 folder:         agent.folder.clone(),
+                 agent_type:     agent.agent_type.clone(),
+                 created_by:     agent.created_by,
+                 is_companion:   agent.is_companion,
+                 shell_command:  agent.shell_command.clone(),
+                 persona_id:     agent.persona_id,
+                 view_mode:      agent.view_mode,
+                 session_id:     remember_conversation.then(|| agent.session_id.clone())
+                                                      .flatten(),
+                 acp_session_id: remember_conversation.then(|| agent.acp_session_id.clone())
+                                                      .flatten(), }
 }
 
 #[cfg(test)]
@@ -98,6 +104,35 @@ mod tests {
 
         assert_eq!(to_saved(&agent, true).session_id, Some("s7".to_string()));
         assert_eq!(to_saved(&agent, false).session_id, None);
+    }
+
+    #[test]
+    fn view_mode_round_trips_through_save_and_load() {
+        let mut saved = saved_agent();
+        saved.view_mode = knot_core::ViewMode::Panel;
+
+        let agent = from_saved(&saved);
+
+        assert_eq!(agent.view_mode, knot_core::ViewMode::Panel);
+        assert_eq!(to_saved(&agent, false).view_mode,
+                   knot_core::ViewMode::Panel);
+    }
+
+    #[test]
+    fn acp_session_id_resets_on_load_and_carries_only_when_remembering() {
+        let mut saved = saved_agent();
+        saved.acp_session_id = Some("acp-1".to_string());
+
+        // Per the agent-lifecycle spec: acp_session_id is conditionally
+        // durable, like session_id - the runtime value always starts at
+        // None after a load, regardless of what was persisted.
+        let mut agent = from_saved(&saved);
+        assert_eq!(agent.acp_session_id, None);
+
+        agent.acp_session_id = Some("acp-2".to_string());
+        assert_eq!(to_saved(&agent, true).acp_session_id,
+                   Some("acp-2".to_string()));
+        assert_eq!(to_saved(&agent, false).acp_session_id, None);
     }
 
     #[test]

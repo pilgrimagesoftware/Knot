@@ -66,23 +66,27 @@ pub enum ViewMode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedAgent {
-    pub id:            Uuid,
-    pub name:          String,
+    pub id:             Uuid,
+    pub name:           String,
     #[serde(default = "default_avatar")]
-    pub avatar:        String,
-    pub folder:        String,
+    pub avatar:         String,
+    pub folder:         String,
     #[serde(default = "default_agent_type")]
-    pub agent_type:    String,
+    pub agent_type:     String,
     #[serde(default)]
-    pub created_by:    Option<Uuid>,
+    pub created_by:     Option<Uuid>,
     #[serde(default)]
-    pub is_companion:  bool,
+    pub is_companion:   bool,
     #[serde(default)]
-    pub shell_command: Option<String>,
+    pub shell_command:  Option<String>,
     #[serde(default)]
-    pub persona_id:    Option<Uuid>,
+    pub persona_id:     Option<Uuid>,
     #[serde(default)]
-    pub session_id:    Option<String>,
+    pub session_id:     Option<String>,
+    #[serde(default)]
+    pub view_mode:      ViewMode,
+    #[serde(default)]
+    pub acp_session_id: Option<String>,
 }
 
 impl SavedAgent {
@@ -103,7 +107,9 @@ impl SavedAgent {
                is_companion: false,
                shell_command: None,
                persona_id: None,
-               session_id: None }
+               session_id: None,
+               view_mode: ViewMode::default(),
+               acp_session_id: None }
     }
 }
 
