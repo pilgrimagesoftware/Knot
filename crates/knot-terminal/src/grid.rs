@@ -58,6 +58,11 @@ pub struct Grid {
     term: Term<EventForwarder>,
     parser: Processor,
     events: mpsc::Receiver<Event>,
+    /// Set whenever the visible grid changes (feed/resize/selection); a UI
+    /// poll loop reads and clears this via [`Self::take_dirty`] to decide
+    /// whether a repaint is actually needed, since the PTY reader thread
+    /// that calls `feed` has no way to trigger one itself.
+    dirty: bool,
 }
 
 impl Grid {
@@ -68,6 +73,7 @@ impl Grid {
             term,
             parser: Processor::new(),
             events: rx,
+            dirty: false,
         }
     }
 
@@ -75,12 +81,20 @@ impl Grid {
     /// contents, cursor position, and queuing any resulting events.
     pub fn feed(&mut self, bytes: &[u8]) {
         self.parser.advance(&mut self.term, bytes);
+        self.dirty = true;
     }
 
     /// Resizes the grid's row/column count. Does not resize the PTY itself -
     /// callers own that separately (see `TerminalTransport`).
     pub fn resize(&mut self, size: GridSize) {
         self.term.resize(size);
+        self.dirty = true;
+    }
+
+    /// Returns whether the grid has changed since the last call, clearing
+    /// the flag.
+    pub fn take_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.dirty)
     }
 
     /// Drains and returns every event queued since the last call.
@@ -109,6 +123,7 @@ impl Grid {
     pub fn start_selection(&mut self, column: usize, row: usize) {
         let point = Point::new(Line(row as i32), Column(column));
         self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
+        self.dirty = true;
     }
 
     /// Extends the in-progress selection (if any) to this cell.
@@ -116,6 +131,7 @@ impl Grid {
         if let Some(selection) = &mut self.term.selection {
             let point = Point::new(Line(row as i32), Column(column));
             selection.update(point, Side::Right);
+            self.dirty = true;
         }
     }
 
@@ -276,5 +292,21 @@ mod tests {
         grid.clear_selection();
         assert_eq!(grid.selection_text(), None);
         assert!(!grid.is_selected(0, 0));
+    }
+
+    #[test]
+    fn take_dirty_reports_and_clears_changes() {
+        let mut grid = grid(20, 5);
+        assert!(!grid.take_dirty(), "a fresh grid has nothing to repaint");
+
+        grid.feed(b"hi");
+        assert!(grid.take_dirty());
+        assert!(!grid.take_dirty(), "dirty flag clears after being read");
+
+        grid.resize(GridSize {
+            columns: 30,
+            rows: 10,
+        });
+        assert!(grid.take_dirty());
     }
 }

@@ -13,15 +13,23 @@ const DEFAULT_FOREGROUND: u32 = 0xE0E0E0;
 const DEFAULT_BACKGROUND: u32 = 0x1A1A1A;
 
 /// Renders every visible row of `grid` as a monospace text grid, with the
-/// cursor cell shown by swapping its foreground/background.
-pub(crate) fn render_grid(grid: &Grid) -> impl IntoElement {
+/// cursor cell shown by swapping its foreground/background. `font_family`
+/// should come from `cx.theme().mono_font_family` (or the user's
+/// `terminal_font_name` setting) - a name GPUI has actually registered, not
+/// a literal like `"SF Mono"` which silently falls back to the app's
+/// (proportional) UI font if it isn't a font GPUI knows about.
+pub(crate) fn render_grid(
+    grid: &Grid,
+    font_family: gpui_kit::SharedString,
+    font_size: gpui_kit::Pixels,
+) -> impl IntoElement {
     let size = grid.size();
     let (cursor_col, cursor_row) = grid.cursor();
 
     v_flex()
         .size_full()
-        .font_family("SF Mono")
-        .text_size(gpui_kit::px(13.))
+        .font_family(font_family)
+        .text_size(font_size)
         .bg(rgb(DEFAULT_BACKGROUND))
         .children(
             (0..size.rows)

@@ -2153,12 +2153,17 @@ impl WorkspaceWindow {
                 window
             });
             // Drains OSC 52 clipboard-store requests queued from the PTY
-            // reader thread onto the OS pasteboard - see `clipboard_writes`'s
-            // doc comment for why this hand-off is needed.
+            // reader thread onto the OS pasteboard (see `clipboard_writes`'s
+            // doc comment), and repaints the terminal grid - the PTY reader
+            // thread has no way to call `cx.notify()` itself, so without
+            // this the grid only visibly updates on an unrelated UI event
+            // (a keystroke, mouse move), making output look stalled after
+            // e.g. pressing Enter.
+            let notify_view = view.clone();
             cx.spawn(async move |cx| {
                 loop {
                     cx.background_executor()
-                        .timer(std::time::Duration::from_millis(100))
+                        .timer(std::time::Duration::from_millis(33))
                         .await;
                     let texts = clipboard_writes
                         .lock()
@@ -2169,6 +2174,18 @@ impl WorkspaceWindow {
                             app.write_to_clipboard(ClipboardItem::new_string(text));
                         });
                     }
+                    cx.update(|app| {
+                        notify_view.update(app, |view, cx| {
+                            let dirty = view
+                                .selected_agent
+                                .and_then(|id| view.sessions.get(&id))
+                                .and_then(|session| session.lock().ok()?.grid())
+                                .is_some_and(|grid| grid.lock().unwrap().take_dirty());
+                            if dirty {
+                                cx.notify();
+                            }
+                        });
+                    });
                 }
             })
             .detach();
@@ -2232,14 +2249,25 @@ impl WorkspaceWindow {
                 _ => {}
             },
         )
-        .and_then(|mut session| {
-            let plan = SessionPlan::build(&config);
-            session.start(&plan)?;
-            Ok(session)
-        });
+        .map(|session| (session, SessionPlan::build(&config)));
         match session {
-            Ok(session) => {
-                self.sessions.insert(id, Arc::new(Mutex::new(session)));
+            Ok((session, plan)) => {
+                let session = Arc::new(Mutex::new(session));
+                self.sessions.insert(id, Arc::clone(&session));
+                // The shell needs a moment to switch the PTY out of canonical
+                // (cooked) mode into its own raw-mode line editing; sending
+                // the (often long) initialization command before that
+                // happens hits the kernel's MAX_CANON line-length limit and
+                // truncates it mid-command. Mirrors the Swift reference's
+                // `TimingConstants.terminalReadyDelay` (0.5s).
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    if let Ok(mut session) = session.lock()
+                        && let Err(error) = session.start(&plan)
+                    {
+                        eprintln!("failed to start terminal session: {error}");
+                    }
+                });
             }
             Err(error) => eprintln!("failed to start terminal session: {error}"),
         }
@@ -2949,7 +2977,22 @@ impl Render for WorkspaceWindow {
                 // Legacy/imported data may carry more than one character;
                 // clamp to a single grapheme so it can't overflow the tile.
                 let avatar = avatar.graphemes(true).next().unwrap_or("🤖").to_string();
-                Button::new(format!("workspace-agent-{id}"))
+                let selected = self.selected_agent == Some(id);
+                // A plain clickable div, not `Button` - `Button`'s default
+                // sizing forces a fixed height regardless of content,
+                // clipping this row's up to 4 lines (name/persona/status/
+                // folder). Same fix as the dashboard cards in
+                // `dashboard.rs`.
+                div()
+                    .id(gpui_kit::ElementId::from(format!("workspace-agent-{id}")))
+                    .cursor_pointer()
+                    .rounded(cx.theme().radius)
+                    .p_2()
+                    .bg(if selected {
+                        cx.theme().muted
+                    } else {
+                        cx.theme().transparent
+                    })
                     .child(
                         h_flex()
                             .w_full()
@@ -3008,7 +3051,6 @@ impl Render for WorkspaceWindow {
                                     .bg(state_color(state))
                             })),
                     )
-                    .selected(self.selected_agent == Some(id))
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.selected_agent = Some(id);
                         view.ensure_session(id);
@@ -3355,6 +3397,9 @@ impl Render for WorkspaceWindow {
                                                         ))
                                                         .child(terminal_view::render_grid(
                                                             &grid.lock().unwrap(),
+                                                            cx.theme().mono_font_family.clone(),
+                                                            px(self.settings.terminal_font_size
+                                                                as f32),
                                                         ))
                                                         .into_any_element(),
                                                 )
