@@ -133,7 +133,7 @@
 
 ## 7. End-to-end verification
 
-- [ ] 7.1 Run `make rust` (fmt + clippy + test + build) across the
+- [x] 7.1 Run `make rust` (fmt + clippy + test + build) across the
       workspace and confirm it passes with the new crate and modules
       included. Verify: command exits 0.
 - [ ] 7.2 Manually run one full session with a confirmed-working adapter
