@@ -132,10 +132,12 @@ mod native_character_picker {
 /// Embedded fonts (all SIL OFL licensed; see the matching `*-LICENSE.txt`
 /// under `assets/fonts/`), so the app looks the same regardless of what's
 /// installed on the system:
-/// - Adamina: single weight, used only for "title" text (the workspace
-///   name in the title bar, agent names) - the renderer synthesizes bold
+/// - Adamina: the app-wide default font (dialogs, buttons, settings labels,
+///   and "title" text like agent names) - the renderer synthesizes bold
 ///   for `font_semibold`/`font_bold` text set in it.
-/// - Manrope: the general UI font (header text, agent cell content).
+/// - Manrope: applied explicitly, only to the workspace header and agent
+///   sidebar cell text that isn't the agent's name (persona, status,
+///   folder, git stats).
 /// - JetBrains Mono: the default terminal font (`terminal_font_name`'s
 ///   default) - a real monospace coding font, not a mono variant of the UI
 ///   font, and reliably resolvable regardless of what's installed on the
@@ -173,10 +175,11 @@ fn shorten_path(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-/// Registers the embedded font families and sets Manrope as the UI font
-/// (Adamina stays registered for "title" text set explicitly), plus a
-/// distinct accent color, so the app doesn't rely on the platform's generic
-/// UI font and neutral-gray default theme.
+/// Registers the embedded font families and sets Adamina as the app-wide
+/// default font (Manrope stays registered for the workspace header/cell
+/// text that applies it explicitly), plus a distinct accent color, so the
+/// app doesn't rely on the platform's generic UI font and neutral-gray
+/// default theme.
 fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
     if let Err(error) = cx.text_system().add_fonts(vec![
         std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
@@ -190,10 +193,15 @@ fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
         eprintln!("failed to register embedded fonts: {error}");
     }
 
+    // The app-wide default stays the "title" font (Adamina) - Manrope
+    // (`ui_font_name`) is applied explicitly only to the workspace header
+    // and agent-cell text that isn't the agent's name, per the user's
+    // request. Everything else (dialogs, buttons, settings labels) keeps
+    // the existing font unchanged.
     let theme = cx.global_mut::<Theme>();
-    theme.font_family = settings.ui_font_name.clone().into();
+    theme.font_family = settings.title_font_name.clone().into();
     theme.mono_font_family = "JetBrains Mono".into();
-    theme.font_size = px(settings.ui_font_size as f32);
+    theme.font_size = px(settings.title_font_size as f32);
     let accent: gpui_kit::Hsla = rgb(0x3B82F6).into();
     let accent_hover: gpui_kit::Hsla = rgb(0x2563EB).into();
     let accent_active: gpui_kit::Hsla = rgb(0x1D4ED8).into();
@@ -677,15 +685,15 @@ fn open_settings_window(
                             settings_window.update(app, |view, cx| {
                                 match target {
                                     native_font_panel::Target::Ui => {
-                                        view.settings.ui_font_name = family.clone();
+                                        view.settings.ui_font_name = family;
                                         view.settings.ui_font_size = size;
+                                    }
+                                    native_font_panel::Target::Title => {
+                                        view.settings.title_font_name = family.clone();
+                                        view.settings.title_font_size = size;
                                         let theme = cx.global_mut::<Theme>();
                                         theme.font_family = family.into();
                                         theme.font_size = px(size as f32);
-                                    }
-                                    native_font_panel::Target::Title => {
-                                        view.settings.title_font_name = family;
-                                        view.settings.title_font_size = size;
                                     }
                                     native_font_panel::Target::Terminal => {
                                         view.settings.terminal_font_name = family;
@@ -3121,8 +3129,11 @@ impl WorkspaceWindow {
 
 impl Render for WorkspaceWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let title_font_name = self.settings.title_font_name.clone();
-        let title_font_size = px(self.settings.title_font_size as f32);
+        // Manrope applies explicitly to header/cell text that isn't the
+        // agent's name - the name (a "title") keeps the app-wide default
+        // font (Adamina), so it needs no override here.
+        let ui_font_name = self.settings.ui_font_name.clone();
+        let ui_font_size = px(self.settings.ui_font_size as f32);
         let (_workspace_name, agents) = {
             let store = self.store.lock().unwrap();
             let Some(workspace) = store
@@ -3215,22 +3226,19 @@ impl Render for WorkspaceWindow {
                                     .flex_1()
                                     .min_w_0()
                                     .gap_0p5()
-                                    .child(
-                                        div()
-                                            .font_family(title_font_name.clone())
-                                            .text_size(title_font_size)
-                                            .font_semibold()
-                                            .child(name),
-                                    )
+                                    .child(div().font_semibold().child(name))
                                     .children(persona_name.map(|persona_name| {
                                         div()
+                                            .font_family(ui_font_name.clone())
+                                            .text_size(ui_font_size)
                                             .text_xs()
                                             .text_color(cx.theme().muted_foreground)
                                             .child(format!("👤 {persona_name}"))
                                     }))
                                     .child(
                                         div()
-                                            .text_sm()
+                                            .font_family(ui_font_name.clone())
+                                            .text_size(ui_font_size)
                                             .text_color(cx.theme().muted_foreground)
                                             .overflow_hidden()
                                             .whitespace_nowrap()
@@ -3239,7 +3247,8 @@ impl Render for WorkspaceWindow {
                                     )
                                     .child(
                                         div()
-                                            .text_sm()
+                                            .font_family(ui_font_name.clone())
+                                            .text_size(ui_font_size)
                                             .text_color(cx.theme().muted_foreground)
                                             .overflow_hidden()
                                             .whitespace_nowrap()
@@ -3406,29 +3415,26 @@ impl Render for WorkspaceWindow {
                     .items_center()
                     .gap_3()
                     .child(div().text_2xl().child(header.avatar.clone()))
+                    .child(div().text_lg().font_semibold().child(header.name.clone()))
                     .child(
                         div()
-                            .font_family(title_font_name.clone())
-                            .text_size(title_font_size)
-                            .font_semibold()
-                            .child(header.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_lg()
+                            .font_family(ui_font_name.clone())
+                            .text_size(ui_font_size)
                             .text_color(cx.theme().muted_foreground)
                             .child(header.folder.clone()),
                     )
                     .when(!header.header_title.is_empty(), |row| {
                         row.child(
                             div()
-                                .text_sm()
+                                .font_family(ui_font_name.clone())
+                                .text_size(ui_font_size)
                                 .text_color(cx.theme().muted_foreground)
                                 .child("●"),
                         )
                         .child(
                             div()
-                                .text_lg()
+                                .font_family(ui_font_name.clone())
+                                .text_size(ui_font_size)
                                 .text_color(cx.theme().muted_foreground)
                                 .child(header.header_title.clone()),
                         )
@@ -3475,13 +3481,16 @@ impl Render for WorkspaceWindow {
                             )
                             .child(
                                 div()
+                                    .font_family(ui_font_name.clone())
+                                    .text_size(ui_font_size)
                                     .text_color(cx.theme().muted_foreground)
                                     .child(state_label(*state)),
                             ),
                     )
                     .child(
                         div()
-                            .text_sm()
+                            .font_family(ui_font_name.clone())
+                            .text_size(ui_font_size)
                             .text_color(cx.theme().muted_foreground)
                             .child(match git_stats {
                                 Some(stats) => {
@@ -3553,11 +3562,14 @@ impl Render for WorkspaceWindow {
                             .w_full()
                             .items_center()
                             .px_4()
-                            .gap_1()
+                            .gap_2()
+                            .border_t_1()
+                            .border_color(cx.theme().border)
                             .child(
                                 Button::new("workspace-new-agent")
                                     .icon(IconName::Plus)
-                                    .tooltip("New agent")
+                                    .label("New agent")
+                                    .ghost()
                                     .on_click(cx.listener(
                                         |view, _: &ClickEvent, window, cx| {
                                             view.open_new_agent_dialog(window, cx);
