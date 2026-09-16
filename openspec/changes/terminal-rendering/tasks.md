@@ -1,21 +1,21 @@
 ## 1. `knot-terminal`: grid parsing layer
 
-- [ ] 1.1 Add `alacritty_terminal` as a dependency of `knot-terminal` and
+- [x] 1.1 Add `alacritty_terminal` as a dependency of `knot-terminal` and
       pin an exact version. Verify: `cargo build -p knot-terminal`
       succeeds.
-- [ ] 1.2 A `Grid`-owning type wrapping `alacritty_terminal::Term` plus an
+- [x] 1.2 A `Grid`-owning type wrapping `alacritty_terminal::Term` plus an
       `EventListener` impl that records title/bell/clipboard events for
       later consumption (a plain queue or callback, matching
       `knot-activity::EventSink`'s existing style). Verify: unit test
       feeds known ANSI byte sequences (SGR color codes, cursor movement,
       a title-setting OSC) and asserts the resulting grid cells/cursor
       position/recorded events match expectations.
-- [ ] 1.3 Wire PTY output bytes (already captured by `TerminalSession`)
+- [x] 1.3 Wire PTY output bytes (already captured by `TerminalSession`)
       into the grid type's `Term::input`, replacing/extending whatever
       currently only counts bytes for activity detection. Verify: an
       integration test spawns a real PTY session running a command with
       known output (e.g. `printf`) and asserts the grid reflects it.
-- [ ] 1.4 Resize: a method that resizes both the `Term`'s grid dimensions
+- [x] 1.4 Resize: a method that resizes both the `Term`'s grid dimensions
       and the underlying PTY (`SIGWINCH` via the existing PTY resize
       call, if `knot-terminal` doesn't already expose one - add it if
       not). Verify: unit test resizes a running session and asserts both

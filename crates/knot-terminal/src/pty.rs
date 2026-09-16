@@ -3,13 +3,14 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use portable_pty::{Child, CommandBuilder, PtySize, native_pty_system};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use crate::{Result, TerminalError, TerminalTransport};
 
 pub struct PtyTransport {
     writer: Mutex<Box<dyn Write + Send>>,
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
+    master: Box<dyn MasterPty + Send>,
 }
 
 impl PtyTransport {
@@ -67,6 +68,7 @@ impl PtyTransport {
         Ok(Self {
             writer: Mutex::new(writer),
             child,
+            master: pair.master,
         })
     }
 }
@@ -97,6 +99,17 @@ impl TerminalTransport for PtyTransport {
             .lock()
             .map_err(|_| TerminalError::Transport("PTY child lock poisoned".to_string()))?
             .kill()
+            .map_err(|error| TerminalError::Transport(error.to_string()))
+    }
+
+    fn resize(&mut self, rows: u16, cols: u16) -> Result<()> {
+        self.master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(|error| TerminalError::Transport(error.to_string()))
     }
 }

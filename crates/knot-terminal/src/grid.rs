@@ -1,0 +1,194 @@
+//! PTY-output-to-grid parsing, backed by `alacritty_terminal`. Feeds raw PTY
+//! bytes into a VT/ANSI parser and exposes the resulting cell grid plus
+//! terminal-originated events (title changes, clipboard requests, bell) -
+//! see `openspec/changes/terminal-rendering/design.md`.
+
+use std::sync::mpsc;
+
+use alacritty_terminal::event::{Event, EventListener};
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::{Column, Line, Point};
+use alacritty_terminal::term::{Config as TermConfig, Term};
+use alacritty_terminal::vte::ansi::Processor;
+
+pub use alacritty_terminal::event::Event as GridEvent;
+pub use alacritty_terminal::term::cell::Cell;
+
+/// A terminal's fixed size, in columns and (visible) rows. `alacritty_terminal`
+/// also tracks scrollback beyond `rows`, addressed separately from the grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GridSize {
+    pub columns: usize,
+    pub rows: usize,
+}
+
+impl Dimensions for GridSize {
+    fn total_lines(&self) -> usize {
+        self.rows
+    }
+
+    fn screen_lines(&self) -> usize {
+        self.rows
+    }
+
+    fn columns(&self) -> usize {
+        self.columns
+    }
+}
+
+/// Forwards `alacritty_terminal` events to an [`mpsc::Sender`] so [`Grid`]
+/// can drain them after each `feed` - `EventListener::send_event` takes
+/// `&self`, so a channel (not a plain `Vec`) is the simplest way to record
+/// events without a lock.
+#[derive(Clone)]
+struct EventForwarder(mpsc::Sender<Event>);
+
+impl EventListener for EventForwarder {
+    fn send_event(&self, event: Event) {
+        let _ = self.0.send(event);
+    }
+}
+
+/// One agent's parsed terminal state: feed it raw PTY output, read back the
+/// visible cell grid and any events (title changes, clipboard requests,
+/// bell) the running program triggered.
+pub struct Grid {
+    term: Term<EventForwarder>,
+    parser: Processor,
+    events: mpsc::Receiver<Event>,
+}
+
+impl Grid {
+    pub fn new(size: GridSize) -> Self {
+        let (tx, rx) = mpsc::channel();
+        let term = Term::new(TermConfig::default(), &size, EventForwarder(tx));
+        Self {
+            term,
+            parser: Processor::new(),
+            events: rx,
+        }
+    }
+
+    /// Parses `bytes` (raw PTY output) into the grid, updating cell
+    /// contents, cursor position, and queuing any resulting events.
+    pub fn feed(&mut self, bytes: &[u8]) {
+        self.parser.advance(&mut self.term, bytes);
+    }
+
+    /// Resizes the grid's row/column count. Does not resize the PTY itself -
+    /// callers own that separately (see `TerminalTransport`).
+    pub fn resize(&mut self, size: GridSize) {
+        self.term.resize(size);
+    }
+
+    /// Drains and returns every event queued since the last call.
+    pub fn drain_events(&mut self) -> Vec<GridEvent> {
+        self.events.try_iter().collect()
+    }
+
+    /// The cursor's current position (0-indexed column/line within the
+    /// visible grid).
+    pub fn cursor(&self) -> (usize, usize) {
+        let point = self.term.grid().cursor.point;
+        (point.column.0, point.line.0.max(0) as usize)
+    }
+
+    /// A visible row's cells, left to right. Panics if `row` is out of
+    /// bounds for the grid's current size.
+    pub fn row_cells(&self, row: usize) -> Vec<Cell> {
+        self.term.grid()[Line(row as i32)]
+            .into_iter()
+            .cloned()
+            .collect()
+    }
+
+    /// A visible row's text content, with trailing blank cells trimmed -
+    /// convenient for tests and any plain-text consumer.
+    pub fn row_text(&self, row: usize) -> String {
+        let mut text: String = self.row_cells(row).iter().map(|cell| cell.c).collect();
+        while text.ends_with(' ') {
+            text.pop();
+        }
+        text
+    }
+
+    pub fn size(&self) -> GridSize {
+        GridSize {
+            columns: self.term.columns(),
+            rows: self.term.screen_lines(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn point_at(column: usize, row: usize) -> Point {
+    Point::new(Line(row as i32), Column(column))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn grid(columns: usize, rows: usize) -> Grid {
+        Grid::new(GridSize { columns, rows })
+    }
+
+    #[test]
+    fn feeds_plain_text_into_the_grid() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"hello");
+        assert_eq!(grid.row_text(0), "hello");
+    }
+
+    #[test]
+    fn tracks_cursor_position_after_writes() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"hi");
+        assert_eq!(grid.cursor(), (2, 0));
+    }
+
+    #[test]
+    fn newline_and_carriage_return_move_to_the_next_line() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"one\r\ntwo");
+        assert_eq!(grid.row_text(0), "one");
+        assert_eq!(grid.row_text(1), "two");
+    }
+
+    #[test]
+    fn resize_updates_reported_size() {
+        let mut grid = grid(20, 5);
+        grid.resize(GridSize {
+            columns: 40,
+            rows: 10,
+        });
+        assert_eq!(
+            grid.size(),
+            GridSize {
+                columns: 40,
+                rows: 10
+            }
+        );
+    }
+
+    #[test]
+    fn title_escape_sequence_produces_a_title_event() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"\x1b]0;my title\x07");
+        let events = grid.drain_events();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            GridEvent::Title(title) if title == "my title"
+        )));
+    }
+
+    #[test]
+    fn sgr_color_codes_set_cell_foreground() {
+        use alacritty_terminal::term::cell::Flags;
+
+        let mut grid = grid(20, 5);
+        grid.feed(b"\x1b[1mbold");
+        let cells = grid.row_cells(0);
+        assert!(cells[0].flags.contains(Flags::BOLD));
+    }
+}
