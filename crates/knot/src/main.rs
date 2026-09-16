@@ -2032,6 +2032,15 @@ enum WorkspaceViewMode {
     Dashboard,
 }
 
+/// Terminal pane geometry, approximated (not measured from real glyph
+/// metrics) for the "SF Mono" 13px font `terminal_view` renders with -
+/// shared by resize and mouse-position translation so they agree on the
+/// same grid. Revisit if layout drifts noticeably.
+const TERMINAL_SIDEBAR_WIDTH: f32 = 250.;
+const TERMINAL_HEADER_HEIGHT: f32 = 56.;
+const TERMINAL_CELL_WIDTH: f32 = 8.;
+const TERMINAL_CELL_HEIGHT: f32 = 18.;
+
 struct WorkspaceWindow {
     store: Arc<Mutex<knot_agents::AgentStore>>,
     settings: knot_core::Settings,
@@ -2199,20 +2208,17 @@ impl WorkspaceWindow {
     /// measurement - close enough for a usable grid, revisit if layout
     /// drifts noticeably from the actual rendered cell size.
     fn resize_session_to_pane(&mut self, id: Uuid, window: &Window) {
-        const SIDEBAR_WIDTH: f32 = 250.;
-        const HEADER_HEIGHT: f32 = 56.;
-        const CELL_WIDTH: f32 = 8.;
-        const CELL_HEIGHT: f32 = 18.;
-
         let Some(session) = self.sessions.get(&id) else {
             return;
         };
         let viewport = window.viewport_size();
-        let pane_width = (f32::from(viewport.width) - SIDEBAR_WIDTH).max(CELL_WIDTH);
-        let pane_height = (f32::from(viewport.height) - HEADER_HEIGHT).max(CELL_HEIGHT);
+        let pane_width =
+            (f32::from(viewport.width) - TERMINAL_SIDEBAR_WIDTH).max(TERMINAL_CELL_WIDTH);
+        let pane_height =
+            (f32::from(viewport.height) - TERMINAL_HEADER_HEIGHT).max(TERMINAL_CELL_HEIGHT);
         let size = knot_terminal::GridSize {
-            columns: (pane_width / CELL_WIDTH) as usize,
-            rows: (pane_height / CELL_HEIGHT) as usize,
+            columns: (pane_width / TERMINAL_CELL_WIDTH) as usize,
+            rows: (pane_height / TERMINAL_CELL_HEIGHT) as usize,
         };
 
         let current = session
@@ -2249,6 +2255,72 @@ impl WorkspaceWindow {
         if let Ok(mut session) = session.lock() {
             let _ = session.send_text(&text);
         }
+    }
+
+    /// Converts a window-relative pixel position to a 0-indexed grid
+    /// column/row, using the same pane-geometry approximation as
+    /// `resize_session_to_pane`.
+    fn grid_position(position: gpui_kit::Point<gpui_kit::Pixels>) -> (usize, usize) {
+        let x = (f32::from(position.x) - TERMINAL_SIDEBAR_WIDTH).max(0.);
+        let y = (f32::from(position.y) - TERMINAL_HEADER_HEIGHT).max(0.);
+        (
+            (x / TERMINAL_CELL_WIDTH) as usize,
+            (y / TERMINAL_CELL_HEIGHT) as usize,
+        )
+    }
+
+    /// Sends a mouse button press/release to the focused terminal pane's
+    /// session, if the running program has enabled SGR mouse reporting -
+    /// otherwise a no-op (falls back to no interaction rather than a
+    /// scrollback/selection view, which isn't implemented yet).
+    fn dispatch_mouse_button(
+        &mut self,
+        id: Uuid,
+        position: gpui_kit::Point<gpui_kit::Pixels>,
+        button: knot_terminal::MouseButton,
+        pressed: bool,
+    ) {
+        let Some(session) = self.sessions.get(&id) else {
+            return;
+        };
+        let Some(grid) = session.lock().ok().and_then(|session| session.grid()) else {
+            return;
+        };
+        let (column, row) = Self::grid_position(position);
+        let sgr = grid.lock().unwrap().sgr_mouse_mode();
+        let Some(bytes) = knot_terminal::mouse_to_bytes(
+            knot_terminal::MouseInput {
+                row,
+                column,
+                button,
+                pressed,
+            },
+            sgr,
+        ) else {
+            return;
+        };
+        if let (Ok(text), Ok(mut session)) = (String::from_utf8(bytes), session.lock()) {
+            let _ = session.send_text(&text);
+        }
+    }
+
+    /// Sends a scroll-wheel event to the focused terminal pane's session
+    /// when the running program has enabled SGR mouse reporting.
+    fn dispatch_scroll(
+        &mut self,
+        id: Uuid,
+        position: gpui_kit::Point<gpui_kit::Pixels>,
+        lines: f32,
+    ) {
+        if lines == 0. {
+            return;
+        }
+        let button = if lines > 0. {
+            knot_terminal::MouseButton::WheelUp
+        } else {
+            knot_terminal::MouseButton::WheelDown
+        };
+        self.dispatch_mouse_button(id, position, button, true);
     }
 
     fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -3103,15 +3175,60 @@ impl Render for WorkspaceWindow {
                                                             gpui_kit::MouseButton::Left,
                                                             cx.listener(
                                                                 move |view,
-                                                                      _: &gpui_kit::MouseDownEvent,
+                                                                      event: &gpui_kit::MouseDownEvent,
                                                                       window,
                                                                       cx| {
                                                                     view.terminal_focus
                                                                         .clone()
                                                                         .focus(window, cx);
+                                                                    view.dispatch_mouse_button(
+                                                                        id,
+                                                                        event.position,
+                                                                        knot_terminal::MouseButton::Left,
+                                                                        true,
+                                                                    );
                                                                 },
                                                             ),
                                                         )
+                                                        .on_mouse_up(
+                                                            gpui_kit::MouseButton::Left,
+                                                            cx.listener(
+                                                                move |view,
+                                                                      event: &gpui_kit::MouseUpEvent,
+                                                                      _window,
+                                                                      _cx| {
+                                                                    view.dispatch_mouse_button(
+                                                                        id,
+                                                                        event.position,
+                                                                        knot_terminal::MouseButton::Left,
+                                                                        false,
+                                                                    );
+                                                                },
+                                                            ),
+                                                        )
+                                                        .on_scroll_wheel(cx.listener(
+                                                            move |view,
+                                                                  event: &gpui_kit::ScrollWheelEvent,
+                                                                  _window,
+                                                                  _cx| {
+                                                                let lines = match event.delta {
+                                                                    gpui_kit::ScrollDelta::Lines(
+                                                                        point,
+                                                                    ) => point.y,
+                                                                    gpui_kit::ScrollDelta::Pixels(
+                                                                        point,
+                                                                    ) => {
+                                                                        f32::from(point.y)
+                                                                            / TERMINAL_CELL_HEIGHT
+                                                                    }
+                                                                };
+                                                                view.dispatch_scroll(
+                                                                    id,
+                                                                    event.position,
+                                                                    lines,
+                                                                );
+                                                            },
+                                                        ))
                                                         .on_key_down(cx.listener(
                                                             move |view, event, _window, _cx| {
                                                                 view.dispatch_key(id, event);

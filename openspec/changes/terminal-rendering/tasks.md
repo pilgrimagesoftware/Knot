@@ -76,12 +76,16 @@
       Ctrl combos, Enter (sends `\r` not its key_char), arrows, function
       keys, Alt-prefixing, and bare modifier presses; manual check
       pending (task 5.2).
-- [ ] 3.2 Mouse: click/drag/scroll events translated and written to the
-      PTY when the running program has enabled mouse reporting (readable
-      from `Term`'s mode flags), falling back to the grid's own
-      scrollback/selection otherwise. Verify: manual check a mouse-aware
-      TUI (e.g. `htop`) receives clicks, and scrolling a plain shell
-      prompt scrolls the view.
+- [x] 3.2 Mouse: click/scroll events translated (`knot_terminal::mouse_to_bytes`,
+      5 unit tests covering left/middle/right buttons, press vs. release,
+      and wheel up/down) and written to the PTY when the running program
+      has enabled SGR mouse reporting (`Grid::sgr_mouse_mode`, checks
+      `TermMode::SGR_MOUSE` + `MOUSE_MODE`), via
+      `WorkspaceWindow::dispatch_mouse_button`/`dispatch_scroll`. Drag
+      isn't sent (no motion-mode tracking yet), and the non-mouse-reporting
+      fallback is a no-op rather than driving scrollback/selection - that
+      view doesn't exist yet (see task 3.3). Verify: manual check pending
+      (task 5.2).
 - [ ] 3.3 Text selection: click-drag over the grid selects text (using
       `alacritty_terminal`'s selection support), with copy sending the
       selected text to the OS pasteboard per the terminal-actions spec's

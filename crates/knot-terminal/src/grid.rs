@@ -93,6 +93,15 @@ impl Grid {
         (point.column.0, point.line.0.max(0) as usize)
     }
 
+    /// Whether the running program has enabled SGR mouse reporting - if
+    /// not, mouse events should drive the grid's own scrollback/selection
+    /// instead of being sent to the PTY (see `terminal-input`'s spec).
+    pub fn sgr_mouse_mode(&self) -> bool {
+        use alacritty_terminal::term::TermMode;
+        let mode = self.term.mode();
+        mode.contains(TermMode::SGR_MOUSE) && mode.intersects(TermMode::MOUSE_MODE)
+    }
+
     /// A visible row's cells, left to right. Panics if `row` is out of
     /// bounds for the grid's current size.
     pub fn row_cells(&self, row: usize) -> Vec<Cell> {
