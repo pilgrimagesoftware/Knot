@@ -2756,23 +2756,13 @@ impl AgentEditor {
             .child(control)
     }
 
-    /// A card grouping related rows, separated by hairlines - the Swift
-    /// reference's `Form` sections use a filled, borderless card rather than
-    /// the Settings window's titled, outlined `GroupBox`.
-    fn dialog_section(cx: &Context<Self>, rows: Vec<gpui_kit::AnyElement>) -> impl IntoElement {
-        let count = rows.len();
-        GroupBox::new().fill().child(
-            v_flex()
-                .children(rows.into_iter().enumerate().map(|(index, row)| {
-                    let row = div().py_2().child(row);
-                    if index + 1 < count {
-                        row.border_b_1().border_color(cx.theme().border)
-                    } else {
-                        row
-                    }
-                }))
-                .into_any_element(),
-        )
+    /// A card grouping related rows - the Swift reference's `Form` sections
+    /// use a filled, borderless card rather than the Settings window's
+    /// titled, outlined `GroupBox`.
+    fn dialog_section(_cx: &Context<Self>, rows: Vec<gpui_kit::AnyElement>) -> impl IntoElement {
+        GroupBox::new()
+            .fill()
+            .child(v_flex().gap_3().children(rows).into_any_element())
     }
 }
 
@@ -2923,20 +2913,10 @@ impl Render for AgentEditor {
         v_flex()
             .size_full()
             .gap_3()
-            .p_5()
+            .px_5()
+            .pt_5()
+            .pb_6()
             .bg(cx.theme().background)
-            .child(
-                v_flex()
-                    .w_full()
-                    .items_center()
-                    .child(div().text_lg().font_semibold().child("New Agent"))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Add a new agent to your knot."),
-                    ),
-            )
             .child(Self::dialog_section(cx, identity_rows))
             .child(Self::dialog_section(cx, agent_rows))
             .child(Self::dialog_section(cx, folder_rows))
