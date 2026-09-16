@@ -44,6 +44,19 @@ pub struct Persona {
     pub state:        PersonaState,
 }
 
+/// Which surface an agent is driven through: the terminal grid (default,
+/// every agent type), or a native ACP panel for agent types with a
+/// registered adapter (`knot-agent-launch::acp_adapter`). The terminal is
+/// never removed - Panel mode only changes which view/launch path is
+/// active, per `openspec/specs/acp-panel-ui/spec.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewMode {
+    #[default]
+    Terminal,
+    Panel,
+}
+
 // ---------------------------------------------------------------------------
 // SavedAgent
 // ---------------------------------------------------------------------------
