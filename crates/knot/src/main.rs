@@ -20,6 +20,7 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::*;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, ClickEvent, ClipboardItem, Context, Entity,
     InteractiveElement, IntoElement, KeyBinding, Menu, MenuItem, ParentElement, PathPromptOptions,
@@ -133,6 +134,15 @@ fn app_titlebar_icon() -> impl IntoElement {
 /// Registers the embedded Adamina family and sets it as the UI font, plus a
 /// distinct accent color, so the app doesn't rely on the platform's generic
 /// UI font and neutral-gray default theme.
+/// Replaces a `$HOME` prefix with `~` - matches the Swift reference's
+/// `AgentTerminalView.shortenPath`.
+fn shorten_path(path: &str) -> String {
+    std::env::var("HOME")
+        .ok()
+        .and_then(|home| path.strip_prefix(&home).map(|rest| format!("~{rest}")))
+        .unwrap_or_else(|| path.to_string())
+}
+
 fn apply_visual_identity(cx: &mut App) {
     if let Err(error) = cx
         .text_system()
@@ -2562,21 +2572,44 @@ impl WorkspaceWindow {
             self.workspace_id,
             None,
             None,
+            Self::select_and_focus_created_agent(cx),
             cx,
         );
+    }
+
+    /// An `on_created` callback for [`open_agent_editor`] that selects the
+    /// new agent (and switches out of the dashboard, if it was open) so it
+    /// becomes the visible agent in the sidebar and content pane, matching
+    /// how tapping an existing agent already behaves.
+    fn select_and_focus_created_agent(
+        cx: &mut Context<Self>,
+    ) -> impl Fn(Uuid, &mut Window, &mut App) + 'static {
+        let weak = cx.entity().downgrade();
+        move |id, _window, app| {
+            if let Some(entity) = weak.upgrade() {
+                entity.update(app, |view, cx| {
+                    view.selected_agent = Some(id);
+                    view.view_mode = WorkspaceViewMode::Terminal;
+                    view.ensure_session(id);
+                    cx.notify();
+                });
+            }
+        }
     }
 }
 
 /// Opens the agent-creation dialog, optionally prefilled the way the Swift
 /// reference's `addAgent(to:)` does when launched from a dashboard's "Add
 /// Agent" tile: folder copied from an existing agent in the workspace, new
-/// agent inserted after the workspace's last agent.
+/// agent inserted after the workspace's last agent. `on_created` is called
+/// with the new agent's id once it's created.
 fn open_agent_editor(
     store: Arc<Mutex<knot_agents::AgentStore>>,
     settings: knot_core::Settings,
     workspace_id: Uuid,
     prefill_folder: Option<String>,
     insert_after: Option<Uuid>,
+    on_created: impl Fn(Uuid, &mut Window, &mut App) + 'static,
     cx: &mut App,
 ) {
     let options = agent_window_options(cx);
@@ -2614,6 +2647,7 @@ fn open_agent_editor(
                 agent_type: "claude".to_string(),
                 persona_id: None,
                 insert_after,
+                on_created: Box::new(on_created),
                 error: None,
             }
         });
@@ -2634,8 +2668,11 @@ struct AgentEditor {
     agent_type: String,
     persona_id: Option<Uuid>,
     insert_after: Option<Uuid>,
+    on_created: Box<AgentCreatedCallback>,
     error: Option<String>,
 }
+
+type AgentCreatedCallback = dyn Fn(Uuid, &mut Window, &mut App);
 
 impl AgentEditor {
     /// Whether the form has everything required to create an agent - the
@@ -2662,10 +2699,10 @@ impl AgentEditor {
         let avatar = self.avatar_input.read(cx).value().trim().to_string();
         let agent_type = self.agent_type.clone();
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
-        {
+        let created_id = {
             let mut store = self.store.lock().unwrap();
             store.set_current_workspace(self.workspace_id);
-            store.create(
+            let id = store.create(
                 folder,
                 knot_agents::CreateOptions {
                     name: Some(name),
@@ -2680,8 +2717,10 @@ impl AgentEditor {
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
-        }
+            id
+        };
         let _ = self.settings.persist();
+        (self.on_created)(created_id, window, cx);
         window.remove_window();
     }
 
@@ -3102,16 +3141,22 @@ impl Render for WorkspaceWindow {
             },
         );
 
-        let selected_title = self
-            .selected_agent
-            .and_then(|id| {
-                self.store.lock().ok().and_then(|store| {
-                    store
-                        .agent(id)
-                        .map(|agent| agent.header_title().to_string())
+        // Matches the Swift reference's `AgentTerminalView.leftVariant`:
+        // avatar, bold name, shortened working folder, then a "●" separator
+        // and the header title (status text, falling back to the terminal
+        // title) when non-empty.
+        let selected_header = self.selected_agent.and_then(|id| {
+            self.store.lock().ok().and_then(|store| {
+                store.agent(id).map(|agent| {
+                    (
+                        agent.avatar.clone(),
+                        agent.name.clone(),
+                        shorten_path(&agent.folder),
+                        agent.header_title().to_string(),
+                    )
                 })
             })
-            .unwrap_or_else(|| "Choose an agent from the sidebar".to_string());
+        });
 
         let dashboard_workspace = is_dashboard.then(|| {
             let store = self.store.lock().unwrap();
@@ -3207,12 +3252,14 @@ impl Render for WorkspaceWindow {
                         .unwrap_or((None, None));
                     if let Some(entity) = weak.upgrade() {
                         entity.update(app, |view, cx| {
+                            let on_created = WorkspaceWindow::select_and_focus_created_agent(cx);
                             open_agent_editor(
                                 Arc::clone(&view.store),
                                 view.settings.clone(),
                                 workspace_id,
                                 folder,
                                 insert_after,
+                                on_created,
                                 cx,
                             );
                         });
@@ -3338,19 +3385,61 @@ impl Render for WorkspaceWindow {
                                             .h(px(56.))
                                             .px_5()
                                             .items_center()
+                                            .gap_3()
                                             .border_b_1()
                                             .border_color(cx.theme().border)
-                                            .child(
-                                                v_flex()
-                                                    .gap_1()
-                                                    .child(div().text_lg().child(selected_title))
-                                                    .child(
-                                                        div()
-                                                            .text_sm()
-                                                            .text_color(cx.theme().muted_foreground)
-                                                            .child("Terminal"),
-                                                    ),
-                                            ),
+                                            .when(selected_header.is_none(), |row| {
+                                                row.child(
+                                                    div()
+                                                        .text_lg()
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .child("Choose an agent from the sidebar"),
+                                                )
+                                            })
+                                            .children(selected_header.map(
+                                                |(avatar, name, folder, header_title)| {
+                                                    h_flex()
+                                                        .items_center()
+                                                        .gap_3()
+                                                        .child(
+                                                            div().text_2xl().child(avatar),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_lg()
+                                                                .font_semibold()
+                                                                .child(name),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_lg()
+                                                                .text_color(
+                                                                    cx.theme().muted_foreground,
+                                                                )
+                                                                .child(folder),
+                                                        )
+                                                        .when(!header_title.is_empty(), |row| {
+                                                            row.child(
+                                                                div()
+                                                                    .text_sm()
+                                                                    .text_color(
+                                                                        cx.theme()
+                                                                            .muted_foreground,
+                                                                    )
+                                                                    .child("●"),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_lg()
+                                                                    .text_color(
+                                                                        cx.theme()
+                                                                            .muted_foreground,
+                                                                    )
+                                                                    .child(header_title),
+                                                            )
+                                                        })
+                                                },
+                                            )),
                                     )
                                     .child(
                                         self.selected_agent
@@ -3640,12 +3729,24 @@ impl Render for CommandCenterWindow {
                     };
                     entity.update(app, |view, cx| {
                         let (folder, insert_after) = view.add_agent_prefill(workspace_id);
+                        let store = Arc::clone(&view.store);
+                        let settings = view.settings.clone();
+                        let on_created = move |id: Uuid, _window: &mut Window, cx: &mut App| {
+                            WorkspaceWindow::open_with_selection(
+                                Arc::clone(&store),
+                                settings.clone(),
+                                workspace_id,
+                                Some(id),
+                                cx,
+                            );
+                        };
                         open_agent_editor(
                             Arc::clone(&view.store),
                             view.settings.clone(),
                             workspace_id,
                             folder,
                             insert_after,
+                            on_created,
                             cx,
                         );
                     });
