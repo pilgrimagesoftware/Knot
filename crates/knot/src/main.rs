@@ -2033,14 +2033,32 @@ enum WorkspaceViewMode {
     Dashboard,
 }
 
-/// Terminal pane geometry, approximated (not measured from real glyph
-/// metrics) for the "SF Mono" 13px font `terminal_view` renders with -
-/// shared by resize and mouse-position translation so they agree on the
-/// same grid. Revisit if layout drifts noticeably.
+/// Terminal pane geometry - shared by resize and mouse-position translation
+/// so they agree on the same grid.
 const TERMINAL_SIDEBAR_WIDTH: f32 = 250.;
 const TERMINAL_HEADER_HEIGHT: f32 = 56.;
-const TERMINAL_CELL_WIDTH: f32 = 8.;
-const TERMINAL_CELL_HEIGHT: f32 = 18.;
+
+/// Measures the actual rendered cell size for `terminal_view`'s font/size,
+/// rather than guessing - an overestimate (e.g. a fixed 18px row height for
+/// a font that actually renders taller) reports more PTY rows than fit in
+/// the pane, so content the running program draws near what it thinks is
+/// the bottom (an input box, a status line) ends up laid out below the
+/// visible container and never appears.
+fn terminal_cell_size(cx: &App, font_size: gpui_kit::Pixels) -> (f32, f32) {
+    let font_id = cx
+        .text_system()
+        .resolve_font(&gpui_kit::font(cx.theme().mono_font_family.clone()));
+    let width = cx
+        .text_system()
+        .em_advance(font_id, font_size)
+        .unwrap_or(px(8.));
+    let ascent = cx.text_system().ascent(font_id, font_size);
+    let descent = cx.text_system().descent(font_id, font_size);
+    (
+        f32::from(width).max(1.),
+        f32::from(ascent + descent).max(1.),
+    )
+}
 
 struct WorkspaceWindow {
     store: Arc<Mutex<knot_agents::AgentStore>>,
@@ -2283,22 +2301,19 @@ impl WorkspaceWindow {
     }
 
     /// Resizes `id`'s session grid/PTY to match the content pane's current
-    /// size, if it changed. Cell dimensions are an approximation for the
-    /// "SF Mono" 13px font `terminal_view` renders with, not a real glyph
-    /// measurement - close enough for a usable grid, revisit if layout
-    /// drifts noticeably from the actual rendered cell size.
-    fn resize_session_to_pane(&mut self, id: Uuid, window: &Window) {
+    /// size, if it changed.
+    fn resize_session_to_pane(&mut self, id: Uuid, window: &Window, cx: &App) {
         let Some(session) = self.sessions.get(&id) else {
             return;
         };
+        let (cell_width, cell_height) =
+            terminal_cell_size(cx, px(self.settings.terminal_font_size as f32));
         let viewport = window.viewport_size();
-        let pane_width =
-            (f32::from(viewport.width) - TERMINAL_SIDEBAR_WIDTH).max(TERMINAL_CELL_WIDTH);
-        let pane_height =
-            (f32::from(viewport.height) - TERMINAL_HEADER_HEIGHT).max(TERMINAL_CELL_HEIGHT);
+        let pane_width = (f32::from(viewport.width) - TERMINAL_SIDEBAR_WIDTH).max(cell_width);
+        let pane_height = (f32::from(viewport.height) - TERMINAL_HEADER_HEIGHT).max(cell_height);
         let size = knot_terminal::GridSize {
-            columns: (pane_width / TERMINAL_CELL_WIDTH) as usize,
-            rows: (pane_height / TERMINAL_CELL_HEIGHT) as usize,
+            columns: (pane_width / cell_width) as usize,
+            rows: (pane_height / cell_height) as usize,
         };
 
         let current = session
@@ -2342,15 +2357,17 @@ impl WorkspaceWindow {
     }
 
     /// Converts a window-relative pixel position to a 0-indexed grid
-    /// column/row, using the same pane-geometry approximation as
-    /// `resize_session_to_pane`.
-    fn grid_position(position: gpui_kit::Point<gpui_kit::Pixels>) -> (usize, usize) {
+    /// column/row, using the same pane geometry as `resize_session_to_pane`.
+    fn grid_position(
+        &self,
+        position: gpui_kit::Point<gpui_kit::Pixels>,
+        cx: &App,
+    ) -> (usize, usize) {
+        let (cell_width, cell_height) =
+            terminal_cell_size(cx, px(self.settings.terminal_font_size as f32));
         let x = (f32::from(position.x) - TERMINAL_SIDEBAR_WIDTH).max(0.);
         let y = (f32::from(position.y) - TERMINAL_HEADER_HEIGHT).max(0.);
-        (
-            (x / TERMINAL_CELL_WIDTH) as usize,
-            (y / TERMINAL_CELL_HEIGHT) as usize,
-        )
+        ((x / cell_width) as usize, (y / cell_height) as usize)
     }
 
     /// Sends a mouse button press/release to the focused terminal pane's
@@ -2363,6 +2380,7 @@ impl WorkspaceWindow {
         position: gpui_kit::Point<gpui_kit::Pixels>,
         button: knot_terminal::MouseButton,
         pressed: bool,
+        cx: &App,
     ) {
         let Some(session) = self.sessions.get(&id) else {
             return;
@@ -2370,7 +2388,7 @@ impl WorkspaceWindow {
         let Some(grid) = session.lock().ok().and_then(|session| session.grid()) else {
             return;
         };
-        let (column, row) = Self::grid_position(position);
+        let (column, row) = self.grid_position(position, cx);
         let sgr = grid.lock().unwrap().sgr_mouse_mode();
         if !sgr {
             // No mouse-aware program is listening - left-button press starts
@@ -2400,7 +2418,12 @@ impl WorkspaceWindow {
     /// Extends an in-progress text selection while the mouse is dragged
     /// with the left button held, when no mouse-aware program has claimed
     /// mouse reporting.
-    fn dispatch_mouse_drag(&mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>) {
+    fn dispatch_mouse_drag(
+        &mut self,
+        id: Uuid,
+        position: gpui_kit::Point<gpui_kit::Pixels>,
+        cx: &App,
+    ) {
         let Some(session) = self.sessions.get(&id) else {
             return;
         };
@@ -2411,7 +2434,7 @@ impl WorkspaceWindow {
         if grid.sgr_mouse_mode() {
             return;
         }
-        let (column, row) = Self::grid_position(position);
+        let (column, row) = self.grid_position(position, cx);
         grid.update_selection(column, row);
     }
 
@@ -2445,6 +2468,7 @@ impl WorkspaceWindow {
         id: Uuid,
         position: gpui_kit::Point<gpui_kit::Pixels>,
         lines: f32,
+        cx: &App,
     ) {
         if lines == 0. {
             return;
@@ -2454,7 +2478,7 @@ impl WorkspaceWindow {
         } else {
             knot_terminal::MouseButton::WheelDown
         };
-        self.dispatch_mouse_button(id, position, button, true);
+        self.dispatch_mouse_button(id, position, button, true, cx);
     }
 
     fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -2965,7 +2989,7 @@ impl Render for WorkspaceWindow {
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
 
         if !is_dashboard && let Some(id) = self.selected_agent {
-            self.resize_session_to_pane(id, window);
+            self.resize_session_to_pane(id, window, cx);
         }
 
         let agent_rows = agents.into_iter().map(
@@ -3334,6 +3358,7 @@ impl Render for WorkspaceWindow {
                                                                         event.position,
                                                                         knot_terminal::MouseButton::Left,
                                                                         true,
+                                                                        cx,
                                                                     );
                                                                 },
                                                             ),
@@ -3344,12 +3369,13 @@ impl Render for WorkspaceWindow {
                                                                 move |view,
                                                                       event: &gpui_kit::MouseUpEvent,
                                                                       _window,
-                                                                      _cx| {
+                                                                      cx| {
                                                                     view.dispatch_mouse_button(
                                                                         id,
                                                                         event.position,
                                                                         knot_terminal::MouseButton::Left,
                                                                         false,
+                                                                        cx,
                                                                     );
                                                                 },
                                                             ),
@@ -3358,11 +3384,12 @@ impl Render for WorkspaceWindow {
                                                             move |view,
                                                                   event: &gpui_kit::MouseMoveEvent,
                                                                   _window,
-                                                                  _cx| {
+                                                                  cx| {
                                                                 if event.dragging() {
                                                                     view.dispatch_mouse_drag(
                                                                         id,
                                                                         event.position,
+                                                                        cx,
                                                                     );
                                                                 }
                                                             },
@@ -3371,7 +3398,15 @@ impl Render for WorkspaceWindow {
                                                             move |view,
                                                                   event: &gpui_kit::ScrollWheelEvent,
                                                                   _window,
-                                                                  _cx| {
+                                                                  cx| {
+                                                                let (_, cell_height) =
+                                                                    terminal_cell_size(
+                                                                        cx,
+                                                                        px(view
+                                                                            .settings
+                                                                            .terminal_font_size
+                                                                            as f32),
+                                                                    );
                                                                 let lines = match event.delta {
                                                                     gpui_kit::ScrollDelta::Lines(
                                                                         point,
@@ -3380,13 +3415,14 @@ impl Render for WorkspaceWindow {
                                                                         point,
                                                                     ) => {
                                                                         f32::from(point.y)
-                                                                            / TERMINAL_CELL_HEIGHT
+                                                                            / cell_height
                                                                     }
                                                                 };
                                                                 view.dispatch_scroll(
                                                                     id,
                                                                     event.position,
                                                                     lines,
+                                                                    cx,
                                                                 );
                                                             },
                                                         ))
