@@ -108,7 +108,7 @@
 
 ## 6. Panel UI
 
-- [ ] 6.1 Add a panel view module in `crates/knot` (sibling to
+- [x] 6.1 Add a panel view module in `crates/knot` (sibling to
       `terminal_view.rs`) that folds a session's update stream into
       renderable state: message list with streaming text accumulation,
       tool-call cards, and pending permission state. Verify: a snapshot/unit

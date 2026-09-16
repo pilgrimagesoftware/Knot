@@ -3726,6 +3726,7 @@ version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "gpui-kit",
+ "knot-acp",
  "knot-activity",
  "knot-agents",
  "knot-core",
@@ -3739,6 +3740,7 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
+ "serde_json",
  "tokio",
  "unicode-segmentation",
  "uuid",
