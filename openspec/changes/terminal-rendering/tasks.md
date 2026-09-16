@@ -132,10 +132,12 @@
 
 ## 5. Final verification
 
-- [ ] 5.1 `cargo fmt --all --check` (or stable `cargo fmt` if nightly is
+- [x] 5.1 `cargo fmt --all --check` (or stable `cargo fmt` if nightly is
       unavailable), `cargo clippy --workspace --all-targets -- -D
       warnings`, `cargo test --workspace`, `cargo build --workspace` all
-      pass clean.
+      pass clean. Verified continuously throughout tasks 1-4, and CI
+      (`workspace (ubuntu-latest)`/`(macos-latest)`) green on the
+      preceding `feature/terminal-rendering` PR.
 - [ ] 5.2 Manual verification end-to-end: create an agent, watch its real
       shell prompt render, type a command and see output, switch agents
       and back, restart an agent and confirm a fresh session, remove an
