@@ -39,6 +39,17 @@ use uuid::Uuid;
 const CHECK_INBOX_PROMPT: &str = "Check your inbox for questions or instructions from other agents. Update your status and immediately execute what is being asked without confirmation.";
 type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
+/// Which setting a font panel session is editing. Plain data, referenced
+/// from platform-independent UI code (button labels/handlers); only the
+/// panel-driving logic that reads/writes it is macOS-only, in
+/// `native_font_panel` below.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum FontPanelTarget {
+    Ui,
+    Title,
+    Terminal,
+}
+
 /// Drives the real macOS font panel (`NSFontPanel`) for the terminal font
 /// picker, since the user wants the system chooser rather than an in-app
 /// dropdown. `NSFontManager.selectedFont` updates live as the user clicks
@@ -54,16 +65,7 @@ mod native_font_panel {
     use objc2_app_kit::NSFontManager;
     use objc2_foundation::NSString;
 
-    /// Which setting a font panel session is editing - the OS font panel is
-    /// a single shared singleton, so only one target can own it at a time;
-    /// `poll_selection` attributes the next change to whichever target's
-    /// `open` was called most recently.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum Target {
-        Ui,
-        Title,
-        Terminal,
-    }
+    pub(crate) use super::FontPanelTarget as Target;
 
     static LAST_SEEN: Mutex<Option<(Target, String, i64)>> = Mutex::new(None);
 
@@ -141,9 +143,9 @@ mod native_character_picker {
 /// - Manrope: applied explicitly, only to the workspace header and agent
 ///   sidebar cell text that isn't the agent's name (persona, status, folder,
 ///   git stats).
-/// - JetBrains Mono: the default terminal font (`terminal_font_name`'s default)
-///   - a real monospace coding font, not a mono variant of the UI font, and
-///   reliably resolvable regardless of what's installed on the system.
+/// - JetBrains Mono: the default terminal font (`terminal_font_name`'s
+///   default), a real monospace coding font rather than a mono variant of the
+///   UI font, reliably resolvable regardless of what's installed on the system.
 const ADAMINA_REGULAR: &[u8] = include_bytes!("../assets/fonts/Adamina-Regular.ttf");
 const MANROPE_REGULAR: &[u8] = include_bytes!("../assets/fonts/Manrope-Regular.ttf");
 const MANROPE_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Manrope-Medium.ttf");
@@ -1790,8 +1792,7 @@ impl SettingsWindow {
     /// The choice comes back asynchronously via
     /// `native_font_panel::poll_selection`.
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
-    fn font_picker_button(id: &'static str, target: native_font_panel::Target, name: String,
-                          size: f64)
+    fn font_picker_button(id: &'static str, target: FontPanelTarget, name: String, size: f64)
                           -> Button {
         Button::new(id).label(format!("{name}, {size:.0}pt"))
                        .on_click(move |_, _, _| {
@@ -1807,7 +1808,7 @@ impl SettingsWindow {
                     "UI",
                     Self::font_picker_button(
                         "ui-font-picker",
-                        native_font_panel::Target::Ui,
+                        FontPanelTarget::Ui,
                         self.settings.ui_font_name.clone(),
                         self.settings.ui_font_size,
                     ),
@@ -1816,7 +1817,7 @@ impl SettingsWindow {
                     "Title",
                     Self::font_picker_button(
                         "title-font-picker",
-                        native_font_panel::Target::Title,
+                        FontPanelTarget::Title,
                         self.settings.title_font_name.clone(),
                         self.settings.title_font_size,
                     ),
@@ -1825,7 +1826,7 @@ impl SettingsWindow {
                     "Terminal",
                     Self::font_picker_button(
                         "terminal-font-picker",
-                        native_font_panel::Target::Terminal,
+                        FontPanelTarget::Terminal,
                         self.settings.terminal_font_name.clone(),
                         self.settings.terminal_font_size,
                     ),
