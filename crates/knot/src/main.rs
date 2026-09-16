@@ -2244,11 +2244,18 @@ impl WorkspaceWindow {
         let title_store = Arc::clone(&self.store);
         let clipboard_writes = Arc::clone(&self.clipboard_writes);
 
+        let last_output: Arc<Mutex<Option<std::time::Instant>>> = Arc::new(Mutex::new(None));
+        let on_output_activity = Arc::clone(&last_output);
+
         let _runtime_guard = self.runtime.enter();
         let session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
             &config,
             status_sink,
-            |_| {},
+            move |_| {
+                if let Ok(mut last_output) = on_output_activity.lock() {
+                    *last_output = Some(std::time::Instant::now());
+                }
+            },
             |_| {},
             move |event| match event {
                 knot_terminal::GridEvent::Title(title) => {
@@ -2276,10 +2283,27 @@ impl WorkspaceWindow {
                 // (cooked) mode into its own raw-mode line editing; sending
                 // the (often long) initialization command before that
                 // happens hits the kernel's MAX_CANON line-length limit and
-                // truncates it mid-command. Mirrors the Swift reference's
-                // `TimingConstants.terminalReadyDelay` (0.5s).
+                // truncates it mid-command. A fixed delay isn't reliable
+                // (shell startup time varies with the user's rc files), so
+                // instead wait for the shell's own startup output (prompt
+                // draw, MOTD, etc.) to go quiet - `QUIET_PERIOD` after the
+                // last byte, capped by `MAX_WAIT` so a shell that never
+                // stops printing doesn't block the command forever.
+                const QUIET_PERIOD: std::time::Duration = std::time::Duration::from_millis(150);
+                const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
+                const MAX_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    let start = std::time::Instant::now();
+                    loop {
+                        let quiet = last_output.lock().is_ok_and(|last_output| {
+                            last_output
+                                .is_some_and(|last_output| last_output.elapsed() >= QUIET_PERIOD)
+                        });
+                        if quiet || start.elapsed() >= MAX_WAIT {
+                            break;
+                        }
+                        std::thread::sleep(POLL_INTERVAL);
+                    }
                     if let Ok(mut session) = session.lock()
                         && let Err(error) = session.start(&plan)
                     {
