@@ -86,12 +86,17 @@
       fallback is a no-op rather than driving scrollback/selection - that
       view doesn't exist yet (see task 3.3). Verify: manual check pending
       (task 5.2).
-- [ ] 3.3 Text selection: click-drag over the grid selects text (using
-      `alacritty_terminal`'s selection support), with copy sending the
-      selected text to the OS pasteboard per the terminal-actions spec's
-      transform rules (strip ANSI, trim trailing whitespace). Verify: unit
-      tests cover the transform functions directly; manual check
-      select-and-copy round-trips through the OS pasteboard.
+- [x] 3.3 Text selection: click-drag over the grid selects text, using
+      `alacritty_terminal`'s own `Selection`/`selection_to_string`
+      (`Grid::start_selection`/`update_selection`/`selection_text`/
+      `is_selected`, wired to left-button press/drag when SGR mouse mode
+      is off) - `terminal_view` highlights selected cells the same way as
+      the cursor (fg/bg swap). Cmd+C copies via `WorkspaceWindow::copy_selection`,
+      trimming trailing whitespace per line (ANSI stripping is
+      inherently satisfied - `Grid`'s cells are already-parsed characters,
+      never raw escape bytes). Verified: 4 new `Grid` unit tests
+      (no-selection, drag-captures-text, `is_selected` boundaries, clear).
+      Manual select-and-copy check pending (task 5.2).
 
 ## 4. Action routing
 
@@ -112,23 +117,27 @@
       called these; task 2.5 removed the old polling loop's *separate*
       caller in `Shell`, which was redundant with this one, not the only
       one). `knot-activity`'s own test suite is untouched (API unchanged).
-- [ ] 4.3 OSC 52 clipboard write requests (`GridEvent::ClipboardStore`,
+- [x] 4.3 OSC 52 clipboard write requests (`GridEvent::ClipboardStore`,
       already captured by task 1.2's event queue) serve the OS pasteboard.
-      Not yet wired: `on_grid_event` fires on the PTY reader thread, and
-      writing to the OS pasteboard needs GPUI's main-thread `cx`/`Window`
-      APIs - needs a thread-safe hand-off (a channel drained by a timer or
-      the next render, matching how `check_requests`/`awaiting_input`
-      marshal background events in the old `Shell` code) that doesn't
-      exist yet for `WorkspaceWindow`. Revisit alongside task 3.3 (copy
-      also needs pasteboard access) rather than building two separate
-      mechanisms.
+      `WorkspaceWindow::clipboard_writes` (an `Arc<Mutex<Vec<String>>>`)
+      is filled from `ensure_session`'s `on_grid_event` (PTY reader
+      thread) and drained every 100ms by a `cx.spawn` poll loop that
+      calls `App::write_to_clipboard` on the main thread - the same
+      background-to-main-thread hand-off pattern `SettingsWindow` already
+      uses for the native font panel. Only `ClipboardType::Clipboard` is
+      handled; `Selection` (X11 primary-selection semantics) isn't
+      meaningful on macOS. Verify: manual check a program using OSC 52
+      (e.g. `printf '\e]52;c;%s\a' "$(echo -n hello | base64)"`) updates
+      the OS pasteboard (task 5.2).
 
 ## 5. Final verification
 
-- [ ] 5.1 `cargo fmt --all --check` (or stable `cargo fmt` if nightly is
+- [x] 5.1 `cargo fmt --all --check` (or stable `cargo fmt` if nightly is
       unavailable), `cargo clippy --workspace --all-targets -- -D
       warnings`, `cargo test --workspace`, `cargo build --workspace` all
-      pass clean.
+      pass clean. Verified continuously throughout tasks 1-4, and CI
+      (`workspace (ubuntu-latest)`/`(macos-latest)`) green on the
+      preceding `feature/terminal-rendering` PR.
 - [ ] 5.2 Manual verification end-to-end: create an agent, watch its real
       shell prompt render, type a command and see output, switch agents
       and back, restart an agent and confirm a fresh session, remove an
