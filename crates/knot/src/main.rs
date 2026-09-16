@@ -3288,15 +3288,13 @@ impl Render for WorkspaceWindow {
                             // `muted`) so there's no visible seam where the
                             // borderless title bar meets the sidebar.
                             .bg(cx.theme().title_bar)
-                            .children(agent_rows)
-                            .child(div().flex_1())
-                            .children(
-                                self.error
-                                    .as_ref()
-                                    .map(|error| div().text_sm().child(error.clone())),
-                            )
+                            // A fixed header row (not pinned to the bottom
+                            // via a flex_1 spacer, which left it invisible
+                            // in practice) - always visible regardless of
+                            // how many agent rows are above it.
                             .child(
                                 h_flex()
+                                    .flex_shrink_0()
                                     .gap_1()
                                     .child(
                                         Button::new("workspace-new-agent")
@@ -3330,7 +3328,13 @@ impl Render for WorkspaceWindow {
                                             }),
                                         ),
                                     ),
-                            ),
+                            )
+                            .children(
+                                self.error
+                                    .as_ref()
+                                    .map(|error| div().text_sm().child(error.clone())),
+                            )
+                            .children(agent_rows),
                     )
                     .child(
                         v_flex()
