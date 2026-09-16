@@ -235,8 +235,7 @@ fn session_id_from(raw: &Value) -> Result<String> {
 }
 
 fn permission_result(
-    decision: PermissionDecision,
-    options: &[PermissionOption],
+    decision: PermissionDecision, options: &[PermissionOption],
 ) -> std::result::Result<Value, JsonRpcErrorPayload> {
     let outcome = match decision {
         PermissionDecision::Allow => options

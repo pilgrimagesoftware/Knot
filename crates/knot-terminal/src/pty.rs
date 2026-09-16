@@ -35,10 +35,7 @@ pub struct PtyTransport {
 
 impl PtyTransport {
     pub fn spawn<Output, Exit>(
-        folder: impl AsRef<Path>,
-        shell: impl Into<String>,
-        on_output: Output,
-        on_exit: Exit,
+        folder: impl AsRef<Path>, shell: impl Into<String>, on_output: Output, on_exit: Exit,
     ) -> Result<Self>
     where
         Output: Fn(&[u8]) + Send + Sync + 'static,

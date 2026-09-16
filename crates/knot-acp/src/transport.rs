@@ -246,9 +246,7 @@ impl Transport {
     }
 
     pub async fn respond(
-        &self,
-        id: Value,
-        result: std::result::Result<Value, JsonRpcErrorPayload>,
+        &self, id: Value, result: std::result::Result<Value, JsonRpcErrorPayload>,
     ) -> Result<()> {
         let response = match result {
             Ok(result) => JsonRpcResponse {

@@ -223,8 +223,7 @@ fn add_agent_tile(
 /// One workspace's section: color bar + name (+ nav when global) + agent
 /// grid, or an "No agents" empty state.
 pub(crate) fn workspace_section(
-    workspace: DashboardWorkspace,
-    is_global: bool,
+    workspace: DashboardWorkspace, is_global: bool,
     on_agent_tap: impl Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + Clone + 'static,
     on_workspace_nav: impl Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + Clone + 'static,
     on_add_agent: impl Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + Clone + 'static,

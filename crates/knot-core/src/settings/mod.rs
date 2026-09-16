@@ -280,9 +280,7 @@ impl Settings {
 
     /// Add a new user persona, enabled by default.
     pub fn add_persona(
-        &mut self,
-        name: impl Into<String>,
-        instructions: impl Into<String>,
+        &mut self, name: impl Into<String>, instructions: impl Into<String>,
     ) -> Result<&Persona> {
         let persona = Persona {
             id: Uuid::new_v4(),
@@ -299,10 +297,7 @@ impl Settings {
     /// Rewrite name/instructions for an existing persona of any type. A no-op
     /// if `id` is not present.
     pub fn update_persona(
-        &mut self,
-        id: Uuid,
-        name: impl Into<String>,
-        instructions: impl Into<String>,
+        &mut self, id: Uuid, name: impl Into<String>, instructions: impl Into<String>,
     ) -> Result<()> {
         let Some(persona) = self.personas.iter_mut().find(|p| p.id == id) else {
             return Ok(());

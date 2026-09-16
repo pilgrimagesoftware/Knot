@@ -54,8 +54,7 @@ impl Watch {
     /// Create a watch. `relevant` decides whether a changed path should count
     /// toward the debounce; `callback` fires once after changes settle.
     pub fn new(
-        path: impl Into<PathBuf>,
-        debounce: Duration,
+        path: impl Into<PathBuf>, debounce: Duration,
         relevant: impl Fn(&Path) -> bool + Send + Sync + 'static,
         callback: impl Fn() + Send + Sync + 'static,
     ) -> Self {
@@ -129,11 +128,8 @@ impl Watch {
 }
 
 async fn watch_loop(
-    mut events: mpsc::UnboundedReceiver<notify::Event>,
-    debounce: Duration,
-    relevant: Arc<RelevantFn>,
-    callback: Arc<CallbackFn>,
-    pause: Arc<Mutex<PauseState>>,
+    mut events: mpsc::UnboundedReceiver<notify::Event>, debounce: Duration,
+    relevant: Arc<RelevantFn>, callback: Arc<CallbackFn>, pause: Arc<Mutex<PauseState>>,
 ) {
     let mut deadline: Option<Instant> = None;
 

@@ -109,9 +109,7 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
 /// screen, then (for a non-empty `agent_command`) set `KNOT_AGENT_ID` and
 /// run it. The leading space suppresses shell history under `ignorespace`.
 pub fn build_initialization_command(
-    folder: &str,
-    agent_command: &str,
-    agent_id: Option<Uuid>,
+    folder: &str, agent_command: &str, agent_id: Option<Uuid>,
 ) -> String {
     if agent_command.is_empty() {
         return format!(" cd '{folder}' && clear");

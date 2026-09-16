@@ -76,10 +76,7 @@ pub fn mcp_arguments(agent_type: &str, mcp_url: &str, plugin_root: Option<&Path>
 /// when `agent_type` does not support inline registration or the resume
 /// rules drop them.
 pub fn inline_registration_arguments(
-    agent_type: &str,
-    agent_id: Uuid,
-    is_resume: bool,
-    persona: Option<&Persona>,
+    agent_type: &str, agent_id: Uuid, is_resume: bool, persona: Option<&Persona>,
 ) -> String {
     match agent_type {
         "claude" => {

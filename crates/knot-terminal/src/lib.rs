@@ -117,9 +117,7 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
     }
 
     pub fn spawn_pty<Output>(
-        config: &SessionConfig<'_>,
-        sink: EventSink,
-        on_output: Output,
+        config: &SessionConfig<'_>, sink: EventSink, on_output: Output,
     ) -> Result<TerminalSession<PtyTransport>>
     where
         Output: Fn(&[u8]) + Send + Sync + 'static,
@@ -128,10 +126,7 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
     }
 
     pub fn spawn_pty_with_exit<Output, Exit, GridEventFn>(
-        config: &SessionConfig<'_>,
-        sink: EventSink,
-        on_output: Output,
-        on_exit: Exit,
+        config: &SessionConfig<'_>, sink: EventSink, on_output: Output, on_exit: Exit,
         on_grid_event: GridEventFn,
     ) -> Result<TerminalSession<PtyTransport>>
     where
@@ -249,9 +244,7 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
 }
 
 fn make_tracker<T: TerminalTransport + 'static>(
-    config: &SessionConfig<'_>,
-    transport: Arc<Mutex<T>>,
-    mut sink: EventSink,
+    config: &SessionConfig<'_>, transport: Arc<Mutex<T>>, mut sink: EventSink,
 ) -> Arc<Tracker> {
     let mut caller_inject = sink.on_inject_registration.take();
     sink.on_inject_registration = Some(Box::new(move |prompt| {

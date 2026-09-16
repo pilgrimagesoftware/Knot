@@ -51,8 +51,7 @@ impl McpToolCatalog {
     /// MCP-driven mutations (`register-agent`, `set-status`, `create-agent`,
     /// hooks) land in the store the UI reads.
     pub fn new(
-        agents: Arc<Mutex<AgentStore>>,
-        repos: watch::Receiver<Vec<RepoInfo>>,
+        agents: Arc<Mutex<AgentStore>>, repos: watch::Receiver<Vec<RepoInfo>>,
         notifier: Arc<dyn DeliveryNotifier + Send + Sync>,
     ) -> Self {
         Self {
@@ -274,10 +273,7 @@ fn schema(properties: &[(&str, &str, &str)], required: &[&str]) -> ToolInputSche
 }
 
 fn tool(
-    name: &str,
-    description: &str,
-    properties: &[(&str, &str, &str)],
-    required: &[&str],
+    name: &str, description: &str, properties: &[(&str, &str, &str)], required: &[&str],
 ) -> ToolDefinition {
     ToolDefinition {
         name: name.to_string(),

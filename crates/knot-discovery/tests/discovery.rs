@@ -35,8 +35,7 @@ async fn no_update_within(rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>, 
 /// not hang the process. `unwrap_or` on the recv is a correctness assertion,
 /// not a real "channel closed" no-op: nothing here drops the sender early.
 async fn settle(
-    rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>,
-    quiet: Duration,
+    rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>, quiet: Duration,
 ) -> Vec<RepoInfo> {
     let overall = timeout(Duration::from_secs(10), async {
         while timeout(quiet, rx.changed()).await.is_ok() {}

@@ -81,8 +81,7 @@ struct ResolvedCreateFields {
 }
 
 fn resolve_create_agent_fields(
-    arguments: &serde_json::Value,
-    bench: Option<&BenchAgent>,
+    arguments: &serde_json::Value, bench: Option<&BenchAgent>,
 ) -> ResolvedCreateFields {
     ResolvedCreateFields {
         name: optional_str(arguments, "name")
@@ -107,9 +106,7 @@ fn resolve_create_agent_fields(
 }
 
 pub fn create_agent(
-    store: &mut AgentStore,
-    arguments: &serde_json::Value,
-    bench_agents: &[BenchAgent],
+    store: &mut AgentStore, arguments: &serde_json::Value, bench_agents: &[BenchAgent],
 ) -> ToolCallResult {
     let agent_id_str = match require_str(arguments, "agentId") {
         Ok(v) => v,

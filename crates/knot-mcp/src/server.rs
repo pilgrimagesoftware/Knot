@@ -144,9 +144,7 @@ enum HookAction {
 }
 
 fn hook_response(
-    handler: Option<&dyn AgentHookHandler>,
-    body: &[u8],
-    action: HookAction,
+    handler: Option<&dyn AgentHookHandler>, body: &[u8], action: HookAction,
 ) -> Response {
     let request: HookRequest = match serde_json::from_slice(body) {
         Ok(request) => request,

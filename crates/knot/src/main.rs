@@ -277,9 +277,7 @@ struct LayoutModel {
 }
 
 fn layout_model(
-    store: &knot_agents::AgentStore,
-    agent_selection: Option<Uuid>,
-    attached_ids: &[Uuid],
+    store: &knot_agents::AgentStore, agent_selection: Option<Uuid>, attached_ids: &[Uuid],
     unread_counts: &BTreeMap<Uuid, usize>,
 ) -> LayoutModel {
     let current = store.current_workspace_id();
@@ -374,8 +372,7 @@ fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::AgentStore 
 }
 
 fn agent_selection_for_workspace(
-    store: &knot_agents::AgentStore,
-    workspace_id: Uuid,
+    store: &knot_agents::AgentStore, workspace_id: Uuid,
 ) -> Option<Uuid> {
     let workspace = store
         .workspaces()
@@ -419,8 +416,7 @@ struct AwaitingNotice {
 }
 
 fn delivery_notice(
-    events: &[DeliveryEvent],
-    agents: &[knot_agents::Agent],
+    events: &[DeliveryEvent], agents: &[knot_agents::Agent],
 ) -> Option<DeliveryNotice> {
     let event = events.last()?;
     let agent = agents.iter().find(|agent| agent.id == event.agent_id)?;
@@ -448,8 +444,7 @@ fn agent_status_snapshot(store: &knot_agents::AgentStore) -> Vec<AgentStatusKey>
 }
 
 fn unread_counts_snapshot(
-    messages: &knot_messaging::MessageStore,
-    agent_ids: &[Uuid],
+    messages: &knot_messaging::MessageStore, agent_ids: &[Uuid],
 ) -> BTreeMap<Uuid, usize> {
     agent_ids
         .iter()
@@ -459,9 +454,7 @@ fn unread_counts_snapshot(
 }
 
 fn apply_terminal_status(
-    store: &Arc<Mutex<knot_agents::AgentStore>>,
-    agent_id: Uuid,
-    state: knot_agents::AgentState,
+    store: &Arc<Mutex<knot_agents::AgentStore>>, agent_id: Uuid, state: knot_agents::AgentState,
 ) {
     if let Ok(mut store) = store.lock() {
         store.set_state(agent_id, state);
@@ -469,10 +462,7 @@ fn apply_terminal_status(
 }
 
 fn should_inject_inbox_prompt(
-    agent_type: &str,
-    mcp_enabled: bool,
-    latest_message: Option<Uuid>,
-    last_injected: Option<Uuid>,
+    agent_type: &str, mcp_enabled: bool, latest_message: Option<Uuid>, last_injected: Option<Uuid>,
 ) -> bool {
     mcp_enabled
         && agent_type != "shell"
@@ -480,10 +470,7 @@ fn should_inject_inbox_prompt(
 }
 
 fn should_show_awaiting_notice(
-    selected_agent: Option<Uuid>,
-    agent_id: Uuid,
-    message: &str,
-    last_message: Option<&String>,
+    selected_agent: Option<Uuid>, agent_id: Uuid, message: &str, last_message: Option<&String>,
 ) -> bool {
     selected_agent != Some(agent_id)
         && !message.is_empty()
@@ -585,9 +572,7 @@ fn settings_window_options(cx: &App) -> WindowOptions {
 
 /// Opens the settings window, or brings it forward if already open.
 fn open_settings_window(
-    handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
-    settings: knot_core::Settings,
-    cx: &mut App,
+    handle: &Rc<RefCell<Option<AnyWindowHandle>>>, settings: knot_core::Settings, cx: &mut App,
 ) {
     if let Some(existing) = *handle.borrow()
         && existing
@@ -853,9 +838,7 @@ impl SettingsWindow {
     /// text buttons read as arbitrary activators, an icon reads as what it
     /// does. `danger` tints destructive actions (clear/delete) red.
     fn icon_button(
-        id: impl Into<gpui_kit::ElementId>,
-        icon_path: &'static str,
-        tooltip: &'static str,
+        id: impl Into<gpui_kit::ElementId>, icon_path: &'static str, tooltip: &'static str,
         danger: bool,
     ) -> Button {
         let mut icon = Icon::default().path(icon_path);
@@ -1862,10 +1845,7 @@ impl SettingsWindow {
     /// The choice comes back asynchronously via `native_font_panel::poll_selection`.
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     fn font_picker_button(
-        id: &'static str,
-        target: native_font_panel::Target,
-        name: String,
-        size: f64,
+        id: &'static str, target: native_font_panel::Target, name: String, size: f64,
     ) -> Button {
         Button::new(id)
             .label(format!("{name}, {size:.0}pt"))
@@ -1924,9 +1904,7 @@ fn persona_editor_window_options(title: &'static str, cx: &App) -> WindowOptions
 /// Opens the persona add/edit window. `persona` is `None` for "Add Persona…"
 /// and `Some` (fields pre-filled) for a row's edit button.
 fn open_persona_editor(
-    parent: WeakEntity<SettingsWindow>,
-    persona: Option<knot_core::Persona>,
-    cx: &mut App,
+    parent: WeakEntity<SettingsWindow>, persona: Option<knot_core::Persona>, cx: &mut App,
 ) {
     let editing_id = persona.as_ref().map(|p| p.id);
     let title = if editing_id.is_some() {
@@ -2124,9 +2102,7 @@ fn terminal_font_family(settings: &knot_core::Settings, cx: &App) -> gpui_kit::S
 /// the bottom (an input box, a status line) ends up laid out below the
 /// visible container and never appears.
 fn terminal_cell_size(
-    cx: &App,
-    font_family: gpui_kit::SharedString,
-    font_size: gpui_kit::Pixels,
+    cx: &App, font_family: gpui_kit::SharedString, font_size: gpui_kit::Pixels,
 ) -> (f32, f32) {
     let font_id = cx.text_system().resolve_font(&gpui_kit::font(font_family));
     let width = cx
@@ -2180,10 +2156,8 @@ impl Drop for WorkspaceWindow {
 
 impl WorkspaceWindow {
     fn open(
-        store: Arc<Mutex<knot_agents::AgentStore>>,
-        settings: knot_core::Settings,
-        workspace_id: Uuid,
-        cx: &mut App,
+        store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings,
+        workspace_id: Uuid, cx: &mut App,
     ) {
         Self::open_with_selection(store, settings, workspace_id, None, cx);
     }
@@ -2193,11 +2167,8 @@ impl WorkspaceWindow {
     /// Command Center card) already knows which agent the user wants to
     /// land on.
     fn open_with_selection(
-        store: Arc<Mutex<knot_agents::AgentStore>>,
-        settings: knot_core::Settings,
-        workspace_id: Uuid,
-        select_agent: Option<Uuid>,
-        cx: &mut App,
+        store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings,
+        workspace_id: Uuid, select_agent: Option<Uuid>, cx: &mut App,
     ) {
         let workspace_name = store
             .lock()
@@ -2482,9 +2453,7 @@ impl WorkspaceWindow {
     /// Converts a window-relative pixel position to a 0-indexed grid
     /// column/row, using the same pane geometry as `resize_session_to_pane`.
     fn grid_position(
-        &self,
-        position: gpui_kit::Point<gpui_kit::Pixels>,
-        cx: &App,
+        &self, position: gpui_kit::Point<gpui_kit::Pixels>, cx: &App,
     ) -> (usize, usize) {
         let (cell_width, cell_height) = terminal_cell_size(
             cx,
@@ -2501,12 +2470,8 @@ impl WorkspaceWindow {
     /// otherwise a no-op (falls back to no interaction rather than a
     /// scrollback/selection view, which isn't implemented yet).
     fn dispatch_mouse_button(
-        &mut self,
-        id: Uuid,
-        position: gpui_kit::Point<gpui_kit::Pixels>,
-        button: knot_terminal::MouseButton,
-        pressed: bool,
-        cx: &App,
+        &mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>,
+        button: knot_terminal::MouseButton, pressed: bool, cx: &App,
     ) {
         let Some(session) = self.sessions.get(&id) else {
             return;
@@ -2545,10 +2510,7 @@ impl WorkspaceWindow {
     /// with the left button held, when no mouse-aware program has claimed
     /// mouse reporting.
     fn dispatch_mouse_drag(
-        &mut self,
-        id: Uuid,
-        position: gpui_kit::Point<gpui_kit::Pixels>,
-        cx: &App,
+        &mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>, cx: &App,
     ) {
         let Some(session) = self.sessions.get(&id) else {
             return;
@@ -2590,11 +2552,7 @@ impl WorkspaceWindow {
     /// Sends a scroll-wheel event to the focused terminal pane's session
     /// when the running program has enabled SGR mouse reporting.
     fn dispatch_scroll(
-        &mut self,
-        id: Uuid,
-        position: gpui_kit::Point<gpui_kit::Pixels>,
-        lines: f32,
-        cx: &App,
+        &mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>, lines: f32, cx: &App,
     ) {
         if lines == 0. {
             return;
@@ -2694,13 +2652,9 @@ impl WorkspaceWindow {
 /// agent inserted after the workspace's last agent. `on_created` is called
 /// with the new agent's id once it's created.
 fn open_agent_editor(
-    store: Arc<Mutex<knot_agents::AgentStore>>,
-    settings: knot_core::Settings,
-    workspace_id: Uuid,
-    prefill_folder: Option<String>,
-    insert_after: Option<Uuid>,
-    on_created: impl Fn(Uuid, &mut Window, &mut App) + 'static,
-    cx: &mut App,
+    store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings, workspace_id: Uuid,
+    prefill_folder: Option<String>, insert_after: Option<Uuid>,
+    on_created: impl Fn(Uuid, &mut Window, &mut App) + 'static, cx: &mut App,
 ) {
     let options = agent_window_options(cx);
     let _ = cx.open_window(options, move |window, cx| {
@@ -2855,10 +2809,7 @@ impl AgentEditor {
     /// Keeps the avatar field to a single character (grapheme cluster), so
     /// typing or pasting past one character doesn't silently grow it.
     fn clamp_avatar_to_one_character(
-        &mut self,
-        avatar_input: &Entity<InputState>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        &mut self, avatar_input: &Entity<InputState>, window: &mut Window, cx: &mut Context<Self>,
     ) {
         let value = avatar_input.read(cx).value().to_string();
         let Some(first) = value.graphemes(true).next() else {
@@ -3768,9 +3719,7 @@ struct CommandCenterWindow {
 
 impl CommandCenterWindow {
     fn open(
-        store: Arc<Mutex<knot_agents::AgentStore>>,
-        settings: knot_core::Settings,
-        cx: &mut App,
+        store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings, cx: &mut App,
     ) {
         let options = command_center_window_options(cx);
         if let Err(error) = cx.open_window(options, move |window, cx| {
@@ -4024,10 +3973,7 @@ impl WorkspaceManager {
     }
 
     fn save_name(
-        &mut self,
-        name: String,
-        editing_id: Option<Uuid>,
-        window: &mut Window,
+        &mut self, name: String, editing_id: Option<Uuid>, window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if name.is_empty() {
@@ -4070,10 +4016,7 @@ impl WorkspaceManager {
     }
 
     fn open_workspace_dialog(
-        &mut self,
-        editing_id: Option<Uuid>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        &mut self, editing_id: Option<Uuid>, window: &mut Window, cx: &mut Context<Self>,
     ) {
         let name = editing_id
             .and_then(|id| {
@@ -4432,10 +4375,8 @@ impl Render for WorkspaceManager {
 /// `set-status`, `create-agent` and hook-driven state changes appear in the UI
 /// within one poll tick.
 fn start_mcp_server(
-    agents: Arc<Mutex<knot_agents::AgentStore>>,
-    settings: knot_core::Settings,
-    notifier: Arc<QueuedNotifier>,
-    messages: Arc<Mutex<knot_messaging::MessageStore>>,
+    agents: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings,
+    notifier: Arc<QueuedNotifier>, messages: Arc<Mutex<knot_messaging::MessageStore>>,
     awaiting_input: AwaitingInputQueue,
 ) -> tokio::sync::oneshot::Sender<()> {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();

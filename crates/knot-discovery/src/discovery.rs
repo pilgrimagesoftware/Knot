@@ -84,8 +84,7 @@ impl Discovery {
 /// restarting the debounce forever. macOS's FSEvents backend doesn't report
 /// plain opens this way, so this feedback loop is Linux-only.
 async fn watch_loop(
-    mut events: mpsc::UnboundedReceiver<notify::Event>,
-    base: PathBuf,
+    mut events: mpsc::UnboundedReceiver<notify::Event>, base: PathBuf,
     tx: watch::Sender<Vec<RepoInfo>>,
 ) {
     let mut deadline: Option<Instant> = None;

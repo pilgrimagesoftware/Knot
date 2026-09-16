@@ -132,9 +132,7 @@ impl AgentStore {
     /// An agent whose resume-session id is already set (e.g. from a prior
     /// call) is left untouched.
     pub fn resolve_resume_sessions<F>(
-        &mut self,
-        persisted: &BTreeMap<Uuid, String>,
-        mut resolver: F,
+        &mut self, persisted: &BTreeMap<Uuid, String>, mut resolver: F,
     ) where
         F: FnMut(&str, &str) -> Option<String>,
     {
@@ -506,10 +504,7 @@ impl AgentStore {
     /// history, deduping so a re-shown file moves to the front instead of
     /// appearing twice.
     pub fn set_markdown_panel(
-        &mut self,
-        id: Uuid,
-        file: std::path::PathBuf,
-        maximized: bool,
+        &mut self, id: Uuid, file: std::path::PathBuf, maximized: bool,
     ) -> Result<()> {
         let agent = self
             .agents
@@ -524,10 +519,7 @@ impl AgentStore {
     }
 
     pub fn set_mermaid_panel(
-        &mut self,
-        id: Uuid,
-        source: String,
-        title: Option<String>,
+        &mut self, id: Uuid, source: String, title: Option<String>,
     ) -> Result<()> {
         let agent = self
             .agents
@@ -546,9 +538,7 @@ impl AgentStore {
     /// entry; this crate stays filesystem-free, so existence is a predicate
     /// the caller supplies rather than an `std::fs` call here.
     pub fn deploy_bench(
-        &mut self,
-        bench: &BenchAgent,
-        folder_exists: impl FnOnce(&Path) -> bool,
+        &mut self, bench: &BenchAgent, folder_exists: impl FnOnce(&Path) -> bool,
     ) -> Option<Uuid> {
         if !folder_exists(Path::new(&bench.folder)) {
             return None;

@@ -9,9 +9,7 @@ use crate::responses::{
 };
 
 pub fn send_message(
-    agents: &AgentStore,
-    messages: &mut MessageStore,
-    notifier: &dyn DeliveryNotifier,
+    agents: &AgentStore, messages: &mut MessageStore, notifier: &dyn DeliveryNotifier,
     arguments: &serde_json::Value,
 ) -> ToolCallResult {
     let from = match require_str(arguments, "from") {
@@ -47,9 +45,7 @@ pub fn send_message(
 }
 
 pub fn check_messages(
-    agents: &AgentStore,
-    messages: &mut MessageStore,
-    arguments: &serde_json::Value,
+    agents: &AgentStore, messages: &mut MessageStore, arguments: &serde_json::Value,
 ) -> ToolCallResult {
     let agent_id_str = match require_str(arguments, "agentId") {
         Ok(v) => v,
@@ -81,9 +77,7 @@ pub fn check_messages(
 }
 
 pub fn broadcast_message(
-    agents: &AgentStore,
-    messages: &mut MessageStore,
-    notifier: &dyn DeliveryNotifier,
+    agents: &AgentStore, messages: &mut MessageStore, notifier: &dyn DeliveryNotifier,
     arguments: &serde_json::Value,
 ) -> ToolCallResult {
     let from = match require_str(arguments, "from") {

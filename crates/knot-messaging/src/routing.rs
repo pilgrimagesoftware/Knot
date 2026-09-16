@@ -33,12 +33,8 @@ fn notify_if_idle(notifier: &dyn DeliveryNotifier, recipient: &Agent, message_id
 /// pool `recipient_id` may be found in, per the spec's workspace scoping.
 /// Returns the new message's id on success.
 pub fn send(
-    store: &mut MessageStore,
-    notifier: &dyn DeliveryNotifier,
-    sender: &Agent,
-    workspace_members: &[Agent],
-    recipient_id: Uuid,
-    content: impl Into<String>,
+    store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &Agent,
+    workspace_members: &[Agent], recipient_id: Uuid, content: impl Into<String>,
 ) -> Result<Uuid> {
     if !sender.is_registered {
         return Err(SendError::SenderNotRegistered);
@@ -64,11 +60,8 @@ pub fn send(
 /// messages created; 0 covers both an unregistered sender and a workspace
 /// with no eligible recipient.
 pub fn broadcast(
-    store: &mut MessageStore,
-    notifier: &dyn DeliveryNotifier,
-    sender: &Agent,
-    workspace_members: &[Agent],
-    content: impl Into<String>,
+    store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &Agent,
+    workspace_members: &[Agent], content: impl Into<String>,
 ) -> usize {
     if !sender.is_registered {
         return 0;

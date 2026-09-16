@@ -77,10 +77,7 @@ impl SavedAgent {
     /// is `None` or empty. Remaining fields start at their defaults; set them on
     /// the returned value as needed.
     pub fn new(
-        id: Uuid,
-        name: impl Into<String>,
-        avatar: Option<String>,
-        folder: impl Into<String>,
+        id: Uuid, name: impl Into<String>, avatar: Option<String>, folder: impl Into<String>,
     ) -> Self {
         let avatar = avatar
             .filter(|a| !a.is_empty())
@@ -124,10 +121,7 @@ pub struct BenchAgent {
 impl BenchAgent {
     /// Build a bench entry with default avatar/agent-type fallback.
     pub fn new(
-        id: Uuid,
-        name: impl Into<String>,
-        avatar: Option<String>,
-        folder: impl Into<String>,
+        id: Uuid, name: impl Into<String>, avatar: Option<String>, folder: impl Into<String>,
     ) -> Self {
         let avatar = avatar
             .filter(|a| !a.is_empty())

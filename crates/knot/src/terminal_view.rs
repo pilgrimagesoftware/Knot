@@ -20,9 +20,7 @@ const DEFAULT_BACKGROUND: u32 = 0x262626;
 /// name, which silently falls back to the app's (proportional) UI font if
 /// GPUI can't resolve it.
 pub(crate) fn render_grid(
-    grid: &Grid,
-    font_family: gpui_kit::SharedString,
-    font_size: gpui_kit::Pixels,
+    grid: &Grid, font_family: gpui_kit::SharedString, font_size: gpui_kit::Pixels,
 ) -> impl IntoElement {
     let size = grid.size();
     let (cursor_col, cursor_row) = grid.cursor();
@@ -39,11 +37,7 @@ pub(crate) fn render_grid(
 }
 
 fn render_row(
-    grid: &Grid,
-    cells: Vec<Cell>,
-    row: usize,
-    cursor_row: usize,
-    cursor_col: usize,
+    grid: &Grid, cells: Vec<Cell>, row: usize, cursor_row: usize, cursor_col: usize,
 ) -> impl IntoElement {
     let mut spans: Vec<(String, u32, u32, Flags)> = Vec::new();
     for (col, cell) in cells.iter().enumerate() {

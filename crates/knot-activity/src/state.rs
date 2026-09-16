@@ -236,10 +236,7 @@ impl ActivityState {
     /// A hook reported a status authoritatively, carrying an optional message
     /// for the awaiting-input notification.
     pub fn apply_hook_status(
-        &mut self,
-        now: Instant,
-        status: AgentState,
-        message: Option<String>,
+        &mut self, now: Instant, status: AgentState, message: Option<String>,
     ) -> Vec<Effect> {
         // Any hook status cancels the input-protection guard.
         self.guard_until = None;
@@ -395,10 +392,7 @@ impl ActivityState {
     }
 
     fn set_status(
-        &mut self,
-        status: AgentState,
-        source: ActivitySource,
-        now: Instant,
+        &mut self, status: AgentState, source: ActivitySource, now: Instant,
         effects: &mut Vec<Effect>,
     ) {
         if self.status == status {
