@@ -2920,16 +2920,28 @@ impl Render for AgentEditor {
             .pt_5()
             .pb_6()
             .bg(cx.theme().background)
-            .child(Self::dialog_section(cx, identity_rows))
-            .child(Self::dialog_section(cx, agent_rows))
-            .child(Self::dialog_section(cx, folder_rows))
-            .children(self.error.as_ref().map(|error| {
+            .child(
+                // Scrolls in place instead of pushing the action row (which
+                // must stay visible) off the bottom of the window - the
+                // folder path row can wrap to more than one line.
                 div()
-                    .text_sm()
-                    .text_color(cx.theme().danger)
-                    .child(error.clone())
-            }))
-            .child(div().flex_1())
+                    .id("new-agent-content")
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .child(
+                        v_flex()
+                            .gap_3()
+                            .child(Self::dialog_section(cx, identity_rows))
+                            .child(Self::dialog_section(cx, agent_rows))
+                            .child(Self::dialog_section(cx, folder_rows))
+                            .children(self.error.as_ref().map(|error| {
+                                div()
+                                    .text_sm()
+                                    .text_color(cx.theme().danger)
+                                    .child(error.clone())
+                            })),
+                    ),
+            )
             .child(
                 h_flex()
                     .flex_shrink_0()
