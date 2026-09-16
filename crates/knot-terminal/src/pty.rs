@@ -7,6 +7,26 @@ use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system}
 
 use crate::{Result, TerminalError, TerminalTransport};
 
+/// Removes environment variables that identify the *host* terminal app
+/// (Warp, iTerm2, etc.) launching Knot from the spawned shell's inherited
+/// environment. `portable_pty::CommandBuilder::new` inherits the whole
+/// process environment by default; left in place, a shell integration
+/// script (e.g. Warp's) sourced by the nested shell's rc files can use
+/// these to report status/title directly back to the *host* terminal's own
+/// session (by session id/IPC, not by writing to this pty) rather than to
+/// the pty Knot actually owns - the nested shell believes it's still
+/// running directly inside the host terminal, because it inherited that
+/// terminal's session identity.
+fn strip_host_terminal_env(command: &mut CommandBuilder) {
+    const PREFIXES: &[&str] = &["WARP_", "ITERM_", "KONSOLE_", "VTE_"];
+    const EXACT: &[&str] = &["TERM_PROGRAM", "TERM_PROGRAM_VERSION", "TERM_SESSION_ID"];
+    for (key, _) in std::env::vars() {
+        if EXACT.contains(&key.as_str()) || PREFIXES.iter().any(|prefix| key.starts_with(prefix)) {
+            command.env_remove(key);
+        }
+    }
+}
+
 pub struct PtyTransport {
     writer: Mutex<Box<dyn Write + Send>>,
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
@@ -36,6 +56,7 @@ impl PtyTransport {
         let mut command = CommandBuilder::new(shell.into());
         command.arg("-i");
         command.cwd(folder.as_ref());
+        strip_host_terminal_env(&mut command);
         let child = pair
             .slave
             .spawn_command(command)
@@ -120,6 +141,33 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+
+    #[test]
+    fn strip_host_terminal_env_removes_host_identity_vars() {
+        // SAFETY: no other test in this process reads these keys, and each
+        // is restored/removed before the function returns.
+        unsafe {
+            std::env::set_var("WARP_TEST_SESSION_UUID", "test-session");
+            std::env::set_var("TERM_PROGRAM", "WarpTerminal");
+            std::env::set_var("PLAIN_TEST_VAR", "kept");
+        }
+
+        let mut command = CommandBuilder::new("/bin/sh");
+        strip_host_terminal_env(&mut command);
+
+        assert_eq!(command.get_env("WARP_TEST_SESSION_UUID"), None);
+        assert_eq!(command.get_env("TERM_PROGRAM"), None);
+        assert_eq!(
+            command.get_env("PLAIN_TEST_VAR"),
+            Some(std::ffi::OsStr::new("kept"))
+        );
+
+        unsafe {
+            std::env::remove_var("WARP_TEST_SESSION_UUID");
+            std::env::remove_var("TERM_PROGRAM");
+            std::env::remove_var("PLAIN_TEST_VAR");
+        }
+    }
 
     #[test]
     fn pty_forwards_output_and_exit_status() {
