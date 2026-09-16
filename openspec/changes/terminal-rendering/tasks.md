@@ -66,12 +66,16 @@
 
 ## 3. Input dispatch
 
-- [ ] 3.1 Keyboard: translate GPUI key events (including modifier
+- [x] 3.1 Keyboard: translate GPUI key events (including modifier
       combinations) from the focused grid element to the bytes/escape
       sequences the PTY expects (printable text, control codes, arrow/
-      function keys). Verify: table-driven unit tests cover representative
-      keys against expected byte sequences; manual check typed commands
-      execute and Ctrl+C/Ctrl+D behave correctly.
+      function keys) - `knot_terminal::key_to_bytes` (framework-agnostic,
+      takes a plain `KeyInput`), wired via a focusable pane
+      (`WorkspaceWindow::dispatch_key`, click the pane to focus it).
+      Verified: 9 table-driven unit tests cover letters, shifted letters,
+      Ctrl combos, Enter (sends `\r` not its key_char), arrows, function
+      keys, Alt-prefixing, and bare modifier presses; manual check
+      pending (task 5.2).
 - [ ] 3.2 Mouse: click/drag/scroll events translated and written to the
       PTY when the running program has enabled mouse reporting (readable
       from `Term`'s mode flags), falling back to the grid's own

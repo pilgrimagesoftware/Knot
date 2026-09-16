@@ -2042,6 +2042,9 @@ struct WorkspaceWindow {
     /// tracker; the UI thread has no tokio runtime of its own, so enter
     /// this one around each spawn (see `ensure_session`).
     runtime: tokio::runtime::Runtime,
+    /// Focus target for the terminal grid pane - key events only reach
+    /// `dispatch_key` while this is focused (click the pane to focus it).
+    terminal_focus: gpui_kit::FocusHandle,
     view_mode: WorkspaceViewMode,
     dashboard_sort: dashboard::DashboardSort,
     new_agent_name_input: Entity<InputState>,
@@ -2109,7 +2112,7 @@ impl WorkspaceWindow {
                     .ok()
                     .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
             });
-            let view = cx.new(|_| {
+            let view = cx.new(|cx| {
                 let mut window = WorkspaceWindow {
                     store,
                     settings,
@@ -2118,6 +2121,7 @@ impl WorkspaceWindow {
                     sessions: BTreeMap::new(),
                     runtime: tokio::runtime::Runtime::new()
                         .expect("failed to start terminal session runtime"),
+                    terminal_focus: cx.focus_handle(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     new_agent_name_input,
@@ -2220,6 +2224,30 @@ impl WorkspaceWindow {
             && let Ok(mut session) = session.lock()
         {
             let _ = session.resize(size);
+        }
+    }
+
+    /// Translates a key press on the focused terminal pane into PTY input,
+    /// per `terminal-input`'s spec.
+    fn dispatch_key(&mut self, id: Uuid, event: &gpui_kit::KeyDownEvent) {
+        let Some(session) = self.sessions.get(&id) else {
+            return;
+        };
+        let keystroke = &event.keystroke;
+        let input = knot_terminal::KeyInput {
+            key: &keystroke.key,
+            key_char: keystroke.key_char.as_deref(),
+            control: keystroke.modifiers.control,
+            alt: keystroke.modifiers.alt,
+        };
+        let Some(bytes) = knot_terminal::key_to_bytes(input) else {
+            return;
+        };
+        let Ok(text) = String::from_utf8(bytes) else {
+            return;
+        };
+        if let Ok(mut session) = session.lock() {
+            let _ = session.send_text(&text);
         }
     }
 
@@ -3063,11 +3091,37 @@ impl Render for WorkspaceWindow {
                                     )
                                     .child(
                                         self.selected_agent
-                                            .and_then(|id| self.sessions.get(&id))
-                                            .and_then(|session| session.lock().ok()?.grid())
-                                            .map(|grid| {
-                                                terminal_view::render_grid(&grid.lock().unwrap())
-                                                    .into_any_element()
+                                            .and_then(|id| {
+                                                let grid =
+                                                    self.sessions.get(&id)?.lock().ok()?.grid()?;
+                                                Some(
+                                                    div()
+                                                        .id("terminal-pane")
+                                                        .size_full()
+                                                        .track_focus(&self.terminal_focus)
+                                                        .on_mouse_down(
+                                                            gpui_kit::MouseButton::Left,
+                                                            cx.listener(
+                                                                move |view,
+                                                                      _: &gpui_kit::MouseDownEvent,
+                                                                      window,
+                                                                      cx| {
+                                                                    view.terminal_focus
+                                                                        .clone()
+                                                                        .focus(window, cx);
+                                                                },
+                                                            ),
+                                                        )
+                                                        .on_key_down(cx.listener(
+                                                            move |view, event, _window, _cx| {
+                                                                view.dispatch_key(id, event);
+                                                            },
+                                                        ))
+                                                        .child(terminal_view::render_grid(
+                                                            &grid.lock().unwrap(),
+                                                        ))
+                                                        .into_any_element(),
+                                                )
                                             })
                                             .unwrap_or_else(|| {
                                                 div()

@@ -8,9 +8,11 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 mod grid;
+mod keys;
 mod pty;
 
 pub use grid::{Cell, Grid, GridEvent, GridSize};
+pub use keys::{KeyInput, key_to_bytes};
 
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};
 use knot_agent_launch::{
