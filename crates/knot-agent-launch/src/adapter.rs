@@ -51,8 +51,12 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
                                            supports_resume:           true,
                                            supports_permission_modes: true, }),
         // Native ACP flag.
+        // `--skip-trust` is required for headless/automated invocation -
+        // confirmed live (task 1.2): without it gemini blocks on an
+        // interactive "trust this workspace?" prompt that never resolves
+        // when driven over stdio instead of a real terminal.
         "gemini" => Some(AdapterConfig { command:                   "gemini",
-                                         args:                      &["--acp"],
+                                         args:                      &["--acp", "--skip-trust"],
                                          supports_resume:           true,
                                          supports_permission_modes: true, }),
         // Native ACP flag (stdio transport, the ACP default).

@@ -21,6 +21,13 @@ pub enum AcpError {
 
     #[error("acp connection closed before a response was received")]
     ConnectionClosed,
+
+    /// Connecting or opening a session took too long - per design.md's
+    /// "Panel mode fails closed to Terminal mode with a visible error"
+    /// requirement, a hung adapter (e.g. blocked on an interactive prompt
+    /// it can't show over stdio) must surface an error, not hang forever.
+    #[error("timed out waiting for the acp adapter to respond")]
+    Timeout,
 }
 
 /// Why an ACP session stopped taking requests, per the `acp-client` spec's

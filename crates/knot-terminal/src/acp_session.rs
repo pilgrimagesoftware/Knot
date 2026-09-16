@@ -4,8 +4,10 @@
 //! `openspec/specs/acp-panel-ui/spec.md`'s "Switch to Terminal mid-turn"
 //! scenario.
 
+use std::time::Duration;
+
 use knot_acp::{
-    AcpClient, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
+    AcpClient, AcpError, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
 };
 use knot_agent_launch::AdapterLaunch;
 use tokio::process::Command;
@@ -18,15 +20,35 @@ pub struct AcpSession {
     session_id: String,
 }
 
+/// How long to wait for the adapter to answer `initialize` and open a
+/// session before failing closed, per design.md's "Panel mode fails
+/// closed to Terminal mode with a visible error" requirement - a hung
+/// adapter (e.g. blocked on an interactive prompt it can't show over
+/// stdio) must not hang the caller forever.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
+
 impl AcpSession {
     /// Spawns `launch`'s adapter and opens a session for `cwd`. If
     /// `prior_session_id` is given and the adapter supports resume,
     /// attempts `session/load` first; on any failure (unsupported or an
     /// error response) falls back to a fresh `session/new` rather than
     /// surfacing an error, per the `agent-lifecycle` layout-restore
-    /// fallback requirement.
+    /// fallback requirement. Fails with `AcpError::Timeout` rather than
+    /// hanging if the adapter never responds.
     pub async fn start(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
                        -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+        Self::start_with_timeout(launch, cwd, prior_session_id, CONNECT_TIMEOUT).await
+    }
+
+    async fn start_with_timeout(launch: &AdapterLaunch, cwd: &str,
+                                prior_session_id: Option<&str>, timeout: Duration)
+                                -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+        tokio::time::timeout(timeout, Self::start_inner(launch, cwd, prior_session_id)).await
+                                                                                       .unwrap_or(Err(AcpError::Timeout))
+    }
+
+    async fn start_inner(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+                         -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
         let mut command = Command::new(launch.config.command);
         command.args(launch.config.args);
         if !launch.mcp_config.is_empty() {
@@ -166,5 +188,27 @@ mod tests {
         assert_eq!(*sent.lock().unwrap(),
                    vec!["terminal is alive".to_string()],
                    "the terminal transport must be untouched by the ACP session's lifecycle");
+    }
+
+    /// A fake adapter that never answers anything - simulates a hung
+    /// process (e.g. blocked on an interactive prompt it can't show over
+    /// stdio, as `gemini --acp` does without `--skip-trust`).
+    fn hanging_adapter_launch() -> AdapterLaunch {
+        AdapterLaunch { config:     AdapterConfig { command:                   "sh",
+                                                    args:                      &["-c",
+                                                                                 "while true; do sleep 1; done"],
+                                                    supports_resume:           false,
+                                                    supports_permission_modes: false, },
+                        mcp_config: String::new(), }
+    }
+
+    #[tokio::test]
+    async fn start_fails_closed_with_a_visible_error_instead_of_hanging() {
+        let result = AcpSession::start_with_timeout(&hanging_adapter_launch(),
+                                                    "/tmp/project",
+                                                    None,
+                                                    std::time::Duration::from_millis(50)).await;
+
+        assert!(matches!(result, Err(AcpError::Timeout)));
     }
 }
