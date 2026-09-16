@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+#[cfg(target_os = "macos")]
 use std::time::Duration;
 
 use gpui_kit::base::Selectable;
