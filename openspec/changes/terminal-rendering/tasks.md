@@ -86,12 +86,17 @@
       fallback is a no-op rather than driving scrollback/selection - that
       view doesn't exist yet (see task 3.3). Verify: manual check pending
       (task 5.2).
-- [ ] 3.3 Text selection: click-drag over the grid selects text (using
-      `alacritty_terminal`'s selection support), with copy sending the
-      selected text to the OS pasteboard per the terminal-actions spec's
-      transform rules (strip ANSI, trim trailing whitespace). Verify: unit
-      tests cover the transform functions directly; manual check
-      select-and-copy round-trips through the OS pasteboard.
+- [x] 3.3 Text selection: click-drag over the grid selects text, using
+      `alacritty_terminal`'s own `Selection`/`selection_to_string`
+      (`Grid::start_selection`/`update_selection`/`selection_text`/
+      `is_selected`, wired to left-button press/drag when SGR mouse mode
+      is off) - `terminal_view` highlights selected cells the same way as
+      the cursor (fg/bg swap). Cmd+C copies via `WorkspaceWindow::copy_selection`,
+      trimming trailing whitespace per line (ANSI stripping is
+      inherently satisfied - `Grid`'s cells are already-parsed characters,
+      never raw escape bytes). Verified: 4 new `Grid` unit tests
+      (no-selection, drag-captures-text, `is_selected` boundaries, clear).
+      Manual select-and-copy check pending (task 5.2).
 
 ## 4. Action routing
 

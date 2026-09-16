@@ -24,11 +24,13 @@ pub(crate) fn render_grid(grid: &Grid) -> impl IntoElement {
         .text_size(gpui_kit::px(13.))
         .bg(rgb(DEFAULT_BACKGROUND))
         .children(
-            (0..size.rows).map(|row| render_row(grid.row_cells(row), row, cursor_row, cursor_col)),
+            (0..size.rows)
+                .map(|row| render_row(grid, grid.row_cells(row), row, cursor_row, cursor_col)),
         )
 }
 
 fn render_row(
+    grid: &Grid,
     cells: Vec<Cell>,
     row: usize,
     cursor_row: usize,
@@ -37,8 +39,9 @@ fn render_row(
     let mut spans: Vec<(String, u32, u32, Flags)> = Vec::new();
     for (col, cell) in cells.iter().enumerate() {
         let is_cursor = row == cursor_row && col == cursor_col;
+        let is_selected = grid.is_selected(col, row);
         let (mut fg, mut bg) = (resolve_color(cell.fg, true), resolve_color(cell.bg, false));
-        if cell.flags.contains(Flags::INVERSE) ^ is_cursor {
+        if cell.flags.contains(Flags::INVERSE) ^ is_cursor ^ is_selected {
             std::mem::swap(&mut fg, &mut bg);
         }
         match spans.last_mut() {

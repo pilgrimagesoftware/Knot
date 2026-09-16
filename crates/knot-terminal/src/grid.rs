@@ -7,7 +7,8 @@ use std::sync::mpsc;
 
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::index::{Column, Line, Point};
+use alacritty_terminal::index::{Column, Line, Point, Side};
+use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::{Config as TermConfig, Term};
 use alacritty_terminal::vte::ansi::Processor;
 
@@ -101,6 +102,43 @@ impl Grid {
         use alacritty_terminal::term::TermMode;
         let mode = self.term.mode();
         mode.contains(TermMode::SGR_MOUSE) && mode.intersects(TermMode::MOUSE_MODE)
+    }
+
+    /// Starts (replacing any existing) a simple text selection anchored at
+    /// this cell.
+    pub fn start_selection(&mut self, column: usize, row: usize) {
+        let point = Point::new(Line(row as i32), Column(column));
+        self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
+    }
+
+    /// Extends the in-progress selection (if any) to this cell.
+    pub fn update_selection(&mut self, column: usize, row: usize) {
+        if let Some(selection) = &mut self.term.selection {
+            let point = Point::new(Line(row as i32), Column(column));
+            selection.update(point, Side::Right);
+        }
+    }
+
+    /// Clears any active selection.
+    pub fn clear_selection(&mut self) {
+        self.term.selection = None;
+    }
+
+    /// The selected text, if any (empty/point-only selections return
+    /// `None`).
+    pub fn selection_text(&self) -> Option<String> {
+        self.term.selection_to_string()
+    }
+
+    /// Whether this cell is part of the active selection - for rendering a
+    /// highlight.
+    pub fn is_selected(&self, column: usize, row: usize) -> bool {
+        let point = Point::new(Line(row as i32), Column(column));
+        self.term
+            .selection
+            .as_ref()
+            .and_then(|selection| selection.to_range(&self.term))
+            .is_some_and(|range| range.contains(point))
     }
 
     /// A visible row's cells, left to right. Panics if `row` is out of
@@ -200,5 +238,43 @@ mod tests {
         grid.feed(b"\x1b[1mbold");
         let cells = grid.row_cells(0);
         assert!(cells[0].flags.contains(Flags::BOLD));
+    }
+
+    #[test]
+    fn no_selection_text_before_selecting() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"hello world");
+        assert_eq!(grid.selection_text(), None);
+    }
+
+    #[test]
+    fn dragging_a_selection_captures_the_spanned_text() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"hello world");
+        grid.start_selection(0, 0);
+        grid.update_selection(4, 0);
+        assert_eq!(grid.selection_text(), Some("hello".to_string()));
+    }
+
+    #[test]
+    fn is_selected_reports_cells_within_the_selection() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"hello world");
+        grid.start_selection(0, 0);
+        grid.update_selection(4, 0);
+        assert!(grid.is_selected(0, 0));
+        assert!(grid.is_selected(4, 0));
+        assert!(!grid.is_selected(6, 0));
+    }
+
+    #[test]
+    fn clear_selection_removes_it() {
+        let mut grid = grid(20, 5);
+        grid.feed(b"hello world");
+        grid.start_selection(0, 0);
+        grid.update_selection(4, 0);
+        grid.clear_selection();
+        assert_eq!(grid.selection_text(), None);
+        assert!(!grid.is_selected(0, 0));
     }
 }

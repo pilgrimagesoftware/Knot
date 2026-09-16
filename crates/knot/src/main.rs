@@ -2287,11 +2287,15 @@ impl WorkspaceWindow {
 
     /// Translates a key press on the focused terminal pane into PTY input,
     /// per `terminal-input`'s spec.
-    fn dispatch_key(&mut self, id: Uuid, event: &gpui_kit::KeyDownEvent) {
+    fn dispatch_key(&mut self, id: Uuid, event: &gpui_kit::KeyDownEvent, cx: &mut App) {
+        let keystroke = &event.keystroke;
+        if keystroke.modifiers.platform && keystroke.key == "c" {
+            self.copy_selection(id, cx);
+            return;
+        }
         let Some(session) = self.sessions.get(&id) else {
             return;
         };
-        let keystroke = &event.keystroke;
         let input = knot_terminal::KeyInput {
             key: &keystroke.key,
             key_char: keystroke.key_char.as_deref(),
@@ -2340,6 +2344,15 @@ impl WorkspaceWindow {
         };
         let (column, row) = Self::grid_position(position);
         let sgr = grid.lock().unwrap().sgr_mouse_mode();
+        if !sgr {
+            // No mouse-aware program is listening - left-button press starts
+            // (replacing any prior) text selection instead of forwarding the
+            // click, per terminal-input's spec.
+            if button == knot_terminal::MouseButton::Left && pressed {
+                grid.lock().unwrap().start_selection(column, row);
+            }
+            return;
+        }
         let Some(bytes) = knot_terminal::mouse_to_bytes(
             knot_terminal::MouseInput {
                 row,
@@ -2354,6 +2367,47 @@ impl WorkspaceWindow {
         if let (Ok(text), Ok(mut session)) = (String::from_utf8(bytes), session.lock()) {
             let _ = session.send_text(&text);
         }
+    }
+
+    /// Extends an in-progress text selection while the mouse is dragged
+    /// with the left button held, when no mouse-aware program has claimed
+    /// mouse reporting.
+    fn dispatch_mouse_drag(&mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>) {
+        let Some(session) = self.sessions.get(&id) else {
+            return;
+        };
+        let Some(grid) = session.lock().ok().and_then(|session| session.grid()) else {
+            return;
+        };
+        let mut grid = grid.lock().unwrap();
+        if grid.sgr_mouse_mode() {
+            return;
+        }
+        let (column, row) = Self::grid_position(position);
+        grid.update_selection(column, row);
+    }
+
+    /// Copies the focused terminal pane's active selection to the OS
+    /// pasteboard, applying the terminal-actions spec's default transform
+    /// (trim trailing whitespace per line).
+    fn copy_selection(&mut self, id: Uuid, cx: &mut App) {
+        let Some(session) = self.sessions.get(&id) else {
+            return;
+        };
+        let Some(text) = session
+            .lock()
+            .ok()
+            .and_then(|session| session.grid())
+            .and_then(|grid| grid.lock().unwrap().selection_text())
+        else {
+            return;
+        };
+        let text: String = text
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n");
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
     /// Sends a scroll-wheel event to the focused terminal pane's session
@@ -3258,6 +3312,19 @@ impl Render for WorkspaceWindow {
                                                                 },
                                                             ),
                                                         )
+                                                        .on_mouse_move(cx.listener(
+                                                            move |view,
+                                                                  event: &gpui_kit::MouseMoveEvent,
+                                                                  _window,
+                                                                  _cx| {
+                                                                if event.dragging() {
+                                                                    view.dispatch_mouse_drag(
+                                                                        id,
+                                                                        event.position,
+                                                                    );
+                                                                }
+                                                            },
+                                                        ))
                                                         .on_scroll_wheel(cx.listener(
                                                             move |view,
                                                                   event: &gpui_kit::ScrollWheelEvent,
@@ -3282,8 +3349,8 @@ impl Render for WorkspaceWindow {
                                                             },
                                                         ))
                                                         .on_key_down(cx.listener(
-                                                            move |view, event, _window, _cx| {
-                                                                view.dispatch_key(id, event);
+                                                            move |view, event, _window, cx| {
+                                                                view.dispatch_key(id, event, cx);
                                                             },
                                                         ))
                                                         .child(terminal_view::render_grid(
