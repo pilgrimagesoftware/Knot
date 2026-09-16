@@ -831,6 +831,8 @@ impl SettingsWindow {
             "opencode" => "OpenCode",
             "gemini" => "Gemini",
             "copilot" => "Copilot",
+            "custom1" => "Custom 1",
+            "custom2" => "Custom 2",
             "shell" => "Shell",
             _ => "Claude",
         }
@@ -2802,28 +2804,29 @@ impl Render for AgentEditor {
                     .dropdown_caret(true)
                     .dropdown_menu({
                         let editor = editor.clone();
-                        move |menu, _, _| {
-                            menu.item(PopupMenuItem::new("Claude").on_click({
+                        move |mut menu, _, _| {
+                            // Matches the Swift reference's `availableAgents`
+                            // list (`CodingSettingsView.swift`).
+                            for (agent_type, label) in [
+                                ("claude", "Claude"),
+                                ("codex", "Codex"),
+                                ("opencode", "OpenCode"),
+                                ("gemini", "Gemini"),
+                                ("copilot", "Copilot"),
+                                ("custom1", "Custom 1"),
+                                ("custom2", "Custom 2"),
+                                ("shell", "Shell"),
+                            ] {
                                 let editor = editor.clone();
-                                move |_, _, app| {
-                                    editor.update(app, |e, _| e.agent_type = "claude".to_string())
-                                }
-                            }))
-                            .item(PopupMenuItem::new("Codex").on_click({
-                                let editor = editor.clone();
-                                move |_, _, app| {
-                                    editor.update(app, |e, _| e.agent_type = "codex".to_string())
-                                }
-                            }))
-                            .item(
-                                PopupMenuItem::new("Shell").on_click({
-                                    let editor = editor.clone();
+                                menu = menu.item(PopupMenuItem::new(label).on_click(
                                     move |_, _, app| {
-                                        editor
-                                            .update(app, |e, _| e.agent_type = "shell".to_string())
-                                    }
-                                }),
-                            )
+                                        editor.update(app, |e, _| {
+                                            e.agent_type = agent_type.to_string()
+                                        })
+                                    },
+                                ));
+                            }
+                            menu
                         }
                     }),
             )
@@ -4838,6 +4841,8 @@ mod tests {
         assert_eq!(SettingsWindow::agent_type_label("opencode"), "OpenCode");
         assert_eq!(SettingsWindow::agent_type_label("gemini"), "Gemini");
         assert_eq!(SettingsWindow::agent_type_label("copilot"), "Copilot");
+        assert_eq!(SettingsWindow::agent_type_label("custom1"), "Custom 1");
+        assert_eq!(SettingsWindow::agent_type_label("custom2"), "Custom 2");
         assert_eq!(SettingsWindow::agent_type_label("shell"), "Shell");
     }
 
