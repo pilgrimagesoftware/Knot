@@ -5,16 +5,21 @@
 //!
 //! Contract: `openspec/specs/agent-launch-command/spec.md`.
 
+mod adapter;
 mod capabilities;
 mod command;
 mod consts;
 mod escape;
 mod registration;
 
+pub use adapter::{AdapterConfig, acp_adapter};
 pub use capabilities::{
     can_fork, can_resume, supports_inline_registration, supports_system_prompt,
 };
-pub use command::{LaunchRequest, build_agent_command, build_initialization_command};
+pub use command::{
+    AdapterLaunch, LaunchPlan, LaunchRequest, build_agent_command, build_initialization_command,
+    plan_launch,
+};
 pub use escape::{persona_prompt, shell_escape};
 pub use registration::{
     inline_registration_arguments, knot_instructions, mcp_arguments, registration_prompt,

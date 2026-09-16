@@ -50,19 +50,19 @@
 
 ## 3. Adapter registry and launch integration
 
-- [ ] 3.1 Add an adapter registry to `crates/knot-agent-launch` keyed by
+- [x] 3.1 Add an adapter registry to `crates/knot-agent-launch` keyed by
       agent type, populated from the spike's findings (task 1.1): adapter
       command template, `supports_resume`, permission-mode support. Verify:
       unit test looks up each of the seven agent types and asserts the
       expected registry entry (including "no adapter" for unconfirmed
       types).
-- [ ] 3.2 Branch the launch path: Panel-mode agent with a registered adapter
+- [x] 3.2 Branch the launch path: Panel-mode agent with a registered adapter
       spawns the adapter and connects via `knot-acp`; Terminal mode or no
       adapter uses the existing terminal command path unchanged. Verify:
       existing `agent-launch-command` tests still pass unmodified, plus a
       new test asserting a Panel-mode, adapter-registered agent produces an
       adapter spawn instead of a terminal command.
-- [ ] 3.3 Thread MCP configuration and inline-registration-equivalent data
+- [x] 3.3 Thread MCP configuration and inline-registration-equivalent data
       into the adapter's own configuration mechanism (args or ACP session
       config) per agent type, matching the terminal path's MCP-enabled and
       MCP-disabled behavior. Verify: unit test for one adapter compares its

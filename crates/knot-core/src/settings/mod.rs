@@ -18,7 +18,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use directories::{BaseDirs, ProjectDirs};
-pub use records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, Workspace};
+pub use records::{
+    BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, ViewMode, Workspace,
+};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;

@@ -3,9 +3,10 @@
 
 use std::path::Path;
 
-use knot_core::{Persona, Settings};
+use knot_core::{Persona, Settings, ViewMode};
 use uuid::Uuid;
 
+use crate::adapter::AdapterConfig;
 use crate::capabilities::{can_fork, can_resume, supports_inline_registration};
 use crate::registration::{inline_registration_arguments, mcp_arguments};
 
@@ -84,20 +85,68 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
         full.push_str(opts);
     }
 
-    if settings.mcp_server_enabled {
-        full.push_str(&mcp_arguments(request.agent_type, &mcp_url(settings), request.plugin_root));
-
-        if let Some(agent_id) = request.agent_id
-           && supports_inline_registration(request.agent_type)
-        {
-            full.push_str(&inline_registration_arguments(request.agent_type,
-                                                         agent_id,
-                                                         request.resume_session_id.is_some(),
-                                                         request.persona));
-        }
-    }
+    full.push_str(&mcp_and_registration_args(settings, request));
 
     full
+}
+
+/// MCP configuration plus inline-registration arguments for `request`, or
+/// an empty string when MCP is disabled - the single place both the
+/// terminal command and the adapter's own configuration mechanism
+/// (`plan_launch`'s `LaunchPlan::Adapter`) get this from, so the two launch
+/// paths can't drift apart for the same settings.
+fn mcp_and_registration_args(settings: &Settings, request: &LaunchRequest<'_>) -> String {
+    if !settings.mcp_server_enabled {
+        return String::new();
+    }
+    let mut args = mcp_arguments(request.agent_type, &mcp_url(settings), request.plugin_root);
+    if let Some(agent_id) = request.agent_id
+       && supports_inline_registration(request.agent_type)
+    {
+        args.push_str(&inline_registration_arguments(request.agent_type,
+                                                     agent_id,
+                                                     request.resume_session_id.is_some(),
+                                                     request.persona));
+    }
+    args
+}
+
+/// An ACP adapter launch: the registered adapter plus the MCP/registration
+/// configuration to pass through its own configuration mechanism, matching
+/// the terminal path's MCP-enabled and MCP-disabled behavior per
+/// `openspec/specs/agent-launch-command/spec.md`'s "Adapter-carried MCP and
+/// registration" requirement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterLaunch {
+    pub config:     AdapterConfig,
+    pub mcp_config: String,
+}
+
+/// The decided way to launch an agent: the existing terminal command, or an
+/// ACP adapter subprocess to connect to via `knot-acp`. Per
+/// `openspec/specs/agent-launch-command/spec.md`'s "ACP launch path"
+/// requirement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LaunchPlan {
+    Terminal(String),
+    Adapter(AdapterLaunch),
+}
+
+/// Decides between the terminal and ACP adapter launch paths: Panel mode
+/// with a registered adapter (`adapter`, typically `acp_adapter(request
+/// .agent_type)`) uses the adapter; Terminal mode or no registered adapter
+/// falls back to the existing terminal command unchanged.
+pub fn plan_launch(view_mode: ViewMode, adapter: Option<AdapterConfig>, settings: &Settings,
+                   request: &LaunchRequest<'_>)
+                   -> LaunchPlan {
+    if view_mode == ViewMode::Panel
+       && let Some(config) = adapter
+    {
+        return LaunchPlan::Adapter(AdapterLaunch { config,
+                                                   mcp_config:
+                                                       mcp_and_registration_args(settings, request) });
+    }
+    LaunchPlan::Terminal(build_agent_command(settings, request))
 }
 
 /// Build the terminal initialization command: `cd` into `folder`, clear the
@@ -214,5 +263,78 @@ mod tests {
     fn shell_agent_wrapper_has_no_env_var() {
         let cmd = build_initialization_command("/tmp/repo", "", None);
         assert_eq!(cmd, " cd '/tmp/repo' && clear");
+    }
+
+    fn stub_adapter() -> AdapterConfig {
+        AdapterConfig { command:                   "claude-code-acp",
+                        args:                      &[],
+                        supports_resume:           true,
+                        supports_permission_modes: true, }
+    }
+
+    #[test]
+    fn terminal_mode_always_uses_terminal_command_even_with_an_adapter() {
+        let s = settings();
+        let req = LaunchRequest { agent_type: "claude",
+                                  ..Default::default() };
+        let plan = plan_launch(ViewMode::Terminal, Some(stub_adapter()), &s, &req);
+        assert_eq!(plan, LaunchPlan::Terminal(build_agent_command(&s, &req)));
+    }
+
+    #[test]
+    fn panel_mode_without_an_adapter_falls_back_to_terminal_command() {
+        let s = settings();
+        let req = LaunchRequest { agent_type: "claude",
+                                  ..Default::default() };
+        let plan = plan_launch(ViewMode::Panel, None, &s, &req);
+        assert_eq!(plan, LaunchPlan::Terminal(build_agent_command(&s, &req)));
+    }
+
+    #[test]
+    fn panel_mode_with_an_adapter_spawns_the_adapter_instead_of_a_terminal_command() {
+        let s = settings();
+        let req = LaunchRequest { agent_type: "claude",
+                                  ..Default::default() };
+        let plan = plan_launch(ViewMode::Panel, Some(stub_adapter()), &s, &req);
+        let LaunchPlan::Adapter(adapter_launch) = plan
+        else {
+            panic!("expected an adapter launch plan, not a terminal command");
+        };
+        assert_eq!(adapter_launch.config, stub_adapter());
+    }
+
+    #[test]
+    fn adapter_mcp_config_matches_the_terminal_paths_mcp_arguments() {
+        let s = settings();
+        let req = LaunchRequest { agent_type: "claude",
+                                  agent_id: Some(Uuid::nil()),
+                                  ..Default::default() };
+
+        let terminal_cmd = build_agent_command(&s, &req);
+        let LaunchPlan::Adapter(adapter_launch) =
+            plan_launch(ViewMode::Panel, Some(stub_adapter()), &s, &req)
+        else {
+            panic!("expected an adapter launch plan");
+        };
+
+        assert!(terminal_cmd.ends_with(&adapter_launch.mcp_config));
+        assert!(!adapter_launch.mcp_config.is_empty());
+    }
+
+    #[test]
+    fn adapter_mcp_config_is_empty_when_mcp_disabled() {
+        let mut s = settings();
+        s.mcp_server_enabled = false;
+        let req = LaunchRequest { agent_type: "claude",
+                                  agent_id: Some(Uuid::nil()),
+                                  ..Default::default() };
+
+        let LaunchPlan::Adapter(adapter_launch) =
+            plan_launch(ViewMode::Panel, Some(stub_adapter()), &s, &req)
+        else {
+            panic!("expected an adapter launch plan");
+        };
+
+        assert_eq!(adapter_launch.mcp_config, "");
     }
 }
