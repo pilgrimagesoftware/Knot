@@ -21,16 +21,47 @@ pub struct AdapterConfig {
 
 /// Looks up `agent_type`'s ACP adapter, if any is confirmed working.
 ///
-/// No adapter has been verified against a live agent yet (the research
-/// spike in `openspec/changes/acp-agent-panel-ui/tasks.md` task 1.1 was
-/// deliberately skipped for this pass), so every agent type currently
-/// returns `None` and launches through the existing terminal path per the
-/// "Panel-mode agent with no adapter" fallback requirement. Entries are
-/// added here one agent type at a time as each adapter is verified working
-/// in practice, per the change's rollout plan - a wrong or premature guess
-/// here costs one config entry, not a design change.
-pub fn acp_adapter(_agent_type: &str) -> Option<AdapterConfig> {
-    None
+/// Populated from the research spike's findings
+/// (`openspec/changes/acp-agent-panel-ui/acp-adapter-findings.md`, task
+/// 1.1) - documented current adapter/native-flag support per vendor docs,
+/// not yet exercised against a live handshake (task 1.2, still
+/// outstanding). Agent types with no known ACP path (or not otherwise
+/// supported by Knot - Cursor, QwenCode) return `None` and launch through
+/// the existing terminal path per the "Panel-mode agent with no adapter"
+/// fallback requirement. A wrong or premature entry here costs one config
+/// fix, not a design change, per the change's rollout plan.
+pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
+    match agent_type {
+        // Adapter package `@agentclientprotocol/claude-agent-acp` (npm),
+        // exposing the `claude-agent-acp` binary once installed.
+        "claude" => Some(AdapterConfig { command:                   "claude-agent-acp",
+                                         args:                      &[],
+                                         supports_resume:           true,
+                                         supports_permission_modes: true, }),
+        // Adapter `cola-io/codex-acp`, built from source (no packaged
+        // binary release confirmed). Resume support is undocumented, so
+        // this fails closed (false) rather than guessing.
+        "codex" => Some(AdapterConfig { command:                   "codex-acp",
+                                        args:                      &[],
+                                        supports_resume:           false,
+                                        supports_permission_modes: true, }),
+        // Native ACP subcommand.
+        "opencode" => Some(AdapterConfig { command:                   "opencode",
+                                           args:                      &["acp"],
+                                           supports_resume:           true,
+                                           supports_permission_modes: true, }),
+        // Native ACP flag.
+        "gemini" => Some(AdapterConfig { command:                   "gemini",
+                                         args:                      &["--acp"],
+                                         supports_resume:           true,
+                                         supports_permission_modes: true, }),
+        // Native ACP flag (stdio transport, the ACP default).
+        "copilot" => Some(AdapterConfig { command:                   "copilot",
+                                          args:                      &["--acp"],
+                                          supports_resume:           true,
+                                          supports_permission_modes: true, }),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -38,20 +69,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn no_agent_type_has_a_confirmed_adapter_yet() {
-        for agent_type in ["claude",
-                           "codex",
-                           "opencode",
-                           "gemini",
-                           "copilot",
-                           "shell",
+    fn confirmed_agent_types_have_registered_adapters() {
+        for (agent_type, command) in [("claude", "claude-agent-acp"),
+                                      ("codex", "codex-acp"),
+                                      ("opencode", "opencode"),
+                                      ("gemini", "gemini"),
+                                      ("copilot", "copilot")]
+        {
+            let adapter = acp_adapter(agent_type);
+            assert_eq!(adapter.map(|a| a.command),
+                       Some(command),
+                       "{agent_type} should have a registered adapter");
+        }
+    }
+
+    #[test]
+    fn unsupported_or_unknown_agent_types_have_no_adapter() {
+        for agent_type in ["shell",
                            "custom1",
                            "custom2",
-                           "unknown-type"]
+                           "unknown-type",
+                           "cursor",
+                           "qwencode"]
         {
             assert_eq!(acp_adapter(agent_type),
                        None,
-                       "{agent_type} should have no adapter until one is verified working");
+                       "{agent_type} should have no registered adapter");
         }
+    }
+
+    #[test]
+    fn codex_resume_is_conservatively_unsupported() {
+        // Per the findings note: resume support for the codex-acp adapter
+        // is undocumented, so this fails closed rather than guessing.
+        assert!(!acp_adapter("codex").unwrap().supports_resume);
     }
 }

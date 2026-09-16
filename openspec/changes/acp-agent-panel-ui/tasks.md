@@ -1,18 +1,30 @@
 ## 1. Spike: confirm ACP adapter invocation per agent
 
-- [ ] 1.1 For Claude Code, Codex, Gemini CLI, OpenCode, Cursor, GitHub
+- [x] 1.1 For Claude Code, Codex, Gemini CLI, OpenCode, Cursor, GitHub
       Copilot CLI, and QwenCode, confirm current ACP support (native flag vs.
       adapter package vs. none) against each agent's own docs/`--help`, and
       record the adapter command template + capability flags
       (`supports_resume`, permission modes) in a short findings note.
       Verify: findings note lists a concrete command (or "no known ACP path
       yet") for all seven agents.
-- [ ] 1.2 For at least one confirmed-available adapter, manually run it as a
+      See `acp-adapter-findings.md`. Registry populated in
+      `knot-agent-launch::acp_adapter` for the five agent types Knot
+      already supports (claude, codex, opencode, gemini, copilot) - Cursor
+      and QwenCode aren't Knot agent types yet.
+- [x] 1.2 For at least one confirmed-available adapter, manually run it as a
       subprocess and exchange a raw `initialize` + `session/new` +
       `session/prompt` JSON-RPC handshake (e.g. via a scratch script or
       `nc`/`socat` against its stdio) to confirm the wire format matches the
       spec assumptions in design.md. Verify: a captured transcript of a
       successful handshake is attached to the findings note.
+      Ran against a live `gemini --acp` using the actual `knot-acp` client
+      (not a throwaway script) - see the transcript in
+      `acp-adapter-findings.md`. Found and fixed three real bugs:
+      `session/new`/`session/load` missing `mcpServers`, `SessionUpdate`
+      parsing the wrong (un-enveloped) shape, and `InitializeResult`
+      reading `capabilities` instead of the real `agentCapabilities` key.
+      Re-verified live after each fix; a real model turn ("pong") now
+      parses correctly end to end.
 
 ## 2. `knot-acp` crate: transport and protocol types
 
