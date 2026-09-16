@@ -24,34 +24,39 @@
 
 ## 2. GPUI grid rendering in `WorkspaceWindow`
 
-- [ ] 2.1 `TerminalGridElement`: a GPUI `Element` that reads a grid
-      handle's visible rows and paints each cell's character with its
-      foreground/background/attributes (bold, italic, underline) using
-      GPUI's text layout, plus a cursor indicator at the grid's cursor
-      position. Verify: a standalone window rendering a static/fixture
-      grid (not a live PTY) visually matches expected cell contents
-      (manual check - GPUI element rendering has no meaningful headless
-      test in this codebase's existing patterns).
-- [ ] 2.2 Session lifecycle in `WorkspaceWindow`: on agent selection (or
+- [x] 2.1 Renders every visible row's cells (foreground/background,
+      bold/italic/underline/strikeout, consecutive same-style cells
+      merged into one span for reasonable element count) plus a cursor
+      (fg/bg swap at the cursor cell) via a plain function
+      (`terminal_view::render_grid`) rather than a custom GPUI `Element`
+      impl - simpler for a first cut since nothing here needs
+      layout/paint-level control; revisit only if profiling shows the
+      per-frame div count is a real cost. Verify: `cargo build`/`clippy`
+      clean; manual check in the running app (task 5.2).
+- [x] 2.2 Session lifecycle in `WorkspaceWindow`: on agent selection (or
       workspace open with a pre-selected agent), spawn a session via
-      `SessionPlan`/`SessionConfig` if none exists yet, and show its
-      grid. Verify: selecting a non-shell agent shows its shell prompt in
-      the content pane.
-- [ ] 2.3 Detach (hide, don't destroy) the previously-selected agent's
+      `SessionPlan`/`SessionConfig` if none exists yet (`ensure_session`),
+      and show its grid. Verify: selecting a non-shell agent shows its
+      shell prompt in the content pane (manual check, task 5.2).
+- [x] 2.3 Detach (hide, don't destroy) the previously-selected agent's
       grid on selection change; keep the session alive so switching back
-      doesn't lose scrollback. Verify: typing in agent A, switching to
-      agent B, switching back to A shows A's prior output still present.
+      doesn't lose scrollback - `ensure_session` only spawns if the
+      `sessions` map has no entry yet, and selection change never removes
+      an entry. Verify: manual check (task 5.2).
 - [ ] 2.4 Tear down a session when its agent is removed or restarted
       (`agent-lifecycle`'s restart operation gets a fresh session, not a
-      reused one). Verify: removing an agent frees its session/grid; a
-      unit test on the session-registry type covers this without a real
-      subprocess where possible.
-- [ ] 2.5 Delete `Shell`, the `OutputBuffer`/`OUTPUT_POLL_INTERVAL`/
-      `poll_outputs` scaffold, and any now-unused raw-byte-display code
-      now that `WorkspaceWindow` spawns real sessions - this was dead
-      code (unreachable from `main`), not a behavior change. Verify:
-      `cargo build --workspace` and `cargo test --workspace` still pass
-      with it removed; `grep` confirms no remaining references.
+      reused one). `remove_session` + a `Drop` impl (shuts down every
+      session when the window closes) exist, but nothing in
+      `WorkspaceWindow` yet exposes remove/restart-agent UI to call it
+      from - `Shell`'s dead code had `close_agent`/`restart_agent`, but
+      porting those UI actions is a `dashboard-view`/agent-management
+      concern, not terminal-rendering's. Revisit once that UI exists.
+- [x] 2.5 Delete `Shell`, the `OutputBuffer`/`OUTPUT_POLL_INTERVAL`/
+      `TerminalModel`/`AgentHeader`/`terminal_model`/`visible_output`
+      scaffold now that `WorkspaceWindow` spawns real sessions - this was
+      dead code (unreachable from `main`), not a behavior change.
+      Verified: `cargo build --workspace`/`test --workspace` pass with it
+      removed; `grep` confirms no remaining references.
 - [ ] 2.6 Window resize calls the grid's resize (task 1.4) so the PTY and
       rendered grid track the content pane's size. Verify: manual check
       resizing the window reflows a running program's output (e.g.

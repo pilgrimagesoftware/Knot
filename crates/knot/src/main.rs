@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod dashboard;
+mod terminal_view;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,9 +20,9 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::*;
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, AsyncApp, ClickEvent, ClipboardItem, Context, Entity,
+    AnyWindowHandle, App, AppContext, ClickEvent, ClipboardItem, Context, Entity,
     InteractiveElement, IntoElement, KeyBinding, Menu, MenuItem, ParentElement, PathPromptOptions,
-    Render, StatefulInteractiveElement, Styled, Subscription, SystemMenuType, SystemNotification,
+    Render, StatefulInteractiveElement, Styled, Subscription, SystemMenuType,
     SystemNotificationResponse, WeakEntity, Window, WindowBounds, WindowOptions, actions, div, px,
     rgb, size,
 };
@@ -33,8 +34,6 @@ use knot_terminal::{PtyTransport, SessionConfig, SessionPlan, TerminalSession};
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
-const MAX_VISIBLE_LINES: usize = 200;
-const OUTPUT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const CHECK_INBOX_PROMPT: &str = "Check your inbox for questions or instructions from other agents. Update your status and immediately execute what is being asked without confirmation.";
 type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
@@ -168,12 +167,6 @@ fn apply_visual_identity(cx: &mut App) {
     Theme::sync_base(cx);
 }
 
-/// Captured bytes streamed out of a live terminal session. Rendered lazily.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-struct OutputBuffer {
-    bytes: Vec<u8>,
-}
-
 #[derive(Debug, PartialEq)]
 struct WorkspaceRow {
     id: Uuid,
@@ -268,70 +261,6 @@ fn layout_model(
         workspace_rows,
         selected_agent_rows,
     }
-}
-
-/// The selected agent's header, as shown above its terminal pane.
-#[derive(Debug, Clone, PartialEq)]
-struct AgentHeader {
-    avatar: String,
-    name: String,
-    title: String,
-}
-
-/// What to paint in the terminal pane.
-#[derive(Debug, Clone, PartialEq, Default)]
-struct TerminalModel {
-    header: Option<AgentHeader>,
-    lines: Vec<String>,
-    can_attach: bool,
-}
-
-fn terminal_model(
-    store: &knot_agents::AgentStore,
-    selection: Option<Uuid>,
-    attached_ids: &[Uuid],
-    buffer: Option<&OutputBuffer>,
-) -> TerminalModel {
-    let agent = selection.and_then(|id| store.agent(id));
-    let header = agent.map(|agent| AgentHeader {
-        avatar: agent.avatar.clone(),
-        name: agent.name.clone(),
-        title: agent.header_title().to_string(),
-    });
-    let attached = agent.is_some_and(|agent| attached_ids.contains(&agent.id));
-    let lines = if attached {
-        buffer
-            .map(|buffer| visible_output(buffer, MAX_VISIBLE_LINES))
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    TerminalModel {
-        header,
-        lines,
-        can_attach: agent.is_some() && !attached,
-    }
-}
-
-/// Splits raw terminal bytes into lines, normalizing CRLF and clipping to the
-/// last `max_lines`. ANSI escapes are preserved as-is.
-fn visible_output(buffer: &OutputBuffer, max_lines: usize) -> Vec<String> {
-    if buffer.bytes.is_empty() {
-        return Vec::new();
-    }
-    let text = String::from_utf8_lossy(&buffer.bytes);
-    let mut lines = text
-        .split('\n')
-        .map(|line| line.strip_suffix('\r').unwrap_or(line))
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    if lines.len() > 1 && lines.last().is_some_and(String::is_empty) {
-        lines.pop();
-    }
-    if lines.len() > max_lines {
-        return lines.split_off(lines.len() - max_lines);
-    }
-    lines
 }
 
 fn command_to_send(input: &str) -> Option<&str> {
@@ -535,411 +464,6 @@ fn notification_body(message: &str) -> &str {
 /// it doesn't switch the front window's selection to the clicked agent.
 fn notification_response_agent_id(response: &SystemNotificationResponse) -> Option<Uuid> {
     Uuid::parse_str(&response.tag).ok()
-}
-
-struct Shell {
-    store: Arc<Mutex<knot_agents::AgentStore>>,
-    settings: knot_core::Settings,
-    agent_selection: Option<Uuid>,
-    buffers: BTreeMap<Uuid, Arc<Mutex<OutputBuffer>>>,
-    sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
-    command_input: Entity<InputState>,
-    input_subscription: Option<Subscription>,
-    new_agent_name_input: Entity<InputState>,
-    new_agent_folder_input: Entity<InputState>,
-    show_new_agent: bool,
-    agent_error: Option<String>,
-    new_workspace_name_input: Entity<InputState>,
-    show_new_workspace: bool,
-    editing_workspace_id: Option<Uuid>,
-    notifier: Arc<QueuedNotifier>,
-    delivery_notice: Option<DeliveryNotice>,
-    messages: Arc<Mutex<knot_messaging::MessageStore>>,
-    check_requests: Arc<Mutex<Vec<Uuid>>>,
-    process_exits: Arc<Mutex<Vec<Uuid>>>,
-    awaiting_input: AwaitingInputQueue,
-    mcp_stop: Option<tokio::sync::oneshot::Sender<()>>,
-    awaiting_notice: Option<AwaitingNotice>,
-    /// The terminal/tracker background tasks (`TerminalSession::spawn_pty`
-    /// calls `tokio::spawn`) need a runtime, but the UI thread only carries
-    /// gpui's own executor. `attach_session` enters this one around each
-    /// spawn so the tracker keeps running on its worker threads.
-    runtime: tokio::runtime::Runtime,
-}
-
-impl Drop for Shell {
-    fn drop(&mut self) {
-        if let Some(stop) = self.mcp_stop.take() {
-            let _ = stop.send(());
-        }
-        for session in self.sessions.values() {
-            if let Ok(mut session) = session.lock() {
-                let _ = session.shutdown();
-            }
-        }
-    }
-}
-
-impl Shell {
-    /// Spawns a PTY-backed terminal session for the agent if one is not
-    /// already running. The PTY read thread appends output into `buffers`;
-    /// [`poll_outputs`] wakes this view when a buffer grows.
-    fn attach_session(&mut self, id: Uuid) {
-        if self.sessions.contains_key(&id) {
-            return;
-        }
-        let agent = {
-            let store = self.store.lock().unwrap();
-            store.agent(id).cloned()
-        };
-        let Some(agent) = agent else {
-            return;
-        };
-        let persona = self.settings.persona(id);
-        let config = SessionConfig {
-            settings: &self.settings,
-            agent: &agent,
-            persona,
-            plugin_root: None,
-        };
-        let buffer = Arc::new(Mutex::new(OutputBuffer::default()));
-        let buffer_sink = Arc::clone(&buffer);
-        self.buffers.insert(id, Arc::clone(&buffer));
-        let status_store = Arc::clone(&self.store);
-        let process_exits = Arc::clone(&self.process_exits);
-        let status_sink = EventSink {
-            on_status: Some(Box::new(move |event| {
-                apply_terminal_status(&status_store, id, event.status);
-            })),
-            on_check_messages: {
-                let requests = Arc::clone(&self.check_requests);
-                Some(Box::new(move || {
-                    if let Ok(mut requests) = requests.lock() {
-                        requests.push(id);
-                    }
-                }))
-            },
-            on_awaiting_input: {
-                let awaiting_input = Arc::clone(&self.awaiting_input);
-                Some(Box::new(move |message| {
-                    if let Ok(mut awaiting_input) = awaiting_input.lock() {
-                        awaiting_input.push((id, message));
-                    }
-                }))
-            },
-            ..Default::default()
-        };
-
-        // `spawn_pty` runs `tokio::spawn` for the activity tracker; the UI
-        // thread has no tokio runtime of its own, so enter ours around the
-        // spawn. The drop of the guard just exits the context; the spawned
-        // task keeps running on the runtime's worker threads.
-        let _runtime_guard = self.runtime.enter();
-        let session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
-            &config,
-            status_sink,
-            move |bytes| {
-                if let Ok(mut guard) = buffer_sink.lock() {
-                    guard.bytes.extend_from_slice(bytes);
-                }
-            },
-            move |_| {
-                if let Ok(mut process_exits) = process_exits.lock() {
-                    process_exits.push(id);
-                }
-            },
-        )
-        .and_then(|mut session| {
-            let plan = SessionPlan::build(&config);
-            session.start(&plan)?;
-            Ok(session)
-        });
-
-        match session {
-            Ok(session) => {
-                self.sessions.insert(id, Arc::new(Mutex::new(session)));
-            }
-            Err(err) => {
-                eprintln!("failed to attach terminal session: {err}");
-                self.buffers.remove(&id);
-            }
-        }
-    }
-
-    fn submit_command(&mut self, command: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(id) = self.agent_selection else {
-            return;
-        };
-        let Some(session) = self.sessions.get(&id) else {
-            return;
-        };
-        let Some(command) = command_to_send(command) else {
-            return;
-        };
-
-        match session.lock() {
-            Ok(mut session) => match session.send_command(command) {
-                Ok(()) => {
-                    cx.update_entity(&self.command_input, |input, input_cx| {
-                        input.clean(window, input_cx);
-                    });
-                    cx.notify();
-                }
-                Err(err) => eprintln!("failed to send terminal command: {err}"),
-            },
-            Err(_) => eprintln!("failed to send terminal command: session lock poisoned"),
-        }
-    }
-
-    fn persist_store(&mut self) {
-        let Ok(store) = self.store.lock() else {
-            self.agent_error = Some("Agent store is unavailable.".to_string());
-            return;
-        };
-        self.settings.saved_agents =
-            store.saved_agents(self.settings.restore_conversation_on_launch);
-        self.settings.saved_workspaces = store.saved_workspaces();
-        if let Err(error) = self.settings.persist() {
-            self.agent_error = Some(format!("Could not save agent: {error}"));
-        }
-    }
-
-    fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let folder = self
-            .new_agent_folder_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        if folder.is_empty() {
-            self.agent_error = Some("Choose a folder for the agent.".to_string());
-            cx.notify();
-            return;
-        }
-        let path = PathBuf::from(&folder);
-        if !path.is_dir() {
-            self.agent_error = Some("The agent folder must be an existing directory.".to_string());
-            cx.notify();
-            return;
-        }
-
-        let name = self
-            .new_agent_name_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let id = {
-            let mut store = self.store.lock().unwrap();
-            store.create(
-                folder,
-                knot_agents::CreateOptions {
-                    name: (!name.is_empty()).then_some(name),
-                    ..Default::default()
-                },
-            )
-        };
-        self.persist_store();
-        self.agent_selection = Some(id);
-        self.show_new_agent = false;
-        self.agent_error = None;
-        cx.update_entity(&self.new_agent_name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
-        cx.update_entity(&self.new_agent_folder_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
-        self.attach_session(id);
-        cx.notify();
-    }
-
-    fn cancel_new_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_new_agent = false;
-        self.agent_error = None;
-        cx.update_entity(&self.new_agent_name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
-        cx.update_entity(&self.new_agent_folder_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
-        cx.notify();
-    }
-
-    fn close_agent(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        let removed = self.store.lock().unwrap().remove(id);
-        if removed.is_empty() {
-            return;
-        }
-        for agent in &removed {
-            self.remove_session(agent.id, true);
-        }
-        if removed
-            .iter()
-            .any(|agent| Some(agent.id) == self.agent_selection)
-        {
-            self.agent_selection = {
-                let store = self.store.lock().unwrap();
-                initial_agent_selection(&store)
-            };
-            if let Some(selection) = self.agent_selection {
-                self.attach_session(selection);
-            }
-        }
-        self.persist_store();
-        cx.notify();
-    }
-
-    fn restart_agent(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        self.remove_session(id, true);
-        if let Err(error) = self.store.lock().unwrap().restart(id) {
-            self.agent_error = Some(format!("Could not restart agent: {error}"));
-            cx.notify();
-            return;
-        }
-        self.agent_selection = Some(id);
-        self.attach_session(id);
-        self.persist_store();
-        cx.notify();
-    }
-
-    fn attach_agent(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        self.agent_selection = Some(id);
-        self.attach_session(id);
-        cx.notify();
-    }
-
-    fn open_workspace_manager(&self, cx: &mut Context<Self>) {
-        let store = Arc::clone(&self.store);
-        let settings = self.settings.clone();
-        let options = manager_window_options(cx);
-        cx.open_window(options, move |window, cx| {
-            let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
-            let view = cx.new(|_| WorkspaceManager {
-                store,
-                settings,
-                name_input,
-                editing_id: None,
-                workspace_dialog_id: None,
-                show_workspace_dialog: false,
-                delete_workspace_id: None,
-                error: None,
-                _mcp_stop: None,
-            });
-            cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-        })
-        .expect("failed to open workspace manager");
-    }
-
-    fn create_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let name = self
-            .new_workspace_name_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        if name.is_empty() {
-            self.agent_error = Some("Choose a name for the workspace.".to_string());
-            cx.notify();
-            return;
-        }
-        if let Some(id) = self.editing_workspace_id {
-            if !self.store.lock().unwrap().rename_workspace(id, name) {
-                self.agent_error = Some("Workspace no longer exists.".to_string());
-                cx.notify();
-                return;
-            }
-            self.show_new_workspace = false;
-            self.editing_workspace_id = None;
-            self.agent_error = None;
-            self.persist_store();
-            cx.update_entity(&self.new_workspace_name_input, |input, input_cx| {
-                input.clean(window, input_cx);
-            });
-            cx.notify();
-            return;
-        }
-        let id = Uuid::new_v4();
-        self.store
-            .lock()
-            .unwrap()
-            .add_workspace(knot_core::Workspace {
-                id,
-                name,
-                color_hex: "#1B4FB2".to_string(),
-                agent_ids: Vec::new(),
-                layout_mode: "single".to_string(),
-                active_agent_ids: Vec::new(),
-                focused_pane_index: 0,
-                split_ratio: 0.5,
-                split_ratio_secondary: None,
-                show_dashboard: None,
-                is_detached: None,
-            });
-        self.store.lock().unwrap().set_current_workspace(id);
-        self.agent_selection = None;
-        self.show_new_workspace = false;
-        self.editing_workspace_id = None;
-        self.agent_error = None;
-        self.persist_store();
-        cx.update_entity(&self.new_workspace_name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
-        cx.notify();
-    }
-
-    fn cancel_new_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show_new_workspace = false;
-        self.editing_workspace_id = None;
-        self.agent_error = None;
-        cx.update_entity(&self.new_workspace_name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
-        cx.notify();
-    }
-
-    fn rename_workspace(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(name) = self
-            .store
-            .lock()
-            .unwrap()
-            .workspaces()
-            .iter()
-            .find(|workspace| workspace.id == id)
-            .map(|workspace| workspace.name.clone())
-        else {
-            return;
-        };
-        self.editing_workspace_id = Some(id);
-        self.show_new_workspace = true;
-        self.agent_error = None;
-        cx.update_entity(&self.new_workspace_name_input, |input, input_cx| {
-            input.set_value(name, window, input_cx);
-        });
-        cx.notify();
-    }
-
-    fn reap_sessions(&mut self, live_ids: &BTreeSet<Uuid>) {
-        let session_ids = self.sessions.keys().copied().collect::<Vec<_>>();
-        for id in stale_session_ids(&session_ids, live_ids) {
-            self.remove_session(id, true);
-        }
-    }
-
-    fn remove_exited_sessions(&mut self, ids: &[Uuid]) {
-        for id in ids {
-            self.remove_session(*id, false);
-        }
-    }
-
-    fn remove_session(&mut self, id: Uuid, shutdown: bool) {
-        if let Some(session) = self.sessions.remove(&id)
-            && shutdown
-            && let Ok(mut session) = session.lock()
-        {
-            let _ = session.shutdown();
-        }
-        self.buffers.remove(&id);
-    }
 }
 
 fn manager_window_options(cx: &App) -> WindowOptions {
@@ -2513,12 +2037,27 @@ struct WorkspaceWindow {
     settings: knot_core::Settings,
     workspace_id: Uuid,
     selected_agent: Option<Uuid>,
+    sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
+    /// `TerminalSession::spawn_pty` runs `tokio::spawn` for the activity
+    /// tracker; the UI thread has no tokio runtime of its own, so enter
+    /// this one around each spawn (see `ensure_session`).
+    runtime: tokio::runtime::Runtime,
     view_mode: WorkspaceViewMode,
     dashboard_sort: dashboard::DashboardSort,
     new_agent_name_input: Entity<InputState>,
     new_agent_folder_input: Entity<InputState>,
     show_new_agent: bool,
     error: Option<String>,
+}
+
+impl Drop for WorkspaceWindow {
+    fn drop(&mut self) {
+        for session in self.sessions.values() {
+            if let Ok(mut session) = session.lock() {
+                let _ = session.shutdown();
+            }
+        }
+    }
 }
 
 impl WorkspaceWindow {
@@ -2570,21 +2109,83 @@ impl WorkspaceWindow {
                     .ok()
                     .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
             });
-            let view = cx.new(|_| WorkspaceWindow {
-                store,
-                settings,
-                workspace_id,
-                selected_agent,
-                view_mode: WorkspaceViewMode::Terminal,
-                dashboard_sort: dashboard::DashboardSort::default(),
-                new_agent_name_input,
-                new_agent_folder_input,
-                show_new_agent: false,
-                error: None,
+            let view = cx.new(|_| {
+                let mut window = WorkspaceWindow {
+                    store,
+                    settings,
+                    workspace_id,
+                    selected_agent,
+                    sessions: BTreeMap::new(),
+                    runtime: tokio::runtime::Runtime::new()
+                        .expect("failed to start terminal session runtime"),
+                    view_mode: WorkspaceViewMode::Terminal,
+                    dashboard_sort: dashboard::DashboardSort::default(),
+                    new_agent_name_input,
+                    new_agent_folder_input,
+                    show_new_agent: false,
+                    error: None,
+                };
+                if let Some(id) = selected_agent {
+                    window.ensure_session(id);
+                }
+                window
             });
             cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
         }) {
             eprintln!("failed to open workspace window: {error}");
+        }
+    }
+
+    /// Spawns a PTY-backed terminal session for `id` if one is not already
+    /// running - matches (and, per `terminal-rendering`'s tasks.md, replaces)
+    /// `Shell::attach_session`'s pattern.
+    fn ensure_session(&mut self, id: Uuid) {
+        if self.sessions.contains_key(&id) {
+            return;
+        }
+        let agent = {
+            let store = self.store.lock().unwrap();
+            store.agent(id).cloned()
+        };
+        let Some(agent) = agent else {
+            return;
+        };
+        let persona = self.settings.persona(id);
+        let config = SessionConfig {
+            settings: &self.settings,
+            agent: &agent,
+            persona,
+            plugin_root: None,
+        };
+        let status_store = Arc::clone(&self.store);
+        let status_sink = EventSink {
+            on_status: Some(Box::new(move |event| {
+                apply_terminal_status(&status_store, id, event.status);
+            })),
+            ..Default::default()
+        };
+
+        let _runtime_guard = self.runtime.enter();
+        let session = TerminalSession::<PtyTransport>::spawn_pty(&config, status_sink, |_| {})
+            .and_then(|mut session| {
+                let plan = SessionPlan::build(&config);
+                session.start(&plan)?;
+                Ok(session)
+            });
+        match session {
+            Ok(session) => {
+                self.sessions.insert(id, Arc::new(Mutex::new(session)));
+            }
+            Err(error) => eprintln!("failed to start terminal session: {error}"),
+        }
+    }
+
+    /// Tears down a session (e.g. its agent was removed or restarted).
+    fn remove_session(&mut self, id: Uuid) {
+        if let Some(session) = self.sessions.remove(&id)
+            && let Ok(mut session) = session.lock()
+        {
+            let _ = session.shutdown();
         }
     }
 
@@ -3166,6 +2767,7 @@ impl Render for WorkspaceWindow {
                     .selected(self.selected_agent == Some(id))
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.selected_agent = Some(id);
+                        view.ensure_session(id);
                         cx.notify();
                     }))
             },
@@ -3244,6 +2846,7 @@ impl Render for WorkspaceWindow {
                         entity.update(app, |view, cx| {
                             view.selected_agent = Some(id);
                             view.view_mode = WorkspaceViewMode::Terminal;
+                            view.ensure_session(id);
                             cx.notify();
                         });
                     }
@@ -3421,18 +3024,33 @@ impl Render for WorkspaceWindow {
                                             ),
                                     )
                                     .child(
-                                        div()
-                                            .size_full()
-                                            .p_6()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .bg(cx.theme().muted)
-                                            .child(
+                                        self.selected_agent
+                                            .and_then(|id| self.sessions.get(&id))
+                                            .and_then(|session| session.lock().ok()?.grid())
+                                            .map(|grid| {
+                                                terminal_view::render_grid(&grid.lock().unwrap())
+                                                    .into_any_element()
+                                            })
+                                            .unwrap_or_else(|| {
                                                 div()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Terminal display will appear here"),
-                                            ),
+                                                    .size_full()
+                                                    .p_6()
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .bg(cx.theme().muted)
+                                                    .child(
+                                                        div()
+                                                            .text_color(cx.theme().muted_foreground)
+                                                            .child(if self.selected_agent.is_some()
+                                                            {
+                                                                "Starting terminal…"
+                                                            } else {
+                                                                "Choose an agent from the sidebar"
+                                                            }),
+                                                    )
+                                                    .into_any_element()
+                                            }),
                                     )
                                     .into_any_element()
                             })),
@@ -4095,444 +3713,6 @@ impl Render for WorkspaceManager {
     }
 }
 
-impl Render for Shell {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let attached_ids = self.sessions.keys().copied().collect::<Vec<_>>();
-        let (model, terminal_model) = {
-            let store = self.store.lock().unwrap();
-            let agent_ids = store
-                .agents()
-                .iter()
-                .map(|agent| agent.id)
-                .collect::<Vec<_>>();
-            let messages = self.messages.lock().unwrap();
-            let unread_counts = unread_counts_snapshot(&messages, &agent_ids);
-            let model = layout_model(&store, self.agent_selection, &attached_ids, &unread_counts);
-            let selected_buffer = self
-                .agent_selection
-                .and_then(|id| self.buffers.get(&id))
-                .map(|buffer| buffer.lock().unwrap().clone());
-            let terminal_model = terminal_model(
-                &store,
-                self.agent_selection,
-                &attached_ids,
-                selected_buffer.as_ref(),
-            );
-            (model, terminal_model)
-        };
-
-        let workspace_buttons = model
-            .workspace_rows
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                let name = row.name;
-                h_flex()
-                    .child(
-                        Button::new(id.to_string())
-                            .label(name)
-                            .selected(row.selected)
-                            .on_click(cx.listener(move |shell, _: &ClickEvent, _window, cx| {
-                                let selection = {
-                                    let mut store = shell.store.lock().unwrap();
-                                    store.set_current_workspace(id);
-                                    agent_selection_for_workspace(&store, id)
-                                };
-                                shell.agent_selection = selection;
-                                if let Some(agent_id) = selection {
-                                    shell.attach_session(agent_id);
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new(format!("rename-workspace-{id}"))
-                            .label("Rename")
-                            .on_click(cx.listener(move |shell, _: &ClickEvent, window, cx| {
-                                shell.rename_workspace(id, window, cx);
-                            })),
-                    )
-            })
-            .collect::<Vec<_>>();
-
-        let new_workspace_button = Button::new("new-workspace")
-            .label("New Workspace")
-            .on_click(cx.listener(|shell, _: &ClickEvent, _window, cx| {
-                shell.show_new_workspace = true;
-                shell.agent_error = None;
-                cx.notify();
-            }));
-        let manage_workspaces_button = Button::new("manage-workspaces")
-            .label("Manage Workspaces")
-            .on_click(cx.listener(|shell, _: &ClickEvent, _window, cx| {
-                shell.open_workspace_manager(cx);
-            }));
-        let new_workspace_form = if self.show_new_workspace {
-            v_flex()
-                .child(Input::new(&self.new_workspace_name_input).h_full())
-                .child(
-                    h_flex()
-                        .child(
-                            Button::new("create-workspace")
-                                .label(if self.editing_workspace_id.is_some() {
-                                    "Save"
-                                } else {
-                                    "Create"
-                                })
-                                .on_click(cx.listener(|shell, _: &ClickEvent, window, cx| {
-                                    shell.create_workspace(window, cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("cancel-create-workspace")
-                                .label("Cancel")
-                                .on_click(cx.listener(|shell, _: &ClickEvent, window, cx| {
-                                    shell.cancel_new_workspace(window, cx);
-                                })),
-                        ),
-                )
-        } else {
-            v_flex()
-        };
-
-        let agent_buttons = model
-            .selected_agent_rows
-            .into_iter()
-            .map(|row| {
-                let id = row.id;
-                let attached = row.attached;
-                let label = format!(
-                    "{} {} [{}] [{}] {}{}{}",
-                    row.avatar,
-                    row.name,
-                    row.agent_type,
-                    state_label(row.state),
-                    row.folder,
-                    if row.attached { " (attached)" } else { "" },
-                    if row.unread_count > 0 {
-                        format!(" ({} unread)", row.unread_count)
-                    } else {
-                        String::new()
-                    }
-                );
-                h_flex()
-                    .child(
-                        Button::new(format!("select-agent-{id}"))
-                            .label(label)
-                            .selected(row.selected)
-                            .on_click(cx.listener(move |shell, _: &ClickEvent, _window, cx| {
-                                shell.agent_selection = Some(id);
-                                shell.attach_session(id);
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        Button::new(format!("attach-agent-{id}"))
-                            .label(if attached { "Restart" } else { "Attach" })
-                            .on_click(cx.listener(move |shell, _: &ClickEvent, _window, cx| {
-                                if attached {
-                                    shell.restart_agent(id, cx);
-                                } else {
-                                    shell.attach_agent(id, cx);
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new(format!("close-agent-{id}"))
-                            .label("Close")
-                            .on_click(cx.listener(move |shell, _: &ClickEvent, _window, cx| {
-                                shell.close_agent(id, cx);
-                            })),
-                    )
-            })
-            .collect::<Vec<_>>();
-
-        let new_agent_button = Button::new("new-agent")
-            .label("New Agent")
-            .on_click(cx.listener(|shell, _: &ClickEvent, _window, cx| {
-                shell.show_new_agent = true;
-                shell.agent_error = None;
-                cx.notify();
-            }));
-        let new_agent_form =
-            if self.show_new_agent {
-                v_flex()
-                    .child(Input::new(&self.new_agent_folder_input).h_full())
-                    .child(Input::new(&self.new_agent_name_input).h_full())
-                    .child(
-                        h_flex()
-                            .child(Button::new("create-agent").label("Create").on_click(
-                                cx.listener(|shell, _: &ClickEvent, window, cx| {
-                                    shell.create_agent(window, cx);
-                                }),
-                            ))
-                            .child(Button::new("cancel-create-agent").label("Cancel").on_click(
-                                cx.listener(|shell, _: &ClickEvent, window, cx| {
-                                    shell.cancel_new_agent(window, cx);
-                                }),
-                            )),
-                    )
-                    .children(
-                        self.agent_error
-                            .as_ref()
-                            .map(|error| div().child(error.clone())),
-                    )
-            } else {
-                v_flex()
-            };
-
-        let command_input = Input::new(&self.command_input).h_full();
-        let terminal_pane = match &terminal_model.header {
-            Some(header) => {
-                let lines = terminal_model
-                    .lines
-                    .iter()
-                    .map(|line| div().child(line.clone()));
-                v_flex()
-                    .size_full()
-                    .child(div().child(format!(
-                        "{} {} - {}",
-                        header.avatar, header.name, header.title
-                    )))
-                    .child(if terminal_model.can_attach {
-                        div().child("Selected agent is not attached yet.")
-                    } else {
-                        div().children(lines)
-                    })
-                    .child(command_input)
-                    .children(self.delivery_notice.as_ref().map(|notice| {
-                        div().child(format!(
-                            "New MCP message delivered to {} ({})",
-                            notice.recipient_name, notice.count
-                        ))
-                    }))
-                    .children(self.awaiting_notice.as_ref().map(|notice| {
-                        div().child(format!(
-                            "{} is awaiting input: {}",
-                            notice.agent_name, notice.message
-                        ))
-                    }))
-            }
-            None => v_flex()
-                .size_full()
-                .child(div().child("Select an agent to see its terminal."))
-                .child(command_input),
-        };
-
-        h_flex()
-            .size_full()
-            .child(
-                v_flex()
-                    .size_full()
-                    .child(manage_workspaces_button)
-                    .child(new_workspace_button)
-                    .child(new_workspace_form)
-                    .children(workspace_buttons),
-            )
-            .child(
-                v_flex()
-                    .size_full()
-                    .child(new_agent_button)
-                    .child(new_agent_form)
-                    .children(agent_buttons),
-            )
-            .child(terminal_pane)
-    }
-}
-
-/// Runs for the life of the app. Picks up output that the PTY read threads
-/// (raw `std::thread`s, which cannot touch gpui's non-`Send` app handle) write
-/// into shared buffers, plus MCP-driven agent changes in the shared store, and
-/// re-renders the shell when either moves.
-async fn poll_outputs(weak: WeakEntity<Shell>, cx: &mut AsyncApp) {
-    let mut seen = BTreeMap::<Uuid, usize>::new();
-    let mut last_status: Option<Vec<AgentStatusKey>> = None;
-    let mut last_unread: Option<BTreeMap<Uuid, usize>> = None;
-    let mut last_workspace = None;
-    let mut last_injected_message = BTreeMap::<Uuid, Uuid>::new();
-    let mut last_awaiting_message = BTreeMap::<Uuid, String>::new();
-    loop {
-        cx.background_executor().timer(OUTPUT_POLL_INTERVAL).await;
-        if weak.upgrade().is_none() {
-            break;
-        }
-        let (changed, notice, awaiting_notice) = cx.update(|app| {
-            let Some(entity) = weak.upgrade() else {
-                return (false, None, None);
-            };
-            let mut changed = false;
-            let exited_ids = entity
-                .read(app)
-                .process_exits
-                .lock()
-                .unwrap()
-                .drain(..)
-                .collect::<Vec<_>>();
-            if !exited_ids.is_empty() {
-                entity.update(app, |shell, _| shell.remove_exited_sessions(&exited_ids));
-                changed = true;
-            }
-            let live_ids = entity
-                .read(app)
-                .store
-                .lock()
-                .unwrap()
-                .agents()
-                .iter()
-                .map(|agent| agent.id)
-                .collect::<BTreeSet<_>>();
-            let session_ids = entity
-                .read(app)
-                .sessions
-                .keys()
-                .copied()
-                .collect::<Vec<_>>();
-            if !stale_session_ids(&session_ids, &live_ids).is_empty() {
-                entity.update(app, |shell, _| shell.reap_sessions(&live_ids));
-                changed = true;
-            }
-            for id in entity.read(app).sessions.keys() {
-                let len = entity
-                    .read(app)
-                    .buffers
-                    .get(id)
-                    .map(|buffer| buffer.lock().unwrap().bytes.len())
-                    .unwrap_or(0);
-                if seen.get(id) != Some(&len) {
-                    changed = true;
-                    seen.insert(*id, len);
-                }
-            }
-            let (status, agents, workspace_id) = {
-                let store = entity.read(app).store.lock().unwrap();
-                (
-                    agent_status_snapshot(&store),
-                    store.agents().to_vec(),
-                    store.current_workspace_id(),
-                )
-            };
-            if last_status.as_ref() != Some(&status) {
-                changed = true;
-                last_status = Some(status);
-            }
-            if last_workspace != Some(workspace_id) {
-                changed = true;
-                last_workspace = Some(workspace_id);
-            }
-            let agent_ids = agents.iter().map(|agent| agent.id).collect::<Vec<_>>();
-            let unread_counts = {
-                let messages = entity.read(app).messages.lock().unwrap();
-                unread_counts_snapshot(&messages, &agent_ids)
-            };
-            if last_unread.as_ref() != Some(&unread_counts) {
-                changed = true;
-                last_unread = Some(unread_counts);
-            }
-            let events = entity.read(app).notifier.drain();
-            let notice = delivery_notice(&events, &agents);
-            changed |= notice.is_some();
-            let awaiting_events = entity
-                .read(app)
-                .awaiting_input
-                .lock()
-                .unwrap()
-                .drain(..)
-                .collect::<Vec<_>>();
-            let mut awaiting_notice = None;
-            for (id, message) in awaiting_events {
-                let Some(message) = message else {
-                    continue;
-                };
-                let selected = entity.read(app).agent_selection;
-                let show_notice = should_show_awaiting_notice(
-                    selected,
-                    id,
-                    &message,
-                    last_awaiting_message.get(&id),
-                );
-                let Some(agent_name) = agents
-                    .iter()
-                    .find(|agent| agent.id == id)
-                    .map(|agent| agent.name.clone())
-                else {
-                    continue;
-                };
-                if should_notify(
-                    entity.read(app).settings.desktop_notifications_enabled,
-                    show_notice,
-                ) {
-                    app.show_system_notification(SystemNotification {
-                        tag: id.to_string().into(),
-                        title: format!("Knot - {agent_name}").into(),
-                        body: notification_body(&message).into(),
-                        actions: Vec::new(),
-                    });
-                }
-                if !show_notice {
-                    continue;
-                }
-                last_awaiting_message.insert(id, message.clone());
-                awaiting_notice = Some(AwaitingNotice {
-                    agent_name,
-                    message,
-                });
-            }
-            changed |= awaiting_notice.is_some();
-            let requests = entity
-                .read(app)
-                .check_requests
-                .lock()
-                .unwrap()
-                .drain(..)
-                .collect::<Vec<_>>();
-            for id in requests {
-                let Some((agent_type, latest_message)) = (|| {
-                    let store = entity.read(app).store.lock().unwrap();
-                    let messages = entity.read(app).messages.lock().unwrap();
-                    let agent_type = store.agent(id)?.agent_type.clone();
-                    Some((agent_type, messages.latest_unread_id(id)))
-                })() else {
-                    continue;
-                };
-                if !should_inject_inbox_prompt(
-                    &agent_type,
-                    entity.read(app).settings.mcp_server_enabled,
-                    latest_message,
-                    last_injected_message.get(&id).copied(),
-                ) {
-                    continue;
-                }
-                let Some(session) = entity.read(app).sessions.get(&id) else {
-                    continue;
-                };
-                if let Ok(mut session) = session.lock()
-                    && session.send_command(CHECK_INBOX_PROMPT).is_ok()
-                    && let Some(message_id) = latest_message
-                {
-                    last_injected_message.insert(id, message_id);
-                    changed = true;
-                }
-            }
-            (changed, notice, awaiting_notice)
-        });
-        if changed {
-            cx.update(|app| {
-                if let Some(entity) = weak.upgrade() {
-                    entity.update(app, |shell, cx| {
-                        if let Some(notice) = notice {
-                            shell.delivery_notice = Some(notice);
-                        }
-                        if let Some(notice) = awaiting_notice {
-                            shell.awaiting_notice = Some(notice);
-                        }
-                        cx.notify();
-                    });
-                }
-            });
-        }
-    }
-}
-
 /// Starts the local MCP server on a dedicated thread with its own tokio
 /// runtime (the app's UI loop runs on GPUI's own executor, not tokio). Runs
 /// for the lifetime of the process - there is no shutdown path yet, matching
@@ -4917,73 +4097,6 @@ mod tests {
             model.selected_agent_rows[0].state,
             knot_agents::AgentState::Input
         );
-    }
-
-    #[test]
-    fn terminal_model_renders_header_and_output_for_attached_agent() {
-        let mut store = knot_agents::AgentStore::new();
-        let ws = workspace("One");
-        store.add_workspace(ws.clone());
-        store.set_current_workspace(ws.id);
-        let id = store.create("~/alpha", knot_agents::CreateOptions::default());
-        store.set_status_text(id, "planning".to_string());
-        let buffer = OutputBuffer {
-            bytes: b"hello\r\nworld\n".to_vec(),
-        };
-
-        let model = terminal_model(&store, Some(id), &[id], Some(&buffer));
-        assert!(!model.can_attach);
-        let header = model.header.unwrap();
-        assert_eq!(header.name, "alpha");
-        assert_eq!(header.title, "planning");
-        assert_eq!(model.lines, vec!["hello", "world"]);
-    }
-
-    #[test]
-    fn terminal_model_hides_output_until_attached() {
-        let mut store = knot_agents::AgentStore::new();
-        let ws = workspace("One");
-        store.add_workspace(ws.clone());
-        store.set_current_workspace(ws.id);
-        let id = store.create("~/alpha", knot_agents::CreateOptions::default());
-        let buffer = OutputBuffer {
-            bytes: b"premature output\n".to_vec(),
-        };
-
-        let model = terminal_model(&store, Some(id), &[], Some(&buffer));
-        assert!(model.can_attach);
-        assert!(model.header.is_some());
-        assert!(model.lines.is_empty());
-    }
-
-    #[test]
-    fn terminal_model_without_selection_has_no_header() {
-        let store = knot_agents::AgentStore::new();
-        let model = terminal_model(&store, None, &[], None);
-        assert!(model.header.is_none());
-        assert!(!model.can_attach);
-    }
-
-    #[test]
-    fn visible_output_normalizes_crlf_clips_and_handles_empty() {
-        assert_eq!(
-            visible_output(&OutputBuffer::default(), 10),
-            Vec::<String>::new()
-        );
-
-        let buffer = OutputBuffer {
-            bytes: b"ready\r\n".to_vec(),
-        };
-        assert_eq!(visible_output(&buffer, 10), vec!["ready"]);
-
-        let mut bytes = Vec::new();
-        for i in 0..250 {
-            bytes.extend_from_slice(format!("line {i}\n").as_bytes());
-        }
-        let clipped = visible_output(&OutputBuffer { bytes }, 200);
-        assert_eq!(clipped.len(), 200);
-        assert_eq!(clipped[0], "line 50");
-        assert_eq!(clipped.last().unwrap(), "line 249");
     }
 
     #[test]
