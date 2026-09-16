@@ -2086,7 +2086,28 @@ enum WorkspaceViewMode {
 /// Terminal pane geometry - shared by resize and mouse-position translation
 /// so they agree on the same grid.
 const TERMINAL_SIDEBAR_WIDTH: f32 = 250.;
-const TERMINAL_HEADER_HEIGHT: f32 = 56.;
+const TERMINAL_HEADER_HEIGHT: f32 = 64.;
+
+/// The font family to actually render the terminal with: the user's
+/// `terminal_font_name` setting if GPUI can actually resolve it (checked
+/// against the platform's font catalog plus whatever we've embedded),
+/// otherwise the embedded JetBrains Mono default. Guards against a stale or
+/// otherwise-unresolvable persisted value (an old default, a font that was
+/// uninstalled, a font-panel value AppKit accepts but GPUI's lookup
+/// doesn't) silently falling back further to the proportional UI font.
+fn terminal_font_family(settings: &knot_core::Settings, cx: &App) -> gpui_kit::SharedString {
+    let requested = &settings.terminal_font_name;
+    if cx
+        .text_system()
+        .all_font_names()
+        .iter()
+        .any(|name| name == requested)
+    {
+        requested.clone().into()
+    } else {
+        "JetBrains Mono".into()
+    }
+}
 
 /// Measures the actual rendered cell size for `terminal_view`'s font/size,
 /// rather than guessing - an overestimate (e.g. a fixed 18px row height for
@@ -2399,7 +2420,7 @@ impl WorkspaceWindow {
         };
         let (cell_width, cell_height) = terminal_cell_size(
             cx,
-            self.settings.terminal_font_name.clone().into(),
+            terminal_font_family(&self.settings, cx),
             px(self.settings.terminal_font_size as f32),
         );
         let viewport = window.viewport_size();
@@ -2459,7 +2480,7 @@ impl WorkspaceWindow {
     ) -> (usize, usize) {
         let (cell_width, cell_height) = terminal_cell_size(
             cx,
-            self.settings.terminal_font_name.clone().into(),
+            terminal_font_family(&self.settings, cx),
             px(self.settings.terminal_font_size as f32),
         );
         let x = (f32::from(position.x) - TERMINAL_SIDEBAR_WIDTH).max(0.);
@@ -3484,120 +3505,107 @@ impl Render for WorkspaceWindow {
             }
         };
 
-        v_flex()
+        h_flex()
             .size_full()
             .child(
-                TitleBar::new()
-                    .h(px(64.))
-                    .border_color(gpui_kit::transparent_black())
+                // The sidebar column owns the traffic lights (Swift's own
+                // sidebar panel does the same - they sit within its width,
+                // not the content pane's). The content header below is a
+                // plain sibling row, not part of this TitleBar, so it
+                // starts at this column's true right edge with no gutter
+                // GPUI reserves inside TitleBar for the traffic lights -
+                // that's what kept misaligning it with the divider below.
+                v_flex()
+                    .w(px(250.))
+                    .h_full()
+                    .flex_shrink_0()
+                    .bg(cx.theme().title_bar)
+                    .child(
+                        TitleBar::new()
+                            .h(px(64.))
+                            .border_color(gpui_kit::transparent_black())
+                            .bg(cx.theme().title_bar)
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .items_center()
+                                    .child(app_titlebar_icon())
+                                    .child(knot_core::l10n::t("app.name")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("workspace-agent-list")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .child(v_flex().gap_1().p_4().children(agent_rows)),
+                    )
+                    .children(
+                        self.error
+                            .as_ref()
+                            .map(|error| div().text_sm().px_4().child(error.clone())),
+                    )
                     .child(
                         h_flex()
-                            .size_full()
+                            .flex_shrink_0()
+                            .h(px(48.))
+                            .w_full()
+                            .items_center()
+                            .px_4()
+                            .gap_1()
                             .child(
-                                // Traffic lights live within this column's
-                                // width, matching the sidebar below it - the
-                                // agent header starts where the content
-                                // pane does, not immediately after the
-                                // lights.
-                                h_flex()
-                                    .w(px(250.))
-                                    .h_full()
-                                    .flex_shrink_0()
-                                    .items_center()
-                                    .px_4()
-                                    .bg(cx.theme().title_bar)
-                                    .child(app_titlebar_icon()),
+                                Button::new("workspace-new-agent")
+                                    .icon(IconName::Plus)
+                                    .tooltip("New agent")
+                                    .on_click(cx.listener(
+                                        |view, _: &ClickEvent, window, cx| {
+                                            view.open_new_agent_dialog(window, cx);
+                                        },
+                                    )),
                             )
                             .child(
-                                h_flex()
-                                    .flex_1()
-                                    .h_full()
-                                    .items_center()
-                                    .justify_between()
-                                    .px_5()
-                                    .bg(cx.theme().background)
-                                    .child(title_bar_left)
-                                    .child(title_bar_right),
+                                SettingsWindow::icon_button(
+                                    "workspace-dashboard",
+                                    "icons/layout-dashboard.svg",
+                                    "Dashboard",
+                                    false,
+                                )
+                                .selected(is_dashboard)
+                                .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                                    view.view_mode = match view.view_mode {
+                                        WorkspaceViewMode::Terminal => {
+                                            WorkspaceViewMode::Dashboard
+                                        }
+                                        WorkspaceViewMode::Dashboard => {
+                                            WorkspaceViewMode::Terminal
+                                        }
+                                    };
+                                    cx.notify();
+                                })),
                             ),
                     ),
             )
             .child(
-                h_flex()
+                v_flex()
                     .flex_1()
-                    .relative()
-                    .bg(cx.theme().background)
-                    .child(
+                    .h_full()
+                    .children((!is_dashboard).then(|| {
+                        h_flex()
+                            .flex_shrink_0()
+                            .h(px(64.))
+                            .items_center()
+                            .justify_between()
+                            .px_5()
+                            .bg(cx.theme().background)
+                            .child(title_bar_left)
+                            .child(title_bar_right)
+                    }))
+                    .child(dashboard_content.unwrap_or_else(|| {
                         v_flex()
-                            .w(px(250.))
-                            .h_full()
-                            .gap_2()
-                            .p_4()
-                            // Matches the title bar's own base color (not
-                            // `muted`) so there's no visible seam where the
-                            // borderless title bar meets the sidebar.
-                            .bg(cx.theme().title_bar)
+                            .size_full()
                             .child(
-                                div()
-                                    .id("workspace-agent-list")
-                                    .flex_1()
-                                    .min_h_0()
-                                    .overflow_y_scroll()
-                                    .child(v_flex().gap_1().children(agent_rows)),
-                            )
-                            .children(
-                                self.error
-                                    .as_ref()
-                                    .map(|error| div().text_sm().child(error.clone())),
-                            )
-                            .child(
-                                h_flex()
-                                    .flex_shrink_0()
-                                    .h(px(32.))
-                                    .w_full()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(
-                                        Button::new("workspace-new-agent")
-                                            .icon(IconName::Plus)
-                                            .tooltip("New agent")
-                                            .on_click(cx.listener(
-                                                |view, _: &ClickEvent, window, cx| {
-                                                    view.open_new_agent_dialog(window, cx);
-                                                },
-                                            )),
-                                    )
-                                    .child(
-                                        SettingsWindow::icon_button(
-                                            "workspace-dashboard",
-                                            "icons/layout-dashboard.svg",
-                                            "Dashboard",
-                                            false,
-                                        )
-                                        .selected(is_dashboard)
-                                        .on_click(
-                                            cx.listener(|view, _: &ClickEvent, _window, cx| {
-                                                view.view_mode = match view.view_mode {
-                                                    WorkspaceViewMode::Terminal => {
-                                                        WorkspaceViewMode::Dashboard
-                                                    }
-                                                    WorkspaceViewMode::Dashboard => {
-                                                        WorkspaceViewMode::Terminal
-                                                    }
-                                                };
-                                                cx.notify();
-                                            }),
-                                        ),
-                                    ),
-                            ),
-                    )
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .child(dashboard_content.unwrap_or_else(|| {
-                                v_flex()
-                                    .size_full()
-                                    .child(
-                                        self.selected_agent
+                                self.selected_agent
                                             .and_then(|id| {
                                                 let grid =
                                                     self.sessions.get(&id)?.lock().ok()?.grid()?;
@@ -3665,10 +3673,10 @@ impl Render for WorkspaceWindow {
                                                                 let (_, cell_height) =
                                                                     terminal_cell_size(
                                                                         cx,
-                                                                        view.settings
-                                                                            .terminal_font_name
-                                                                            .clone()
-                                                                            .into(),
+                                                                        terminal_font_family(
+                                                                            &view.settings,
+                                                                            cx,
+                                                                        ),
                                                                         px(view
                                                                             .settings
                                                                             .terminal_font_size
@@ -3700,10 +3708,10 @@ impl Render for WorkspaceWindow {
                                                         ))
                                                         .child(terminal_view::render_grid(
                                                             &grid.lock().unwrap(),
-                                                            self.settings
-                                                                .terminal_font_name
-                                                                .clone()
-                                                                .into(),
+                                                            terminal_font_family(
+                                                                &self.settings,
+                                                                cx,
+                                                            ),
                                                             px(self.settings.terminal_font_size
                                                                 as f32),
                                                         ))
@@ -3733,8 +3741,7 @@ impl Render for WorkspaceWindow {
                                     )
                                     .into_any_element()
                             })),
-                    ),
-            )
+                    )
     }
 }
 
