@@ -87,7 +87,7 @@
       subprocess call and live-connection teardown belong to the runtime
       layer that owns a running `AcpClient` (`crates/knot`, not yet wired to
       any agent instance; that wiring lands with the panel UI in section 6).
-- [ ] 4.3 Implement the view-mode switch: starting/stopping the ACP
+- [x] 4.3 Implement the view-mode switch: starting/stopping the ACP
       connection without disturbing the underlying terminal process, per
       the `acp-panel-ui` "Switch to Terminal mid-turn" scenario. Verify:
       integration test toggles mode mid-turn and asserts the terminal

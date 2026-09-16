@@ -7,11 +7,13 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+mod acp_session;
 mod grid;
 mod keys;
 mod mouse;
 mod pty;
 
+pub use acp_session::AcpSession;
 pub use grid::{Cell, ClipboardType, Grid, GridEvent, GridSize};
 pub use keys::{KeyInput, key_to_bytes};
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};

@@ -1,0 +1,161 @@
+//! An ACP-backed agent session (Panel mode), independent of
+//! [`crate::TerminalSession`] - switching an agent's view mode
+//! starts/stops one of these without disturbing the other, per
+//! `openspec/specs/acp-panel-ui/spec.md`'s "Switch to Terminal mid-turn"
+//! scenario.
+
+use knot_acp::{AcpClient, Result as AcpResult, SessionEvent};
+use knot_agent_launch::AdapterLaunch;
+use tokio::process::Command;
+use tokio::sync::mpsc;
+
+/// A live ACP connection for one agent: the adapter subprocess plus its
+/// open session id.
+pub struct AcpSession {
+    client:     AcpClient,
+    session_id: String,
+}
+
+impl AcpSession {
+    /// Spawns `launch`'s adapter and opens a session for `cwd`. If
+    /// `prior_session_id` is given and the adapter supports resume,
+    /// attempts `session/load` first; on any failure (unsupported or an
+    /// error response) falls back to a fresh `session/new` rather than
+    /// surfacing an error, per the `agent-lifecycle` layout-restore
+    /// fallback requirement.
+    pub async fn start(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+                       -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+        let mut command = Command::new(launch.config.command);
+        command.args(launch.config.args);
+        if !launch.mcp_config.is_empty() {
+            command.arg(&launch.mcp_config);
+        }
+        let (client, events) = AcpClient::connect(command).await?;
+
+        let session_id = match prior_session_id {
+            Some(prior) if client.capabilities().supports_resume => {
+                match client.session_load(prior, cwd).await {
+                    Ok(id) => id,
+                    Err(_) => client.session_new(cwd).await?,
+                }
+            }
+            _ => client.session_new(cwd).await?,
+        };
+
+        Ok((Self { client, session_id }, events))
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    pub async fn prompt(&self, text: &str) -> AcpResult<()> {
+        self.client.session_prompt(&self.session_id, text).await
+    }
+
+    pub async fn cancel(&self) -> AcpResult<()> {
+        self.client.session_cancel(&self.session_id).await
+    }
+
+    /// Closes the ACP connection. Never touches any terminal transport -
+    /// the two are independent per-agent objects.
+    pub async fn stop(&self) {
+        self.client.close().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use knot_agent_launch::AdapterConfig;
+
+    use super::*;
+    use crate::{TerminalError, TerminalTransport};
+
+    #[derive(Default)]
+    struct FakeTransport {
+        sent: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl TerminalTransport for FakeTransport {
+        fn send_text(&mut self, text: &str) -> Result<(), TerminalError> {
+            self.sent.lock().unwrap().push(text.to_string());
+            Ok(())
+        }
+
+        fn send_return(&mut self) -> Result<(), TerminalError> {
+            Ok(())
+        }
+
+        fn terminate(&mut self) -> Result<(), TerminalError> {
+            Ok(())
+        }
+    }
+
+    /// A fake adapter: answers `initialize`/`session/new`, then streams one
+    /// `session/update` text delta.
+    fn fake_adapter_launch() -> AdapterLaunch {
+        AdapterLaunch { config:     AdapterConfig { command:                   "sh",
+                                                    args:                      &[
+                                                                                 "-c",
+                                                                                 r#"while IFS= read -r line; do
+                          id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+                          method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+                          case "$method" in
+                            initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}" ;;
+                            session/new)
+                              echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-1\"}}"
+                              echo "{\"jsonrpc\":\"2.0\",\"method\":\"session/update\",\"params\":{\"sessionUpdate\":\"text_delta\",\"text\":\"hi\"}}"
+                              ;;
+                          esac
+                        done"#,
+        ],
+                                                    supports_resume:           false,
+                                                    supports_permission_modes: false, },
+                        mcp_config: String::new(), }
+    }
+
+    #[tokio::test]
+    async fn starting_and_stopping_an_acp_session_never_touches_the_terminal_transport() {
+        use knot_agents::{Agent, AgentStore, CreateOptions};
+        use knot_core::Settings;
+
+        use crate::{SessionConfig, TerminalSession};
+
+        let mut store = AgentStore::new();
+        let agent_id = store.create("/tmp/project", CreateOptions::default());
+        let agent: Agent = store.agent(agent_id).unwrap().clone();
+        let settings = Settings::default();
+        let config = SessionConfig { settings:    &settings,
+                                     agent:       &agent,
+                                     persona:     None,
+                                     plugin_root: None, };
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let mut terminal_session = TerminalSession::new(&config,
+                                                        FakeTransport { sent: Arc::clone(&sent), },
+                                                        knot_activity::EventSink::default());
+        terminal_session.send_text("terminal is alive").unwrap();
+
+        let (session, mut events) =
+            AcpSession::start(&fake_adapter_launch(), "/tmp/project", None).await
+                                                                           .expect("connect");
+        assert_eq!(session.session_id(), "sess-1");
+
+        // The ACP update the fake adapter streamed right after session/new
+        // is already in flight - receiving it after the "switch back to
+        // Terminal" (stop()) proves it still lands rather than being
+        // dropped by the switch.
+        let update = events.recv().await.expect("session update");
+        assert!(matches!(
+                    update,
+                    SessionEvent::Update(knot_acp::SessionUpdate::TextDelta { text }) if text == "hi"
+                ));
+
+        session.stop().await;
+
+        assert_eq!(*sent.lock().unwrap(),
+                   vec!["terminal is alive".to_string()],
+                   "the terminal transport must be untouched by the ACP session's lifecycle");
+    }
+}
