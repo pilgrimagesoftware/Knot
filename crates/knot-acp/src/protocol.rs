@@ -110,13 +110,31 @@ pub struct AgentCapabilities {
 /// distinguished, not flattened into one opaque payload.
 #[derive(Debug, Clone)]
 pub enum SessionUpdate {
-    TextDelta { text: String },
-    ToolCallStart { tool_call_id: String, kind: String },
-    ToolCallUpdate { tool_call_id: String, status: String },
-    ToolCallResult { tool_call_id: String, output: Value },
-    Diff { path: String, diff: String },
-    TurnEnd { stop_reason: String },
-    Unknown { raw: Value },
+    TextDelta {
+        text: String,
+    },
+    ToolCallStart {
+        tool_call_id: String,
+        kind: String,
+    },
+    ToolCallUpdate {
+        tool_call_id: String,
+        status: String,
+    },
+    ToolCallResult {
+        tool_call_id: String,
+        output: Value,
+    },
+    Diff {
+        path: String,
+        diff: String,
+    },
+    TurnEnd {
+        stop_reason: String,
+    },
+    Unknown {
+        raw: Value,
+    },
 }
 
 impl SessionUpdate {

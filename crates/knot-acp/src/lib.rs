@@ -14,4 +14,6 @@ mod transport;
 
 pub use client::{AcpClient, SessionEvent};
 pub use error::{AcpError, Result, SessionEndCause};
-pub use protocol::{AgentCapabilities, PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate};
+pub use protocol::{
+    AgentCapabilities, PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate,
+};

@@ -10,8 +10,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::{AcpError, Result, SessionEndCause};
 use crate::protocol::{
-    AgentCapabilities, InitializeParams, InitializeResult, JsonRpcErrorPayload, PermissionDecision, PermissionOption,
-    PermissionRequest, SessionUpdate, PROTOCOL_VERSION,
+    AgentCapabilities, InitializeParams, InitializeResult, JsonRpcErrorPayload, PROTOCOL_VERSION,
+    PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate,
 };
 use crate::transport::{Transport, TransportEvent};
 
@@ -28,7 +28,8 @@ pub enum SessionEvent {
 pub struct AcpClient {
     transport: Arc<Transport>,
     capabilities: AgentCapabilities,
-    permission_pending: Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>>,
+    permission_pending:
+        Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>>,
 }
 
 impl AcpClient {
@@ -36,15 +37,25 @@ impl AcpClient {
     /// client plus the ordered session-event stream. Fails closed (per
     /// `acp-client`'s capability-negotiation requirement) if the agent
     /// reports an unsupported protocol version.
-    pub async fn connect(command: Command) -> Result<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+    pub async fn connect(
+        command: Command,
+    ) -> Result<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
         let (transport, mut transport_events) = Transport::spawn(command)?;
 
-        let init_params = InitializeParams { protocol_version: PROTOCOL_VERSION };
-        let raw = transport.request("initialize", Some(serde_json::to_value(init_params).expect("serializable"))).await?;
-        let init_result: InitializeResult = serde_json::from_value(raw).map_err(|error| AcpError::Rpc {
-            code: -32600,
-            message: format!("malformed initialize response: {error}"),
-        })?;
+        let init_params = InitializeParams {
+            protocol_version: PROTOCOL_VERSION,
+        };
+        let raw = transport
+            .request(
+                "initialize",
+                Some(serde_json::to_value(init_params).expect("serializable")),
+            )
+            .await?;
+        let init_result: InitializeResult =
+            serde_json::from_value(raw).map_err(|error| AcpError::Rpc {
+                code: -32600,
+                message: format!("malformed initialize response: {error}"),
+            })?;
         if init_result.protocol_version != PROTOCOL_VERSION {
             return Err(AcpError::UnsupportedProtocolVersion {
                 client: PROTOCOL_VERSION,
@@ -52,8 +63,9 @@ impl AcpClient {
             });
         }
 
-        let permission_pending: Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>> =
-            Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let permission_pending: Arc<
+            Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>,
+        > = Arc::new(Mutex::new(std::collections::HashMap::new()));
         let (events_tx, events_rx) = mpsc::unbounded_channel();
 
         let transport_for_loop = Arc::clone(&transport);
@@ -61,24 +73,41 @@ impl AcpClient {
         tokio::spawn(async move {
             while let Some(event) = transport_events.recv().await {
                 match event {
-                    TransportEvent::Notification { method, params } if method == "session/update" => {
+                    TransportEvent::Notification { method, params }
+                        if method == "session/update" =>
+                    {
                         let update = SessionUpdate::from_params(params.unwrap_or(Value::Null));
                         let _ = events_tx.send(SessionEvent::Update(update));
                     }
                     TransportEvent::Notification { .. } => {}
-                    TransportEvent::Request { id, method, params } if method == "session/request_permission" => {
+                    TransportEvent::Request { id, method, params }
+                        if method == "session/request_permission" =>
+                    {
                         let params = params.unwrap_or(Value::Null);
-                        let tool_call_id = params.get("toolCallId").and_then(Value::as_str).unwrap_or_default().to_owned();
-                        let options: Vec<PermissionOption> =
-                            serde_json::from_value(params.get("options").cloned().unwrap_or(Value::Array(vec![]))).unwrap_or_default();
+                        let tool_call_id = params
+                            .get("toolCallId")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned();
+                        let options: Vec<PermissionOption> = serde_json::from_value(
+                            params
+                                .get("options")
+                                .cloned()
+                                .unwrap_or(Value::Array(vec![])),
+                        )
+                        .unwrap_or_default();
                         let rpc_key = id.to_string();
                         let (decision_tx, decision_rx) = oneshot::channel();
-                        pending_for_loop.lock().expect("permission mutex poisoned").insert(rpc_key.clone(), decision_tx);
-                        let _ = events_tx.send(SessionEvent::PermissionRequest(PermissionRequest {
-                            rpc_id: id.clone(),
-                            tool_call_id,
-                            options: options.clone(),
-                        }));
+                        pending_for_loop
+                            .lock()
+                            .expect("permission mutex poisoned")
+                            .insert(rpc_key.clone(), decision_tx);
+                        let _ =
+                            events_tx.send(SessionEvent::PermissionRequest(PermissionRequest {
+                                rpc_id: id.clone(),
+                                tool_call_id,
+                                options: options.clone(),
+                            }));
                         let transport = Arc::clone(&transport_for_loop);
                         let options_for_answer = options;
                         tokio::spawn(async move {
@@ -93,7 +122,11 @@ impl AcpClient {
                         let _ = transport_for_loop
                             .respond(
                                 id,
-                                Err(JsonRpcErrorPayload { code: -32601, message: "method not supported".to_owned(), data: None }),
+                                Err(JsonRpcErrorPayload {
+                                    code: -32601,
+                                    message: "method not supported".to_owned(),
+                                    data: None,
+                                }),
                             )
                             .await;
                     }
@@ -101,7 +134,11 @@ impl AcpClient {
                         // Per the "session closed while a permission request
                         // is pending" scenario: any still-pending permission
                         // decisions resolve to Deny rather than hanging.
-                        let pending: Vec<_> = pending_for_loop.lock().expect("permission mutex poisoned").drain().collect();
+                        let pending: Vec<_> = pending_for_loop
+                            .lock()
+                            .expect("permission mutex poisoned")
+                            .drain()
+                            .collect();
                         for (_, sender) in pending {
                             let _ = sender.send(PermissionDecision::Deny);
                         }
@@ -112,7 +149,14 @@ impl AcpClient {
             }
         });
 
-        Ok((Self { transport, capabilities: init_result.capabilities, permission_pending }, events_rx))
+        Ok((
+            Self {
+                transport,
+                capabilities: init_result.capabilities,
+                permission_pending,
+            },
+            events_rx,
+        ))
     }
 
     pub fn capabilities(&self) -> &AgentCapabilities {
@@ -120,7 +164,10 @@ impl AcpClient {
     }
 
     pub async fn session_new(&self, cwd: &str) -> Result<String> {
-        let raw = self.transport.request("session/new", Some(json!({ "cwd": cwd }))).await?;
+        let raw = self
+            .transport
+            .request("session/new", Some(json!({ "cwd": cwd })))
+            .await?;
         session_id_from(&raw)
     }
 
@@ -131,7 +178,13 @@ impl AcpClient {
         if !self.capabilities.supports_resume {
             return Err(AcpError::ResumeNotSupported);
         }
-        let raw = self.transport.request("session/load", Some(json!({ "sessionId": session_id, "cwd": cwd }))).await?;
+        let raw = self
+            .transport
+            .request(
+                "session/load",
+                Some(json!({ "sessionId": session_id, "cwd": cwd })),
+            )
+            .await?;
         session_id_from(&raw)
     }
 
@@ -143,14 +196,21 @@ impl AcpClient {
     }
 
     pub async fn session_cancel(&self, session_id: &str) -> Result<()> {
-        self.transport.notify("session/cancel", Some(json!({ "sessionId": session_id }))).await
+        self.transport
+            .notify("session/cancel", Some(json!({ "sessionId": session_id })))
+            .await
     }
 
     /// Answers a pending `session/request_permission` request surfaced via
     /// [`SessionEvent::PermissionRequest`].
     pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
         let key = request.rpc_id.to_string();
-        if let Some(sender) = self.permission_pending.lock().expect("permission mutex poisoned").remove(&key) {
+        if let Some(sender) = self
+            .permission_pending
+            .lock()
+            .expect("permission mutex poisoned")
+            .remove(&key)
+        {
             let _ = sender.send(decision);
         }
     }
@@ -168,15 +228,27 @@ fn session_id_from(raw: &Value) -> Result<String> {
     raw.get("sessionId")
         .and_then(Value::as_str)
         .map(str::to_owned)
-        .ok_or_else(|| AcpError::Rpc { code: -32600, message: "session response missing sessionId".to_owned() })
+        .ok_or_else(|| AcpError::Rpc {
+            code: -32600,
+            message: "session response missing sessionId".to_owned(),
+        })
 }
 
-fn permission_result(decision: PermissionDecision, options: &[PermissionOption]) -> std::result::Result<Value, JsonRpcErrorPayload> {
+fn permission_result(
+    decision: PermissionDecision,
+    options: &[PermissionOption],
+) -> std::result::Result<Value, JsonRpcErrorPayload> {
     let outcome = match decision {
-        PermissionDecision::Allow => options.first().map(|option| option.option_id.clone()).unwrap_or_else(|| "allow".to_owned()),
+        PermissionDecision::Allow => options
+            .first()
+            .map(|option| option.option_id.clone())
+            .unwrap_or_else(|| "allow".to_owned()),
         PermissionDecision::Deny => options
             .iter()
-            .find(|option| option.option_id.to_lowercase().contains("deny") || option.name.to_lowercase().contains("deny"))
+            .find(|option| {
+                option.option_id.to_lowercase().contains("deny")
+                    || option.name.to_lowercase().contains("deny")
+            })
             .map(|option| option.option_id.clone())
             .unwrap_or_else(|| "deny".to_owned()),
     };
@@ -208,7 +280,9 @@ mod tests {
 
     #[tokio::test]
     async fn connect_negotiates_matching_protocol_version() {
-        let (client, _events) = AcpClient::connect(fake_agent(PROTOCOL_VERSION, true)).await.expect("connect");
+        let (client, _events) = AcpClient::connect(fake_agent(PROTOCOL_VERSION, true))
+            .await
+            .expect("connect");
 
         assert!(client.capabilities().supports_resume);
     }
@@ -225,16 +299,23 @@ mod tests {
 
     #[tokio::test]
     async fn session_new_returns_session_id() {
-        let (client, _events) = AcpClient::connect(fake_agent(PROTOCOL_VERSION, true)).await.expect("connect");
+        let (client, _events) = AcpClient::connect(fake_agent(PROTOCOL_VERSION, true))
+            .await
+            .expect("connect");
 
-        let session_id = client.session_new("/tmp/project").await.expect("session id");
+        let session_id = client
+            .session_new("/tmp/project")
+            .await
+            .expect("session id");
 
         assert_eq!(session_id, "sess-1");
     }
 
     #[tokio::test]
     async fn session_load_fails_closed_when_resume_unsupported() {
-        let (client, _events) = AcpClient::connect(fake_agent(PROTOCOL_VERSION, false)).await.expect("connect");
+        let (client, _events) = AcpClient::connect(fake_agent(PROTOCOL_VERSION, false))
+            .await
+            .expect("connect");
 
         let result = client.session_load("sess-1", "/tmp/project").await;
 
@@ -258,7 +339,10 @@ mod tests {
 
         assert!(result.is_err());
         let ended = events.recv().await.expect("ended event");
-        assert!(matches!(ended, SessionEvent::Ended(SessionEndCause::ProcessExited { .. })));
+        assert!(matches!(
+            ended,
+            SessionEvent::Ended(SessionEndCause::ProcessExited { .. })
+        ));
     }
 
     /// Fake agent that, once `session/new` succeeds, streams a text delta
@@ -297,8 +381,13 @@ mod tests {
 
     #[tokio::test]
     async fn close_while_permission_pending_ends_session_without_hanging() {
-        let (client, mut events) = AcpClient::connect(permission_flow_agent()).await.expect("connect");
-        client.session_new("/tmp/project").await.expect("session id");
+        let (client, mut events) = AcpClient::connect(permission_flow_agent())
+            .await
+            .expect("connect");
+        client
+            .session_new("/tmp/project")
+            .await
+            .expect("session id");
         let _text = events.recv().await.expect("text delta");
         let _turn_end = events.recv().await.expect("turn end");
         let _permission = events.recv().await.expect("permission request");
@@ -314,20 +403,34 @@ mod tests {
 
     #[tokio::test]
     async fn ordered_updates_stream_text_and_turn_end() {
-        let (client, mut events) = AcpClient::connect(permission_flow_agent()).await.expect("connect");
-        client.session_new("/tmp/project").await.expect("session id");
+        let (client, mut events) = AcpClient::connect(permission_flow_agent())
+            .await
+            .expect("connect");
+        client
+            .session_new("/tmp/project")
+            .await
+            .expect("session id");
 
         let first = events.recv().await.expect("first update");
         let second = events.recv().await.expect("second update");
 
-        assert!(matches!(first, SessionEvent::Update(SessionUpdate::TextDelta { text }) if text == "hello"));
-        assert!(matches!(second, SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason }) if stop_reason == "end_turn"));
+        assert!(
+            matches!(first, SessionEvent::Update(SessionUpdate::TextDelta { text }) if text == "hello")
+        );
+        assert!(
+            matches!(second, SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason }) if stop_reason == "end_turn")
+        );
     }
 
     #[tokio::test]
     async fn permission_deny_decision_is_delivered_to_the_agent() {
-        let (client, mut events) = AcpClient::connect(permission_flow_agent()).await.expect("connect");
-        client.session_new("/tmp/project").await.expect("session id");
+        let (client, mut events) = AcpClient::connect(permission_flow_agent())
+            .await
+            .expect("connect");
+        client
+            .session_new("/tmp/project")
+            .await
+            .expect("session id");
         let _text = events.recv().await.expect("text delta");
         let _turn_end = events.recv().await.expect("turn end");
         let permission = match events.recv().await.expect("permission request") {
@@ -338,6 +441,8 @@ mod tests {
         client.answer_permission(&permission, PermissionDecision::Deny);
 
         let confirmation = events.recv().await.expect("decision echoed back");
-        assert!(matches!(confirmation, SessionEvent::Update(SessionUpdate::TextDelta { text }) if text == "decision:deny"));
+        assert!(
+            matches!(confirmation, SessionEvent::Update(SessionUpdate::TextDelta { text }) if text == "decision:deny")
+        );
     }
 }
