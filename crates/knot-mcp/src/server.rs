@@ -24,18 +24,18 @@ pub type AgentsSnapshotFn = Arc<dyn Fn() -> Vec<knot_agents::Agent> + Send + Syn
 
 #[derive(Clone)]
 struct AppState {
-    catalog: Arc<dyn ToolCatalog>,
-    agents: AgentsSnapshotFn,
-    hooks: Option<Arc<dyn AgentHookHandler>>,
+    catalog:  Arc<dyn ToolCatalog>,
+    agents:   AgentsSnapshotFn,
+    hooks:    Option<Arc<dyn AgentHookHandler>>,
     sessions: McpSessionManager,
 }
 
 /// The local MCP HTTP server: health/info, JSON-RPC `/mcp`, SSE `/mcp`, and
 /// the `GET /api/v1/agent/status` status endpoint.
 pub struct McpServer {
-    port: u16,
-    state: AppState,
-    handle: Option<JoinHandle<()>>,
+    port:       u16,
+    state:      AppState,
+    handle:     Option<JoinHandle<()>>,
     bound_addr: Option<std::net::SocketAddr>,
 }
 
@@ -47,17 +47,13 @@ impl Drop for McpServer {
 
 impl McpServer {
     pub fn new(port: u16, catalog: Arc<dyn ToolCatalog>, agents: AgentsSnapshotFn) -> Self {
-        Self {
-            port,
-            state: AppState {
-                catalog,
-                agents,
-                hooks: None,
-                sessions: McpSessionManager::new(),
-            },
-            handle: None,
-            bound_addr: None,
-        }
+        Self { port,
+               state: AppState { catalog,
+                                 agents,
+                                 hooks: None,
+                                 sessions: McpSessionManager::new() },
+               handle: None,
+               bound_addr: None }
     }
 
     pub fn with_hook_handler(mut self, handler: Arc<dyn AgentHookHandler>) -> Self {
@@ -82,13 +78,12 @@ impl McpServer {
     pub async fn start(&mut self) -> crate::Result<()> {
         let router = build_router(self.state.clone());
         let addr: std::net::SocketAddr = ([127, 0, 0, 1], self.port).into();
-        let listener = TcpListener::bind(addr)
-            .await
-            .map_err(|e| crate::McpError::Bind(addr, e))?;
+        let listener = TcpListener::bind(addr).await
+                                              .map_err(|e| crate::McpError::Bind(addr, e))?;
         self.bound_addr = Some(listener.local_addr().map_err(crate::McpError::Serve)?);
         self.handle = Some(tokio::spawn(async move {
-            let _ = axum::serve(listener, router).await;
-        }));
+                               let _ = axum::serve(listener, router).await;
+                           }));
         Ok(())
     }
 
@@ -101,16 +96,13 @@ impl McpServer {
 }
 
 fn build_router(state: AppState) -> Router {
-    Router::new()
-        .route("/health", get(health))
-        .route("/", get(info))
-        .route("/mcp", post(mcp_rpc).get(mcp_sse))
-        .route(
-            "/api/v1/agent/status",
-            get(agent_status_endpoint).post(agent_status_hook_endpoint),
-        )
-        .route("/api/v1/agent/register", post(agent_register_endpoint))
-        .with_state(state)
+    Router::new().route("/health", get(health))
+                 .route("/", get(info))
+                 .route("/mcp", post(mcp_rpc).get(mcp_sse))
+                 .route("/api/v1/agent/status",
+                        get(agent_status_endpoint).post(agent_status_hook_endpoint))
+                 .route("/api/v1/agent/register", post(agent_register_endpoint))
+                 .with_state(state)
 }
 
 async fn health() -> &'static str {
@@ -119,10 +111,9 @@ async fn health() -> &'static str {
 
 async fn info() -> Response {
     axum::Json(serde_json::json!({
-        "name": consts::SERVER_NAME,
-        "version": consts::SERVER_VERSION,
-    }))
-    .into_response()
+                   "name": consts::SERVER_NAME,
+                   "version": consts::SERVER_VERSION,
+               })).into_response()
 }
 
 async fn agent_status_endpoint(State(state): State<AppState>) -> axum::Json<Vec<AgentStatusEntry>> {
@@ -143,11 +134,8 @@ enum HookAction {
     Status,
 }
 
-fn hook_response(
-    handler: Option<&dyn AgentHookHandler>,
-    body: &[u8],
-    action: HookAction,
-) -> Response {
+fn hook_response(handler: Option<&dyn AgentHookHandler>, body: &[u8], action: HookAction)
+                 -> Response {
     let request: HookRequest = match serde_json::from_slice(body) {
         Ok(request) => request,
         Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
@@ -156,12 +144,9 @@ fn hook_response(
         return (StatusCode::BAD_REQUEST, error.to_string()).into_response();
     }
 
-    let Some(handler) = handler else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Agent hooks are not configured",
-        )
-            .into_response();
+    let Some(handler) = handler
+    else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "Agent hooks are not configured").into_response();
     };
     let result = match action {
         HookAction::Register => handler.register(&request),
@@ -175,13 +160,12 @@ fn hook_response(
 
 fn sse_response(event: &str, data: &str, session_id: Option<&str>) -> Response {
     let body = format!("event: {event}\ndata: {data}\n\n");
-    let mut response = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .header(header::CACHE_CONTROL, "no-cache")
-        .header(header::CONNECTION, "keep-alive");
+    let mut response = Response::builder().status(StatusCode::OK)
+                                          .header(header::CONTENT_TYPE, "text/event-stream")
+                                          .header(header::CACHE_CONTROL, "no-cache")
+                                          .header(header::CONNECTION, "keep-alive");
     if let Some(id) = session_id
-        && let Ok(value) = HeaderValue::from_str(id)
+       && let Ok(value) = HeaderValue::from_str(id)
     {
         response = response.header(SESSION_HEADER, value);
     }
@@ -194,14 +178,12 @@ async fn mcp_sse() -> Response {
 
 async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
     state.sessions.cleanup_stale_default();
-    let session_id = headers
-        .get(SESSION_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-    let accepts_sse = headers
-        .get(header::ACCEPT)
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| v.contains("text/event-stream"));
+    let session_id = headers.get(SESSION_HEADER)
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_string);
+    let accepts_sse = headers.get(header::ACCEPT)
+                             .and_then(|v| v.to_str().ok())
+                             .is_some_and(|v| v.contains("text/event-stream"));
 
     let request: JsonRpcRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
@@ -210,13 +192,15 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
 
     let response_session_id = if request.method == "initialize" {
         state.sessions.create_session(Uuid::nil()).id
-    } else if let Some(session_id) = session_id {
+    }
+    else if let Some(session_id) = session_id {
         if state.sessions.session(&session_id).is_none() {
             return session_error_response(request.id, "Invalid or expired MCP session");
         }
         state.sessions.touch(&session_id);
         session_id
-    } else {
+    }
+    else {
         state.sessions.create_session(Uuid::nil()).id
     };
 

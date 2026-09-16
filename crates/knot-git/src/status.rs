@@ -36,21 +36,21 @@ impl ChangeType {
 /// original path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEntry {
-    pub path: PathBuf,
+    pub path:      PathBuf,
     pub orig_path: Option<PathBuf>,
-    pub staged: Option<ChangeType>,
-    pub unstaged: Option<ChangeType>,
+    pub staged:    Option<ChangeType>,
+    pub unstaged:  Option<ChangeType>,
 }
 
 /// Parsed `git status --porcelain=v2 --branch` output.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RepoStatus {
     /// Branch name, or `None` when HEAD is detached.
-    pub head: Option<String>,
+    pub head:     Option<String>,
     pub upstream: Option<String>,
-    pub ahead: i64,
-    pub behind: i64,
-    pub entries: Vec<FileEntry>,
+    pub ahead:    i64,
+    pub behind:   i64,
+    pub entries:  Vec<FileEntry>,
 }
 
 impl RepoStatus {
@@ -62,17 +62,13 @@ impl RepoStatus {
     /// and conflicted).
     pub fn modified(&self) -> impl Iterator<Item = &FileEntry> {
         self.entries.iter().filter(|e| {
-            matches!(
-                e.unstaged,
-                Some(
-                    ChangeType::Modified
-                        | ChangeType::Added
-                        | ChangeType::Deleted
-                        | ChangeType::Renamed
-                        | ChangeType::Copied
-                )
-            )
-        })
+                               matches!(e.unstaged,
+                                        Some(ChangeType::Modified
+                                             | ChangeType::Added
+                                             | ChangeType::Deleted
+                                             | ChangeType::Renamed
+                                             | ChangeType::Copied))
+                           })
     }
 
     pub fn untracked(&self) -> impl Iterator<Item = &FileEntry> {
@@ -82,9 +78,11 @@ impl RepoStatus {
     }
 
     pub fn conflicted(&self) -> impl Iterator<Item = &FileEntry> {
-        self.entries.iter().filter(|e| {
-            e.staged == Some(ChangeType::Unmerged) || e.unstaged == Some(ChangeType::Unmerged)
-        })
+        self.entries
+            .iter()
+            .filter(|e| {
+                e.staged == Some(ChangeType::Unmerged) || e.unstaged == Some(ChangeType::Unmerged)
+            })
     }
 
     /// True when no entry carries a staged or unstaged change. Ignored files
@@ -102,7 +100,8 @@ pub fn parse_status(output: &str) -> RepoStatus {
     for line in output.lines() {
         if let Some(rest) = line.strip_prefix("# branch.") {
             parse_branch_header(rest, &mut status);
-        } else if let Some(entry) = parse_entry(line) {
+        }
+        else if let Some(entry) = parse_entry(line) {
             status.entries.push(entry);
         }
     }
@@ -171,12 +170,10 @@ fn parse_ordinary(rest: &str) -> Option<FileEntry> {
     let (staged, unstaged) = xy(fields.next()?);
     let path = fields.nth(6)?;
 
-    Some(FileEntry {
-        path: PathBuf::from(path),
-        orig_path: None,
-        staged,
-        unstaged,
-    })
+    Some(FileEntry { path: PathBuf::from(path),
+                     orig_path: None,
+                     staged,
+                     unstaged })
 }
 
 /// `<XY> <sub> <mH> <mI> <mW> <hH> <hI> <Xscore> <path>\t<origPath>`
@@ -186,12 +183,10 @@ fn parse_rename(rest: &str) -> Option<FileEntry> {
     let paths = fields.nth(7)?;
     let (path, orig) = paths.split_once('\t')?;
 
-    Some(FileEntry {
-        path: PathBuf::from(path),
-        orig_path: Some(PathBuf::from(orig)),
-        staged,
-        unstaged,
-    })
+    Some(FileEntry { path: PathBuf::from(path),
+                     orig_path: Some(PathBuf::from(orig)),
+                     staged,
+                     unstaged })
 }
 
 /// `<XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>`
@@ -200,21 +195,17 @@ fn parse_unmerged(rest: &str) -> Option<FileEntry> {
     fields.next()?; // XY is always "UU"-like for conflicts; force Unmerged
     let path = fields.nth(8)?;
 
-    Some(FileEntry {
-        path: PathBuf::from(path),
-        orig_path: None,
-        staged: Some(ChangeType::Unmerged),
-        unstaged: Some(ChangeType::Unmerged),
-    })
+    Some(FileEntry { path:      PathBuf::from(path),
+                     orig_path: None,
+                     staged:    Some(ChangeType::Unmerged),
+                     unstaged:  Some(ChangeType::Unmerged), })
 }
 
 fn untracked_like(path: &str, change: ChangeType) -> FileEntry {
-    FileEntry {
-        path: PathBuf::from(path),
-        orig_path: None,
-        staged: None,
-        unstaged: Some(change),
-    }
+    FileEntry { path:      PathBuf::from(path),
+                orig_path: None,
+                staged:    None,
+                unstaged:  Some(change), }
 }
 
 #[cfg(test)]
@@ -252,10 +243,8 @@ mod tests {
         let entry = &status.entries[0];
 
         assert_eq!(entry.staged, Some(super::ChangeType::Renamed));
-        assert_eq!(
-            entry.orig_path.as_deref(),
-            Some(std::path::Path::new("old_name.txt"))
-        );
+        assert_eq!(entry.orig_path.as_deref(),
+                   Some(std::path::Path::new("old_name.txt")));
         insta::assert_debug_snapshot!(status);
     }
 }

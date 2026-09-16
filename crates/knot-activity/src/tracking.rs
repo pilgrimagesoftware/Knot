@@ -49,7 +49,8 @@ impl Default for ActivityTracking {
 pub fn tracking_for(agent_type: &str) -> ActivityTracking {
     if agent_type == "shell" {
         ActivityTracking::NONE
-    } else {
+    }
+    else {
         ActivityTracking::ALL
     }
 }
@@ -82,9 +83,7 @@ mod tests {
         assert_eq!(user_only, ActivityTracking::USER_INPUT);
         assert!(!user_only.contains(ActivityTracking::TERMINAL_OUTPUT));
         assert!(user_only.contains(ActivityTracking::USER_INPUT));
-        assert_eq!(
-            user_only.insert(ActivityTracking::TERMINAL_OUTPUT),
-            ActivityTracking::ALL
-        );
+        assert_eq!(user_only.insert(ActivityTracking::TERMINAL_OUTPUT),
+                   ActivityTracking::ALL);
     }
 }

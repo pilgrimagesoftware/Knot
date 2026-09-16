@@ -12,33 +12,31 @@ use crate::agent::{Agent, AgentState};
 /// Build a runtime agent from its persisted record. Runtime fields always
 /// start at their documented defaults, never copied from anywhere.
 pub fn from_saved(saved: &SavedAgent) -> Agent {
-    Agent {
-        id: saved.id,
-        name: saved.name.clone(),
-        avatar: saved.avatar.clone(),
-        folder: saved.folder.clone(),
-        agent_type: saved.agent_type.clone(),
-        created_by: saved.created_by,
-        is_companion: saved.is_companion,
-        shell_command: saved.shell_command.clone(),
-        persona_id: saved.persona_id,
+    Agent { id:            saved.id,
+            name:          saved.name.clone(),
+            avatar:        saved.avatar.clone(),
+            folder:        saved.folder.clone(),
+            agent_type:    saved.agent_type.clone(),
+            created_by:    saved.created_by,
+            is_companion:  saved.is_companion,
+            shell_command: saved.shell_command.clone(),
+            persona_id:    saved.persona_id,
 
-        state: AgentState::Idle,
-        status_text: String::new(),
-        is_registered: false,
-        is_pending_start: false,
-        terminal_title: String::new(),
-        restart_token: Uuid::new_v4(),
-        session_id: None,
-        resume_session_id: None,
-        fork_session: false,
-        metadata: BTreeMap::new(),
-        markdown_file: None,
-        markdown_maximized: false,
-        markdown_history: Vec::new(),
-        mermaid_source: None,
-        mermaid_title: None,
-    }
+            state:              AgentState::Idle,
+            status_text:        String::new(),
+            is_registered:      false,
+            is_pending_start:   false,
+            terminal_title:     String::new(),
+            restart_token:      Uuid::new_v4(),
+            session_id:         None,
+            resume_session_id:  None,
+            fork_session:       false,
+            metadata:           BTreeMap::new(),
+            markdown_file:      None,
+            markdown_maximized: false,
+            markdown_history:   Vec::new(),
+            mermaid_source:     None,
+            mermaid_title:      None, }
 }
 
 /// Extract the durable subset of a runtime agent for persistence.
@@ -46,20 +44,17 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
 /// record when true (`restore-conversation-on-launch` enabled), otherwise
 /// always persisted as `None` regardless of the agent's runtime session id.
 pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
-    SavedAgent {
-        id: agent.id,
-        name: agent.name.clone(),
-        avatar: agent.avatar.clone(),
-        folder: agent.folder.clone(),
-        agent_type: agent.agent_type.clone(),
-        created_by: agent.created_by,
-        is_companion: agent.is_companion,
-        shell_command: agent.shell_command.clone(),
-        persona_id: agent.persona_id,
-        session_id: remember_conversation
-            .then(|| agent.session_id.clone())
-            .flatten(),
-    }
+    SavedAgent { id:            agent.id,
+                 name:          agent.name.clone(),
+                 avatar:        agent.avatar.clone(),
+                 folder:        agent.folder.clone(),
+                 agent_type:    agent.agent_type.clone(),
+                 created_by:    agent.created_by,
+                 is_companion:  agent.is_companion,
+                 shell_command: agent.shell_command.clone(),
+                 persona_id:    agent.persona_id,
+                 session_id:    remember_conversation.then(|| agent.session_id.clone())
+                                                     .flatten(), }
 }
 
 #[cfg(test)]
@@ -107,10 +102,8 @@ mod tests {
 
     #[test]
     fn legacy_record_without_companion_fields_loads_with_defaults() {
-        let json = format!(
-            r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
-            Uuid::new_v4()
-        );
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           Uuid::new_v4());
         let saved: SavedAgent = serde_json::from_str(&json).unwrap();
 
         let agent = from_saved(&saved);

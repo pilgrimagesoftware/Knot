@@ -24,8 +24,9 @@ pub fn optional_bool(args: &Value, key: &str) -> Option<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn require_str_returns_value_when_present() {

@@ -12,12 +12,9 @@ fn mk_repo(base: &Path, name: &str) {
 }
 
 async fn no_update_within(rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>, secs: u64) {
-    assert!(
-        timeout(Duration::from_secs(secs), rx.changed())
-            .await
-            .is_err(),
-        "expected no further update"
-    );
+    assert!(timeout(Duration::from_secs(secs), rx.changed()).await
+                                                            .is_err(),
+            "expected no further update");
 }
 
 /// Drain updates until `quiet` passes with none arriving, then return the last
@@ -34,18 +31,13 @@ async fn no_update_within(rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>, 
 /// never actually goes quiet for `quiet` must still fail the test in seconds,
 /// not hang the process. `unwrap_or` on the recv is a correctness assertion,
 /// not a real "channel closed" no-op: nothing here drops the sender early.
-async fn settle(
-    rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>,
-    quiet: Duration,
-) -> Vec<RepoInfo> {
+async fn settle(rx: &mut tokio::sync::watch::Receiver<Vec<RepoInfo>>, quiet: Duration)
+                -> Vec<RepoInfo> {
     let overall = timeout(Duration::from_secs(10), async {
-        while timeout(quiet, rx.changed()).await.is_ok() {}
-    })
-    .await;
-    assert!(
-        overall.is_ok(),
-        "settle() did not go quiet within 10s - updates kept arriving faster than `quiet` apart"
-    );
+                      while timeout(quiet, rx.changed()).await.is_ok() {}
+                  }).await;
+    assert!(overall.is_ok(),
+            "settle() did not go quiet within 10s - updates kept arriving faster than `quiet` apart");
     rx.borrow_and_update().clone()
 }
 
@@ -69,9 +61,8 @@ async fn rapid_child_creation_coalesces_to_one_rescan() {
     let base = tempfile::tempdir().unwrap();
 
     let (discovery, mut rx) = Discovery::new();
-    discovery
-        .set_source_folder(Some(base.path().to_path_buf()))
-        .unwrap();
+    discovery.set_source_folder(Some(base.path().to_path_buf()))
+             .unwrap();
     assert!(rx.borrow_and_update().is_empty());
 
     for name in ["alpha", "beta", "gamma"] {
@@ -92,15 +83,12 @@ async fn switching_source_folder_settles_on_the_last() {
     mk_repo(c.path(), "gamma");
 
     let (discovery, mut rx) = Discovery::new();
-    discovery
-        .set_source_folder(Some(a.path().to_path_buf()))
-        .unwrap();
-    discovery
-        .set_source_folder(Some(b.path().to_path_buf()))
-        .unwrap();
-    discovery
-        .set_source_folder(Some(c.path().to_path_buf()))
-        .unwrap();
+    discovery.set_source_folder(Some(a.path().to_path_buf()))
+             .unwrap();
+    discovery.set_source_folder(Some(b.path().to_path_buf()))
+             .unwrap();
+    discovery.set_source_folder(Some(c.path().to_path_buf()))
+             .unwrap();
 
     let settled = rx.borrow_and_update().clone();
     let expected = scan(&c.path().canonicalize().unwrap());
@@ -116,8 +104,6 @@ async fn switching_source_folder_settles_on_the_last() {
     mk_repo(a.path(), "stale-a");
     mk_repo(b.path(), "stale-b");
     let after = settle(&mut rx, Duration::from_secs(2)).await;
-    assert_eq!(
-        after, expected,
-        "a/b activity must not resurface after switching to c"
-    );
+    assert_eq!(after, expected,
+               "a/b activity must not resurface after switching to c");
 }

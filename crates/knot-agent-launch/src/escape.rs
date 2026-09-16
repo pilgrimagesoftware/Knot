@@ -26,17 +26,16 @@ pub fn persona_prompt(persona: Option<&Persona>) -> Option<String> {
     if persona.instructions.is_empty() {
         return None;
     }
-    Some(format!(
-        "You are asked to impersonate {} based on the following instructions: {}",
-        persona.name, persona.instructions
-    ))
+    Some(format!("You are asked to impersonate {} based on the following instructions: {}",
+                 persona.name, persona.instructions))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use knot_core::{PersonaState, PersonaType};
     use uuid::Uuid;
+
+    use super::*;
 
     #[test]
     fn shell_escape_covers_every_special_character() {
@@ -45,13 +44,11 @@ mod tests {
     }
 
     fn persona(instructions: &str) -> Persona {
-        Persona {
-            id: Uuid::nil(),
-            name: "Ada".to_string(),
-            instructions: instructions.to_string(),
-            persona_type: PersonaType::User,
-            state: PersonaState::Enabled,
-        }
+        Persona { id:           Uuid::nil(),
+                  name:         "Ada".to_string(),
+                  instructions: instructions.to_string(),
+                  persona_type: PersonaType::User,
+                  state:        PersonaState::Enabled, }
     }
 
     #[test]

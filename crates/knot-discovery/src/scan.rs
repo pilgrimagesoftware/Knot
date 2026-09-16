@@ -8,7 +8,7 @@ use crate::consts::{GIT_DIR, GITDIR_PREFIX, HEAD, HEAD_REF_PREFIX, WORKTREES_MAR
 /// any linked worktrees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoInfo {
-    pub name: String,
+    pub name:      String,
     pub worktrees: Vec<WorktreeInfo>,
 }
 
@@ -35,57 +35,53 @@ pub fn scan(base: &Path) -> Vec<RepoInfo> {
 
     for entry in entries.flatten() {
         let item_path = entry.path();
-        let Some(folder) = item_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
+        let Some(folder) = item_path.file_name()
+                                    .map(|n| n.to_string_lossy().into_owned())
         else {
             continue;
         };
         let git_path = item_path.join(GIT_DIR);
-        let Ok(meta) = fs::symlink_metadata(&git_path) else {
+        let Ok(meta) = fs::symlink_metadata(&git_path)
+        else {
             continue;
         };
 
         if meta.is_dir() {
             let branch = parse_branch_from_head(&git_path).unwrap_or_else(|| folder.clone());
-            worktrees.entry(item_path.clone()).or_default().insert(
-                0,
-                WorktreeInfo {
-                    name: branch,
-                    path: item_path.clone(),
-                },
-            );
+            worktrees.entry(item_path.clone())
+                     .or_default()
+                     .insert(0,
+                             WorktreeInfo { name: branch,
+                                            path: item_path.clone(), });
             repo_names.insert(item_path, folder);
-        } else if let Some(repo_path) = parse_worktree_gitfile(&git_path) {
-            let repo_name = repo_path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let wt_name = folder
-                .strip_prefix(&format!("{repo_name}-"))
-                .unwrap_or(&folder)
-                .to_owned();
-            worktrees.entry(repo_path).or_default().push(WorktreeInfo {
-                name: wt_name,
-                path: item_path,
-            });
+        }
+        else if let Some(repo_path) = parse_worktree_gitfile(&git_path) {
+            let repo_name = repo_path.file_name()
+                                     .map(|n| n.to_string_lossy().into_owned())
+                                     .unwrap_or_default();
+            let wt_name = folder.strip_prefix(&format!("{repo_name}-"))
+                                .unwrap_or(&folder)
+                                .to_owned();
+            worktrees.entry(repo_path)
+                     .or_default()
+                     .push(WorktreeInfo { name: wt_name,
+                                          path: item_path, });
         }
     }
 
-    let mut result: Vec<RepoInfo> = repo_names
-        .into_iter()
-        .map(|(repo_path, name)| {
-            let mut wts = worktrees.remove(&repo_path).unwrap_or_default();
-            // Primary stays at index 0; order the linked worktrees for stability.
-            if wts.len() > 1 {
-                wts[1..].sort_by_key(|w| w.name.to_lowercase());
-            }
-            RepoInfo {
-                name,
-                worktrees: wts,
-            }
-        })
-        .collect();
+    let mut result: Vec<RepoInfo> =
+        repo_names.into_iter()
+                  .map(|(repo_path, name)| {
+                      let mut wts = worktrees.remove(&repo_path).unwrap_or_default();
+                      // Primary stays at index 0; order the linked worktrees
+                      // for stability.
+                      if wts.len() > 1 {
+                          wts[1..].sort_by_key(|w| w.name.to_lowercase());
+                      }
+                      RepoInfo { name,
+                                 worktrees: wts }
+                  })
+                  .collect();
 
     result.sort_by_key(|r| r.name.to_lowercase());
     result
@@ -97,13 +93,12 @@ pub fn scan(base: &Path) -> Vec<RepoInfo> {
 pub fn parse_branch_from_head(git_dir: &Path) -> Option<String> {
     let content = fs::read_to_string(git_dir.join(HEAD)).ok()?;
     let trimmed = content.trim();
-    trimmed
-        .strip_prefix(HEAD_REF_PREFIX)
-        .map(|name| name.to_owned())
+    trimmed.strip_prefix(HEAD_REF_PREFIX)
+           .map(|name| name.to_owned())
 }
 
-/// The owning repository path for a linked worktree's `.git` file, read from its
-/// `gitdir: .../.git/worktrees/<id>` pointer. `None` when the file is
+/// The owning repository path for a linked worktree's `.git` file, read from
+/// its `gitdir: .../.git/worktrees/<id>` pointer. `None` when the file is
 /// unreadable or not a worktree pointer.
 pub fn parse_worktree_gitfile(git_file: &Path) -> Option<PathBuf> {
     let content = fs::read_to_string(git_file).ok()?;
@@ -128,10 +123,8 @@ mod tests {
         fs::create_dir(&git_dir).unwrap();
 
         fs::write(git_dir.join("HEAD"), "ref: refs/heads/feature/login\n").unwrap();
-        assert_eq!(
-            parse_branch_from_head(&git_dir),
-            Some("feature/login".to_owned())
-        );
+        assert_eq!(parse_branch_from_head(&git_dir),
+                   Some("feature/login".to_owned()));
 
         fs::write(git_dir.join("HEAD"), "9c1f0a2b3c4d5e6f\n").unwrap();
         assert_eq!(parse_branch_from_head(&git_dir), None);
@@ -143,10 +136,8 @@ mod tests {
         let git_file = dir.path().join(".git");
 
         fs::write(&git_file, "gitdir: /src/app/.git/worktrees/app-feat\n").unwrap();
-        assert_eq!(
-            parse_worktree_gitfile(&git_file),
-            Some(PathBuf::from("/src/app"))
-        );
+        assert_eq!(parse_worktree_gitfile(&git_file),
+                   Some(PathBuf::from("/src/app")));
 
         fs::write(&git_file, "gitdir: /src/app/.git\n").unwrap();
         assert_eq!(parse_worktree_gitfile(&git_file), None);
@@ -159,10 +150,8 @@ mod tests {
         write(&app.join(".git").join("HEAD"), "ref: refs/heads/main\n");
 
         let feat = base.path().join("app-feat");
-        write(
-            &feat.join(".git"),
-            &format!("gitdir: {}/.git/worktrees/app-feat\n", app.display()),
-        );
+        write(&feat.join(".git"),
+              &format!("gitdir: {}/.git/worktrees/app-feat\n", app.display()));
 
         let repos = scan(base.path());
         assert_eq!(repos.len(), 1);
@@ -174,10 +163,8 @@ mod tests {
     #[test]
     fn detached_head_primary_uses_folder_name() {
         let base = tempfile::tempdir().unwrap();
-        write(
-            &base.path().join("app").join(".git").join("HEAD"),
-            "9c1f0a2b3c4d5e6f7081920a3b4c5d6e7f809012\n",
-        );
+        write(&base.path().join("app").join(".git").join("HEAD"),
+              "9c1f0a2b3c4d5e6f7081920a3b4c5d6e7f809012\n");
 
         let repos = scan(base.path());
         assert_eq!(repos.len(), 1);
@@ -189,30 +176,23 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let app = base.path().join("app");
         write(&app.join(".git").join("HEAD"), "ref: refs/heads/main\n");
-        write(
-            &base.path().join("app-hotfix").join(".git"),
-            &format!("gitdir: {}/.git/worktrees/app-hotfix\n", app.display()),
-        );
+        write(&base.path().join("app-hotfix").join(".git"),
+              &format!("gitdir: {}/.git/worktrees/app-hotfix\n", app.display()));
 
         let repos = scan(base.path());
-        let feat = repos[0]
-            .worktrees
-            .iter()
-            .find(|w| w.path.ends_with("app-hotfix"));
+        let feat = repos[0].worktrees
+                           .iter()
+                           .find(|w| w.path.ends_with("app-hotfix"));
         assert_eq!(feat.unwrap().name, "hotfix");
     }
 
     #[test]
     fn repos_sorted_case_insensitively() {
         let base = tempfile::tempdir().unwrap();
-        write(
-            &base.path().join("Zebra").join(".git").join("HEAD"),
-            "ref: refs/heads/main\n",
-        );
-        write(
-            &base.path().join("apple").join(".git").join("HEAD"),
-            "ref: refs/heads/main\n",
-        );
+        write(&base.path().join("Zebra").join(".git").join("HEAD"),
+              "ref: refs/heads/main\n");
+        write(&base.path().join("apple").join(".git").join("HEAD"),
+              "ref: refs/heads/main\n");
 
         let repos = scan(base.path());
         let names: Vec<_> = repos.iter().map(|r| r.name.as_str()).collect();

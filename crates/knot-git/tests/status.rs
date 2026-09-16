@@ -56,11 +56,10 @@ fn status_reports_staged_rename_with_original_path() {
     run(&["mv", "old.txt", "new.txt"]);
 
     let status = Repository::open(path).status().unwrap();
-    let entry = status
-        .entries
-        .iter()
-        .find(|e| e.staged == Some(ChangeType::Renamed))
-        .expect("a staged rename entry");
+    let entry = status.entries
+                      .iter()
+                      .find(|e| e.staged == Some(ChangeType::Renamed))
+                      .expect("a staged rename entry");
 
     assert_eq!(entry.path, Path::new("new.txt"));
     assert_eq!(entry.orig_path.as_deref(), Some(Path::new("old.txt")));
@@ -71,9 +70,8 @@ fn clean_repo_is_clean() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
     init_repo(path);
-    Runner::new(path)
-        .run(&["commit", "-qm", "empty", "--allow-empty"])
-        .unwrap();
+    Runner::new(path).run(&["commit", "-qm", "empty", "--allow-empty"])
+                     .unwrap();
 
     let status = Repository::open(path).status().unwrap();
 

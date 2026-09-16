@@ -16,9 +16,7 @@ pub struct Repository {
 
 impl Repository {
     pub fn open(path: impl Into<PathBuf>) -> Self {
-        Self {
-            runner: Runner::new(path),
-        }
+        Self { runner: Runner::new(path), }
     }
 
     pub fn with_runner(runner: Runner) -> Self {
@@ -117,7 +115,8 @@ impl Repository {
             Err(err) => return Err(err),
         };
 
-        // left-right count prints "<behind>\t<ahead>": left = @{u}, right = HEAD.
+        // left-right count prints "<behind>\t<ahead>": left = @{u}, right =
+        // HEAD.
         let mut counts = output.split_whitespace();
         let behind = counts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
         let ahead = counts.next().and_then(|s| s.parse().ok()).unwrap_or(0);

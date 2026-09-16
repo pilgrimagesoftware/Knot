@@ -17,9 +17,7 @@ pub fn registration_user_prompt() -> &'static str {
 
 /// The knot system instructions, with `agent_id` embedded.
 pub fn knot_instructions(agent_id: Uuid) -> String {
-    format!(
-        "You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals so engage with them: ask for help and in return help them succeed. Your knot agent ID: {agent_id}. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional."
-    )
+    format!("You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals so engage with them: ask for help and in return help them succeed. Your knot agent ID: {agent_id}. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional.")
 }
 
 /// The combined registration prompt for agent types without system-prompt
@@ -39,9 +37,7 @@ fn resolve_plugin_dir(plugin_root: Option<&Path>, agent_type: &str) -> Option<Pa
 pub fn mcp_arguments(agent_type: &str, mcp_url: &str, plugin_root: Option<&Path>) -> String {
     match agent_type {
         "claude" => {
-            let mut args = format!(
-                r#" --mcp-config '{{"mcpServers":{{"knot":{{"type":"http","url":"{mcp_url}"}}}}}}' --allowed-tools 'mcp__knot__*'"#
-            );
+            let mut args = format!(r#" --mcp-config '{{"mcpServers":{{"knot":{{"type":"http","url":"{mcp_url}"}}}}}}' --allowed-tools 'mcp__knot__*'"#);
             if let Some(dir) = resolve_plugin_dir(plugin_root, agent_type) {
                 args.push_str(&format!(" --plugin-dir \"{}\"", dir.display()));
             }
@@ -49,23 +45,19 @@ pub fn mcp_arguments(agent_type: &str, mcp_url: &str, plugin_root: Option<&Path>
         }
         "codex" => match resolve_plugin_dir(plugin_root, agent_type) {
             Some(dir) => {
-                format!(
-                    r#" -c 'notify=["bash","{}/scripts/notify.sh"]'"#,
-                    dir.display()
-                )
+                format!(r#" -c 'notify=["bash","{}/scripts/notify.sh"]'"#,
+                        dir.display())
             }
             None => String::new(),
         },
         "gemini" => " --allowed-mcp-server-names knot".to_string(),
         "copilot" => {
-            let mcp_config = format!(
-                r#"--additional-mcp-config '{{"mcpServers":{{"knot":{{"type":"http","url":"{mcp_url}","tools":["*"]}}}}}}'"#
-            );
-            let allowed_tools = COPILOT_ALLOWED_TOOLS
-                .iter()
-                .map(|tool| format!("--allow-tool 'knot({tool})'"))
-                .collect::<Vec<_>>()
-                .join(" ");
+            let mcp_config = format!(r#"--additional-mcp-config '{{"mcpServers":{{"knot":{{"type":"http","url":"{mcp_url}","tools":["*"]}}}}}}'"#);
+            let allowed_tools =
+                COPILOT_ALLOWED_TOOLS.iter()
+                                     .map(|tool| format!("--allow-tool 'knot({tool})'"))
+                                     .collect::<Vec<_>>()
+                                     .join(" ");
             format!(" {mcp_config} {allowed_tools}")
         }
         _ => String::new(),
@@ -75,12 +67,9 @@ pub fn mcp_arguments(agent_type: &str, mcp_url: &str, plugin_root: Option<&Path>
 /// Inline registration arguments carrying `agent_id`, or an empty string
 /// when `agent_type` does not support inline registration or the resume
 /// rules drop them.
-pub fn inline_registration_arguments(
-    agent_type: &str,
-    agent_id: Uuid,
-    is_resume: bool,
-    persona: Option<&Persona>,
-) -> String {
+pub fn inline_registration_arguments(agent_type: &str, agent_id: Uuid, is_resume: bool,
+                                     persona: Option<&Persona>)
+                                     -> String {
     match agent_type {
         "claude" => {
             let mut system_prompt = knot_instructions(agent_id);
@@ -90,11 +79,10 @@ pub fn inline_registration_arguments(
             }
             if is_resume {
                 format!(r#" --append-system-prompt "{system_prompt}""#)
-            } else {
-                format!(
-                    r#" --append-system-prompt "{system_prompt}" "{}""#,
-                    registration_user_prompt()
-                )
+            }
+            else {
+                format!(r#" --append-system-prompt "{system_prompt}" "{}""#,
+                        registration_user_prompt())
             }
         }
         "codex" => {
@@ -105,34 +93,34 @@ pub fn inline_registration_arguments(
             }
             if is_resume {
                 format!(r#" -c 'developer_instructions="{system_prompt}"'"#)
-            } else {
-                format!(
-                    r#" -c 'developer_instructions="{system_prompt}"' "{}""#,
-                    registration_user_prompt()
-                )
+            }
+            else {
+                format!(r#" -c 'developer_instructions="{system_prompt}"' "{}""#,
+                        registration_user_prompt())
             }
         }
         "opencode" => {
             if is_resume {
                 String::new()
-            } else {
+            }
+            else {
                 format!(r#" --prompt "{}""#, registration_prompt(agent_id))
             }
         }
         "gemini" => {
             if is_resume {
                 String::new()
-            } else {
-                format!(
-                    r#" --prompt-interactive "{}""#,
-                    registration_prompt(agent_id)
-                )
+            }
+            else {
+                format!(r#" --prompt-interactive "{}""#,
+                        registration_prompt(agent_id))
             }
         }
         "copilot" => {
             if is_resume {
                 String::new()
-            } else {
+            }
+            else {
                 format!(r#" --interactive "{}""#, registration_prompt(agent_id))
             }
         }
@@ -142,22 +130,21 @@ pub fn inline_registration_arguments(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use knot_core::{PersonaState, PersonaType};
     use tempfile::tempdir;
+
+    use super::*;
 
     fn id() -> Uuid {
         Uuid::nil()
     }
 
     fn persona(instructions: &str) -> Persona {
-        Persona {
-            id: Uuid::nil(),
-            name: "Ada".to_string(),
-            instructions: instructions.to_string(),
-            persona_type: PersonaType::User,
-            state: PersonaState::Enabled,
-        }
+        Persona { id:           Uuid::nil(),
+                  name:         "Ada".to_string(),
+                  instructions: instructions.to_string(),
+                  persona_type: PersonaType::User,
+                  state:        PersonaState::Enabled, }
     }
 
     #[test]
@@ -194,18 +181,14 @@ mod tests {
 
     #[test]
     fn codex_mcp_arguments_absent_plugin_dir_is_empty() {
-        assert_eq!(
-            mcp_arguments("codex", "http://127.0.0.1:8766/mcp", None),
-            ""
-        );
+        assert_eq!(mcp_arguments("codex", "http://127.0.0.1:8766/mcp", None),
+                   "");
     }
 
     #[test]
     fn gemini_mcp_arguments() {
-        assert_eq!(
-            mcp_arguments("gemini", "http://127.0.0.1:8766/mcp", None),
-            " --allowed-mcp-server-names knot"
-        );
+        assert_eq!(mcp_arguments("gemini", "http://127.0.0.1:8766/mcp", None),
+                   " --allowed-mcp-server-names knot");
     }
 
     #[test]
@@ -218,14 +201,10 @@ mod tests {
 
     #[test]
     fn unsupported_type_has_no_mcp_arguments() {
-        assert_eq!(
-            mcp_arguments("opencode", "http://127.0.0.1:8766/mcp", None),
-            ""
-        );
-        assert_eq!(
-            mcp_arguments("shell", "http://127.0.0.1:8766/mcp", None),
-            ""
-        );
+        assert_eq!(mcp_arguments("opencode", "http://127.0.0.1:8766/mcp", None),
+                   "");
+        assert_eq!(mcp_arguments("shell", "http://127.0.0.1:8766/mcp", None),
+                   "");
     }
 
     #[test]
@@ -264,33 +243,23 @@ mod tests {
 
     #[test]
     fn gemini_resume_adds_no_registration_args() {
-        assert_eq!(
-            inline_registration_arguments("gemini", id(), true, None),
-            ""
-        );
+        assert_eq!(inline_registration_arguments("gemini", id(), true, None),
+                   "");
     }
 
     #[test]
     fn opencode_and_copilot_resume_add_no_registration_args() {
-        assert_eq!(
-            inline_registration_arguments("opencode", id(), true, None),
-            ""
-        );
-        assert_eq!(
-            inline_registration_arguments("copilot", id(), true, None),
-            ""
-        );
+        assert_eq!(inline_registration_arguments("opencode", id(), true, None),
+                   "");
+        assert_eq!(inline_registration_arguments("copilot", id(), true, None),
+                   "");
     }
 
     #[test]
     fn unsupported_type_has_no_inline_registration() {
-        assert_eq!(
-            inline_registration_arguments("shell", id(), false, None),
-            ""
-        );
-        assert_eq!(
-            inline_registration_arguments("unknown", id(), false, None),
-            ""
-        );
+        assert_eq!(inline_registration_arguments("shell", id(), false, None),
+                   "");
+        assert_eq!(inline_registration_arguments("unknown", id(), false, None),
+                   "");
     }
 }

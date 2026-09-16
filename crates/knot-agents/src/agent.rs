@@ -28,36 +28,36 @@ pub enum AgentState {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Agent {
     // Durable (mirrors `knot_core::SavedAgent`)
-    pub id: Uuid,
-    pub name: String,
-    pub avatar: String,
-    pub folder: String,
-    pub agent_type: String,
-    pub created_by: Option<Uuid>,
-    pub is_companion: bool,
+    pub id:            Uuid,
+    pub name:          String,
+    pub avatar:        String,
+    pub folder:        String,
+    pub agent_type:    String,
+    pub created_by:    Option<Uuid>,
+    pub is_companion:  bool,
     pub shell_command: Option<String>,
-    pub persona_id: Option<Uuid>,
+    pub persona_id:    Option<Uuid>,
 
     // Runtime-only
-    pub state: AgentState,
-    pub status_text: String,
-    pub is_registered: bool,
-    pub is_pending_start: bool,
-    pub terminal_title: String,
-    pub restart_token: Uuid,
-    pub session_id: Option<String>,
+    pub state:             AgentState,
+    pub status_text:       String,
+    pub is_registered:     bool,
+    pub is_pending_start:  bool,
+    pub terminal_title:    String,
+    pub restart_token:     Uuid,
+    pub session_id:        Option<String>,
     pub resume_session_id: Option<String>,
-    pub fork_session: bool,
-    pub metadata: BTreeMap<String, String>,
+    pub fork_session:      bool,
+    pub metadata:          BTreeMap<String, String>,
 
     // Panel state, set by the `display-markdown` / `view-mermaid` MCP
     // tools. Not yet consumed by any UI.
-    pub markdown_file: Option<PathBuf>,
+    pub markdown_file:      Option<PathBuf>,
     pub markdown_maximized: bool,
     /// Most recent first.
-    pub markdown_history: Vec<PathBuf>,
-    pub mermaid_source: Option<String>,
-    pub mermaid_title: Option<String>,
+    pub markdown_history:   Vec<PathBuf>,
+    pub mermaid_source:     Option<String>,
+    pub mermaid_title:      Option<String>,
 }
 
 impl Agent {
@@ -71,7 +71,8 @@ impl Agent {
     pub fn header_title(&self) -> &str {
         if self.status_text.is_empty() {
             &self.terminal_title
-        } else {
+        }
+        else {
             &self.status_text
         }
     }
@@ -83,22 +84,14 @@ mod tests {
 
     #[test]
     fn agent_state_serializes_to_swift_raw_strings() {
-        assert_eq!(
-            serde_json::to_string(&AgentState::Idle).unwrap(),
-            "\"Idle\""
-        );
-        assert_eq!(
-            serde_json::to_string(&AgentState::Running).unwrap(),
-            "\"Working\""
-        );
-        assert_eq!(
-            serde_json::to_string(&AgentState::Input).unwrap(),
-            "\"Awaiting input\""
-        );
-        assert_eq!(
-            serde_json::to_string(&AgentState::Error).unwrap(),
-            "\"Error\""
-        );
+        assert_eq!(serde_json::to_string(&AgentState::Idle).unwrap(),
+                   "\"Idle\"");
+        assert_eq!(serde_json::to_string(&AgentState::Running).unwrap(),
+                   "\"Working\"");
+        assert_eq!(serde_json::to_string(&AgentState::Input).unwrap(),
+                   "\"Awaiting input\"");
+        assert_eq!(serde_json::to_string(&AgentState::Error).unwrap(),
+                   "\"Error\"");
     }
 
     #[test]
@@ -118,31 +111,29 @@ mod tests {
     }
 
     pub(crate) fn test_agent() -> Agent {
-        Agent {
-            id: Uuid::new_v4(),
-            name: "proj".to_string(),
-            avatar: "🤖".to_string(),
-            folder: "/tmp/proj".to_string(),
-            agent_type: "claude".to_string(),
-            created_by: None,
-            is_companion: false,
-            shell_command: None,
-            persona_id: None,
-            state: AgentState::Idle,
-            status_text: String::new(),
-            is_registered: false,
-            is_pending_start: false,
-            terminal_title: String::new(),
-            restart_token: Uuid::new_v4(),
-            session_id: None,
-            resume_session_id: None,
-            fork_session: false,
-            metadata: BTreeMap::new(),
-            markdown_file: None,
-            markdown_maximized: false,
-            markdown_history: Vec::new(),
-            mermaid_source: None,
-            mermaid_title: None,
-        }
+        Agent { id:                 Uuid::new_v4(),
+                name:               "proj".to_string(),
+                avatar:             "🤖".to_string(),
+                folder:             "/tmp/proj".to_string(),
+                agent_type:         "claude".to_string(),
+                created_by:         None,
+                is_companion:       false,
+                shell_command:      None,
+                persona_id:         None,
+                state:              AgentState::Idle,
+                status_text:        String::new(),
+                is_registered:      false,
+                is_pending_start:   false,
+                terminal_title:     String::new(),
+                restart_token:      Uuid::new_v4(),
+                session_id:         None,
+                resume_session_id:  None,
+                fork_session:       false,
+                metadata:           BTreeMap::new(),
+                markdown_file:      None,
+                markdown_maximized: false,
+                markdown_history:   Vec::new(),
+                mermaid_source:     None,
+                mermaid_title:      None, }
     }
 }
