@@ -66,6 +66,16 @@ impl PanelSessionHandle {
         self.session.prompt(text).await
     }
 
+    /// Records a prompt the user just sent in the conversation state - the
+    /// ACP stream itself never echoes it back, so the caller must add it
+    /// explicitly before (or independent of) actually sending it.
+    pub fn record_user_message(&self, text: String) {
+        if let Ok(mut state) = self.state.lock() {
+            state.push_user_message(text);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// A cheap clone of the underlying session, for a caller holding this
     /// handle behind a `Mutex` to `.await` on (e.g. `prompt`) without
     /// keeping the lock held across the await point.

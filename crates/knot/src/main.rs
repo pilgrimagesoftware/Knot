@@ -2523,6 +2523,7 @@ impl WorkspaceWindow {
                 panel_session::PanelSessionSlot::Ready(handle)
                     if handle.state().lock().unwrap().pending_permission.is_none() =>
                 {
+                    handle.record_user_message(text.clone());
                     Some(handle.session())
                 }
                 _ => None,

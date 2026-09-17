@@ -38,7 +38,20 @@ pub(crate) fn render_panel(state: &PanelState,
 
 fn render_message(message: &PanelMessage) -> gpui_kit::AnyElement {
     match message {
-        PanelMessage::Text(text) => div().text_sm().child(text.clone()).into_any_element(),
+        // Right-aligned, tinted background - visually distinct from the
+        // assistant's plain left-aligned text, per acp-panel-ui's
+        // "visually distinguish user messages, assistant messages, and
+        // system/tool content" requirement.
+        PanelMessage::User(text) => h_flex().justify_end()
+                                            .child(div().text_sm()
+                                                        .text_color(rgb(0xFFFFFF))
+                                                        .px_3()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .bg(rgb(0x2563EB))
+                                                        .child(text.clone()))
+                                            .into_any_element(),
+        PanelMessage::Assistant(text) => div().text_sm().child(text.clone()).into_any_element(),
         PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
     }
 }
