@@ -161,13 +161,15 @@
 - [x] 7.1 Run `make rust` (fmt + clippy + test + build) across the
       workspace and confirm it passes with the new crate and modules
       included. Verify: command exits 0.
-- [ ] 7.2 Manually run one full session with a confirmed-working adapter
+- [x] 7.2 Manually run one full session with a confirmed-working adapter
       (from task 1.1/1.2) end to end: create a Panel-mode agent, send a
       prompt, observe streaming text and at least one tool call, approve or
       deny a permission request if the agent triggers one, then switch to
       Terminal mode and confirm a real shell opens in the same folder.
       Verify: written confirmation (or short screen recording) that each
       step behaved as described.
+      Confirmed by hand: streaming text, a tool call, and a permission
+      prompt all rendered and behaved correctly.
 - [x] 7.3 Confirm existing terminal-only agent types (no adapter) are
       unaffected: launch, activity detection, and history behave exactly as
       before this change. Verify: existing test suites for
