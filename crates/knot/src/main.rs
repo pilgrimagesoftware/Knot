@@ -185,15 +185,14 @@ fn shorten_path(path: &str) -> String {
 /// app doesn't rely on the platform's generic UI font and neutral-gray
 /// default theme.
 fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
-    if let Err(error) =
-        cx.text_system()
-          .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
-                          std::borrow::Cow::Borrowed(MANROPE_REGULAR),
-                          std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
-                          std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
-                          std::borrow::Cow::Borrowed(MANROPE_BOLD),
-                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
-                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),])
+    if let Err(error) = cx.text_system()
+                          .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
+                                          std::borrow::Cow::Borrowed(MANROPE_REGULAR),
+                                          std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
+                                          std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
+                                          std::borrow::Cow::Borrowed(MANROPE_BOLD),
+                                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
+                                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),])
     {
         eprintln!("failed to register embedded fonts: {error}");
     }
@@ -3261,41 +3260,40 @@ impl Render for WorkspaceWindow {
         // font (Adamina), so it needs no override here.
         let ui_font_name = self.settings.ui_font_name.clone();
         let ui_font_size = px(self.settings.ui_font_size as f32);
-        let (_workspace_name, agents) = {
-            let store = self.store.lock().unwrap();
-            let Some(workspace) = store.workspaces()
-                                       .iter()
-                                       .find(|workspace| workspace.id == self.workspace_id)
-            else {
-                return v_flex().size_full()
+        let (_workspace_name, agents) =
+            {
+                let store = self.store.lock().unwrap();
+                let Some(workspace) = store.workspaces()
+                                           .iter()
+                                           .find(|workspace| workspace.id == self.workspace_id)
+                else {
+                    return v_flex().size_full()
                                .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
                                .child("Workspace no longer exists.");
-            };
-            let agents =
-                workspace.agent_ids
-                         .iter()
-                         .filter_map(|id| store.agent(*id))
-                         .map(|agent| {
-                             let persona_name =
-                                 agent.persona_id.and_then(|id| {
-                                                     self.settings
+                };
+                let agents = workspace.agent_ids
+                                      .iter()
+                                      .filter_map(|id| store.agent(*id))
+                                      .map(|agent| {
+                                          let persona_name = agent.persona_id.and_then(|id| {
+                                                                                 self.settings
                                                          .personas
                                                          .iter()
                                                          .find(|persona| persona.id == id)
                                                          .map(|persona| persona.name.clone())
-                                                 });
-                             (agent.id,
-                              agent.avatar.clone(),
-                              agent.name.clone(),
-                              agent.folder.clone(),
-                              agent.state,
-                              agent.is_shell(),
-                              agent.header_title().to_string(),
-                              persona_name)
-                         })
-                         .collect::<Vec<_>>();
-            (workspace.name.clone(), agents)
-        };
+                                                                             });
+                                          (agent.id,
+                                           agent.avatar.clone(),
+                                           agent.name.clone(),
+                                           agent.folder.clone(),
+                                           agent.state,
+                                           agent.is_shell(),
+                                           agent.header_title().to_string(),
+                                           persona_name)
+                                      })
+                                      .collect::<Vec<_>>();
+                (workspace.name.clone(), agents)
+            };
 
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
 
@@ -3997,13 +3995,12 @@ impl Render for CommandCenterWindow {
             store.workspaces()
                  .iter()
                  .map(|workspace| {
-                     let dash_agents =
-                         workspace.agent_ids
-                                  .iter()
-                                  .filter_map(|id| store.agent(*id))
-                                  .filter(|agent| !agent.is_companion)
-                                  .map(|agent| {
-                                      let folder_name =
+                     let dash_agents = workspace.agent_ids
+                                                .iter()
+                                                .filter_map(|id| store.agent(*id))
+                                                .filter(|agent| !agent.is_companion)
+                                                .map(|agent| {
+                                                    let folder_name =
                                           PathBuf::from(&agent.folder).file_name()
                                                                       .map(|name| {
                                                                           name.to_string_lossy()
@@ -4012,9 +4009,9 @@ impl Render for CommandCenterWindow {
                                                                       .unwrap_or_else(|| {
                                                                           agent.folder.clone()
                                                                       });
-                                      let git_stats =
+                                                    let git_stats =
                                           Repository::open(&agent.folder).diff_stats().ok();
-                                      dashboard::DashboardAgent { id: agent.id,
+                                                    dashboard::DashboardAgent { id: agent.id,
                                                                   avatar: agent.avatar
                                                                                .graphemes(true)
                                                                                .next()
@@ -4028,8 +4025,8 @@ impl Render for CommandCenterWindow {
                                                                       agent.header_title()
                                                                            .to_string(),
                                                                   git_stats }
-                                  })
-                                  .collect::<Vec<_>>();
+                                                })
+                                                .collect::<Vec<_>>();
                      dashboard::DashboardWorkspace { id:        workspace.id,
                                                      name:      workspace.name.clone(),
                                                      color_hex: workspace.color_hex.clone(),

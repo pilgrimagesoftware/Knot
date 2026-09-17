@@ -43,13 +43,21 @@ impl McpSessionManager {
         Self::default()
     }
 
+    /// Creates a session for `agent_id`. `Uuid::nil()` marks a
+    /// pre-registration session (the agent isn't identified yet, e.g. during
+    /// the `initialize` handshake) and is exempt from the one-session-per-agent
+    /// dedup below — otherwise every new agent's handshake would evict every
+    /// other still-registering agent's session, since they'd all share the
+    /// nil key.
     pub fn create_session(&self, agent_id: Uuid) -> McpSession {
         let mut table = self.table.lock().unwrap();
-        if let Some(old_id) = table.agent_to_session.remove(&agent_id) {
-            table.sessions.remove(&old_id);
-        }
         let session = McpSession::new(agent_id);
-        table.agent_to_session.insert(agent_id, session.id.clone());
+        if agent_id != Uuid::nil() {
+            if let Some(old_id) = table.agent_to_session.remove(&agent_id) {
+                table.sessions.remove(&old_id);
+            }
+            table.agent_to_session.insert(agent_id, session.id.clone());
+        }
         table.sessions.insert(session.id.clone(), session.clone());
         session
     }
@@ -120,6 +128,17 @@ mod tests {
         assert!(manager.session(&first.id).is_none());
         assert!(manager.session(&second.id).is_some());
         assert_eq!(manager.session_for_agent(agent_id).unwrap().id, second.id);
+    }
+
+    #[test]
+    fn nil_agent_sessions_do_not_evict_each_other() {
+        let manager = McpSessionManager::new();
+
+        let first = manager.create_session(Uuid::nil());
+        let second = manager.create_session(Uuid::nil());
+
+        assert!(manager.session(&first.id).is_some());
+        assert!(manager.session(&second.id).is_some());
     }
 
     #[test]
