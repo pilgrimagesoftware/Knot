@@ -180,3 +180,68 @@
       `acp_adapter` returns `None` for every agent type (no adapter
       confirmed yet), every agent is still on the terminal path exactly as
       before.
+
+## Post-merge hand-testing fixes (beyond the original task list)
+
+Manual end-to-end testing (task 7.2, by the user) against real `gemini`
+and `claude-agent-acp` adapters surfaced several real bugs, all fixed and
+committed on `104-acp-agent-panel-ui`:
+
+- `gemini` needs `--skip-trust` (adapter registry) or it blocks on an
+  interactive trust prompt the ACP client can't answer.
+- `AcpSession::start` had no timeout, so that hang was silent - added a
+  20s connect timeout (`AcpError::Timeout`).
+- Adapter subprocess stderr was discarded (`Stdio::null()`) - now piped
+  and forwarded, prefixed with the adapter's command name.
+- No prompt input existed at all originally - added (single-line input +
+  Send button), which surfaced that ACP's `session/prompt` response
+  doesn't resolve until the full turn completes (by design), so the UI
+  redraw poll loop needed to keep working off the background
+  event-drain task's dirty flag, not the prompt future's completion.
+- `AdapterConfig` gained an `install: Option<InstallMethod>` field;
+  `claude`'s missing adapter binary is now auto-installed via npm on
+  first use, silently (design.md decision 6 - supersedes the original
+  "don't invoke a package manager" framing of the non-goal, per explicit
+  product direction). Verified against the real npm-installed binary.
+- The user's own sent prompts weren't recorded anywhere (ACP's update
+  stream only ever carries the *agent's* output) - added
+  `PanelMessage::User`, recorded explicitly by
+  `PanelSessionHandle::record_user_message` when a prompt is sent,
+  rendered distinctly from assistant text.
+
+### Known open gap: rich prompt content
+
+The prompt input is currently text-only - `AcpClient::session_prompt`
+sends a single `{"type":"text"}` content block. ACP's `prompt` field is
+actually an array of content blocks (text, image, `resource_link`,
+etc.), so file/image attachments are a real, spec-supported feature,
+not a hack. The user asked for this (file attachment via the existing
+`cx.prompt_for_paths` pattern used elsewhere in `main.rs`, e.g.
+`choose_folder`) - **not yet implemented**, ran out of session budget
+before starting. Design sketch handed off below for whoever picks this
+up:
+
+1. `knot-acp::AcpClient`: add `session_prompt_with_content(&self,
+   session_id: &str, content: Vec<serde_json::Value>) -> Result<()>`,
+   and refactor the existing `session_prompt(&self, session_id, text)`
+   to call it with a single text block (no behavior change, just shared
+   plumbing).
+2. `knot-terminal::AcpSession`: add `prompt_with_attachments(&self,
+   text: &str, file_paths: &[PathBuf]) -> AcpResult<()>` that builds a
+   text block (if `text` is non-empty) plus one `resource_link` block
+   per path (`{"type": "resource_link", "uri": "file://<path>", "name":
+   <filename>}`), then calls `session_prompt_with_content`.
+3. `WorkspaceWindow`: add `panel_prompt_attachments: BTreeMap<Uuid,
+   Vec<PathBuf>>` (pending attachments per agent, cleared on send). An
+   "Attach" button next to Send opens `cx.prompt_for_paths` (`files:
+   true, directories: false, multiple: true`) and appends chosen paths;
+   render a small chip row above the input listing attached filenames
+   with a remove control. `send_panel_prompt` uses
+   `prompt_with_attachments` instead of `prompt` when attachments are
+   pending, and should probably fold the attachment names into the
+   recorded `PanelMessage::User` text (e.g. append "📎 <filename>" per
+   attachment) so they show in the conversation history too.
+4. Unit-test `session_prompt_with_content`'s request shape and
+   `prompt_with_attachments`'s content-block assembly directly (no live
+   adapter needed for that part); the file-picker wiring itself can't be
+   unit-tested and needs the same manual-check treatment as 6.2-6.4.
