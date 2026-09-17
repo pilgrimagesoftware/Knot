@@ -32,26 +32,26 @@ after a named sibling agent; absent a sibling, the new agent is appended.
 ### Requirement: Durable versus runtime fields
 
 The system SHALL persist only these agent fields: id, name, avatar, folder,
-agent type, created-by, is-companion, shell command, persona id, and,
-conditionally, session id (see below). All other fields are runtime-only and
-MUST reset to defaults when agents are loaded: state (Idle), status text
-(empty), registered (false), pending-start (false), terminal title (empty),
-resume-session id (none), hook metadata (empty), git stats (none).
+agent type, created-by, is-companion, shell command, persona id, view mode
+(Panel or Terminal), and, conditionally, session id and ACP session id (see
+below). All other fields are runtime-only and MUST reset to defaults when
+agents are loaded: state (Idle), status text (empty), registered (false),
+pending-start (false), terminal title (empty), resume-session id (none),
+hook metadata (empty), git stats (none).
 
 When the `restore-conversation-on-launch` scalar setting is enabled,
-persisting an agent SHALL additionally record its current session id. When
-the setting is disabled, session id SHALL NOT be persisted (recorded as
-none), regardless of the agent's runtime session id at persist time.
+persisting an agent SHALL additionally record its current session id and, if
+the agent has an active ACP session, its ACP session id. When the setting is
+disabled, neither id SHALL be persisted (both recorded as none), regardless
+of the agent's runtime values at persist time.
 
 When `restore-conversation-on-launch` is enabled, loading agents as part of a
 layout restore SHALL, for each restored agent, resolve a resume-session id
 as follows, applied before that agent's terminal session is launched:
-
 1. If the agent's persisted session id is present, use it directly.
 2. Otherwise, look up the most recent session for that agent's `(folder,
-   agent type)` via the conversation-history provider registry, and use its
-   id if found.
-
+agent type)` via the conversation-history provider registry, and use its
+id if found.
 If neither step yields an id — `restore-conversation-on-launch` is disabled,
 no persisted session id exists, no history provider exists for the agent's
 type, or no session is found — resume-session id SHALL remain at its default
@@ -59,11 +59,17 @@ type, or no session is found — resume-session id SHALL remain at its default
 agent's runtime session id itself remains unset by this resolution; it is
 set by the normal resume flow when the terminal actually resumes.
 
+For an agent in Panel view mode with a persisted ACP session id, layout
+restore SHALL instead attempt `session/load` with that id through the ACP
+client; on failure (adapter reports resume unsupported, or the load
+request errors) the agent SHALL start a fresh ACP session with no error
+surfaced, mirroring the terminal path's fallback.
+
 This resolution applies only to loading agents for layout restore (e.g. cold
 app launch). It SHALL NOT apply to a manual "Restart" of an already-running
-agent, which continues to always clear session id and resume-session id per
-the Restart requirement; a manual restart does not alter the agent's
-persisted session id.
+agent, which continues to always clear session id, ACP session id, and
+resume-session id per the Restart requirement; a manual restart does not
+alter the agent's persisted session id.
 
 #### Scenario: Reload drops runtime state
 
@@ -183,7 +189,7 @@ collapse split panes so no pane references the removed agent.
 
 Restarting an agent SHALL preserve its id and regenerate its restart token,
 which forces its terminal session to be destroyed and recreated. Restart SHALL
-clear session id, resume-session id, and fork flag; reset state to Idle; set
+clear session id, ACP session id, resume-session id, and fork flag; reset state to Idle; set
 registered to false; and clear the terminal title.
 
 #### Scenario: Restart keeps identity, drops session
