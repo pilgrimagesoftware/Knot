@@ -3728,6 +3728,7 @@ dependencies = [
  "gpui-kit",
  "knot-acp",
  "knot-activity",
+ "knot-agent-launch",
  "knot-agents",
  "knot-core",
  "knot-discovery",
