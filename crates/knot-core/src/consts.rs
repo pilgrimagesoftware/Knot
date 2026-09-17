@@ -5,7 +5,9 @@ pub const ORG_NAME: &str = "Kochava Studios";
 
 pub const SETTINGS_FILE: &str = "settings.json";
 
-pub const MCP_PORT_DEFAULT: u16 = 8766;
+/// Distinct from Skwad's default (8766) so a Knot instance doesn't fight a
+/// running Skwad instance over the same port.
+pub const MCP_PORT_DEFAULT: u16 = 8767;
 
 pub const RECENT_REPOS_MAX: usize = 5;
 

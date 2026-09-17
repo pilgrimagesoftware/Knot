@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn default_scalars() {
         let s = Settings::default();
-        assert_eq!(s.mcp_server_port, 8766);
+        assert_eq!(s.mcp_server_port, 8767);
         assert_eq!(s.terminal_font_name, "JetBrains Mono");
         assert!(s.restore_layout_on_launch);
         assert!(!s.restore_conversation_on_launch);
@@ -436,7 +436,7 @@ mod tests {
         let path = dir.path().join("settings.json");
         fs::write(&path, "{ not json").unwrap();
         let s = Settings::load_from(&path).unwrap();
-        assert_eq!(s.mcp_server_port, 8766);
+        assert_eq!(s.mcp_server_port, 8767);
         assert!(s.saved_agents.is_empty());
     }
 
