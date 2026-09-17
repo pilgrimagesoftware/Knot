@@ -126,7 +126,7 @@
       tool-call cards, and pending permission state. Verify: a snapshot/unit
       test builds panel state from a scripted update sequence and asserts
       the resulting message/tool-call list matches expectations.
-- [ ] 6.2 Render tool-call cards by ACP `kind` (execute, read, edit, etc.),
+- [x] 6.2 Render tool-call cards by ACP `kind` (execute, read, edit, etc.),
       with a generic input/output fallback for unknown kinds, and render
       edit-kind results as an added/removed diff view. Verify: manual check
       against a live adapter session (from task 1.2) showing at least one
@@ -136,7 +136,7 @@
       answered, and send the chosen decision back through `knot-acp`.
       Verify: manual check with a live adapter that a deny decision is
       actually delivered (adapter's next behavior reflects the denial).
-- [ ] 6.4 Add the per-agent Panel/Terminal view-mode toggle to the agent
+- [x] 6.4 Add the per-agent Panel/Terminal view-mode toggle to the agent
       header, following `knot-ui-conventions.md` (icon+tooltip button
       style, consistent with existing header controls), showing the toggle
       only for agent types with a registered adapter. Verify: manual check
