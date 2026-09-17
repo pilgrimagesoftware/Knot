@@ -2078,6 +2078,9 @@ struct WorkspaceWindow {
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
     /// here persists across a view-mode toggle, only stopped on restart.
     panel_sessions:         BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
+    /// One prompt-entry input per Panel-mode agent that has been viewed,
+    /// created lazily. Not part of `Agent`/persistence - purely UI state.
+    panel_prompt_inputs:    BTreeMap<Uuid, Entity<InputState>>,
     view_mode:              WorkspaceViewMode,
     dashboard_sort:         dashboard::DashboardSort,
     new_agent_name_input:   Entity<InputState>,
@@ -2151,6 +2154,7 @@ impl WorkspaceWindow {
                     terminal_focus: cx.focus_handle(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
+                    panel_prompt_inputs: BTreeMap::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     new_agent_name_input,
@@ -2409,9 +2413,11 @@ impl WorkspaceWindow {
     }
 
     /// Renders the Panel-mode content pane for `id`: a connecting/failed
-    /// placeholder, or the folded conversation once the ACP session is
-    /// ready. Starts the session if it isn't already running.
-    fn render_panel_pane(&mut self, id: Uuid, _cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    /// placeholder, or the folded conversation plus a prompt input once
+    /// the ACP session is ready. Starts the session if it isn't already
+    /// running.
+    fn render_panel_pane(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>)
+                         -> gpui_kit::AnyElement {
         self.ensure_panel_session(id);
         let Some(slot) = self.panel_sessions.get(&id)
         else {
@@ -2436,6 +2442,7 @@ impl WorkspaceWindow {
             panel_session::PanelSessionSlot::Ready(handle) => {
                 let state_arc = handle.state();
                 let state = state_arc.lock().unwrap();
+                let blocked = state.pending_permission.is_some();
                 let session_arc = Arc::clone(slot);
                 let pending = state.pending_permission.clone();
                 let on_decision = move |decision: knot_acp::PermissionDecision| {
@@ -2449,9 +2456,92 @@ impl WorkspaceWindow {
                         handle.answer_permission(request, decision);
                     }
                 };
-                panel_view::render_panel(&state, on_decision).into_any_element()
+                drop(state);
+                drop(slot_guard);
+                let input = self.panel_prompt_input(id, window, cx);
+                v_flex().size_full()
+                        .child(div().id("panel-conversation")
+                                    .flex_1()
+                                    .min_h_0()
+                                    .overflow_y_scroll()
+                                    .child(panel_view::render_panel(&state_arc.lock().unwrap(),
+                                                                    on_decision)))
+                        .child(
+                            h_flex().flex_shrink_0()
+                                    .gap_2()
+                                    .p_2()
+                                    .border_t_1()
+                                    .border_color(cx.theme().border)
+                                    .child(gpui_kit::component::input::Input::new(&input)
+                                        .flex_1()
+                                        .disabled(blocked))
+                                    .child(Button::new("panel-send-prompt").label("Send")
+                                                                          .primary()
+                                                                          .disabled(blocked)
+                                                                          .on_click(cx.listener(
+                                        move |view, _: &ClickEvent, window, cx| {
+                                            view.send_panel_prompt(id, window, cx);
+                                        },
+                                    ))),
+                        )
+                        .into_any_element()
             }
         }
+    }
+
+    /// Gets or creates the prompt input entity for `id`'s panel.
+    fn panel_prompt_input(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>)
+                          -> Entity<InputState> {
+        if let Some(input) = self.panel_prompt_inputs.get(&id) {
+            return input.clone();
+        }
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Send a message…"));
+        self.panel_prompt_inputs.insert(id, input.clone());
+        input
+    }
+
+    /// Reads and clears `id`'s prompt input, then sends it through the
+    /// live ACP session (if any and not blocked on a pending permission),
+    /// per `acp-panel-ui`'s "blocking further prompt submission until
+    /// answered" requirement.
+    fn send_panel_prompt(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(input) = self.panel_prompt_inputs.get(&id).cloned()
+        else {
+            return;
+        };
+        let text = input.read(cx).value().trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return;
+        };
+        let session = {
+            let guard = slot.lock().unwrap();
+            match &*guard {
+                panel_session::PanelSessionSlot::Ready(handle)
+                    if handle.state().lock().unwrap().pending_permission.is_none() =>
+                {
+                    Some(handle.session())
+                }
+                _ => None,
+            }
+        };
+        let Some(session) = session
+        else {
+            return;
+        };
+        cx.update_entity(&input, |state, cx| {
+              state.set_value("", window, cx);
+          });
+        let _runtime_guard = self.runtime.enter();
+        self.runtime.spawn(async move {
+                        if let Err(error) = session.prompt(&text).await {
+                            eprintln!("failed to send panel prompt: {error}");
+                        }
+                    });
+        cx.notify();
     }
 
     /// Toggles `id` between Panel and Terminal view mode, per
@@ -3661,7 +3751,9 @@ impl Render for WorkspaceWindow {
                                                          == Some(knot_core::ViewMode::Panel)
                                                 };
                                                 if is_panel_mode {
-                                                    return Some(self.render_panel_pane(id, cx));
+                                                    return Some(self.render_panel_pane(id,
+                                                                                       window,
+                                                                                       cx));
                                                 }
                                                 let grid =
                                                     self.sessions.get(&id)?.lock().ok()?.grid()?;

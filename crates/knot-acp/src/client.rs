@@ -25,6 +25,11 @@ pub enum SessionEvent {
     Ended(SessionEndCause),
 }
 
+/// Cheap to clone - `transport` and `permission_pending` are both `Arc`,
+/// so every clone dispatches through the same underlying connection. Lets
+/// a caller holding one behind a `Mutex` extract an owned handle to
+/// `.await` on without keeping the lock held across the await point.
+#[derive(Clone)]
 pub struct AcpClient {
     transport:          Arc<Transport>,
     capabilities:       AgentCapabilities,

@@ -14,7 +14,9 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 /// A live ACP connection for one agent: the adapter subprocess plus its
-/// open session id.
+/// open session id. Cheap to clone - see `knot_acp::AcpClient`'s doc
+/// comment.
+#[derive(Clone)]
 pub struct AcpSession {
     client:     AcpClient,
     session_id: String,

@@ -66,6 +66,13 @@ impl PanelSessionHandle {
         self.session.prompt(text).await
     }
 
+    /// A cheap clone of the underlying session, for a caller holding this
+    /// handle behind a `Mutex` to `.await` on (e.g. `prompt`) without
+    /// keeping the lock held across the await point.
+    pub fn session(&self) -> AcpSession {
+        self.session.clone()
+    }
+
     pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
         self.session.answer_permission(request, decision);
         if let Ok(mut state) = self.state.lock() {
