@@ -269,7 +269,8 @@ mod tests {
         AdapterConfig { command:                   "claude-code-acp",
                         args:                      &[],
                         supports_resume:           true,
-                        supports_permission_modes: true, }
+                        supports_permission_modes: true,
+                        install:                   None, }
     }
 
     #[test]

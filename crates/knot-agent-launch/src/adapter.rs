@@ -5,6 +5,17 @@
 //! Contract: `openspec/specs/agent-launch-command/spec.md`'s "ACP launch
 //! path" requirement, design decision 2.
 
+/// The command to run once, on the user's behalf, to make an adapter's
+/// binary available when it isn't found on `PATH` - see design.md
+/// decision 6. Only declared for adapters with a package-manager install
+/// path; an adapter that needs a source build (e.g. `codex-acp`) has none
+/// and fails closed with a visible error instead, per the same decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InstallMethod {
+    pub command: &'static str,
+    pub args:    &'static [&'static str],
+}
+
 /// How to launch `agent_type`'s ACP adapter subprocess, and what it
 /// supports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,15 +28,18 @@ pub struct AdapterConfig {
     pub args:                      &'static [&'static str],
     pub supports_resume:           bool,
     pub supports_permission_modes: bool,
+    /// How to install `command` if it isn't found, or `None` if this
+    /// adapter type has no declared package-manager install path.
+    pub install:                   Option<InstallMethod>,
 }
 
 /// Looks up `agent_type`'s ACP adapter, if any is confirmed working.
 ///
 /// Populated from the research spike's findings
 /// (`openspec/changes/acp-agent-panel-ui/acp-adapter-findings.md`, task
-/// 1.1) - documented current adapter/native-flag support per vendor docs,
-/// not yet exercised against a live handshake (task 1.2, still
-/// outstanding). Agent types with no known ACP path (or not otherwise
+/// 1.1). `claude` and `gemini` have each been exercised against a live
+/// handshake (task 1.2); the rest are per-vendor-doc claims, not yet run.
+/// Agent types with no known ACP path (or not otherwise
 /// supported by Knot - Cursor, QwenCode) return `None` and launch through
 /// the existing terminal path per the "Panel-mode agent with no adapter"
 /// fallback requirement. A wrong or premature entry here costs one config
@@ -33,24 +47,34 @@ pub struct AdapterConfig {
 pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
     match agent_type {
         // Adapter package `@agentclientprotocol/claude-agent-acp` (npm),
-        // exposing the `claude-agent-acp` binary once installed.
+        // exposing the `claude-agent-acp` binary once installed - and
+        // auto-installed on first use if it isn't (design.md decision 6).
         "claude" => Some(AdapterConfig { command:                   "claude-agent-acp",
                                          args:                      &[],
                                          supports_resume:           true,
-                                         supports_permission_modes: true, }),
+                                         supports_permission_modes: true,
+                                         install:                   Some(InstallMethod { command: "npm",
+                                                                                         args:    &["install",
+                                                                                                    "-g",
+                                                                                                    "@agentclientprotocol/claude-agent-acp"], }), }),
         // Adapter `cola-io/codex-acp`, built from source (no packaged
-        // binary release confirmed). Resume support is undocumented, so
-        // this fails closed (false) rather than guessing.
+        // binary release confirmed, so no declared install method - a
+        // missing binary here fails closed rather than attempting a
+        // source build). Resume support is undocumented, so this fails
+        // closed (false) rather than guessing.
         "codex" => Some(AdapterConfig { command:                   "codex-acp",
                                         args:                      &[],
                                         supports_resume:           false,
-                                        supports_permission_modes: true, }),
-        // Native ACP subcommand.
+                                        supports_permission_modes: true,
+                                        install:                   None, }),
+        // Native ACP subcommand - no install step (the opencode CLI
+        // itself is the agent).
         "opencode" => Some(AdapterConfig { command:                   "opencode",
                                            args:                      &["acp"],
                                            supports_resume:           true,
-                                           supports_permission_modes: true, }),
-        // Native ACP flag.
+                                           supports_permission_modes: true,
+                                           install:                   None, }),
+        // Native ACP flag - no install step.
         // `--skip-trust` is required for headless/automated invocation -
         // confirmed live (task 1.2): without it gemini blocks on an
         // interactive "trust this workspace?" prompt that never resolves
@@ -58,12 +82,15 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
         "gemini" => Some(AdapterConfig { command:                   "gemini",
                                          args:                      &["--acp", "--skip-trust"],
                                          supports_resume:           true,
-                                         supports_permission_modes: true, }),
-        // Native ACP flag (stdio transport, the ACP default).
+                                         supports_permission_modes: true,
+                                         install:                   None, }),
+        // Native ACP flag (stdio transport, the ACP default) - no install
+        // step.
         "copilot" => Some(AdapterConfig { command:                   "copilot",
                                           args:                      &["--acp"],
                                           supports_resume:           true,
-                                          supports_permission_modes: true, }),
+                                          supports_permission_modes: true,
+                                          install:                   None, }),
         _ => None,
     }
 }

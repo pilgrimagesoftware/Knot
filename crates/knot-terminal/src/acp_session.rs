@@ -9,7 +9,7 @@ use std::time::Duration;
 use knot_acp::{
     AcpClient, AcpError, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
 };
-use knot_agent_launch::AdapterLaunch;
+use knot_agent_launch::{AdapterLaunch, InstallMethod};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
@@ -51,12 +51,31 @@ impl AcpSession {
 
     async fn start_inner(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
                          -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
-        let mut command = Command::new(launch.config.command);
-        command.args(launch.config.args);
-        if !launch.mcp_config.is_empty() {
-            command.arg(&launch.mcp_config);
-        }
-        let (client, events) = AcpClient::connect(command).await?;
+        let build_command = || {
+            let mut command = Command::new(launch.config.command);
+            command.args(launch.config.args);
+            if !launch.mcp_config.is_empty() {
+                command.arg(&launch.mcp_config);
+            }
+            command
+        };
+
+        let (client, events) = match AcpClient::connect(build_command()).await {
+            Err(AcpError::Spawn(error))
+                if error.kind() == std::io::ErrorKind::NotFound
+                   && let Some(install) = launch.config.install =>
+            {
+                // Auto-install, silently, on first use - per design.md
+                // decision 6, the adapter is Knot-published configuration
+                // (not arbitrary user-supplied code), so this doesn't ask
+                // for confirmation. Adapters with no declared install
+                // method (`install: None`) fall through to the original
+                // spawn error unchanged.
+                run_install(install).await?;
+                AcpClient::connect(build_command()).await?
+            }
+            other => other?,
+        };
 
         let session_id = match prior_session_id {
             Some(prior) if client.capabilities().supports_resume => {
@@ -97,11 +116,38 @@ impl AcpSession {
     }
 }
 
+/// Runs an adapter's declared install command to completion. Per
+/// design.md decision 6, this is invoked silently (no confirmation
+/// prompt) - the adapter is Knot-published configuration, not arbitrary
+/// user-supplied code.
+async fn run_install(install: InstallMethod) -> AcpResult<()> {
+    let output = Command::new(install.command).args(install.args)
+                                              .output()
+                                              .await
+                                              .map_err(|error| {
+                                                  AcpError::InstallFailed(format!(
+            "failed to run `{} {}`: {error}",
+            install.command,
+            install.args.join(" ")
+        ))
+                                              })?;
+    if !output.status.success() {
+        return Err(AcpError::InstallFailed(format!(
+            "`{} {}` exited with {}: {}",
+            install.command,
+            install.args.join(" "),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use knot_agent_launch::AdapterConfig;
+    use knot_agent_launch::{AdapterConfig, InstallMethod};
 
     use super::*;
     use crate::{TerminalError, TerminalTransport};
@@ -145,7 +191,8 @@ mod tests {
                         done"#,
         ],
                                                     supports_resume:           false,
-                                                    supports_permission_modes: false, },
+                                                    supports_permission_modes: false,
+                                                    install:                   None, },
                         mcp_config: String::new(), }
     }
 
@@ -200,7 +247,8 @@ mod tests {
                                                     args:                      &["-c",
                                                                                  "while true; do sleep 1; done"],
                                                     supports_resume:           false,
-                                                    supports_permission_modes: false, },
+                                                    supports_permission_modes: false,
+                                                    install:                   None, },
                         mcp_config: String::new(), }
     }
 
@@ -212,5 +260,39 @@ mod tests {
                                                     std::time::Duration::from_millis(50)).await;
 
         assert!(matches!(result, Err(AcpError::Timeout)));
+    }
+
+    #[tokio::test]
+    async fn missing_adapter_is_auto_installed_and_the_connection_is_retried() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin_path = dir.path().join("fake-acp-adapter");
+        let bin_path_string = bin_path.to_string_lossy().into_owned();
+        assert!(!bin_path.exists(), "the adapter binary must not exist yet");
+
+        // The "install" step writes a responder script to `bin_path` and
+        // makes it executable, standing in for a real `npm install -g`.
+        let install_script = format!("cat > '{bin_path_string}' <<'SCRIPT'\n#!/bin/sh\nwhile IFS= read -r line; do\n  id=$(echo \"$line\" | sed -E 's/.*\"id\":([0-9]+).*/\\1/')\n  method=$(echo \"$line\" | sed -nE 's/.*\"method\":\"([^\"]+)\".*/\\1/p')\n  case \"$method\" in\n    initialize) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"protocolVersion\\\":1,\\\"capabilities\\\":{{}}}}}}\" ;;\n    session/new) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"sessionId\\\":\\\"sess-installed\\\"}}}}\" ;;\n  esac\ndone\nSCRIPT\nchmod +x '{bin_path_string}'");
+
+        let command: &'static str = Box::leak(bin_path_string.clone().into_boxed_str());
+        let install_args: &'static [&'static str] =
+            Box::leak(vec!["-c", Box::leak(install_script.into_boxed_str()) as &'static str].into_boxed_slice());
+        let launch = AdapterLaunch { config:
+                                         AdapterConfig { command,
+                                                         args: &[],
+                                                         supports_resume: false,
+                                                         supports_permission_modes: false,
+                                                         install:
+                                                             Some(InstallMethod { command: "sh",
+                                                                                  args:
+                                                                                      install_args, }) },
+                                     mcp_config: String::new(), };
+
+        let (session, _events) =
+            AcpSession::start(&launch, "/tmp/project", None).await
+                                                            .expect("connect after auto-install");
+
+        assert_eq!(session.session_id(), "sess-installed");
+        assert!(bin_path.exists(),
+                "install step should have created the adapter binary");
     }
 }

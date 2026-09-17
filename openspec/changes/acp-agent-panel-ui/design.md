@@ -63,10 +63,11 @@ wrong guess here costs one config entry, not a redesign.
   migration for users who prefer the terminal.
 
 **Non-Goals (design-level, beyond proposal.md's non-goals):**
-- Building or vendoring any agent's ACP adapter binary ourselves. Knot
-  invokes an adapter command the user's environment already provides
-  (installed via npm/cargo/the agent's own installer); Knot ships
-  configuration (command + args), not the adapter.
+- Building or vendoring any agent's ACP adapter binary ourselves - Knot
+  never ships or bundles adapter code. It may still *install* one on the
+  user's behalf via that adapter's own published install method (see
+  decision 6) - the boundary is "don't vendor the binary," not "never
+  invoke a package manager."
 - A shared "universal" tool-call renderer that tries to model every possible
   tool schema generically. Render by ACP's own typed tool-call `kind`
   (execute, read, edit, etc.); an unknown kind falls back to a generic
@@ -123,6 +124,26 @@ render path would force one of the two to contort around the other's data
 model. The agent header / view-mode toggle is the shared surface (per
 `knot-ui-conventions.md`, styled consistently with existing header
 conventions), not the content renderer.
+
+**6. Auto-install a missing adapter, silently, on first Panel-mode use.**
+Manually requiring `npm install -g <adapter package>` before Panel mode
+works is bad UX - it surfaces as an opaque spawn error the first time a
+user tries the feature. When `AdapterConfig` declares an `install` method
+(currently: an npm package for the `claude` adapter; agents with a native
+`--acp` flag need no install step) and the adapter command isn't found
+(`io::ErrorKind::NotFound` from the initial spawn), `AcpSession::start`
+runs the install command once and retries the connection, with no
+confirmation prompt. Alternatives considered: (a) show an error with a
+copy-pasteable install command, requiring the user to run it themselves
+in a separate terminal; (b) show a button that installs on click, with
+confirmation. Both were rejected per explicit product direction - the
+adapter is Knot-published-and-documented configuration (not arbitrary
+user-supplied code), so treating its install like any other first-run
+dependency fetch (analogous to `cargo build` fetching crates) is an
+acceptable trust boundary here. This does NOT extend to adapters without
+a declared `install` method (e.g. `codex-acp`, which needs a source
+build) - those still fail closed with a visible error per Decision/Risk
+below; only npm-installable adapters get this treatment for now.
 
 ## Risks / Trade-offs
 
