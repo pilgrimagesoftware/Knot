@@ -7,7 +7,8 @@
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::{ClickEvent, IntoElement, ParentElement, Styled, div, rgb};
 use knot_acp::{PermissionDecision, PermissionRequest};
@@ -68,6 +69,8 @@ fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
             .bg(rgb(CARD_BG))
             .child(h_flex().gap_2()
                            .items_center()
+                           .child(Icon::new(tool_call_icon(&card.kind)).xsmall()
+                                                                       .text_color(rgb(MUTED)))
                            .child(div().text_xs()
                                        .text_color(rgb(MUTED))
                                        .child(card.kind.clone()))
@@ -88,6 +91,24 @@ fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
                            .map(|output| render_generic_output(output).into_any_element())
                            .unwrap_or_else(|| in_progress_placeholder().into_any_element())
                    })
+}
+
+/// Maps an ACP tool-call `kind` to an identifying icon, per the response
+/// action bar design's "icon lookup keyed on kind" decision. `kind` is a
+/// plain string off the wire rather than a closed enum, so the match is
+/// string-keyed with a generic fallback arm rather than truly exhaustive.
+fn tool_call_icon(kind: &str) -> IconName {
+    match kind {
+        "read" => IconName::FileText,
+        "edit" => IconName::Pencil,
+        "delete" => IconName::Trash,
+        "move" => IconName::Move,
+        "search" => IconName::Search,
+        "execute" => IconName::Terminal,
+        "think" => IconName::Brain,
+        "fetch" => IconName::Globe,
+        _ => IconName::Wrench,
+    }
 }
 
 fn in_progress_placeholder() -> impl IntoElement {
@@ -163,4 +184,21 @@ fn render_ended_banner(cause: &knot_acp::SessionEndCause) -> impl IntoElement {
     div().text_xs()
          .text_color(rgb(ERROR_COLOR))
          .child(format!("Session ended: {cause}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_known_kind_maps_to_a_distinct_icon_and_unknown_kinds_fall_back() {
+        let known =
+            ["read", "edit", "delete", "move", "search", "execute", "think", "fetch"];
+        for kind in known {
+            assert_ne!(tool_call_icon(kind), IconName::Wrench,
+                       "expected a specific icon for known kind {kind:?}");
+        }
+        assert_eq!(tool_call_icon("some-future-kind"), IconName::Wrench);
+        assert_eq!(tool_call_icon(""), IconName::Wrench);
+    }
 }

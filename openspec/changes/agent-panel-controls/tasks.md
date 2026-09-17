@@ -1,9 +1,9 @@
 ## 1. Tool-call icons
 
-- [ ] 1.1 Add an icon lookup keyed on `ToolCallCard.kind` (exhaustive
+- [x] 1.1 Add an icon lookup keyed on `ToolCallCard.kind` (exhaustive
       match, generic fallback arm) in `panel_view.rs`. Verify: unit test
       covers every `ToolCallKind` variant plus the fallback arm.
-- [ ] 1.2 Render the icon in `render_tool_call_card`, preceding the
+- [x] 1.2 Render the icon in `render_tool_call_card`, preceding the
       existing kind/summary label. Verify: manual run shows an icon on
       every tool-call card in a live ACP session.
 
