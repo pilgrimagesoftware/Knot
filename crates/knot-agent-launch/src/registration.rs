@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn claude_mcp_arguments_without_plugin_dir() {
-        let args = mcp_arguments("claude", "http://127.0.0.1:8766/mcp", None);
+        let args = mcp_arguments("claude", "http://127.0.0.1:8767/mcp", None);
         assert!(args.contains("--mcp-config"));
         assert!(args.contains("--allowed-tools 'mcp__knot__*'"));
         assert!(!args.contains("--plugin-dir"));
@@ -166,7 +166,7 @@ mod tests {
     fn claude_mcp_arguments_with_plugin_dir() {
         let dir = tempdir().unwrap();
         std::fs::create_dir(dir.path().join("claude")).unwrap();
-        let args = mcp_arguments("claude", "http://127.0.0.1:8766/mcp", Some(dir.path()));
+        let args = mcp_arguments("claude", "http://127.0.0.1:8767/mcp", Some(dir.path()));
         assert!(args.contains("--plugin-dir"));
     }
 
@@ -174,26 +174,26 @@ mod tests {
     fn codex_mcp_arguments_only_notify_hook() {
         let dir = tempdir().unwrap();
         std::fs::create_dir(dir.path().join("codex")).unwrap();
-        let args = mcp_arguments("codex", "http://127.0.0.1:8766/mcp", Some(dir.path()));
+        let args = mcp_arguments("codex", "http://127.0.0.1:8767/mcp", Some(dir.path()));
         assert!(args.contains("notify=[\"bash\""));
         assert!(!args.contains("--mcp-config"));
     }
 
     #[test]
     fn codex_mcp_arguments_absent_plugin_dir_is_empty() {
-        assert_eq!(mcp_arguments("codex", "http://127.0.0.1:8766/mcp", None),
+        assert_eq!(mcp_arguments("codex", "http://127.0.0.1:8767/mcp", None),
                    "");
     }
 
     #[test]
     fn gemini_mcp_arguments() {
-        assert_eq!(mcp_arguments("gemini", "http://127.0.0.1:8766/mcp", None),
+        assert_eq!(mcp_arguments("gemini", "http://127.0.0.1:8767/mcp", None),
                    " --allowed-mcp-server-names knot");
     }
 
     #[test]
     fn copilot_mcp_arguments() {
-        let args = mcp_arguments("copilot", "http://127.0.0.1:8766/mcp", None);
+        let args = mcp_arguments("copilot", "http://127.0.0.1:8767/mcp", None);
         assert!(args.contains("--additional-mcp-config"));
         assert!(args.contains("--allow-tool 'knot(register-agent)'"));
         assert!(args.contains("--allow-tool 'knot(broadcast-message)'"));
@@ -201,9 +201,9 @@ mod tests {
 
     #[test]
     fn unsupported_type_has_no_mcp_arguments() {
-        assert_eq!(mcp_arguments("opencode", "http://127.0.0.1:8766/mcp", None),
+        assert_eq!(mcp_arguments("opencode", "http://127.0.0.1:8767/mcp", None),
                    "");
-        assert_eq!(mcp_arguments("shell", "http://127.0.0.1:8766/mcp", None),
+        assert_eq!(mcp_arguments("shell", "http://127.0.0.1:8767/mcp", None),
                    "");
     }
 

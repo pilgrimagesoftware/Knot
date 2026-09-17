@@ -5317,23 +5317,23 @@ mod tests {
 
     #[test]
     fn mcp_server_url_formats_localhost_with_port() {
-        assert_eq!(SettingsWindow::mcp_server_url(8766),
-                   "http://127.0.0.1:8766");
+        assert_eq!(SettingsWindow::mcp_server_url(8767),
+                   "http://127.0.0.1:8767");
         assert_eq!(SettingsWindow::mcp_server_url(9000),
                    "http://127.0.0.1:9000");
     }
 
     #[test]
     fn mcp_install_command_matches_swift_reference_per_agent() {
-        let url = "http://127.0.0.1:8766";
+        let url = "http://127.0.0.1:8767";
         assert_eq!(SettingsWindow::mcp_install_command("claude", url),
-                   "claude mcp add --transport http --scope user knot http://127.0.0.1:8766");
+                   "claude mcp add --transport http --scope user knot http://127.0.0.1:8767");
         assert_eq!(SettingsWindow::mcp_install_command("codex", url),
-                   "codex mcp add knot --url http://127.0.0.1:8766");
+                   "codex mcp add knot --url http://127.0.0.1:8767");
         assert_eq!(SettingsWindow::mcp_install_command("opencode", url),
                    "opencode mcp add");
         assert_eq!(SettingsWindow::mcp_install_command("gemini", url),
-                   "gemini mcp add --transport http knot http://127.0.0.1:8766 --scope user");
+                   "gemini mcp add --transport http knot http://127.0.0.1:8767 --scope user");
         assert_eq!(SettingsWindow::mcp_install_command("copilot", url), "");
     }
 
