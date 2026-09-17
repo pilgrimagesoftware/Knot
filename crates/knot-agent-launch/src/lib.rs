@@ -12,7 +12,7 @@ mod consts;
 mod escape;
 mod registration;
 
-pub use adapter::{AdapterConfig, acp_adapter};
+pub use adapter::{AdapterConfig, InstallMethod, acp_adapter};
 pub use capabilities::{
     can_fork, can_resume, supports_inline_registration, supports_system_prompt,
 };

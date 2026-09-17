@@ -9,11 +9,14 @@
 use knot_acp::{PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate};
 use serde_json::Value;
 
-/// One entry in the panel's message list: streamed assistant text, or a
-/// tool call's card.
+/// One entry in the panel's message list: a user-sent prompt, streamed
+/// assistant text, or a tool call's card - kept as distinct variants per
+/// `acp-panel-ui`'s "visually distinguish user messages, assistant
+/// messages, and system/tool content" requirement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PanelMessage {
-    Text(String),
+    User(String),
+    Assistant(String),
     ToolCall(ToolCallCard),
 }
 
@@ -67,6 +70,12 @@ impl PanelState {
         self.pending_permission = None;
     }
 
+    /// Records a prompt the user just sent, so it shows in the
+    /// conversation - the ACP stream itself never echoes it back.
+    pub fn push_user_message(&mut self, text: String) {
+        self.messages.push(PanelMessage::User(text));
+    }
+
     fn apply_update(&mut self, update: SessionUpdate) {
         match update {
             SessionUpdate::TextDelta { text } => self.append_text(text),
@@ -112,11 +121,11 @@ impl PanelState {
     /// or this is the first message) - per the "Rapid successive text
     /// deltas" scenario: deltas accumulate into one message, not several.
     fn append_text(&mut self, text: String) {
-        if let Some(PanelMessage::Text(existing)) = self.messages.last_mut() {
+        if let Some(PanelMessage::Assistant(existing)) = self.messages.last_mut() {
             existing.push_str(&text);
         }
         else {
-            self.messages.push(PanelMessage::Text(text));
+            self.messages.push(PanelMessage::Assistant(text));
         }
     }
 
@@ -150,7 +159,19 @@ mod tests {
         state.apply(text("world"));
 
         assert_eq!(state.messages,
-                   vec![PanelMessage::Text("Hello, world".to_string())]);
+                   vec![PanelMessage::Assistant("Hello, world".to_string())]);
+    }
+
+    #[test]
+    fn user_message_is_recorded_and_does_not_merge_with_assistant_text() {
+        let mut state = PanelState::new();
+
+        state.push_user_message("hello".to_string());
+        state.apply(text("hi there"));
+
+        assert_eq!(state.messages,
+                   vec![PanelMessage::User("hello".to_string()),
+                        PanelMessage::Assistant("hi there".to_string())]);
     }
 
     #[test]

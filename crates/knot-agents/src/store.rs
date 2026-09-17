@@ -124,6 +124,20 @@ impl AgentStore {
         }
     }
 
+    pub fn set_acp_session_id(&mut self, id: Uuid, session_id: String) {
+        if let Some(agent) = self.agent_mut(id) {
+            agent.acp_session_id = Some(session_id);
+        }
+    }
+
+    /// Sets the agent's view mode (Panel or Terminal), per `acp-panel-ui`'s
+    /// view-mode-toggle requirement.
+    pub fn set_view_mode(&mut self, id: Uuid, view_mode: ViewMode) {
+        if let Some(agent) = self.agent_mut(id) {
+            agent.view_mode = view_mode;
+        }
+    }
+
     /// Applies the outcome of an ACP `session/load` attempt made per agent
     /// by the caller (the actual attempt is async subprocess/JSON-RPC work
     /// that belongs to `knot-acp` and the runtime layer that owns it, not
@@ -167,12 +181,6 @@ impl AgentStore {
     pub fn set_state(&mut self, id: Uuid, state: AgentState) {
         if let Some(agent) = self.agent_mut(id) {
             agent.state = state;
-        }
-    }
-
-    pub fn set_view_mode(&mut self, id: Uuid, view_mode: ViewMode) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.view_mode = view_mode;
         }
     }
 

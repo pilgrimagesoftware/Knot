@@ -51,13 +51,35 @@ impl Transport {
     /// server-to-client requests, notifications, and session-end.
     pub fn spawn(mut command: Command)
                  -> Result<(std::sync::Arc<Self>, mpsc::UnboundedReceiver<TransportEvent>)> {
+        let program = command.as_std()
+                             .get_program()
+                             .to_string_lossy()
+                             .into_owned();
         command.stdin(Stdio::piped())
                .stdout(Stdio::piped())
-               .stderr(Stdio::null());
+               // Piped (not discarded) and forwarded to our own stderr,
+               // prefixed by the adapter's command name - an adapter that
+               // fails a request often explains why on stderr, not as a
+               // JSON-RPC error, and silently discarding it (the prior
+               // behavior) made every such failure look like a hang.
+               .stderr(Stdio::piped())
+               // Without this, dropping the `Child` (e.g. the owning
+               // window closing without an explicit `close()`/`stop()`
+               // call) leaves the adapter subprocess running as an orphan
+               // instead of terminating it.
+               .kill_on_drop(true);
         let mut child = command.spawn()?;
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
+        let stderr = child.stderr.take().expect("stderr piped");
         let (events_tx, events_rx) = mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                eprintln!("[{program}] {line}");
+            }
+        });
 
         let transport = std::sync::Arc::new(Self { child: Mutex::new(child),
                                                    stdin: AsyncMutex::new(stdin),

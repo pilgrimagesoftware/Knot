@@ -1,155 +1,166 @@
-//! GPUI renderer for the folded ACP session state.
+//! Renders `panel_state::PanelState` as a chat-like panel: streaming
+//! messages, tool-call cards (by ACP `kind`, with a diff view for edit-kind
+//! calls), and an inline permission prompt. Sibling to `terminal_view.rs`
+//! (which renders a `Grid`) per design decision 5 - this renders a
+//! completely different data model.
+//!
+//! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use gpui_kit::base::{StyledExt, h_flex, v_flex};
+use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::{IntoElement, ParentElement, Styled, div, px, rgb};
-use knot_acp::PermissionDecision;
-use serde_json::Value;
+use gpui_kit::{ClickEvent, IntoElement, ParentElement, Styled, div, rgb};
+use knot_acp::{PermissionDecision, PermissionRequest};
 
 use crate::panel_state::{PanelMessage, PanelState, ToolCallCard};
 
-pub(crate) fn render(
-    state: &PanelState, on_permission: impl Fn(PermissionDecision) + Clone + 'static,
-) -> impl IntoElement {
-    let mut messages = v_flex().size_full().gap_3().p_5();
-    for message in &state.messages {
-        messages = messages.child(match message {
-            PanelMessage::Text(text) => message_bubble("Assistant", text).into_any_element(),
-            PanelMessage::ToolCall(card) => tool_call_card(card).into_any_element(),
-        });
-    }
+const CARD_BG: u32 = 0x1E1E1E;
+const CARD_BORDER: u32 = 0x333333;
+const ERROR_COLOR: u32 = 0xEF4444;
+const MUTED: u32 = 0x9CA3AF;
 
-    if let Some(request) = &state.pending_permission {
-        let allow = on_permission.clone();
-        let deny = on_permission.clone();
-        let mut prompt = v_flex()
-            .gap_2()
+/// Renders the full panel: message list, then a pending permission prompt
+/// or an ended-session banner if applicable. `on_permission_decision` is
+/// invoked with the resolved decision when the user picks an option.
+pub(crate) fn render_panel(state: &PanelState,
+                           on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static)
+                           -> impl IntoElement {
+    v_flex().size_full()
+            .gap_3()
+            .p_4()
+            .overflow_y_hidden()
+            .children(state.messages.iter().map(render_message))
+            .children(state.pending_permission
+                           .as_ref()
+                           .map(|request| render_permission_prompt(request, on_permission_decision)))
+            .children(state.ended.as_ref().map(render_ended_banner))
+}
+
+fn render_message(message: &PanelMessage) -> gpui_kit::AnyElement {
+    match message {
+        // Right-aligned, tinted background - visually distinct from the
+        // assistant's plain left-aligned text, per acp-panel-ui's
+        // "visually distinguish user messages, assistant messages, and
+        // system/tool content" requirement.
+        PanelMessage::User(text) => h_flex().justify_end()
+                                            .child(div().text_sm()
+                                                        .text_color(rgb(0xFFFFFF))
+                                                        .px_3()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .bg(rgb(0x2563EB))
+                                                        .child(text.clone()))
+                                            .into_any_element(),
+        PanelMessage::Assistant(text) => div().text_sm().child(text.clone()).into_any_element(),
+        PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
+    }
+}
+
+/// A tool-call card, rendered by ACP `kind`: edit-kind calls show an
+/// added/removed diff view; every other kind (including unrecognized ones)
+/// falls back to a generic status/output card.
+fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
+    v_flex().gap_2()
             .p_3()
-            .rounded_lg()
+            .rounded_md()
             .border_1()
-            .border_color(rgb(0xd6a84f))
-            .child(div().font_semibold().child("Permission required"))
-            .child(
-                div()
-                    .text_sm()
-                    .child(format!("Tool call {}", request.tool_call_id)),
-            );
-        for option in &request.options {
-            prompt = prompt.child(div().text_sm().child(option.name.clone()));
-        }
-        prompt = prompt.child(
-            h_flex()
-                .gap_2()
-                .child(
-                    Button::new("panel-permission-allow")
-                        .label("Allow")
-                        .on_click(move |_, _, _| allow(PermissionDecision::Allow)),
-                )
-                .child(
-                    Button::new("panel-permission-deny")
-                        .label("Deny")
-                        .ghost()
-                        .on_click(move |_, _, _| deny(PermissionDecision::Deny)),
-                ),
-        );
-        messages = messages.child(prompt);
-    }
-
-    if let Some(ended) = &state.ended {
-        messages = messages.child(
-            div()
-                .text_sm()
-                .text_color(rgb(0x888888))
-                .child(format!("Session ended: {ended:?}")),
-        );
-    }
-
-    div().size_full().child(messages)
+            .border_color(rgb(CARD_BORDER))
+            .bg(rgb(CARD_BG))
+            .child(h_flex().gap_2()
+                           .items_center()
+                           .child(div().text_xs()
+                                       .text_color(rgb(MUTED))
+                                       .child(card.kind.clone()))
+                           .children(card.status.clone().map(|status| {
+                                                            div().text_xs()
+                                                                 .text_color(rgb(MUTED))
+                                                                 .child(status)
+                                                        })))
+            .child(if card.kind == "edit" {
+                       card.diff
+                           .as_ref()
+                           .map(|(path, diff)| render_diff(path, diff).into_any_element())
+                           .unwrap_or_else(|| in_progress_placeholder().into_any_element())
+                   }
+                   else {
+                       card.result
+                           .as_ref()
+                           .map(|output| render_generic_output(output).into_any_element())
+                           .unwrap_or_else(|| in_progress_placeholder().into_any_element())
+                   })
 }
 
-fn message_bubble(label: &'static str, text: &str) -> impl IntoElement {
-    v_flex()
-        .gap_1()
-        .child(div().text_xs().text_color(rgb(0x888888)).child(label))
-        .child(
-            div()
-                .max_w(px(900.))
-                .p_3()
-                .rounded_lg()
-                .bg(rgb(0x252525))
-                .child(text.to_owned()),
-        )
+fn in_progress_placeholder() -> impl IntoElement {
+    div().text_xs().text_color(rgb(MUTED)).child("Running…")
 }
 
-fn tool_call_card(card: &ToolCallCard) -> impl IntoElement {
-    let kind = display_kind(&card.kind);
-    let state = card.status.as_deref().unwrap_or(if card.result.is_some() {
-        "completed"
-    } else {
-        "in progress"
-    });
-    let mut body = v_flex()
-        .gap_2()
-        .p_3()
-        .rounded_lg()
-        .border_1()
-        .border_color(rgb(0x444444))
-        .child(
-            h_flex()
-                .justify_between()
-                .child(div().font_semibold().child(kind))
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(0x888888))
-                        .child(state.to_owned()),
-                ),
-        )
-        .child(div().text_sm().child(card.id.to_string()));
-
-    if let Some((path, diff)) = &card.diff {
-        body = body.child(diff_view(path, diff));
-    }
-    if let Some(result) = &card.result {
-        body = body.child(div().text_sm().child(value_summary(result)));
-    }
-    body
+/// A file-edit diff as an added/removed line view rather than raw text,
+/// per `acp-panel-ui`'s tool-call-rendering requirement.
+fn render_diff(path: &str, diff: &str) -> impl IntoElement {
+    v_flex().gap_1()
+            .child(div().text_xs()
+                        .text_color(rgb(MUTED))
+                        .child(path.to_string()))
+            .children(diff.lines().map(|line| {
+                                      let (color, text) =
+                                          if let Some(added) = line.strip_prefix('+') {
+                                              (0x22C55E, format!("+ {added}"))
+                                          }
+                                          else if let Some(removed) = line.strip_prefix('-') {
+                                              (0xEF4444, format!("- {removed}"))
+                                          }
+                                          else {
+                                              (MUTED, line.to_string())
+                                          };
+                                      div().font_family("monospace")
+                                           .text_xs()
+                                           .text_color(rgb(color))
+                                           .child(text)
+                                  }))
 }
 
-fn diff_view(path: &str, diff: &str) -> impl IntoElement {
-    let mut lines = v_flex()
-        .gap_0p5()
-        .p_2()
-        .rounded_lg()
-        .bg(rgb(0x171717))
-        .child(div().font_semibold().child(path.to_owned()));
-    for line in diff.lines() {
-        let color = if line.starts_with('+') {
-            rgb(0x55b56a)
-        } else if line.starts_with('-') {
-            rgb(0xe06c75)
-        } else {
-            rgb(0x888888)
-        };
-        lines = lines.child(div().text_sm().text_color(color).child(line.to_owned()));
-    }
-    lines
+/// A generic input/output fallback for tool-call kinds without a dedicated
+/// renderer (execute, read, and any unrecognized kind).
+fn render_generic_output(output: &serde_json::Value) -> impl IntoElement {
+    div().font_family("monospace")
+         .text_xs()
+         .text_color(rgb(MUTED))
+         .child(serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string()))
 }
 
-fn display_kind(kind: &str) -> String {
-    match kind {
-        "execute" => "Command".to_owned(),
-        "read" => "Read file".to_owned(),
-        "edit" => "Edit file".to_owned(),
-        "search" => "Search".to_owned(),
-        "" => "Tool call".to_owned(),
-        other => format!("Tool call ({other})"),
-    }
+/// An inline permission request with actionable allow/deny controls, per
+/// `acp-panel-ui`'s permission-prompts requirement. Sending further
+/// prompts is blocked by the caller while this is rendered (the caller
+/// checks `PanelState::pending_permission` before calling `prompt`).
+fn render_permission_prompt(request: &PermissionRequest,
+                            on_decision: impl Fn(PermissionDecision) + Clone + 'static)
+                            -> impl IntoElement {
+    let allow = on_decision.clone();
+    let deny = on_decision;
+    v_flex().gap_2()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x3B82F6))
+            .child(div().text_sm().child(format!("Permission requested for tool call {}",
+                                                 request.tool_call_id)))
+            .child(h_flex().gap_2()
+                           .child(Button::new("panel-permission-allow").label("Allow")
+                                                                       .primary()
+                                                                       .small()
+                                                                       .on_click(move |_: &ClickEvent, _, _| {
+                                                                           allow(PermissionDecision::Allow);
+                                                                       }))
+                           .child(Button::new("panel-permission-deny").label("Deny")
+                                                                      .ghost()
+                                                                      .small()
+                                                                      .on_click(move |_: &ClickEvent, _, _| {
+                                                                          deny(PermissionDecision::Deny);
+                                                                      })))
 }
 
-fn value_summary(value: &Value) -> String {
-    value
-        .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| value.to_string())
+fn render_ended_banner(cause: &knot_acp::SessionEndCause) -> impl IntoElement {
+    div().text_xs()
+         .text_color(rgb(ERROR_COLOR))
+         .child(format!("Session ended: {cause}"))
 }
