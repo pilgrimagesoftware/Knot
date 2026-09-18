@@ -17,6 +17,57 @@ pub(crate) enum WorkspaceViewMode {
 pub(crate) const TERMINAL_SIDEBAR_WIDTH: f32 = 250.;
 pub(crate) const TERMINAL_HEADER_HEIGHT: f32 = 64.;
 
+/// Which text size a detail line renders at, and therefore what size its
+/// icon has to be.
+///
+/// The row's detail lines are not all one size - the agent type and persona
+/// are `text_xs`, the status and folder are the UI font size - so an icon
+/// fixed at one size reads as undersized beside half of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DetailLineSize {
+    /// `text_xs`, for the type and persona lines.
+    Small,
+    /// The UI font size, for the status and folder lines.
+    Body,
+}
+
+/// One labelled detail line on an agent row: a leading icon saying what the
+/// line is, then the text.
+///
+/// Without the icon a line is a bare string whose meaning has to be inferred
+/// from its content, which fails exactly when it matters - a status that
+/// mentions a path, a folder named after a person.
+///
+/// `items_start`, not `items_center`: the persona line has no
+/// `whitespace_nowrap`, so a name like "DevOps Troubleshooter" wraps onto a
+/// second line, and a centred icon floats into the gap between the two. On a
+/// single-line row the two are indistinguishable.
+pub(crate) fn detail_line(icon: gpui_kit::assets::IconName, text: String, size: DetailLineSize,
+                          font_family: String, font_size: gpui_kit::Pixels, cx: &App)
+                          -> gpui_kit::AnyElement {
+    let muted = cx.theme().muted_foreground;
+    let icon = match size {
+        DetailLineSize::Small => Icon::new(icon).xsmall(),
+        DetailLineSize::Body => Icon::new(icon).small(),
+    };
+    let line = div().font_family(font_family)
+                    .text_size(font_size)
+                    .text_color(muted);
+    let line = match size {
+        DetailLineSize::Small => line.text_xs(),
+        // The status and folder lines truncate rather than wrap, which is
+        // what keeps a long path from growing the row.
+        DetailLineSize::Body => line.overflow_hidden().whitespace_nowrap().text_ellipsis(),
+    };
+    h_flex().w_full()
+            .min_w_0()
+            .gap_1()
+            .items_start()
+            .child(icon.text_color(muted).flex_shrink_0())
+            .child(line.min_w_0().child(text))
+            .into_any_element()
+}
+
 /// Whether an agent of this type runs a terminal process of its own.
 ///
 /// Under ACP-only launch only shell agents do; every other type reaches
@@ -1036,13 +1087,16 @@ impl WorkspaceWindow {
                 .and_then(|option| option.current_value.as_str())
                 .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
-                let panel_style = panel_view::PanelStyle { permission_risk,
-                                                           markdown_font_size:
-                                                               px(self.settings.markdown_font_size
-                                                                  as f32),
-                                                           mono_font_family: cx.theme()
-                                                                               .mono_font_family
-                                                                               .clone() };
+                let theme = cx.theme();
+                let panel_style =
+                    panel_view::PanelStyle { permission_risk,
+                                             markdown_font_size: px(self.settings.markdown_font_size
+                                                                    as f32),
+                                             mono_font_family: theme.mono_font_family.clone(),
+                                             ui_font_family: theme.font_family.clone(),
+                                             danger_color: theme.danger,
+                                             info_color: theme.info,
+                                             border_color: theme.border };
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
@@ -2150,24 +2204,12 @@ impl Render for WorkspaceWindow {
                                     // coding-agent type of its own, and an
                                     // unlabelled row gave no clue what it was.
                                     .children(is_companion.then(|| {
-                                        h_flex()
-                                            .w_full()
-                                            .min_w_0()
-                                            .gap_1()
-                                            .items_center()
-                                            .child(
-                                                Icon::new(gpui_kit::assets::IconName::CornerDownRight)
-                                                    .xsmall()
-                                                    .text_color(cx.theme().muted_foreground),
-                                            )
-                                            .child(
-                                                div()
-                                                    .font_family(ui_font_name.clone())
-                                                    .text_size(ui_font_size)
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(knot_core::l10n::t("agent.companion")),
-                                            )
+                                        detail_line(gpui_kit::assets::IconName::CornerDownRight,
+                                                    knot_core::l10n::t("agent.companion"),
+                                                    DetailLineSize::Small,
+                                                    ui_font_name.clone(),
+                                                    ui_font_size,
+                                                    cx)
                                     }))
                                     // The agent type reads as one of the
                                     // row's detail lines, directly under the
@@ -2176,57 +2218,41 @@ impl Render for WorkspaceWindow {
                                     // floated away from the name it
                                     // describes and crowded the state dot.
                                     .children((!is_shell).then(|| {
-                                        h_flex()
-                                            .w_full()
-                                            .min_w_0()
-                                            .gap_1()
-                                            .items_center()
-                                            .child(
-                                                Icon::new(SettingsWindow::agent_type_icon(
-                                                    &agent_type,
-                                                ))
-                                                .xsmall()
-                                                .text_color(cx.theme().muted_foreground),
-                                            )
-                                            .child(
-                                                div()
-                                                    .font_family(ui_font_name.clone())
-                                                    .text_size(ui_font_size)
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(SettingsWindow::agent_type_label(
-                                                        &agent_type,
-                                                    )),
-                                            )
+                                        detail_line(SettingsWindow::agent_type_icon(&agent_type),
+                                                    SettingsWindow::agent_type_label(&agent_type)
+                                                                                     .to_string(),
+                                                    DetailLineSize::Small,
+                                                    ui_font_name.clone(),
+                                                    ui_font_size,
+                                                    cx)
                                     }))
                                     .children(persona_name.map(|persona_name| {
-                                        div()
-                                            .font_family(ui_font_name.clone())
-                                            .text_size(ui_font_size)
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!("👤 {persona_name}"))
+                                        // A drawn icon, not the `👤` this line
+                                        // used to carry inside its text: an
+                                        // emoji keeps its own colour and size,
+                                        // so it was the one thing in the
+                                        // column that did not line up.
+                                        detail_line(
+                                            gpui_kit::assets::IconName::User,
+                                            persona_name,
+                                            DetailLineSize::Small,
+                                            ui_font_name.clone(),
+                                            ui_font_size,
+                                            cx,
+                                        )
                                     }))
-                                    .child(
-                                        div()
-                                            .font_family(ui_font_name.clone())
-                                            .text_size(ui_font_size)
-                                            .text_color(cx.theme().muted_foreground)
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .text_ellipsis()
-                                            .child(header_title),
-                                    )
-                                    .child(
-                                        div()
-                                            .font_family(ui_font_name.clone())
-                                            .text_size(ui_font_size)
-                                            .text_color(cx.theme().muted_foreground)
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .text_ellipsis()
-                                            .child(folder_name),
-                                    ),
+                                    .child(detail_line(gpui_kit::assets::IconName::Activity,
+                                                       header_title,
+                                                       DetailLineSize::Body,
+                                                       ui_font_name.clone(),
+                                                       ui_font_size,
+                                                       cx))
+                                    .child(detail_line(gpui_kit::assets::IconName::Folder,
+                                                       folder_name,
+                                                       DetailLineSize::Body,
+                                                       ui_font_name.clone(),
+                                                       ui_font_size,
+                                                       cx)),
                             )
                             .children((!is_shell).then(|| {
                                 div()
