@@ -164,6 +164,23 @@ mod tests {
         }
     }
 
+    /// MCP spells this field `inputSchema`. Under the snake_case
+    /// spelling a validating client drops every tool in the list, which
+    /// made Knot's whole tool set invisible to ACP-launched agents while a
+    /// same-named MCP server elsewhere in the user's config still
+    /// answered - so this asserts the wire key, not the Rust field.
+    #[tokio::test]
+    async fn tools_list_names_the_schema_field_the_way_mcp_does() {
+        let response = dispatch(&request("tools/list", None), &OneToolCatalog).await;
+        let tool = &response.result.unwrap()["tools"][0];
+
+        assert!(tool.get("inputSchema").is_some(),
+                "tools/list must carry `inputSchema`, got {tool}");
+        assert!(tool.get("input_schema").is_none(),
+                "the snake_case spelling must not reach the wire");
+        assert_eq!(tool["inputSchema"]["type"], "object");
+    }
+
     #[tokio::test]
     async fn tool_call_result_has_one_text_content_item() {
         let params = serde_json::json!({ "name": "ping", "arguments": {} });

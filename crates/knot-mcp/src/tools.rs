@@ -7,6 +7,12 @@ use serde::Serialize;
 pub struct ToolDefinition {
     pub name:         String,
     pub description:  String,
+    /// MCP names this field `inputSchema`; a client that validates
+    /// `tools/list` against the schema drops every tool sent under the
+    /// snake_case spelling, which is how Knot's whole tool set went
+    /// missing from ACP-launched agents while a *differently named* MCP
+    /// server in the user's own config still answered.
+    #[serde(rename = "inputSchema")]
     pub input_schema: ToolInputSchema,
 }
 
