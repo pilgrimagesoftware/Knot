@@ -1079,13 +1079,16 @@ impl WorkspaceWindow {
                 .and_then(|option| option.current_value.as_str())
                 .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
-                let panel_style = panel_view::PanelStyle { permission_risk,
-                                                           markdown_font_size:
-                                                               px(self.settings.markdown_font_size
-                                                                  as f32),
-                                                           mono_font_family: cx.theme()
-                                                                               .mono_font_family
-                                                                               .clone() };
+                let theme = cx.theme();
+                let panel_style =
+                    panel_view::PanelStyle { permission_risk,
+                                             markdown_font_size: px(self.settings.markdown_font_size
+                                                                    as f32),
+                                             mono_font_family: theme.mono_font_family.clone(),
+                                             ui_font_family: theme.font_family.clone(),
+                                             danger_color: theme.danger,
+                                             info_color: theme.info,
+                                             border_color: theme.border };
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
