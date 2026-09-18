@@ -1,3 +1,5 @@
+mod about_dialog;
+
 use knot_core::Workspace;
 
 use super::*;

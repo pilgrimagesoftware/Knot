@@ -140,17 +140,26 @@ pub(crate) fn about_knot(_: &AboutKnot, cx: &mut App) {
         eprintln!("About Knot: no open window to show the dialog on");
         return;
     };
-    let result = window.update(cx, |_, window, cx| {
-                           window.open_alert_dialog(cx, |alert, _, _| {
-                                     alert
+    // Deferred, because the menu runs this *inside* the active window's
+    // update: `App::dispatch_action` wraps the dispatch in
+    // `active_window.update(...)`, which takes the window out of
+    // `cx.windows` for the duration, and gpui reports a re-entrant
+    // `window.update` with the same "window not found" it uses for a
+    // closed window. `cx.defer` runs at the end of the effect cycle, once
+    // the window has been returned to the app.
+    cx.defer(move |cx| {
+          let result = window.update(cx, |_, window, cx| {
+                                 window.open_alert_dialog(cx, |alert, _, _| {
+                                           alert
                     .title("About Knot")
                     .description("Knot is a workspace for coordinating coding agents.")
                     .show_cancel(false)
-                                 });
-                       });
-    if let Err(error) = result {
-        eprintln!("About Knot: window went away before the dialog opened: {error}");
-    }
+                                       });
+                             });
+          if let Err(error) = result {
+              eprintln!("About Knot: window went away before the dialog opened: {error}");
+          }
+      });
 }
 
 pub(crate) fn set_app_menus(cx: &mut App) {
