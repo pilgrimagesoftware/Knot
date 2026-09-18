@@ -708,22 +708,35 @@ fn key_name_for_code_falls_back_for_unknown_codes() {
 #[test]
 fn mcp_server_url_formats_localhost_with_port() {
     assert_eq!(SettingsWindow::mcp_server_url(8767),
-               "http://127.0.0.1:8767");
+               "http://127.0.0.1:8767/mcp");
     assert_eq!(SettingsWindow::mcp_server_url(9000),
-               "http://127.0.0.1:9000");
+               "http://127.0.0.1:9000/mcp");
+}
+
+/// The URL the settings window shows, and the `mcp add` command built from
+/// it, must be the one Knot itself hands an agent - not a second spelling.
+/// The server routes MCP at `/mcp` and answers a POST to `/` with 405, so
+/// the old path-less URL registered a server that could never connect.
+#[test]
+fn the_displayed_mcp_url_is_the_one_knot_gives_its_own_agents() {
+    let mut settings = knot_core::Settings::default();
+    settings.mcp_server_port = 8767;
+    assert_eq!(SettingsWindow::mcp_server_url(settings.mcp_server_port),
+               knot_agent_launch::mcp_url(&settings));
 }
 
 #[test]
 fn mcp_install_command_matches_swift_reference_per_agent() {
-    let url = "http://127.0.0.1:8767";
+    // The real URL, path included: this command is copied verbatim.
+    let url = "http://127.0.0.1:8767/mcp";
     assert_eq!(SettingsWindow::mcp_install_command("claude", url),
-               "claude mcp add --transport http --scope user knot http://127.0.0.1:8767");
+               "claude mcp add --transport http --scope user knot http://127.0.0.1:8767/mcp");
     assert_eq!(SettingsWindow::mcp_install_command("codex", url),
-               "codex mcp add knot --url http://127.0.0.1:8767");
+               "codex mcp add knot --url http://127.0.0.1:8767/mcp");
     assert_eq!(SettingsWindow::mcp_install_command("opencode", url),
                "opencode mcp add");
     assert_eq!(SettingsWindow::mcp_install_command("gemini", url),
-               "gemini mcp add --transport http knot http://127.0.0.1:8767 --scope user");
+               "gemini mcp add --transport http knot http://127.0.0.1:8767/mcp --scope user");
     assert_eq!(SettingsWindow::mcp_install_command("copilot", url), "");
 }
 

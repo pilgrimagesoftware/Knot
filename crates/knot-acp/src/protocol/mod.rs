@@ -18,6 +18,16 @@ use serde_json::Value;
 /// connection rather than guessing at compatibility.
 pub const PROTOCOL_VERSION: u32 = 1;
 
+/// The name Knot's own MCP server is declared under in `session/new`, and
+/// therefore the name an agent sees it by.
+///
+/// Public because the registration prompt has to name it: an agent loads
+/// its own user-level MCP configuration on top of this one, and a server
+/// there can expose identically named tools. The prompt telling the agent
+/// which server is its knot is only correct if it says the same name this
+/// handshake sends, so both read this constant.
+pub const MCP_SERVER_NAME: &str = "knot";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct InitializeParams {
     #[serde(rename = "protocolVersion")]

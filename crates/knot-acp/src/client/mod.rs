@@ -11,7 +11,8 @@ use tokio::sync::{mpsc, oneshot};
 use crate::error::{AcpError, Result};
 use crate::protocol::{
     AgentCapabilities, ConfigOption, InitializeParams, InitializeResult, JsonRpcErrorPayload,
-    PROTOCOL_VERSION, PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate,
+    MCP_SERVER_NAME, PROTOCOL_VERSION, PermissionDecision, PermissionOption, PermissionRequest,
+    SessionUpdate,
 };
 use crate::transport::{Transport, TransportEvent};
 
@@ -210,7 +211,8 @@ impl AcpClient {
     fn mcp_servers(&self, mcp_url: Option<&str>) -> Value {
         match mcp_url {
             Some(url) if self.capabilities.mcp_capabilities.http => {
-                json!([{ "type": "http", "name": "knot", "url": url, "headers": [] }])
+                json!([{ "type": "http", "name": MCP_SERVER_NAME, "url": url,
+                         "headers": [] }])
             }
             _ => json!([]),
         }

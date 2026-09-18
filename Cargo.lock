@@ -3807,6 +3807,7 @@ dependencies = [
 name = "knot-agent-launch"
 version = "0.1.0"
 dependencies = [
+ "knot-acp",
  "knot-core",
  "tempfile",
  "uuid",

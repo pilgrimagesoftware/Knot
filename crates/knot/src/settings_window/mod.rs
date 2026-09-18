@@ -454,8 +454,13 @@ impl SettingsWindow {
         }.to_string()
     }
 
+    /// Delegated so the URL shown here - and the `mcp add` command built
+    /// from it below, which users copy verbatim - is the same one Knot
+    /// hands its own agents over ACP. It was built separately and without
+    /// the `/mcp` path, so anyone following Knot's own instructions
+    /// registered a server that answers 405 and never connects.
     pub(crate) fn mcp_server_url(port: u16) -> String {
-        format!("http://127.0.0.1:{port}")
+        knot_agent_launch::mcp_url_for_port(port)
     }
 
     /// The command to copy for registering `agent_type` against Knot's MCP
