@@ -287,6 +287,28 @@ impl SettingsWindow {
         }
     }
 
+    /// A representative icon per agent type, so a sidebar row is
+    /// identifiable at a glance rather than by its one-character avatar.
+    /// Picked to echo each vendor's own mark where the icon set has one
+    /// (Claude's asterisk, Gemini's sparkle, GitHub's for Copilot);
+    /// everything else falls back to a generic bot.
+    ///
+    /// Uses the full `gpui_kit::assets` (Lucide) set rather than GPUI
+    /// Component's smaller built-in `IconName`, which has no brace,
+    /// terminal or sparkle glyph.
+    pub(crate) fn agent_type_icon(agent_type: &str) -> gpui_kit::assets::IconName {
+        use gpui_kit::assets::IconName;
+        match agent_type {
+            "claude" => IconName::Asterisk,
+            "codex" => IconName::Braces,
+            "opencode" => IconName::Terminal,
+            "gemini" => IconName::Sparkles,
+            "copilot" => IconName::Github,
+            "shell" => IconName::SquareTerminal,
+            _ => IconName::Bot,
+        }
+    }
+
     fn choose_source_folder(&mut self, cx: &mut Context<Self>) {
         let receiver =
             cx.prompt_for_paths(PathPromptOptions { files:       false,

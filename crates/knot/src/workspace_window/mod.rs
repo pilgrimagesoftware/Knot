@@ -1605,33 +1605,45 @@ impl Render for WorkspaceWindow {
                                     .min_w_0()
                                     .gap_0p5()
                                     .child(
+                                        div()
+                                            .w_full()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .text_ellipsis()
+                                            .font_semibold()
+                                            .child(name),
+                                    )
+                                    // The agent type reads as one of the
+                                    // row's detail lines, directly under the
+                                    // name and above the persona - not
+                                    // right-aligned opposite it, where it
+                                    // floated away from the name it
+                                    // describes and crowded the state dot.
+                                    .children((!is_shell).then(|| {
                                         h_flex()
                                             .w_full()
                                             .min_w_0()
-                                            .gap_2()
-                                            .items_baseline()
+                                            .gap_1()
+                                            .items_center()
+                                            .child(
+                                                Icon::new(SettingsWindow::agent_type_icon(
+                                                    &agent_type,
+                                                ))
+                                                .xsmall()
+                                                .text_color(cx.theme().muted_foreground),
+                                            )
                                             .child(
                                                 div()
-                                                    .flex_1()
-                                                    .min_w_0()
-                                                    .overflow_hidden()
-                                                    .whitespace_nowrap()
-                                                    .text_ellipsis()
-                                                    .font_semibold()
-                                                    .child(name),
-                                            )
-                                            .children((!is_shell).then(|| {
-                                                div()
-                                                    .flex_shrink_0()
                                                     .font_family(ui_font_name.clone())
                                                     .text_size(ui_font_size)
                                                     .text_xs()
                                                     .text_color(cx.theme().muted_foreground)
                                                     .child(SettingsWindow::agent_type_label(
                                                         &agent_type,
-                                                    ))
-                                            })),
-                                    )
+                                                    )),
+                                            )
+                                    }))
                                     .children(persona_name.map(|persona_name| {
                                         div()
                                             .font_family(ui_font_name.clone())
