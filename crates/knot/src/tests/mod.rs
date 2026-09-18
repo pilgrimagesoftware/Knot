@@ -286,6 +286,18 @@ fn agent_selection_marks_and_tracks_attach_state() {
                  .attached);
 }
 
+/// `agent-lifecycle`'s exit-driven removal is scoped by which agents own
+/// a terminal process: a shell agent's exiting shell removes it, while an
+/// ACP agent's adapter exiting does not (it has no PTY here at all).
+#[test]
+fn only_shell_agents_run_a_terminal_process() {
+    assert!(runs_a_terminal_process("shell"));
+    for agent_type in ["claude", "codex", "opencode", "gemini", "copilot"] {
+        assert!(!runs_a_terminal_process(agent_type),
+                "{agent_type} must not get a PTY under ACP-only launch");
+    }
+}
+
 #[test]
 fn state_label_matches_the_swift_reference_strings() {
     assert_eq!(state_label(knot_agents::AgentState::Idle), "Idle");

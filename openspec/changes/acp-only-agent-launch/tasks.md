@@ -80,14 +80,16 @@
 
 - [x] 5.1 Run `make rust` (fmt + clippy + test + build, whole workspace) and
       confirm it passes clean.
-- [ ] 5.2 Manually launch one ACP-capable agent type (e.g. `opencode`) via
+- [ ] 5.2 (blocked on a human at the keyboard - see note below) Manually
+      launch one ACP-capable agent type (e.g. `opencode`) via
       the `run` skill, confirm its registration prompt succeeds and it can
       call `set-status` without a "tool not available" response, using the
       logging added in `crates/knot-acp/src/transport/mod.rs` (spawn
       command, request/response) to verify the MCP server entry actually
       reaches the adapter.
-- [ ] 5.3 Confirm a shell companion agent still launches into a working PTY
-      terminal, unaffected by this change.
+- [ ] 5.3 (blocked on a human at the keyboard - see note below) Confirm a
+      shell companion agent still launches into a working PTY terminal,
+      unaffected by this change.
 
 ## 6. Defects found during verification
 
@@ -121,8 +123,18 @@ change made load-bearing, not a regression it introduced.
       on quit, so a removed agent returned on the next launch; the removal
       also left the adapter subprocess running, since `remove_session` only
       knew about PTY sessions.
-- [ ] 6.6 Confirm 6.1-6.5 live: gemini now reports its connection error
+- [ ] 6.6 (blocked on a human at the keyboard - see note below) Confirm
+      6.1-6.5 live: gemini now reports its connection error
       instead of hanging; a long response scrolls and wraps with the Send
       button in place; a finished tool call stops reading "Running…"; the
       sidebar names each agent's type; "Remove Agent" removes it and it
       stays removed across a relaunch.
+
+## Note on the remaining manual tasks
+
+5.2, 5.3 and 6.6 all need someone looking at the running app. An agent
+session cannot stand in for that here: Claude Code's terminal has no
+Screen Recording permission, so it cannot see the window, and GPUI
+publishes no labelled accessibility tree (every control comes through as
+an unnamed `button`), so the UI cannot be driven blind either. What was
+verified without pixels is recorded in `HANDOFF.md`.
