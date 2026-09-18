@@ -14,7 +14,7 @@ mod registration;
 pub use adapter::{AdapterConfig, InstallMethod, acp_adapter};
 pub use builders::{
     LaunchPlan, LaunchRequest, build_agent_command, build_initialization_command, mcp_url,
-    plan_launch,
+    mcp_url_for_port, plan_launch,
 };
 pub use capabilities::supports_inline_registration;
 pub use escape::persona_prompt;

@@ -11,7 +11,18 @@ pub struct LaunchRequest<'a> {
 /// The knot MCP HTTP server's own URL, for wiring into an ACP session's
 /// `mcpServers` params.
 pub fn mcp_url(settings: &Settings) -> String {
-    format!("http://127.0.0.1:{}/mcp", settings.mcp_server_port)
+    mcp_url_for_port(settings.mcp_server_port)
+}
+
+/// The same URL from a bare port, for callers that have no `Settings` -
+/// notably the settings window, which shows the URL and the `mcp add`
+/// command a user copies to register Knot with an agent by hand.
+///
+/// One function, because the path is the part that gets forgotten: the
+/// server routes MCP at `/mcp` and answers a POST to `/` with 405, so a
+/// URL built without it produces an entry that can never connect.
+pub fn mcp_url_for_port(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/mcp")
 }
 
 /// Builds the shell agent's terminal command: its custom command if set,
