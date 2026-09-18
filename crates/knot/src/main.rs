@@ -19,7 +19,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
-use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::*;
@@ -274,6 +274,20 @@ pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
     }
 }
 
+/// The agent-row context menu's item labels, gated on whether the row is a
+/// shell companion - a companion can't own companions or restart
+/// independently of its owner (`agent-lifecycle`), so its menu omits those
+/// two items. Pure so the item set is unit-testable independent of GPUI.
+fn agent_context_menu_items(is_companion: bool) -> Vec<&'static str> {
+    let mut items = vec!["Edit Agent…"];
+    if !is_companion {
+        items.push("New Shell Companion");
+        items.push("Restart Agent");
+    }
+    items.push("Remove Agent");
+    items
+}
+
 #[derive(Debug, PartialEq)]
 struct LayoutModel {
     workspace_rows:      Vec<WorkspaceRow>,
@@ -512,9 +526,9 @@ fn command_center_window_options(cx: &App) -> WindowOptions {
                     ..TitleBar::window_options() }
 }
 
-fn agent_window_options(cx: &App) -> WindowOptions {
-    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title:
-                                                                   Some("New Agent".into()),
+fn agent_window_options(title: &str, cx: &App) -> WindowOptions {
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.to_string()
+                                                                                .into()),
                                                                ..Default::default() }),
                     window_bounds: Some(WindowBounds::centered(size(px(520.), px(500.)), cx)),
                     window_min_size: Some(size(px(460.), px(460.))),
@@ -3075,9 +3089,10 @@ impl WorkspaceWindow {
     fn open_new_agent_dialog(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         open_agent_editor(Arc::clone(&self.store),
                           self.settings.clone(),
-                          self.workspace_id,
-                          None,
-                          None,
+                          AgentEditorRequest { workspace_id:   self.workspace_id,
+                                               prefill_folder: None,
+                                               insert_after:   None,
+                                               edit_target:    None, },
                           Self::select_and_focus_created_agent(cx),
                           cx);
     }
@@ -3102,22 +3117,59 @@ impl WorkspaceWindow {
     }
 }
 
-/// Opens the agent-creation dialog, optionally prefilled the way the Swift
-/// reference's `addAgent(to:)` does when launched from a dashboard's "Add
-/// Agent" tile: folder copied from an existing agent in the workspace, new
-/// agent inserted after the workspace's last agent. `on_created` is called
-/// with the new agent's id once it's created.
+/// Parameters for [`open_agent_editor`], grouped to keep the function's
+/// argument count in check.
+struct AgentEditorRequest {
+    workspace_id:   Uuid,
+    /// Prefilled folder for a new agent, the way the Swift reference's
+    /// `addAgent(to:)` does when launched from a dashboard's "Add Agent"
+    /// tile: folder copied from an existing agent in the workspace. Ignored
+    /// when `edit_target` is set.
+    prefill_folder: Option<String>,
+    /// Where to insert a newly created agent. Ignored when `edit_target` is
+    /// set - editing never moves an agent's position.
+    insert_after:   Option<Uuid>,
+    /// `Some(id)` opens the dialog in edit mode for that existing agent
+    /// (prefilled from it, submitting via `AgentStore::edit`) instead of
+    /// creating a new one.
+    edit_target:    Option<Uuid>,
+}
+
+/// Opens the agent editor dialog, in create or edit mode depending on
+/// `request.edit_target`. `on_created` is called with the new (create mode)
+/// or edited (edit mode) agent's id once the dialog is submitted.
 fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings,
-                     workspace_id: Uuid, prefill_folder: Option<String>,
-                     insert_after: Option<Uuid>,
+                     request: AgentEditorRequest,
                      on_created: impl Fn(Uuid, &mut Window, &mut App) + 'static, cx: &mut App) {
-    let options = agent_window_options(cx);
+    let AgentEditorRequest { workspace_id,
+                             prefill_folder,
+                             insert_after,
+                             edit_target, } = request;
+    let editing = edit_target.and_then(|id| store.lock().unwrap().agent(id).cloned());
+    let title = if editing.is_some() {
+        "Edit Agent"
+    }
+    else {
+        "New Agent"
+    };
+    let options = agent_window_options(title, cx);
     let _ =
         cx.open_window(options, move |window, cx| {
-              let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("Name"));
+              let name_input = cx.new(|cx| {
+                                     InputState::new(window, cx).placeholder("Name")
+                                                                .default_value(
+                    editing.as_ref().map(|a| a.name.clone()).unwrap_or_default(),
+                )
+                                 });
               let shell_command_input =
                   cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
-              let avatar_input = cx.new(|cx| InputState::new(window, cx).default_value("🤖"));
+              let avatar_input = cx.new(|cx| {
+                                       InputState::new(window, cx).default_value(
+                    editing.as_ref()
+                           .map(|a| a.avatar.clone())
+                           .unwrap_or_else(|| "🤖".to_string()),
+                )
+                                   });
               let view = cx.new(|cx| {
                                let avatar_subscription = cx.subscribe_in(
                 &avatar_input,
@@ -3135,6 +3187,7 @@ fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_
                                                         cx.notify();
                                                     }
                                                 });
+                               let persona_id = editing.as_ref().and_then(|a| a.persona_id);
                                AgentEditor { store,
                                              settings,
                                              workspace_id,
@@ -3143,10 +3196,18 @@ fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_
                                              avatar_input,
                                              _avatar_subscription: avatar_subscription,
                                              _name_subscription: name_subscription,
-                                             folder_path: prefill_folder.unwrap_or_default(),
-                                             agent_type: "claude".to_string(),
-                                             persona_id: None,
+                                             folder_path: editing.as_ref()
+                                                                 .map(|a| a.folder.clone())
+                                                                 .or(prefill_folder)
+                                                                 .unwrap_or_default(),
+                                             agent_type:
+                                                 editing.as_ref()
+                                                        .map(|a| a.agent_type.clone())
+                                                        .unwrap_or_else(|| "claude".to_string()),
+                                             persona_id,
+                                             original_persona_id: persona_id,
                                              insert_after,
+                                             edit_target,
                                              on_created: Box::new(on_created),
                                              error: None }
                            });
@@ -3166,7 +3227,16 @@ struct AgentEditor {
     folder_path:          String,
     agent_type:           String,
     persona_id:           Option<Uuid>,
+    /// Snapshot of `persona_id` when the dialog opened, so `save_edit` can
+    /// tell `AgentStore::edit` whether the persona actually changed
+    /// (`EditRequest::persona_changed`) rather than always forcing a
+    /// restart.
+    original_persona_id:  Option<Uuid>,
     insert_after:         Option<Uuid>,
+    /// `Some(id)` when editing an existing agent instead of creating one -
+    /// gates prefill, the submit button's label/handler, and whether the
+    /// (edit-unsupported) shell-command field shows at all.
+    edit_target:          Option<Uuid>,
     on_created:           Box<AgentCreatedCallback>,
     error:                Option<String>,
 }
@@ -3174,9 +3244,9 @@ struct AgentEditor {
 type AgentCreatedCallback = dyn Fn(Uuid, &mut Window, &mut App);
 
 impl AgentEditor {
-    /// Whether the form has everything required to create an agent - the
-    /// "Add Agent" button is disabled until this is true.
-    fn can_create(&self, cx: &Context<Self>) -> bool {
+    /// Whether the form has everything required to submit - the primary
+    /// button ("Add Agent" or "Save") is disabled until this is true.
+    fn can_submit(&self, cx: &Context<Self>) -> bool {
         !self.name_input.read(cx).value().trim().is_empty()
         && !self.folder_path.trim().is_empty()
         && PathBuf::from(self.folder_path.trim()).is_dir()
@@ -3220,6 +3290,54 @@ impl AgentEditor {
         };
         let _ = self.settings.persist();
         (self.on_created)(created_id, window, cx);
+        window.remove_window();
+    }
+
+    /// Applies edits to `self.edit_target` via `AgentStore::edit`. The
+    /// shell-command field isn't submitted - `EditRequest` has no field for
+    /// it, so the row is hidden in edit mode (see `Render for AgentEditor`).
+    fn save_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.edit_target
+        else {
+            return;
+        };
+        let folder = self.folder_path.trim().to_string();
+        if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
+            self.error = Some("Choose a folder.".to_string());
+            cx.notify();
+            return;
+        }
+        let name = self.name_input.read(cx).value().trim().to_string();
+        if name.is_empty() {
+            self.error = Some("Enter a name.".to_string());
+            cx.notify();
+            return;
+        }
+        let avatar = self.avatar_input.read(cx).value().trim().to_string();
+        let agent_type = self.agent_type.clone();
+        let persona_changed = self.persona_id != self.original_persona_id;
+        {
+            let mut store = self.store.lock().unwrap();
+            let result = store.edit(id, knot_agents::EditRequest {
+                name,
+                avatar,
+                folder: Some(folder),
+                agent_type: (!agent_type.is_empty()).then_some(agent_type),
+                persona_id: self.persona_id,
+                persona_changed,
+                relocate_companions: false,
+            });
+            if let Err(error) = result {
+                self.error = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+            self.settings.saved_agents =
+                store.saved_agents(self.settings.restore_conversation_on_launch);
+            self.settings.saved_workspaces = store.saved_workspaces();
+        }
+        let _ = self.settings.persist();
+        (self.on_created)(id, window, cx);
         window.remove_window();
     }
 
@@ -3367,7 +3485,7 @@ impl Render for AgentEditor {
             )
             .into_any_element(),
         ];
-        if is_shell {
+        if is_shell && self.edit_target.is_none() {
             agent_rows.push(
                 Self::dialog_row(
                     "Command",
@@ -3489,12 +3607,16 @@ impl Render for AgentEditor {
                     )
                     .child(
                         Button::new("create-agent-editor")
-                            .label("Add Agent")
+                            .label(if self.edit_target.is_some() { "Save" } else { "Add Agent" })
                             .primary()
-                            .disabled(!self.can_create(cx))
-                            .on_click(
-                                cx.listener(|editor, _, window, cx| editor.create(window, cx)),
-                            ),
+                            .disabled(!self.can_submit(cx))
+                            .on_click(cx.listener(|editor, _, window, cx| {
+                                if editor.edit_target.is_some() {
+                                    editor.save_edit(window, cx);
+                                } else {
+                                    editor.create(window, cx);
+                                }
+                            })),
                     ),
             )
     }
@@ -3574,6 +3696,7 @@ impl Render for WorkspaceWindow {
                                            agent.folder.clone(),
                                            agent.state,
                                            agent.is_shell(),
+                                           agent.is_companion,
                                            agent.header_title().to_string(),
                                            persona_name)
                                       })
@@ -3587,6 +3710,11 @@ impl Render for WorkspaceWindow {
             self.resize_session_to_pane(id, window, cx);
         }
 
+        let store_for_menu = Arc::clone(&self.store);
+        let settings_for_menu = self.settings.clone();
+        let workspace_id = self.workspace_id;
+        let window_entity = cx.entity();
+
         let agent_rows =
             agents.into_iter().map(
                                    |(
@@ -3596,9 +3724,11 @@ impl Render for WorkspaceWindow {
                 folder,
                 state,
                 is_shell,
+                is_companion,
                 header_title,
                 persona_name,
             )| {
+                                       let menu_name = name.clone();
                                        let folder_name =
                                            PathBuf::from(&folder).file_name()
                                                                  .map(|name| {
@@ -3701,6 +3831,122 @@ impl Render for WorkspaceWindow {
                         view.ensure_session(id);
                         cx.notify();
                     }))
+                    .context_menu({
+                        let store = Arc::clone(&store_for_menu);
+                        let settings = settings_for_menu.clone();
+                        let window_entity = window_entity.clone();
+                        let name = menu_name.clone();
+                        move |menu, _window, _cx| {
+                            let mut menu = menu.item(PopupMenuItem::new("Edit Agent…").on_click({
+                                let store = Arc::clone(&store);
+                                let settings = settings.clone();
+                                let window_entity = window_entity.clone();
+                                move |_, _window, app| {
+                                    let window_entity = window_entity.clone();
+                                    open_agent_editor(
+                                        Arc::clone(&store),
+                                        settings.clone(),
+                                        AgentEditorRequest {
+                                            workspace_id,
+                                            prefill_folder: None,
+                                            insert_after: None,
+                                            edit_target: Some(id),
+                                        },
+                                        move |_id, _window, app| {
+                                            window_entity.update(app, |_, cx| cx.notify());
+                                        },
+                                        app,
+                                    );
+                                }
+                            }));
+
+                            if !is_companion {
+                                menu = menu.item(PopupMenuItem::new("New Shell Companion")
+                                                                 .on_click({
+                                    let store = Arc::clone(&store);
+                                    let window_entity = window_entity.clone();
+                                    move |_, _window, app| {
+                                        let created = store.lock()
+                                                            .unwrap()
+                                                            .create_shell_companion(id)
+                                                            .is_ok();
+                                        if created {
+                                            window_entity.update(app, |_, cx| cx.notify());
+                                        }
+                                    }
+                                }));
+
+                                menu = menu.item(PopupMenuItem::new("Restart Agent").on_click({
+                                    let store = Arc::clone(&store);
+                                    let window_entity = window_entity.clone();
+                                    let name = name.clone();
+                                    move |_, window, app| {
+                                        let store = Arc::clone(&store);
+                                        let window_entity = window_entity.clone();
+                                        let name = name.clone();
+                                        window.open_alert_dialog(app, move |alert, _, _| {
+                                            let store = Arc::clone(&store);
+                                            let window_entity = window_entity.clone();
+                                            alert
+                                                .title("Restart Agent")
+                                                .description(format!(
+                                                    "Restart \"{name}\"? Its session will be \
+                                                     cleared."
+                                                ))
+                                                .confirm()
+                                                .on_ok(move |_, _, app| {
+                                                    let _ = store.lock().unwrap().restart(id);
+                                                    window_entity.update(app, |view, cx| {
+                                                        view.remove_session(id);
+                                                        cx.notify();
+                                                    });
+                                                    true
+                                                })
+                                        });
+                                    }
+                                }));
+                            }
+
+                            menu.item(PopupMenuItem::new("Remove Agent").on_click({
+                                let store = Arc::clone(&store);
+                                let window_entity = window_entity.clone();
+                                let name = name.clone();
+                                move |_, window, app| {
+                                    let store = Arc::clone(&store);
+                                    let window_entity = window_entity.clone();
+                                    let name = name.clone();
+                                    window.open_alert_dialog(app, move |alert, _, _| {
+                                        let store = Arc::clone(&store);
+                                        let window_entity = window_entity.clone();
+                                        alert
+                                            .title("Remove Agent")
+                                            .description(format!(
+                                                "Remove \"{name}\"? This closes its terminal \
+                                                 session."
+                                            ))
+                                            .confirm()
+                                            .on_ok(move |_, _, app| {
+                                                let removed = store.lock().unwrap().remove(id);
+                                                window_entity.update(app, |view, cx| {
+                                                    for removed_agent in removed {
+                                                        view.remove_session(removed_agent.id);
+                                                        view.panel_states
+                                                            .remove(&removed_agent.id);
+                                                        if view.selected_agent
+                                                           == Some(removed_agent.id)
+                                                        {
+                                                            view.selected_agent = None;
+                                                        }
+                                                    }
+                                                    cx.notify();
+                                                });
+                                                true
+                                            })
+                                    });
+                                }
+                            }))
+                        }
+                    })
                                    },
             );
 
@@ -3803,9 +4049,11 @@ impl Render for WorkspaceWindow {
                                           WorkspaceWindow::select_and_focus_created_agent(cx);
                                       open_agent_editor(Arc::clone(&view.store),
                                                         view.settings.clone(),
-                                                        workspace_id,
-                                                        folder,
-                                                        insert_after,
+                                                        AgentEditorRequest { workspace_id,
+                                                                             prefill_folder:
+                                                                                 folder,
+                                                                             insert_after,
+                                                                             edit_target: None },
                                                         on_created,
                                                         cx);
                                   });
@@ -4389,9 +4637,12 @@ impl Render for CommandCenterWindow {
                         open_agent_editor(
                             Arc::clone(&view.store),
                             view.settings.clone(),
-                            workspace_id,
-                            folder,
-                            insert_after,
+                            AgentEditorRequest {
+                                workspace_id,
+                                prefill_folder: folder,
+                                insert_after,
+                                edit_target: None,
+                            },
                             on_created,
                             cx,
                         );
@@ -5124,6 +5375,17 @@ mod tests {
                     split_ratio_secondary: None,
                     show_dashboard:        None,
                     is_detached:           None, }
+    }
+
+    #[test]
+    fn agent_context_menu_omits_companion_actions_for_companions() {
+        assert_eq!(agent_context_menu_items(false),
+                   vec!["Edit Agent…",
+                        "New Shell Companion",
+                        "Restart Agent",
+                        "Remove Agent"]);
+        assert_eq!(agent_context_menu_items(true),
+                   vec!["Edit Agent…", "Remove Agent"]);
     }
 
     #[test]
