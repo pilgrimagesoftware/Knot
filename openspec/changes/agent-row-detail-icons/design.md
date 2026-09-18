@@ -62,6 +62,26 @@ The alternative - making every detail line the same text size - is a bigger
 visual change than was asked for, and the existing hierarchy may well be
 deliberate. So the icons follow the lines.
 
+### Icons align to the top of their line, not its centre
+
+The type line's existing icon uses `items_center()`, which is right for a
+line that is always one line high. The persona line is not: it has no
+`whitespace_nowrap`, so a name like "DevOps Troubleshooter" wraps onto a
+second line, and an icon centred against that block floats into the gap
+between the two.
+
+So the detail lines' icon rows align to the start rather than the centre.
+On a single-line row the two are indistinguishable; on a wrapped one only
+the first is right.
+
+*Noted, not changed:* the persona line wraps while the status and folder
+lines truncate with an ellipsis, and the row's own comment describes it as
+"up to 4 lines", which suggests the wrap was not intended. Making the
+persona line truncate like its neighbours would be a visible change to what
+the user sees, was not asked for, and trades the tail of a persona name for
+a shorter row - a call worth making deliberately rather than as a side
+effect of adding icons.
+
 ## Risks / Trade-offs
 
 - **Four icons in a column is more furniture in a dense row** → they are muted
@@ -70,6 +90,8 @@ deliberate. So the icons follow the lines.
 - **`Activity` is a weaker signifier than `Folder`** → status is the harder
   thing to draw. If it reads poorly in use, the swap is one identifier, and
   the alternatives are recorded above.
+- **A wrapped persona line makes the row taller than the icons suggest** →
+  left as it is, deliberately; see the note above.
 - **The row already carries a state-coloured dot** → different job: the dot
   is the agent's machine state, the status line is what the agent says it is
   doing. They can disagree, which is why both exist.

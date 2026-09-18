@@ -16,9 +16,15 @@
       lines are the UI font size. Verify in the app that no icon reads as
       undersized or oversized beside its text.
 
+- [ ] 2.2 Align the detail lines' icon rows to the start rather than the
+      centre, so an icon beside a line that wraps sits with its first line.
+      Verify in the app with a persona whose name wraps - "DevOps
+      Troubleshooter" in a narrow sidebar - that its icon is beside the
+      first line and not floating between the two.
+
 ## 3. Verification
 
 - [ ] 3.1 `make rust` passes clean.
 - [ ] 3.2 In the app, check a row with every line present, a row with no
       persona, and a shell companion - confirming no icon is drawn beside a
-      line that is not there.
+      line that is not there - and narrow the sidebar until a line wraps.

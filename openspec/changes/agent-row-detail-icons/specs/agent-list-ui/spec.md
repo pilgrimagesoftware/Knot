@@ -48,3 +48,10 @@ beside the others.
 
 - **WHEN** a row renders detail lines at more than one text size
 - **THEN** each line's icon matches the text beside it
+
+#### Scenario: A line that wraps keeps its icon beside its first line
+
+- **WHEN** a detail line is long enough to wrap onto a second line - a
+  two-word persona name, say
+- **THEN** its icon sits beside the first line, not centred against the
+  block as a whole
