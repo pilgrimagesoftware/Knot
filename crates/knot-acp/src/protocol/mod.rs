@@ -49,6 +49,20 @@ pub struct AgentCapabilities {
     pub supports_resume:  bool,
     #[serde(default, rename = "permissionModes")]
     pub permission_modes: Vec<String>,
+    #[serde(default, rename = "mcpCapabilities")]
+    pub mcp_capabilities: McpCapabilities,
+}
+
+/// Which MCP server transports the agent accepts in `session/new`'s
+/// `mcpServers` list - per the spec, every agent MUST support `stdio`
+/// (not modeled here, since Knot's own MCP server is HTTP-only); `http`
+/// and `sse` are opt-in and default to unsupported.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct McpCapabilities {
+    #[serde(default)]
+    pub http: bool,
+    #[serde(default)]
+    pub sse:  bool,
 }
 
 /// One agent-declared session setting (mode, model, reasoning effort, ...)

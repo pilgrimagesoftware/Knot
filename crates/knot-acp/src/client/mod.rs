@@ -155,7 +155,8 @@ impl AcpClient {
     pub async fn session_new(&self, cwd: &str, mcp_url: Option<&str>) -> Result<NewSession> {
         let raw = self.transport
                       .request("session/new",
-                               Some(json!({ "cwd": cwd, "mcpServers": mcp_servers(mcp_url) })))
+                               Some(json!({ "cwd": cwd,
+                                          "mcpServers": self.mcp_servers(mcp_url) })))
                       .await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
@@ -174,12 +175,31 @@ impl AcpClient {
         let raw = self.transport
                       .request("session/load",
                                Some(json!({ "sessionId": session_id, "cwd": cwd,
-                                          "mcpServers": mcp_servers(mcp_url) })))
+                                          "mcpServers": self.mcp_servers(mcp_url) })))
                       .await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
         Ok(NewSession { session_id,
                         config_options })
+    }
+
+    /// The `mcpServers` array for a `session/new`/`session/load` request:
+    /// one entry naming Knot's own HTTP MCP server, in the ACP spec's
+    /// `McpServerHttp` shape (`type`/`name`/`url`/`headers`, `headers`
+    /// required even when empty - https://agentclientprotocol.com/protocol/v1/schema),
+    /// when `mcp_url` is given AND the agent declared `mcpCapabilities.http`
+    /// on `initialize` (sending an `http`-type entry to an agent that
+    /// hasn't declared support for it is a protocol violation - confirmed
+    /// live: opencode/gemini reject it with `Invalid params`/`Internal
+    /// error`). Empty otherwise. `mcpServers` itself is still required by
+    /// at least the Gemini CLI adapter even when empty.
+    fn mcp_servers(&self, mcp_url: Option<&str>) -> Value {
+        match mcp_url {
+            Some(url) if self.capabilities.mcp_capabilities.http => {
+                json!([{ "type": "http", "name": "knot", "url": url, "headers": [] }])
+            }
+            _ => json!([]),
+        }
     }
 
     /// Applies one Session Config Option selection (mode, model, effort,
@@ -231,19 +251,6 @@ impl AcpClient {
     /// rather than being left unanswered.
     pub async fn close(&self) {
         self.transport.close().await;
-    }
-}
-
-/// The `mcpServers` array for a `session/new`/`session/load` request: one
-/// entry naming Knot's own HTTP MCP server when `mcp_url` is given, empty
-/// otherwise. `mcpServers` is required by at least the Gemini CLI adapter
-/// (it rejects the request with an invalid_type validation error without
-/// the key at all, confirmed against a live `gemini --acp` handshake), so
-/// an empty array is always sent rather than omitting the key.
-fn mcp_servers(mcp_url: Option<&str>) -> Value {
-    match mcp_url {
-        Some(url) => json!([{ "name": "knot", "type": "http", "url": url }]),
-        None => json!([]),
     }
 }
 
@@ -340,18 +347,26 @@ mod tests {
         assert_eq!(session.session_id, "sess-1");
     }
 
-    /// A fake agent that appends every line it receives to `log_path`,
-    /// so the test can inspect the raw `session/new`/`session/load` params
-    /// it was sent.
-    fn logging_fake_agent(log_path: &std::path::Path) -> Command {
+    /// A fake agent that appends every line it receives to `log_path`, so
+    /// the test can inspect the raw `session/new`/`session/load` params it
+    /// was sent. `declares_http` controls whether its `initialize`
+    /// response advertises `mcpCapabilities.http` - required before an
+    /// `http`-type `mcpServers` entry is valid per the ACP spec.
+    fn logging_fake_agent(log_path: &std::path::Path, declares_http: bool) -> Command {
         let mut command = Command::new("sh");
+        let mcp_capabilities = if declares_http {
+            r#"{\"http\":true}"#
+        }
+        else {
+            r#"{}"#
+        };
         let script = format!(
                              r#"while IFS= read -r line; do
               echo "$line" >> '{}'
               id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
               method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
               case "$method" in
-                initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{PROTOCOL_VERSION},\"agentCapabilities\":{{}}}}}}" ;;
+                initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{PROTOCOL_VERSION},\"agentCapabilities\":{{\"mcpCapabilities\":{mcp_capabilities}}}}}}}" ;;
                 session/new) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"sessionId\":\"sess-1\"}}}}" ;;
                 *) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}" ;;
               esac
@@ -363,11 +378,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_new_carries_the_knot_mcp_server_when_enabled() {
+    async fn session_new_carries_the_knot_mcp_server_when_enabled_and_supported() {
         let log = tempfile::NamedTempFile::new().unwrap();
         let (client, _events) =
-            AcpClient::connect(logging_fake_agent(log.path())).await
-                                                              .expect("connect");
+            AcpClient::connect(logging_fake_agent(log.path(), true)).await
+                                                                    .expect("connect");
         client.session_new("/tmp/project", Some("http://127.0.0.1:8767/mcp"))
               .await
               .expect("session");
@@ -376,16 +391,35 @@ mod tests {
         let request_line = log.lines()
                               .find(|line| line.contains("session/new"))
                               .expect("session/new request logged");
+        assert!(request_line.contains(r#""type":"http""#));
         assert!(request_line.contains(r#""name":"knot""#));
         assert!(request_line.contains(r#""url":"http://127.0.0.1:8767/mcp""#));
+        assert!(request_line.contains(r#""headers":[]"#));
+    }
+
+    #[tokio::test]
+    async fn session_new_omits_the_mcp_server_when_the_agent_does_not_support_http() {
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let (client, _events) =
+            AcpClient::connect(logging_fake_agent(log.path(), false)).await
+                                                                     .expect("connect");
+        client.session_new("/tmp/project", Some("http://127.0.0.1:8767/mcp"))
+              .await
+              .expect("session");
+
+        let log = std::fs::read_to_string(log.path()).unwrap();
+        let request_line = log.lines()
+                              .find(|line| line.contains("session/new"))
+                              .expect("session/new request logged");
+        assert!(request_line.contains(r#""mcpServers":[]"#));
     }
 
     #[tokio::test]
     async fn session_new_sends_no_mcp_servers_when_disabled() {
         let log = tempfile::NamedTempFile::new().unwrap();
         let (client, _events) =
-            AcpClient::connect(logging_fake_agent(log.path())).await
-                                                              .expect("connect");
+            AcpClient::connect(logging_fake_agent(log.path(), true)).await
+                                                                    .expect("connect");
         client.session_new("/tmp/project", None)
               .await
               .expect("session");
