@@ -1985,8 +1985,14 @@ impl Render for WorkspaceWindow {
                     ),
             )
             .child(
+                // `min_w_0` so a wide panel message (a markdown table, a
+                // long command line) wraps inside this column instead of
+                // stretching it past the window and pushing the prompt
+                // input's Send button off screen - see
+                // `knot-ui-conventions.md`'s "Flex overflow" rule.
                 v_flex()
                     .flex_1()
+                    .min_w_0()
                     .h_full()
                     .children((!is_dashboard).then(|| {
                         h_flex()

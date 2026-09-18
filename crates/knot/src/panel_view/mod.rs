@@ -13,7 +13,8 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
-    ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, rgb,
+    ClickEvent, ClipboardItem, InteractiveElement, IntoElement, ParentElement, ScrollHandle,
+    StatefulInteractiveElement, Styled, div, relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
 
@@ -68,11 +69,18 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
                            on_toggle_track: impl Fn() + Clone + 'static)
                            -> impl IntoElement {
     let last_index = state.messages.len().checked_sub(1);
+    // `w_full`, never `size_full`: this is the *content* of the caller's
+    // `overflow_y_scroll` container, so a full height would pin it to the
+    // viewport and clip everything past one screenful instead of letting
+    // the container scroll. `min_w_0` for the same reason horizontally -
+    // without it a wide child (a markdown table, a long command line)
+    // stretches the pane and pushes the input row's Send button off
+    // screen, per `knot-ui-conventions.md`'s "Flex overflow" rule.
     v_flex()
-        .size_full()
+        .w_full()
+        .min_w_0()
         .gap_3()
         .p_4()
-        .overflow_y_hidden()
         .children(state.messages.iter().enumerate().map(|(index, message)| {
             render_message(
                 state,
@@ -97,8 +105,12 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
         // assistant's plain left-aligned text, per acp-panel-ui's
         // "visually distinguish user messages, assistant messages, and
         // system/tool content" requirement.
-        PanelMessage::User(text) => h_flex().justify_end()
-                                            .child(div().text_sm()
+        PanelMessage::User(text) => h_flex().w_full()
+                                            .min_w_0()
+                                            .justify_end()
+                                            .child(div().max_w(relative(0.85))
+                                                        .min_w_0()
+                                                        .text_sm()
                                                         .text_color(rgb(0xFFFFFF))
                                                         .px_3()
                                                         .py_1p5()
@@ -107,9 +119,22 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
                                                         .child(text.clone()))
                                             .into_any_element(),
         PanelMessage::Assistant(text) => {
-            v_flex().gap_1()
-                    .child(TextView::markdown(("panel-message-markdown", index as u64),
-                                              text.clone()).text_sm())
+            v_flex().w_full()
+                    .min_w_0()
+                    .gap_1()
+                    // Markdown that can't wrap - a table, a fenced code
+                    // block - scrolls sideways inside its own container
+                    // rather than widening the pane. Without the
+                    // `min_w_0`/`overflow_x_*` pair it stretched the whole
+                    // conversation column and pushed the prompt input's
+                    // Send button off screen.
+                    .child(div().id(("panel-message-body", index as u64))
+                                .w_full()
+                                .min_w_0()
+                                .overflow_x_scroll()
+                                .child(TextView::markdown(("panel-message-markdown",
+                                                           index as u64),
+                                                          text.clone()).text_sm()))
                     .children((is_last && state.turn_active).then(|| {
                                                                 render_track_toggle(state.tracking,
                                                                                     on_toggle_track)
