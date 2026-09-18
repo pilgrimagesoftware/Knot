@@ -88,3 +88,41 @@
       reaches the adapter.
 - [ ] 5.3 Confirm a shell companion agent still launches into a working PTY
       terminal, unaffected by this change.
+
+## 6. Defects found during verification
+
+Surfaced by task 5.2's manual session once every non-shell agent started
+launching over ACP at window-open. Each is a pre-existing bug in code this
+change made load-bearing, not a regression it introduced.
+
+- [x] 6.1 Repaint the panel pane when its session slot changes lifecycle
+      phase, not only when a `Ready` handle reports new events
+      (`WorkspaceWindow::panel_needs_repaint`). Without this a
+      `Connecting -> Failed` transition never called `cx.notify()`, so a
+      failed connection (gemini, on a host with no configured API key) sat
+      on "Connecting to agent…" forever and made the 20s `CONNECT_TIMEOUT`
+      look like it had never fired.
+- [x] 6.2 Let the conversation actually scroll and wrap: the message list
+      was `size_full().overflow_y_hidden()` *inside* the caller's scroll
+      container, pinning it to one viewport-height and clipping the rest,
+      and nothing in the chain carried `min_w_0()`, so wide content
+      stretched the pane until the Send button left the window.
+- [x] 6.3 Parse a tool call's `content` array off `tool_call`/
+      `tool_call_update` (`knot_acp::ToolCallContent`) and key the card's
+      in-progress placeholder on `status` rather than "no output yet".
+      ACP has no `tool_call_result` or `diff` session-update kind, so
+      `ToolCallCard::result` was never set and every card read "Running…"
+      even after its status said `completed`. Verified against
+      <https://agentclientprotocol.com/protocol/tool-calls>.
+- [x] 6.4 Show the agent type on each sidebar row, so a one-character
+      avatar isn't the only indication of which agent is running there.
+- [x] 6.5 Persist agent removal and tear down the ACP session on it.
+      `AgentStore::remove` only mutates memory and nothing writes settings
+      on quit, so a removed agent returned on the next launch; the removal
+      also left the adapter subprocess running, since `remove_session` only
+      knew about PTY sessions.
+- [ ] 6.6 Confirm 6.1-6.5 live: gemini now reports its connection error
+      instead of hanging; a long response scrolls and wraps with the Send
+      button in place; a finished tool call stops reading "Running…"; the
+      sidebar names each agent's type; "Remove Agent" removes it and it
+      stays removed across a relaunch.
