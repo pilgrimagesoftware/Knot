@@ -62,6 +62,14 @@ pub(crate) fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString,
 /// rather than matching on a literal in three places.
 const PERMISSION_SELECTOR_ID: &str = "panel-permission-mode-selector";
 
+/// How far the prompt box grows with its content before it starts
+/// scrolling, collapsed and expanded. It auto-grows rather than sitting at
+/// a fixed height: a fixed height fights the textarea's own layout, so a
+/// second line made it scroll and jump on every keystroke instead of
+/// simply getting taller.
+const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
+const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
+
 /// One sidebar agent row's render inputs, snapshotted out of the store
 /// while its lock is held so the row closures don't need it. A struct
 /// rather than the tuple this used to be, per the repo convention against
@@ -825,7 +833,6 @@ impl WorkspaceWindow {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .h(if expanded { px(160.) } else { px(36.) })
                             .capture_action::<Paste>({
                                 let entity = cx.entity();
                                 move |_, _, app| {
@@ -837,7 +844,7 @@ impl WorkspaceWindow {
                                     });
                                 }
                             })
-                            .child(Textarea::new(input).size_full().disabled(blocked)),
+                            .child(Textarea::new(input).w_full().disabled(blocked)),
                     )
                     .child(
                         Button::new("panel-send-prompt")
@@ -918,7 +925,7 @@ impl WorkspaceWindow {
                                     .small()
                                     .on_click(cx.listener(
                                         move |view, _: &ClickEvent, _, cx| {
-                                            view.toggle_panel_input_expanded(id);
+                                            view.toggle_panel_input_expanded(id, cx);
                                             cx.notify();
                                         },
                                     )),
@@ -1132,9 +1139,24 @@ impl WorkspaceWindow {
 
     /// Toggles `id`'s input area between its default and expanded
     /// multi-line editing size.
-    fn toggle_panel_input_expanded(&mut self, id: Uuid) {
-        if !self.panel_input_expanded.remove(&id) {
+    fn toggle_panel_input_expanded(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        let expanded = if self.panel_input_expanded.remove(&id) {
+            false
+        }
+        else {
             self.panel_input_expanded.insert(id);
+            true
+        };
+        // The cap is part of the textarea's own layout mode, so expanding
+        // has to update the live entity rather than just the render height.
+        let max_rows = if expanded {
+            PANEL_INPUT_ROWS_EXPANDED
+        }
+        else {
+            PANEL_INPUT_ROWS_COLLAPSED
+        };
+        if let Some(input) = self.panel_prompt_inputs.get(&id).cloned() {
+            cx.update_entity(&input, |state, cx| state.set_auto_grow(1, max_rows, cx));
         }
     }
 
@@ -1187,9 +1209,16 @@ impl WorkspaceWindow {
         }
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
         let placeholder = Self::panel_prompt_placeholder();
+        let max_rows = if self.panel_input_expanded.contains(&id) {
+            PANEL_INPUT_ROWS_EXPANDED
+        }
+        else {
+            PANEL_INPUT_ROWS_COLLAPSED
+        };
         let input = cx.new(|cx| {
                           TextareaState::new(window, cx).placeholder(placeholder)
                                                         .submit_on_enter(!shift_to_send)
+                                                        .auto_grow(1, max_rows)
                       });
         let subscription = cx.subscribe_in(&input,
                                            window,
