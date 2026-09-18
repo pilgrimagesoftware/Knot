@@ -26,6 +26,14 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                              prefill_folder,
                              insert_after,
                              edit_target, } = request;
+    // Re-read from disk rather than trusting the caller's copy. Every
+    // window holds its own `Settings` snapshot taken when it opened, and
+    // personas are edited in a different window that persists to disk -
+    // so a persona added or renamed since this window opened was missing
+    // from the picker, which is the whole content of this dialog's
+    // persona field. Falls back to the caller's snapshot if the file
+    // can't be read.
+    let settings = knot_core::Settings::load().unwrap_or(settings);
     let editing = edit_target.and_then(|id| store.lock().unwrap().agent(id).cloned());
     let title = if editing.is_some() {
         "Edit Agent"

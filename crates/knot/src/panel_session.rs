@@ -88,6 +88,16 @@ impl PanelSessionHandle {
         self.session.clone()
     }
 
+    /// A `'static` writer into this session's conversation, for the task
+    /// that awaits a `prompt` after the handle - and the lock it came
+    /// from - has been dropped. Without it a prompt that the agent
+    /// refuses (an exhausted quota, a transport failure) has nowhere to
+    /// report but stderr.
+    pub fn recorder(&self) -> PanelRecorder {
+        PanelRecorder { state: Arc::clone(&self.state),
+                        dirty: Arc::clone(&self.dirty), }
+    }
+
     pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
         self.session.answer_permission(request, decision);
         if let Ok(mut state) = self.state.lock() {
@@ -145,6 +155,25 @@ impl PanelSessionHandle {
 
     pub async fn stop(&self) {
         self.session.stop().await;
+    }
+}
+
+/// Writes into a panel conversation without holding its handle: an owned
+/// pair of the state and the repaint flag, so a spawned task can report a
+/// failure back into the panel the user is looking at.
+#[derive(Clone)]
+pub struct PanelRecorder {
+    state: Arc<Mutex<PanelState>>,
+    dirty: Arc<AtomicBool>,
+}
+
+impl PanelRecorder {
+    /// Shows `text` in the conversation as a failed turn.
+    pub fn error(&self, text: String) {
+        if let Ok(mut state) = self.state.lock() {
+            state.push_error(text);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
     }
 }
 
@@ -242,6 +271,7 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     // slot needs the turn. The registration prompt is recorded first so
     // the panel opens on the turn already in flight rather than blank.
     let session = handle.session();
+    let recorder = handle.recorder();
     if let Some(prompt) = &request.registration_prompt {
         handle.record_user_message(prompt.clone());
     }
@@ -250,6 +280,11 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     if let Some(prompt) = request.registration_prompt
        && let Err(error) = session.prompt(&prompt).await
     {
+        // Into the conversation, not just the console: the registration
+        // turn is the first thing the panel shows, and an agent that
+        // refuses it (an exhausted daily quota, say) otherwise leaves the
+        // panel sitting on a prompt that never answers.
+        recorder.error(format!("The agent could not start its first turn: {error}"));
         eprintln!("failed to send panel registration prompt: {error}");
     }
 }

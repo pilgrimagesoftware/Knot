@@ -1,7 +1,8 @@
 use super::*;
 /// Opens the settings window, or brings it forward if already open.
 pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
-                                   settings: knot_core::Settings, cx: &mut App) {
+                                   settings: knot_core::Settings,
+                                   store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
        && existing.update(cx, |_, window, _| window.activate_window())
                   .is_ok()
@@ -65,6 +66,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                       }
                                                   });
                                  SettingsWindow { settings,
+                                                  store,
                                                   selected_tab: SettingsTab::General,
                                                   selected_agent_type,
                                                   mcp_selected_agent_type: "claude".to_string(),
@@ -160,18 +162,22 @@ impl SettingsTab {
 }
 
 pub(crate) struct SettingsWindow {
-    settings:                              knot_core::Settings,
-    selected_tab:                          SettingsTab,
-    selected_agent_type:                   String,
-    mcp_selected_agent_type:               String,
-    agent_options_input:                   Entity<InputState>,
-    ai_api_key_input:                      Entity<InputState>,
-    autopilot_custom_prompt_input:         Entity<InputState>,
-    mcp_port_input:                        Entity<InputState>,
-    _agent_options_subscription:           Subscription,
-    _ai_api_key_subscription:              Subscription,
+    settings: knot_core::Settings,
+    /// The live agent store, for questions this window's own `Settings`
+    /// snapshot can't answer truthfully - whether a persona is still
+    /// assigned to an agent, which changes while this window is open.
+    store: Arc<Mutex<knot_agents::AgentStore>>,
+    selected_tab: SettingsTab,
+    selected_agent_type: String,
+    mcp_selected_agent_type: String,
+    agent_options_input: Entity<InputState>,
+    ai_api_key_input: Entity<InputState>,
+    autopilot_custom_prompt_input: Entity<InputState>,
+    mcp_port_input: Entity<InputState>,
+    _agent_options_subscription: Subscription,
+    _ai_api_key_subscription: Subscription,
     _autopilot_custom_prompt_subscription: Subscription,
-    _mcp_port_subscription:                Subscription,
+    _mcp_port_subscription: Subscription,
 }
 
 impl SettingsWindow {
@@ -247,7 +253,7 @@ impl SettingsWindow {
     /// text buttons read as arbitrary activators, an icon reads as what it
     /// does. `danger` tints destructive actions (clear/delete) red.
     pub(crate) fn icon_button(id: impl Into<gpui_kit::ElementId>, icon_path: &'static str,
-                              tooltip: &'static str, danger: bool)
+                              tooltip: impl Into<gpui_kit::SharedString>, danger: bool)
                               -> Button {
         let mut icon = Icon::default().path(icon_path);
         if danger {
@@ -490,7 +496,46 @@ impl SettingsWindow {
         }
     }
 
+    /// How many agents each persona is assigned to. A persona still in
+    /// use can't be deleted: the agents referencing it would keep a
+    /// `persona_id` pointing at nothing, which reads as "no persona"
+    /// everywhere without ever saying the instructions were dropped.
+    pub(crate) fn personas_in_use(agents: &[knot_agents::Agent]) -> BTreeMap<Uuid, usize> {
+        let mut counts = BTreeMap::new();
+        for persona in agents.iter().filter_map(|agent| agent.persona_id) {
+            *counts.entry(persona).or_insert(0) += 1;
+        }
+        counts
+    }
+
+    /// `personas_in_use` against the live store - the window's own
+    /// `Settings` snapshot is from the moment it opened and misses agents
+    /// created since.
+    fn live_personas_in_use(&self) -> BTreeMap<Uuid, usize> {
+        match self.store.lock() {
+            Ok(store) => Self::personas_in_use(store.agents()),
+            Err(_) => BTreeMap::new(),
+        }
+    }
+
+    /// The delete button's tooltip, which doubles as the reason it is
+    /// disabled when the persona is assigned to agents.
+    pub(crate) fn persona_delete_tooltip(in_use: usize) -> String {
+        match in_use {
+            0 => "Delete persona".to_string(),
+            1 => "In use by 1 agent".to_string(),
+            count => format!("In use by {count} agents"),
+        }
+    }
+
     fn delete_persona(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        // Checked again here, not just on the button: the dialog that
+        // gets us here is opened from a rendered row, and an agent could
+        // have taken the persona in between.
+        if self.live_personas_in_use().get(&id).copied().unwrap_or(0) > 0 {
+            cx.notify();
+            return;
+        }
         if let Err(error) = self.settings.remove_persona(id) {
             eprintln!("failed to remove persona: {error}");
         }
@@ -800,6 +845,8 @@ impl SettingsWindow {
                                                     .cloned()
                                                     .collect();
 
+        let in_use = self.live_personas_in_use();
+
         let list = if personas.is_empty() {
             div().text_sm()
                  .text_color(cx.theme().muted_foreground)
@@ -812,6 +859,7 @@ impl SettingsWindow {
                     .children(personas.into_iter().enumerate().map(|(index, persona)| {
                         let id = persona.id;
                         let preview = Self::persona_preview(&persona.instructions, 80);
+                        let in_use = in_use.get(&id).copied().unwrap_or(0);
                         h_flex()
                             .justify_between()
                             .items_center()
@@ -852,12 +900,17 @@ impl SettingsWindow {
                                         }),
                                     )
                                     .child(
+                                        // Disabled rather than hidden while
+                                        // agents still reference it, with the
+                                        // count as the tooltip so the button
+                                        // says why it won't work.
                                         Self::icon_button(
                                             ("persona-delete", index),
                                             "icons/trash.svg",
-                                            "Delete persona",
+                                            Self::persona_delete_tooltip(in_use),
                                             true,
                                         )
+                                        .disabled(in_use > 0)
                                         .on_click({
                                             let settings_window = settings_window.clone();
                                             let name = persona.name.clone();

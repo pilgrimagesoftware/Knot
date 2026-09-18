@@ -1425,13 +1425,13 @@ impl WorkspaceWindow {
                     drop(state);
                     ready.then(|| {
                              handle.record_user_message(text.clone());
-                             handle.session()
+                             (handle.session(), handle.recorder())
                          })
                 }
                 _ => None,
             }
         };
-        let Some(session) = session
+        let Some((session, recorder)) = session
         else {
             self.panel_pending_context.insert(id, context);
             return;
@@ -1442,6 +1442,12 @@ impl WorkspaceWindow {
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
                         if let Err(error) = session.prompt(&text).await {
+                            // Shown under the prompt it belongs to, and
+                            // it ends the turn - an error response is all
+                            // the answer this prompt gets, so the
+                            // composer must not stay blocked waiting for
+                            // a `TurnEnd` that will never arrive.
+                            recorder.error(format!("The agent could not answer: {error}"));
                             eprintln!("failed to send panel prompt: {error}");
                         }
                     });
@@ -1700,7 +1706,12 @@ pub(crate) struct SelectedAgentHeader {
     folder:       String,
     header_title: String,
     agent_type:   String,
-    state:        Option<(knot_agents::AgentState, Option<knot_git::DiffStats>)>,
+    /// The agent's state and its diff stat *lookup*: the outer `Option`
+    /// is whether the first refresh has finished, the inner one whether
+    /// it found a repository. Only a missing lookup means "still
+    /// working" - a folder that is not a git checkout must not sit on
+    /// "Getting stats…" for the life of the window.
+    state:        Option<(knot_agents::AgentState, Option<Option<knot_git::DiffStats>>)>,
 }
 
 impl WorkspaceWindow {
@@ -1724,8 +1735,7 @@ impl WorkspaceWindow {
         let stats = self.diff_stats
                         .lock()
                         .ok()
-                        .and_then(|stats| stats.get(&id).copied())
-                        .flatten();
+                        .and_then(|stats| stats.get(&id).copied());
         let state = (!agent.is_shell()).then_some((agent.state, stats));
         Some(SelectedAgentHeader { avatar: agent.avatar.clone(),
                                    name: agent.name.clone(),
@@ -2337,10 +2347,17 @@ impl Render for WorkspaceWindow {
                                                        .text_color(cx.theme().muted_foreground)
                                                        .child(state_label(*state))))
                             .child(match git_stats {
-                                       Some(stats) => Self::render_diff_stats(stats,
-                                                                              ui_font_name.clone(),
-                                                                              ui_font_size,
-                                                                              cx),
+                                       Some(Some(stats)) => {
+                                           Self::render_diff_stats(stats,
+                                                                   ui_font_name.clone(),
+                                                                   ui_font_size,
+                                                                   cx)
+                                       }
+                                       // The refresh ran and found no
+                                       // repository: the agent's folder
+                                       // isn't a git checkout, so there
+                                       // are no stats to wait for.
+                                       Some(None) => div().into_any_element(),
                                        None => div().font_family(ui_font_name.clone())
                                                     .text_size(ui_font_size)
                                                     .text_color(cx.theme().muted_foreground)
