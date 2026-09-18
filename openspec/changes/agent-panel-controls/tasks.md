@@ -31,14 +31,14 @@
 
 ## 4. Input-area control bar
 
-- [ ] 4.1 Add the input-area component (text entry + control row) as a
+- [x] 4.1 Add the input-area component (text entry + control row) as a
       new sibling under `render_panel`. Verify: `cargo build -p knot`
       succeeds and the bar renders in a live session.
-- [ ] 4.2 Add the add-context control (file/image picker via
+- [x] 4.2 Add the add-context control (file/image picker via
       `cx.prompt_for_paths`, per `knot-ui-conventions`' native-picker
       rule) and attach the result to the pending message. Verify: manual
       run attaches a file and it appears in the input area before send.
-- [ ] 4.3 Add the permission-mode selector, sourced from the session's
+- [x] 4.3 Add the permission-mode selector, sourced from the session's
       available modes; disable with a tooltip when the adapter reports
       none. Verify: unit test covers the populated and disabled cases.
 - [ ] 4.4 Add the model selector, sourced from session capabilities, same
@@ -46,7 +46,7 @@
       and disabled cases.
 - [ ] 4.5 Add the effort selector, same pattern as 4.3/4.4. Verify: unit
       test covers populated and disabled cases.
-- [ ] 4.6 Add the send control: disabled while input is empty, and while a
+- [x] 4.6 Add the send control: disabled while input is empty, and while a
       turn is in flight if the session doesn't support concurrent input.
       Wire it to submit text plus attached context via `session/prompt`
       and clear the input area. Verify: unit test covers both disabled
@@ -54,7 +54,7 @@
 
 ## 5. Input area expand/collapse
 
-- [ ] 5.1 Add the expand toggle and a larger multi-line editing size for
+- [x] 5.1 Add the expand toggle and a larger multi-line editing size for
       the input area, collapsing back on second activation. Verify: manual
       run toggles between both sizes without losing in-progress text.
 

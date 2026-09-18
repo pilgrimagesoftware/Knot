@@ -94,6 +94,13 @@ impl AcpSession {
         &self.session_id
     }
 
+    /// The connected adapter's declared capabilities (e.g. its supported
+    /// permission modes), for panel controls that need to know what the
+    /// adapter actually supports before offering a selection.
+    pub fn capabilities(&self) -> &knot_acp::AgentCapabilities {
+        self.client.capabilities()
+    }
+
     pub async fn prompt(&self, text: &str) -> AcpResult<()> {
         self.client.session_prompt(&self.session_id, text).await
     }
