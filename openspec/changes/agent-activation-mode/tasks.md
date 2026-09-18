@@ -51,12 +51,17 @@
       agent that is not activated, naming why it is not running and that
       selecting it starts it. Verify in the app on a fresh passive agent and
       after Deactivate.
-- [ ] 3.2 Add `Deactivate` to the agent context menu: shown only while the
+- [ ] 3.2 Give a sidebar row for an agent that is not running a distinct
+      treatment from a running one, keyed on liveness rather than activation
+      mode, and not on the state dot. Verify in the app with a workspace
+      holding a running agent, an unstarted passive agent and a deactivated
+      one - the first distinguishable from the other two, which match.
+- [ ] 3.3 Add `Deactivate` to the agent context menu: shown only while the
       agent is running, immediately above Restart Agent, no confirmation.
       Extend `agent_context_menu_entries` and its fact struct, and verify
       with tests that it is absent for a stopped agent, present for a
       running one, and that the exhaustive divider test still holds.
-- [ ] 3.3 Add the activation segmented control and its hint to the agent
+- [ ] 3.4 Add the activation segmented control and its hint to the agent
       editor, defaulting to `Passive` when creating and to the agent's own
       mode when editing, wired through `CreateOptions`/`EditRequest`. Verify
       in the app that a new agent is created passive and that editing an

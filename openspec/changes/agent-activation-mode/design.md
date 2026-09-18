@@ -32,8 +32,13 @@ See proposal.md — Why. The constraints that shape the approach:
   is an ordinary running agent.
 - A bulk control ("deactivate all", "start everything"). One agent at a time
   through the existing menu.
-- Showing activation mode on the sidebar row or dashboard card. Worth doing,
-  but it is a separate visual-design question and this change is already wide.
+- Marking activation *mode* anywhere. The sidebar distinguishes agents that
+  are not running (see Decisions), which is a different statement: once a
+  passive agent is running there is nothing left to mark.
+- The dashboard card. It shows an agent's state and diff stat; whether a
+  stopped agent should read differently there is the same question as the
+  sidebar's and can follow the same answer once that one has been seen in
+  use.
 - Any change to how sessions are resumed. `restore-conversation-on-launch`
   keeps working as specified; a passive agent simply resolves its resume id
   later, when it activates.
@@ -121,6 +126,25 @@ to try one.
 The hint below uses the settings window's `hint()` helper, per the project's
 UI conventions, and says one sentence per mode.
 
+### Stopped rows are distinguished, by liveness rather than by mode
+
+A workspace of mixed agents is unreadable if a passive agent that never
+started looks exactly like a running one, and the state dot cannot carry it:
+its four values describe what a *running* agent is doing and none of them
+means "not running".
+
+The distinction keys on whether the agent is running, not on its activation
+mode. A deactivated `active` agent and an untouched `passive` one are in the
+same position - nothing is there - and giving them different appearances
+would be explaining the implementation rather than the situation. The spec
+therefore says the rows must be distinguishable and leaves the treatment to
+the UI, which is where a dimmed row versus an outline is worth trying
+against real content.
+
+*Alternative considered:* marking passive agents as such permanently, running
+or not. Rejected - once a passive agent is running it is an ordinary running
+agent, and a badge that outlives its meaning is noise.
+
 ## Risks / Trade-offs
 
 - **A passive agent looks broken before its first activation.** Its pane is
@@ -152,7 +176,6 @@ file, which the previous build ignores.
 
 ## Open Questions
 
-- Should the sidebar mark a passive-and-not-yet-started agent - a dimmed row,
-  a dot - so the user can see which agents are idle by choice? Deferrable: it
-  changes no requirement here and no task below, and is better answered by
-  looking at a real workspace of mixed agents than by guessing now.
+None. The one that stood here - whether the sidebar should mark an agent
+that is not running - is answered yes and is now a requirement; see
+"Stopped rows are distinguished" above.
