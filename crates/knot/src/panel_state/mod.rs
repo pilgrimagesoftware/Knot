@@ -6,8 +6,16 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use knot_acp::{ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate};
+use knot_acp::{
+    ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate, ToolCallContent,
+};
 use serde_json::Value;
+
+/// Pretty-prints a legacy `tool_call_result` payload for display, falling
+/// back to its compact form if it somehow can't be re-serialized.
+fn render_json(output: &Value) -> String {
+    serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string())
+}
 
 /// One entry in the panel's message list: a user-sent prompt, streamed
 /// assistant text, or a tool call's card - kept as distinct variants per
@@ -20,19 +28,34 @@ pub enum PanelMessage {
     ToolCall(ToolCallCard),
 }
 
-/// A tool call's rendered state: `kind` (execute, read, edit, ...) plus
-/// whatever result/diff has arrived so far - rendered as in-progress until
-/// `result` (or `diff`, for edit-kind calls) is set, per the "Turn ends mid
-/// tool call" scenario: the last known state is kept, never dropped.
+/// A tool call's rendered state: `kind` (execute, read, edit, ...), the
+/// agent's human-readable `title`, its lifecycle `status`, and whatever
+/// content has arrived so far - per the "Turn ends mid tool call"
+/// scenario, the last known state is kept, never dropped.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolCallCard {
-    pub id:     String,
-    pub kind:   String,
-    pub status: Option<String>,
-    pub result: Option<Value>,
-    /// `(path, diff)` for an edit-kind call, rendered as an added/removed
-    /// line view rather than raw text.
-    pub diff:   Option<(String, String)>,
+    pub id:      String,
+    pub kind:    String,
+    pub title:   String,
+    /// `pending`, `in_progress`, `completed` or `failed` - defaulted to
+    /// `pending` at start rather than left unknown, per the ACP spec.
+    pub status:  String,
+    /// Output blocks as they arrive. A later update's `content` replaces
+    /// this wholesale (the spec's updates carry the full current content,
+    /// not a delta); an update with no `content` at all leaves it alone.
+    pub content: Vec<ToolCallContent>,
+}
+
+impl ToolCallCard {
+    /// Whether the call has finished, either way - the renderer shows an
+    /// in-progress placeholder only while this is false.
+    pub fn is_finished(&self) -> bool {
+        matches!(self.status.as_str(), "completed" | "failed")
+    }
+
+    pub fn failed(&self) -> bool {
+        self.status == "failed"
+    }
 }
 
 /// Folded state for one ACP session, per `acp-panel-ui`'s streaming
@@ -109,24 +132,46 @@ impl PanelState {
     fn apply_update(&mut self, update: SessionUpdate) {
         match update {
             SessionUpdate::TextDelta { text } => self.append_text(text),
-            SessionUpdate::ToolCallStart { tool_call_id, kind } => {
+            SessionUpdate::ToolCallStart { tool_call_id,
+                                           kind,
+                                           title,
+                                           status,
+                                           content, } => {
                 self.messages
                     .push(PanelMessage::ToolCall(ToolCallCard { id: tool_call_id,
                                                                 kind,
-                                                                status: None,
-                                                                result: None,
-                                                                diff: None }));
+                                                                title,
+                                                                status,
+                                                                content }));
             }
             SessionUpdate::ToolCallUpdate { tool_call_id,
-                                            status, } => {
+                                            status,
+                                            title,
+                                            content, } => {
                 if let Some(card) = self.tool_call_mut(&tool_call_id) {
-                    card.status = Some(status);
+                    // Absent fields mean "unchanged", per the ACP spec's
+                    // partial updates - only overwrite what arrived.
+                    if let Some(status) = status {
+                        card.status = status;
+                    }
+                    if let Some(title) = title {
+                        card.title = title;
+                    }
+                    if !content.is_empty() {
+                        card.content = content;
+                    }
                 }
             }
+            // Neither of these is a `sessionUpdate` kind any real agent
+            // emits (results and diffs ride on `tool_call_update`'s
+            // `content`), but `acp-client`'s streaming requirement names
+            // them as distinguished events, so they fold into the same
+            // card content rather than being dropped.
             SessionUpdate::ToolCallResult { tool_call_id,
                                             output, } => {
                 if let Some(card) = self.tool_call_mut(&tool_call_id) {
-                    card.result = Some(output);
+                    card.content
+                        .push(ToolCallContent::Text(render_json(&output)));
                 }
             }
             SessionUpdate::Diff { path, diff } => {
@@ -136,7 +181,9 @@ impl PanelState {
                         .rev()
                         .find(|m| matches!(m, PanelMessage::ToolCall(_)))
                 {
-                    card.diff = Some((path, diff));
+                    card.content.push(ToolCallContent::Diff { path,
+                                                              old_text: None,
+                                                              new_text: diff });
                 }
             }
             // A turn-end carries only a stop reason; the tool call/message
@@ -209,38 +256,110 @@ mod tests {
                         PanelMessage::Assistant("hi there".to_string())]);
     }
 
+    fn tool_call_start(id: &str, kind: &str) -> SessionEvent {
+        SessionEvent::Update(SessionUpdate::ToolCallStart { tool_call_id: id.to_string(),
+                                                            kind:         kind.to_string(),
+                                                            title:        String::new(),
+                                                            status:       "pending".to_string(),
+                                                            content:      Vec::new(), })
+    }
+
+    fn tool_call_update(id: &str, status: Option<&str>, content: Vec<ToolCallContent>)
+                        -> SessionEvent {
+        SessionEvent::Update(SessionUpdate::ToolCallUpdate { tool_call_id: id.to_string(),
+                                                             status: status.map(str::to_string),
+                                                             title: None,
+                                                             content })
+    }
+
     #[test]
     fn tool_call_lifecycle_builds_one_card() {
         let mut state = PanelState::new();
 
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart {
-            tool_call_id: "tc1".to_string(),
-            kind: "execute".to_string(),
-        }));
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallUpdate {
-            tool_call_id: "tc1".to_string(),
-            status: "running".to_string(),
-        }));
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallResult {
-            tool_call_id: "tc1".to_string(),
-            output: json!({"exitCode": 0}),
-        }));
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("in_progress"), Vec::new()));
+        state.apply(tool_call_update("tc1",
+                                     Some("completed"),
+                                     vec![ToolCallContent::Text("done".to_string())]));
 
         assert_eq!(state.messages,
-                   vec![PanelMessage::ToolCall(ToolCallCard { id:     "tc1".to_string(),
-                                                              kind:   "execute".to_string(),
-                                                              status: Some("running".to_string()),
-                                                              result: Some(json!({"exitCode": 0})),
-                                                              diff:   None, })]);
+                   vec![PanelMessage::ToolCall(ToolCallCard { id:      "tc1".to_string(),
+                                                              kind:    "execute".to_string(),
+                                                              title:   String::new(),
+                                                              status:  "completed".to_string(),
+                                                              content:
+                                                                  vec![ToolCallContent::Text("done".to_string())], })]);
+    }
+
+    /// A finished call with no content must not keep reading as running -
+    /// the card renderer keys its in-progress placeholder on this, and
+    /// keying it on "no output yet" instead left completed cards stuck
+    /// showing "Running…".
+    #[test]
+    fn a_completed_tool_call_is_finished_even_with_no_content() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+
+        let PanelMessage::ToolCall(card) = &state.messages[0]
+        else {
+            panic!("expected a tool call card");
+        };
+        assert!(card.is_finished());
+        assert!(!card.failed());
+        assert!(card.content.is_empty());
+    }
+
+    /// Per the ACP spec, every field but `toolCallId` is optional in an
+    /// update: one carrying only content must not blank out the status.
+    #[test]
+    fn a_content_only_update_leaves_the_status_alone() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+        state.apply(tool_call_update("tc1",
+                                     None,
+                                     vec![ToolCallContent::Text("late output".to_string())]));
+
+        let PanelMessage::ToolCall(card) = &state.messages[0]
+        else {
+            panic!("expected a tool call card");
+        };
+        assert_eq!(card.status, "completed");
+        assert_eq!(card.content,
+                   vec![ToolCallContent::Text("late output".to_string())]);
     }
 
     #[test]
     fn edit_tool_call_attaches_a_diff() {
         let mut state = PanelState::new();
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart { tool_call_id:
-                                                                            "tc1".to_string(),
-                                                                        kind:
-                                                                            "edit".to_string(), }));
+        state.apply(tool_call_start("tc1", "edit"));
+
+        state.apply(tool_call_update("tc1",
+                                     Some("completed"),
+                                     vec![ToolCallContent::Diff { path:
+                                                                      "src/lib.rs".to_string(),
+                                                                  old_text: Some("old".to_string()),
+                                                                  new_text: "new".to_string(), }]));
+
+        let PanelMessage::ToolCall(card) = &state.messages[0]
+        else {
+            panic!("expected a tool call card");
+        };
+        assert_eq!(card.content,
+                   vec![ToolCallContent::Diff { path:     "src/lib.rs".to_string(),
+                                                old_text: Some("old".to_string()),
+                                                new_text: "new".to_string(), }]);
+    }
+
+    /// The legacy `diff` session update carries no `toolCallId`, so it
+    /// attaches to the most recent card - kept working because
+    /// `acp-client`'s streaming requirement names diffs as a distinguished
+    /// event, even though no shipping agent emits one this way.
+    #[test]
+    fn a_standalone_diff_update_attaches_to_the_last_card() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "edit"));
 
         state.apply(SessionEvent::Update(SessionUpdate::Diff { path: "src/lib.rs".to_string(),
                                                                diff: "-old\n+new".to_string(), }));
@@ -249,21 +368,17 @@ mod tests {
         else {
             panic!("expected a tool call card");
         };
-        assert_eq!(card.diff.as_ref().map(|(path, _)| path.as_str()),
-                   Some("src/lib.rs"));
+        assert_eq!(card.content,
+                   vec![ToolCallContent::Diff { path:     "src/lib.rs".to_string(),
+                                                old_text: None,
+                                                new_text: "-old\n+new".to_string(), }]);
     }
 
     #[test]
     fn turn_end_mid_tool_call_keeps_the_cards_last_known_state() {
         let mut state = PanelState::new();
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart {
-            tool_call_id: "tc1".to_string(),
-            kind: "execute".to_string(),
-        }));
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallUpdate {
-            tool_call_id: "tc1".to_string(),
-            status: "running".to_string(),
-        }));
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("in_progress"), Vec::new()));
 
         state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason:
                                                                       "end_turn".to_string(), }));
@@ -272,8 +387,9 @@ mod tests {
         else {
             panic!("expected a tool call card");
         };
-        assert_eq!(card.status.as_deref(), Some("running"));
-        assert!(card.result.is_none());
+        assert_eq!(card.status, "in_progress");
+        assert!(!card.is_finished());
+        assert!(card.content.is_empty());
     }
 
     #[test]
