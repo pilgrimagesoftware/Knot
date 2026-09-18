@@ -91,6 +91,23 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Turns off auto-scroll for the in-flight response, per the track
+    /// toggle's "user scrolls away" scenario.
+    pub fn clear_tracking(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.clear_tracking();
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
+    /// Toggles auto-scroll for the in-flight response.
+    pub fn toggle_tracking(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.toggle_tracking();
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     pub async fn stop(&self) {
         self.session.stop().await;
     }

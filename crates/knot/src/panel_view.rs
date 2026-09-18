@@ -10,7 +10,8 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::{ClickEvent, IntoElement, ParentElement, Styled, div, rgb};
+use gpui_kit::{ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div,
+               rgb};
 use knot_acp::{PermissionDecision, PermissionRequest};
 
 use crate::panel_state::{PanelMessage, PanelState, ToolCallCard};
@@ -23,21 +24,36 @@ const MUTED: u32 = 0x9CA3AF;
 /// Renders the full panel: message list, then a pending permission prompt
 /// or an ended-session banner if applicable. `on_permission_decision` is
 /// invoked with the resolved decision when the user picks an option.
-pub(crate) fn render_panel(state: &PanelState,
-                           on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static)
+/// `scroll` backs the conversation's scroll container (the caller applies
+/// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
+/// to a specific message. `on_toggle_track` flips auto-scroll for the
+/// in-flight response.
+pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
+                           on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
+                           on_toggle_track: impl Fn() + Clone + 'static)
                            -> impl IntoElement {
+    let last_index = state.messages.len().checked_sub(1);
     v_flex().size_full()
             .gap_3()
             .p_4()
             .overflow_y_hidden()
-            .children(state.messages.iter().map(render_message))
+            .children(state.messages.iter().enumerate().map(|(index, message)| {
+                                                            render_message(state,
+                                                                           index,
+                                                                           Some(index) == last_index,
+                                                                           message,
+                                                                           scroll,
+                                                                           on_toggle_track.clone())
+                                                        }))
             .children(state.pending_permission
                            .as_ref()
                            .map(|request| render_permission_prompt(request, on_permission_decision)))
             .children(state.ended.as_ref().map(render_ended_banner))
 }
 
-fn render_message(message: &PanelMessage) -> gpui_kit::AnyElement {
+fn render_message(state: &PanelState, index: usize, is_last: bool, message: &PanelMessage,
+                   scroll: &ScrollHandle, on_toggle_track: impl Fn() + Clone + 'static)
+                   -> gpui_kit::AnyElement {
     match message {
         // Right-aligned, tinted background - visually distinct from the
         // assistant's plain left-aligned text, per acp-panel-ui's
@@ -52,9 +68,85 @@ fn render_message(message: &PanelMessage) -> gpui_kit::AnyElement {
                                                         .bg(rgb(0x2563EB))
                                                         .child(text.clone()))
                                             .into_any_element(),
-        PanelMessage::Assistant(text) => div().text_sm().child(text.clone()).into_any_element(),
+        PanelMessage::Assistant(text) => {
+            v_flex().gap_1()
+                    .child(div().text_sm().child(text.clone()))
+                    .children((is_last && state.turn_active).then(|| {
+                                                                  render_track_toggle(state.tracking,
+                                                                                       on_toggle_track)
+                                                              }))
+                    .children((!(is_last && state.turn_active)).then(|| {
+                        let user_index = preceding_user_message(state, index);
+                        render_response_actions(text.clone(), user_index, scroll)
+                    }))
+                    .into_any_element()
+        }
         PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
     }
+}
+
+/// The index of the nearest `PanelMessage::User` before `index`, for the
+/// response action bar's "scroll to user input" control.
+fn preceding_user_message(state: &PanelState, index: usize) -> Option<usize> {
+    state.messages[..index].iter()
+                           .rposition(|message| matches!(message, PanelMessage::User(_)))
+}
+
+/// The in-flight response's auto-scroll toggle, per the track toggle
+/// design's per-response scope - shown only on the currently streaming
+/// response, replaced by the response action bar once it finalizes.
+fn render_track_toggle(tracking: bool, on_toggle: impl Fn() + Clone + 'static) -> impl IntoElement {
+    h_flex().child(Button::new("panel-track-toggle").icon(if tracking {
+                                                               IconName::CircleDot
+                                                           }
+                                                           else {
+                                                               IconName::Circle
+                                                           })
+                                                     .tooltip(if tracking {
+                                                                 "Following new output"
+                                                             }
+                                                             else {
+                                                                 "Not following new output"
+                                                             })
+                                                     .ghost()
+                                                     .small()
+                                                     .on_click(move |_: &ClickEvent, _, _| on_toggle()))
+}
+
+/// A finalized response's action bar: copy, scroll to the user message that
+/// prompted it, and scroll to the top of the conversation.
+fn render_response_actions(text: String, user_index: Option<usize>, scroll: &ScrollHandle)
+                            -> impl IntoElement {
+    let scroll_to_user = scroll.clone();
+    let scroll_to_top = scroll.clone();
+    h_flex().gap_1()
+            .child(Button::new("panel-copy-response").icon(IconName::Copy)
+                                                      .tooltip("Copy response")
+                                                      .ghost()
+                                                      .small()
+                                                      .on_click(move |_: &ClickEvent, _, cx| {
+                                                          cx.write_to_clipboard(
+                                                              ClipboardItem::new_string(
+                                                                  text.clone(),
+                                                              ),
+                                                          );
+                                                      }))
+            .children(user_index.map(|user_index| {
+                Button::new("panel-scroll-to-user").icon(IconName::ArrowUp)
+                                                    .tooltip("Scroll to your message")
+                                                    .ghost()
+                                                    .small()
+                                                    .on_click(move |_: &ClickEvent, _, _| {
+                                                        scroll_to_user.scroll_to_top_of_item(user_index);
+                                                    })
+            }))
+            .child(Button::new("panel-scroll-to-top").icon(IconName::ChevronsUp)
+                                                      .tooltip("Scroll to top")
+                                                      .ghost()
+                                                      .small()
+                                                      .on_click(move |_: &ClickEvent, _, _| {
+                                                          scroll_to_top.scroll_to_top_of_item(0);
+                                                      }))
 }
 
 /// A tool-call card, rendered by ACP `kind`: edit-kind calls show an

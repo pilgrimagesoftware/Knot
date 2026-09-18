@@ -2083,6 +2083,11 @@ struct WorkspaceWindow {
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     panel_prompt_inputs:    BTreeMap<Uuid, Entity<InputState>>,
+    /// One conversation scroll handle per Panel-mode agent that has been
+    /// viewed, created lazily - backs the response action bar's
+    /// scroll-to-user/scroll-to-top controls and the track toggle's
+    /// auto-scroll.
+    panel_scroll_handles:   BTreeMap<Uuid, gpui_kit::ScrollHandle>,
     view_mode:              WorkspaceViewMode,
     dashboard_sort:         dashboard::DashboardSort,
     new_agent_name_input:   Entity<InputState>,
@@ -2158,6 +2163,7 @@ impl WorkspaceWindow {
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
+                    panel_scroll_handles: BTreeMap::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     new_agent_name_input,
@@ -2462,16 +2468,46 @@ impl WorkspaceWindow {
                         handle.answer_permission(request, decision);
                     }
                 };
+                let track_slot = Arc::clone(slot);
+                let on_toggle_track = move || {
+                    if let Ok(slot) = track_slot.lock()
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    {
+                        handle.toggle_tracking();
+                    }
+                };
+                let scroll_away_slot = Arc::clone(slot);
+                let should_follow = state.turn_active && state.tracking;
                 drop(state);
                 drop(slot_guard);
+                let scroll = self.panel_scroll_handle(id);
+                // Per this same method's re-render-on-`take_dirty` poll
+                // loop: each new streamed delta marks the session dirty
+                // and triggers a repaint, so following the bottom here
+                // (rather than via a dedicated scroll subscription) keeps
+                // pace with streaming text.
+                if should_follow {
+                    scroll.scroll_to_bottom();
+                }
                 let input = self.panel_prompt_input(id, window, cx);
                 v_flex().size_full()
                         .child(div().id("panel-conversation")
                                     .flex_1()
                                     .min_h_0()
                                     .overflow_y_scroll()
+                                    .track_scroll(&scroll)
+                                    .on_scroll_wheel(move |_: &gpui_kit::ScrollWheelEvent, _, _| {
+                                        if let Ok(slot) = scroll_away_slot.lock()
+                                           && let panel_session::PanelSessionSlot::Ready(handle) =
+                                               &*slot
+                                        {
+                                            handle.clear_tracking();
+                                        }
+                                    })
                                     .child(panel_view::render_panel(&state_arc.lock().unwrap(),
-                                                                    on_decision)))
+                                                                    &scroll,
+                                                                    on_decision,
+                                                                    on_toggle_track)))
                         .child(
                             h_flex().flex_shrink_0()
                                     .gap_2()
@@ -2493,6 +2529,11 @@ impl WorkspaceWindow {
                         .into_any_element()
             }
         }
+    }
+
+    /// Gets or creates the conversation scroll handle for `id`'s panel.
+    fn panel_scroll_handle(&mut self, id: Uuid) -> gpui_kit::ScrollHandle {
+        self.panel_scroll_handles.entry(id).or_default().clone()
     }
 
     /// Gets or creates the prompt input entity for `id`'s panel.
