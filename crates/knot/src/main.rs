@@ -2082,7 +2082,21 @@ struct WorkspaceWindow {
     panel_sessions:         BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
-    panel_prompt_inputs:    BTreeMap<Uuid, Entity<InputState>>,
+    /// A `Textarea` (not a single-line `Input`) so the expand/collapse
+    /// control can grow the same entity's visible height without losing
+    /// in-progress text, rather than swapping to a second entity.
+    panel_prompt_inputs:    BTreeMap<Uuid, Entity<TextareaState>>,
+    /// One conversation scroll handle per Panel-mode agent that has been
+    /// viewed, created lazily - backs the response action bar's
+    /// scroll-to-user/scroll-to-top controls and the track toggle's
+    /// auto-scroll.
+    panel_scroll_handles:   BTreeMap<Uuid, gpui_kit::ScrollHandle>,
+    /// Files/images attached via the input area's add-context control,
+    /// pending the next send - cleared once the prompt is submitted.
+    panel_pending_context:  BTreeMap<Uuid, Vec<PathBuf>>,
+    /// Panel-mode agent ids whose input area is expanded to the larger
+    /// multi-line editing size; absence means collapsed (the default).
+    panel_input_expanded:   BTreeSet<Uuid>,
     view_mode:              WorkspaceViewMode,
     dashboard_sort:         dashboard::DashboardSort,
     new_agent_name_input:   Entity<InputState>,
@@ -2158,6 +2172,9 @@ impl WorkspaceWindow {
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
+                    panel_scroll_handles: BTreeMap::new(),
+                    panel_pending_context: BTreeMap::new(),
+                    panel_input_expanded: BTreeSet::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     new_agent_name_input,
@@ -2462,46 +2479,301 @@ impl WorkspaceWindow {
                         handle.answer_permission(request, decision);
                     }
                 };
+                let track_slot = Arc::clone(slot);
+                let on_toggle_track = move || {
+                    if let Ok(slot) = track_slot.lock()
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    {
+                        handle.toggle_tracking();
+                    }
+                };
+                let scroll_away_slot = Arc::clone(slot);
+                let should_follow = state.turn_active && state.tracking;
+                let turn_active = state.turn_active;
+                let config_options = state.config_options.clone();
                 drop(state);
                 drop(slot_guard);
+                let scroll = self.panel_scroll_handle(id);
+                let pending_context = self.panel_pending_context
+                                          .get(&id)
+                                          .cloned()
+                                          .unwrap_or_default();
+                let expanded = self.panel_input_expanded.contains(&id);
+                // Per this same method's re-render-on-`take_dirty` poll
+                // loop: each new streamed delta marks the session dirty
+                // and triggers a repaint, so following the bottom here
+                // (rather than via a dedicated scroll subscription) keeps
+                // pace with streaming text.
+                if should_follow {
+                    scroll.scroll_to_bottom();
+                }
                 let input = self.panel_prompt_input(id, window, cx);
                 v_flex().size_full()
                         .child(div().id("panel-conversation")
                                     .flex_1()
                                     .min_h_0()
                                     .overflow_y_scroll()
+                                    .track_scroll(&scroll)
+                                    .on_scroll_wheel(move |_: &gpui_kit::ScrollWheelEvent, _, _| {
+                                        if let Ok(slot) = scroll_away_slot.lock()
+                                           && let panel_session::PanelSessionSlot::Ready(handle) =
+                                               &*slot
+                                        {
+                                            handle.clear_tracking();
+                                        }
+                                    })
                                     .child(panel_view::render_panel(&state_arc.lock().unwrap(),
-                                                                    on_decision)))
-                        .child(
-                            h_flex().flex_shrink_0()
-                                    .gap_2()
-                                    .p_2()
-                                    .border_t_1()
-                                    .border_color(cx.theme().border)
-                                    .child(gpui_kit::component::input::Input::new(&input)
-                                        .flex_1()
-                                        .disabled(blocked))
-                                    .child(Button::new("panel-send-prompt").label("Send")
-                                                                          .primary()
-                                                                          .disabled(blocked)
-                                                                          .on_click(cx.listener(
-                                        move |view, _: &ClickEvent, window, cx| {
-                                            view.send_panel_prompt(id, window, cx);
-                                        },
-                                    ))),
-                        )
+                                                                    &scroll,
+                                                                    on_decision,
+                                                                    on_toggle_track)))
+                        .child(self.render_panel_input_area(id,
+                                                            &input,
+                                                            &pending_context,
+                                                            expanded,
+                                                            blocked,
+                                                            turn_active,
+                                                            &config_options,
+                                                            cx))
                         .into_any_element()
             }
         }
     }
 
+    /// The input area: attached-context chips, the expandable text entry,
+    /// and a control row (add-context, permission mode, model, effort,
+    /// expand/collapse, send) - a sibling of the message list under
+    /// `render_panel_pane`, per design decision "Control bar placement".
+    #[allow(clippy::too_many_arguments)]
+    fn render_panel_input_area(&mut self, id: Uuid, input: &Entity<TextareaState>,
+                               pending_context: &[PathBuf], expanded: bool, blocked: bool,
+                               turn_active: bool, config_options: &[knot_acp::ConfigOption],
+                               cx: &mut Context<Self>)
+                               -> impl IntoElement {
+        let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        v_flex().flex_shrink_0()
+                .gap_2()
+                .p_2()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .children((!pending_context.is_empty()).then(|| {
+                    h_flex().gap_1()
+                            .flex_wrap()
+                            .children(pending_context.iter().enumerate().map(|(index, path)| {
+                        let file_name = path.file_name()
+                                            .map(|name| name.to_string_lossy().into_owned())
+                                            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+                        h_flex().gap_1()
+                                .items_center()
+                                .px_2()
+                                .py_1()
+                                .rounded_md()
+                                .bg(cx.theme().secondary)
+                                .child(div().text_xs().child(file_name))
+                                .child(Button::new(("panel-remove-context", index as u64))
+                                    .icon(IconName::CircleX)
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                        view.remove_panel_context(id, index);
+                                        cx.notify();
+                                    })))
+                    }))
+                }))
+                .child(div().h(if expanded { px(160.) } else { px(36.) })
+                            .child(Textarea::new(input).size_full().disabled(blocked)))
+                .child(h_flex().gap_1()
+                    .items_center()
+                    .child(Button::new("panel-add-context")
+                        .icon(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::Paperclip))
+                        .tooltip("Attach files or images")
+                        .ghost()
+                        .small()
+                        .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                            view.add_panel_context(id, cx);
+                        })))
+                    .child(self.render_panel_config_selector(
+                        id, "panel-permission-mode-selector", "Permission",
+                        "This agent doesn't report permission modes",
+                        Self::find_config_option(config_options, &["mode", "permission_mode",
+                                                                    "permission-mode"]),
+                        cx,
+                    ))
+                    .child(self.render_panel_config_selector(
+                        id, "panel-model-selector", "Model",
+                        "This agent doesn't report selectable models",
+                        Self::find_config_option(config_options, &["model"]),
+                        cx,
+                    ))
+                    .child(self.render_panel_config_selector(
+                        id, "panel-effort-selector", "Effort",
+                        "This agent doesn't report selectable effort levels",
+                        Self::find_config_option(config_options,
+                                                 &["effort", "reasoning", "reasoning_effort",
+                                                   "reasoning-effort"]),
+                        cx,
+                    ))
+                    .child(Button::new("panel-expand-input").icon(if expanded {
+                                                                       IconName::Minimize
+                                                                   }
+                                                                   else {
+                                                                       IconName::Maximize
+                                                                   })
+                        .tooltip(if expanded { "Collapse" } else { "Expand" })
+                        .ghost()
+                        .small()
+                        .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                            view.toggle_panel_input_expanded(id);
+                            cx.notify();
+                        })))
+                    .child(div().flex_1())
+                    .child(Button::new("panel-send-prompt").label("Send")
+                        .primary()
+                        .disabled(!can_send)
+                        .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
+                            view.send_panel_prompt(id, window, cx);
+                        }))))
+    }
+
+    /// One of the input area's three selector slots (permission mode,
+    /// model, effort), sourced from the agent's Session Config Options -
+    /// per ACP's stabilized mechanism, a live control that applies the
+    /// selection via `session/set_config_option`. Disabled with an
+    /// explanatory tooltip when the agent hasn't declared a matching
+    /// option (adapters vary in which axes they expose).
+    fn render_panel_config_selector(&self, id: Uuid, element_id: &'static str,
+                                    placeholder: &'static str, disabled_tooltip: &'static str,
+                                    option: Option<&knot_acp::ConfigOption>,
+                                    cx: &mut Context<Self>)
+                                    -> gpui_kit::AnyElement {
+        let Some(option) = option
+        else {
+            return Button::new(element_id).label(placeholder)
+                                          .tooltip(disabled_tooltip)
+                                          .ghost()
+                                          .small()
+                                          .disabled(true)
+                                          .into_any_element();
+        };
+        let current_value = option.current_value.as_str().unwrap_or_default();
+        let current_label = option.options
+                                  .iter()
+                                  .find(|value| value.value == current_value)
+                                  .map(|value| value.name.clone())
+                                  .unwrap_or_else(|| option.name.clone());
+        let config_id = option.id.clone();
+        let values = option.options.clone();
+        let entity = cx.entity();
+        let session_arc = self.panel_sessions.get(&id).cloned();
+        Button::new(element_id).label(current_label)
+                               .ghost()
+                               .small()
+                               .dropdown_caret(true)
+                               .dropdown_menu(move |menu, _, _| {
+                                   let mut menu = menu;
+                                   for value in &values {
+                                       let entity = entity.clone();
+                                       let Some(session_arc) = session_arc.clone()
+                                       else {
+                                           continue;
+                                       };
+                                       let config_id = config_id.clone();
+                                       let value_id = value.value.clone();
+                                       menu = menu.item(PopupMenuItem::new(value.name.clone())
+                                           .on_click(move |_, _, app| {
+                                               let config_id = config_id.clone();
+                                               let value_id = value_id.clone();
+                                               let session_arc = Arc::clone(&session_arc);
+                                               entity.update(app, move |view, _cx| {
+                                                   if let Ok(slot) = session_arc.lock()
+                                                      && let panel_session::PanelSessionSlot::Ready(handle) =
+                                                          &*slot
+                                                   {
+                                                       let future =
+                                                           handle.set_config_option(config_id,
+                                                                                    value_id);
+                                                       let _guard = view.runtime.enter();
+                                                       view.runtime.spawn(future);
+                                                   }
+                                               });
+                                           }));
+                                   }
+                                   menu
+                               })
+                               .into_any_element()
+    }
+
+    /// Finds the declared config option matching one of `categories`
+    /// (case-insensitive), for bucketing the agent's arbitrary option list
+    /// into the input area's three fixed selector slots.
+    fn find_config_option<'a>(options: &'a [knot_acp::ConfigOption], categories: &[&str])
+                              -> Option<&'a knot_acp::ConfigOption> {
+        options.iter().find(|option| {
+                          option.kind == "select"
+                          && option.category.as_deref().is_some_and(|category| {
+                                                           categories.iter()
+                                                 .any(|candidate| {
+                                                     candidate.eq_ignore_ascii_case(category)
+                                                 })
+                                                       })
+                      })
+    }
+
+    /// Gets or creates the conversation scroll handle for `id`'s panel.
+    fn panel_scroll_handle(&mut self, id: Uuid) -> gpui_kit::ScrollHandle {
+        self.panel_scroll_handles.entry(id).or_default().clone()
+    }
+
+    /// Opens the native file/image picker and attaches the chosen paths to
+    /// `id`'s pending message, per `knot-ui-conventions`' native-picker
+    /// rule (`cx.prompt_for_paths` over an in-app file browser).
+    fn add_panel_context(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(PathPromptOptions { files:       true,
+                                                             directories: false,
+                                                             multiple:    true,
+                                                             prompt:      Some("Attach".into()), });
+        let this = cx.entity();
+        cx.spawn(async move |_this, cx| {
+              let Ok(Ok(Some(paths))) = receiver.await
+              else {
+                  return;
+              };
+              cx.update(|app| {
+                    this.update(app, |view, cx| {
+                            view.panel_pending_context
+                                .entry(id)
+                                .or_default()
+                                .extend(paths);
+                            cx.notify();
+                        });
+                });
+          })
+          .detach();
+    }
+
+    /// Removes one attached path from `id`'s pending context by index.
+    fn remove_panel_context(&mut self, id: Uuid, index: usize) {
+        if let Some(paths) = self.panel_pending_context.get_mut(&id)
+           && index < paths.len()
+        {
+            paths.remove(index);
+        }
+    }
+
+    /// Toggles `id`'s input area between its default and expanded
+    /// multi-line editing size.
+    fn toggle_panel_input_expanded(&mut self, id: Uuid) {
+        if !self.panel_input_expanded.remove(&id) {
+            self.panel_input_expanded.insert(id);
+        }
+    }
+
     /// Gets or creates the prompt input entity for `id`'s panel.
     fn panel_prompt_input(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>)
-                          -> Entity<InputState> {
+                          -> Entity<TextareaState> {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Send a message…"));
+        let input = cx.new(|cx| TextareaState::new(window, cx).placeholder("Send a message…"));
         self.panel_prompt_inputs.insert(id, input.clone());
         input
     }
@@ -2515,9 +2787,18 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let text = input.read(cx).value().trim().to_string();
+        let mut text = input.read(cx).value().trim().to_string();
         if text.is_empty() {
             return;
+        }
+        // Attached context has no dedicated ACP content-block support here
+        // (`knot-acp`'s `session/prompt` only sends a single text block),
+        // so each path rides along as its own line rather than inventing
+        // an unverified resource-attachment wire shape.
+        let context = self.panel_pending_context.remove(&id).unwrap_or_default();
+        for path in &context {
+            text.push_str("\n\nAttached: ");
+            text.push_str(&path.to_string_lossy());
         }
         let Some(slot) = self.panel_sessions.get(&id)
         else {
@@ -2526,17 +2807,22 @@ impl WorkspaceWindow {
         let session = {
             let guard = slot.lock().unwrap();
             match &*guard {
-                panel_session::PanelSessionSlot::Ready(handle)
-                    if handle.state().lock().unwrap().pending_permission.is_none() =>
-                {
-                    handle.record_user_message(text.clone());
-                    Some(handle.session())
+                panel_session::PanelSessionSlot::Ready(handle) => {
+                    let state = handle.state();
+                    let state = state.lock().unwrap();
+                    let ready = state.pending_permission.is_none() && !state.turn_active;
+                    drop(state);
+                    ready.then(|| {
+                             handle.record_user_message(text.clone());
+                             handle.session()
+                         })
                 }
                 _ => None,
             }
         };
         let Some(session) = session
         else {
+            self.panel_pending_context.insert(id, context);
             return;
         };
         cx.update_entity(&input, |state, cx| {
@@ -5373,5 +5659,39 @@ mod tests {
                         "Voice",
                         "MCP",
                         "Appearance"]);
+    }
+
+    fn config_option(id: &str, category: &str) -> knot_acp::ConfigOption {
+        knot_acp::ConfigOption { id:            id.to_string(),
+                                 name:          id.to_string(),
+                                 category:      Some(category.to_string()),
+                                 kind:          "select".to_string(),
+                                 current_value: serde_json::Value::Null,
+                                 options:       Vec::new(), }
+    }
+
+    #[test]
+    fn find_config_option_matches_category_case_insensitively() {
+        let options = vec![config_option("mode", "Mode"),
+                           config_option("model", "model")];
+
+        let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+        assert_eq!(found.map(|option| option.id.as_str()), Some("mode"));
+    }
+
+    #[test]
+    fn find_config_option_is_none_when_no_category_matches() {
+        let options = vec![config_option("mode", "mode")];
+
+        assert!(WorkspaceWindow::find_config_option(&options, &["model"]).is_none());
+    }
+
+    #[test]
+    fn find_config_option_ignores_non_select_options() {
+        let mut boolean_option = config_option("brave_mode", "mode");
+        boolean_option.kind = "boolean".to_string();
+        let options = vec![boolean_option];
+
+        assert!(WorkspaceWindow::find_config_option(&options, &["mode"]).is_none());
     }
 }

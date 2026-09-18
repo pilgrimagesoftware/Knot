@@ -10,8 +10,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::{AcpError, Result, SessionEndCause};
 use crate::protocol::{
-    AgentCapabilities, InitializeParams, InitializeResult, JsonRpcErrorPayload, PROTOCOL_VERSION,
-    PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate,
+    AgentCapabilities, ConfigOption, InitializeParams, InitializeResult, JsonRpcErrorPayload,
+    PROTOCOL_VERSION, PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate,
 };
 use crate::transport::{Transport, TransportEvent};
 
@@ -31,10 +31,22 @@ pub enum SessionEvent {
 /// `.await` on without keeping the lock held across the await point.
 #[derive(Clone)]
 pub struct AcpClient {
-    transport:          Arc<Transport>,
-    capabilities:       AgentCapabilities,
+    transport:           Arc<Transport>,
+    capabilities:        AgentCapabilities,
+    /// Session Config Options declared on `initialize`, if any - seeds a
+    /// new session's config options before `session/new`'s own (possibly
+    /// richer, per-session) list arrives.
+    init_config_options: Vec<ConfigOption>,
     permission_pending:
         Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>>,
+}
+
+/// A newly created session: its id plus whatever Session Config Options
+/// (mode, model, reasoning effort, ...) the agent declared for it.
+#[derive(Debug, Clone, Default)]
+pub struct NewSession {
+    pub session_id:     String,
+    pub config_options: Vec<ConfigOption>,
 }
 
 impl AcpClient {
@@ -146,6 +158,7 @@ impl AcpClient {
 
         Ok((Self { transport,
                    capabilities: init_result.capabilities,
+                   init_config_options: init_result.config_options,
                    permission_pending },
             events_rx))
     }
@@ -154,7 +167,7 @@ impl AcpClient {
         &self.capabilities
     }
 
-    pub async fn session_new(&self, cwd: &str) -> Result<String> {
+    pub async fn session_new(&self, cwd: &str) -> Result<NewSession> {
         // `mcpServers` is required by at least the Gemini CLI adapter (it
         // rejects the request with an invalid_type validation error
         // without it, confirmed against a live `gemini --acp` handshake);
@@ -162,13 +175,16 @@ impl AcpClient {
         let raw = self.transport
                       .request("session/new", Some(json!({ "cwd": cwd, "mcpServers": [] })))
                       .await?;
-        session_id_from(&raw)
+        let session_id = session_id_from(&raw)?;
+        let config_options = config_options_from(&raw, &self.init_config_options);
+        Ok(NewSession { session_id,
+                        config_options })
     }
 
     /// Resumes a prior session. Returns a typed "not supported" error
     /// without sending the request when the agent's capabilities don't
     /// advertise `session/load` support.
-    pub async fn session_load(&self, session_id: &str, cwd: &str) -> Result<String> {
+    pub async fn session_load(&self, session_id: &str, cwd: &str) -> Result<NewSession> {
         if !self.capabilities.supports_resume {
             return Err(AcpError::ResumeNotSupported);
         }
@@ -177,7 +193,27 @@ impl AcpClient {
                                Some(json!({ "sessionId": session_id, "cwd": cwd,
                                           "mcpServers": [] })))
                       .await?;
-        session_id_from(&raw)
+        let session_id = session_id_from(&raw)?;
+        let config_options = config_options_from(&raw, &self.init_config_options);
+        Ok(NewSession { session_id,
+                        config_options })
+    }
+
+    /// Applies one Session Config Option selection (mode, model, effort,
+    /// ...) and returns the agent's updated full list, per the stabilized
+    /// Session Config Options `session/set_config_option` response shape.
+    pub async fn session_set_config_option(&self, session_id: &str, config_id: &str, value: &str)
+                                           -> Result<Vec<ConfigOption>> {
+        let raw = self.transport
+                      .request("session/set_config_option",
+                               Some(json!({ "sessionId": session_id, "configId": config_id,
+                                          "type": "id", "value": value })))
+                      .await?;
+        Ok(raw.get("configOptions")
+              .cloned()
+              .map(serde_json::from_value)
+              .and_then(std::result::Result::ok)
+              .unwrap_or_default())
     }
 
     pub async fn session_prompt(&self, session_id: &str, text: &str) -> Result<()> {
@@ -221,6 +257,18 @@ fn session_id_from(raw: &Value) -> Result<String> {
        .map(str::to_owned)
        .ok_or_else(|| AcpError::Rpc { code:    -32600,
                                       message: "session response missing sessionId".to_owned(), })
+}
+
+/// A `session/new`/`session/load` response's own `configOptions`, falling
+/// back to whatever `initialize` already declared when the per-session
+/// response omits them (the stabilized spec allows declaring them in
+/// either place).
+fn config_options_from(raw: &Value, init_config_options: &[ConfigOption]) -> Vec<ConfigOption> {
+    raw.get("configOptions")
+       .cloned()
+       .map(serde_json::from_value)
+       .and_then(std::result::Result::ok)
+       .unwrap_or_else(|| init_config_options.to_vec())
 }
 
 fn permission_result(decision: PermissionDecision, options: &[PermissionOption])
@@ -288,11 +336,11 @@ mod tests {
             AcpClient::connect(fake_agent(PROTOCOL_VERSION, true)).await
                                                                   .expect("connect");
 
-        let session_id = client.session_new("/tmp/project")
-                               .await
-                               .expect("session id");
+        let session = client.session_new("/tmp/project")
+                            .await
+                            .expect("session id");
 
-        assert_eq!(session_id, "sess-1");
+        assert_eq!(session.session_id, "sess-1");
     }
 
     #[tokio::test]
@@ -414,5 +462,57 @@ mod tests {
 
         let confirmation = events.recv().await.expect("decision echoed back");
         assert!(matches!(confirmation, SessionEvent::Update(SessionUpdate::TextDelta { text }) if text == "decision:deny"));
+    }
+
+    /// Fake agent declaring one `select` Session Config Option ("mode") on
+    /// `session/new`, and answering `session/set_config_option` with an
+    /// updated `currentValue`.
+    fn config_options_agent() -> Command {
+        let mut command = Command::new("sh");
+        command.arg("-c").arg(
+            r#"while IFS= read -r line; do
+              id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+              method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+              case "$method" in
+                initialize)
+                  echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}"
+                  ;;
+                session/new)
+                  echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-1\",\"configOptions\":[{\"id\":\"mode\",\"name\":\"Session Mode\",\"category\":\"mode\",\"type\":\"select\",\"currentValue\":\"ask\",\"options\":[{\"value\":\"ask\",\"name\":\"Ask\"},{\"value\":\"code\",\"name\":\"Code\"}]}]}}"
+                  ;;
+                session/set_config_option)
+                  echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"configOptions\":[{\"id\":\"mode\",\"name\":\"Session Mode\",\"category\":\"mode\",\"type\":\"select\",\"currentValue\":\"code\",\"options\":[{\"value\":\"ask\",\"name\":\"Ask\"},{\"value\":\"code\",\"name\":\"Code\"}]}]}}"
+                  ;;
+                *) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{}}" ;;
+              esac
+            done"#,
+        );
+        command
+    }
+
+    #[tokio::test]
+    async fn session_new_parses_declared_config_options() {
+        let (client, _events) = AcpClient::connect(config_options_agent()).await
+                                                                          .expect("connect");
+
+        let session = client.session_new("/tmp/project").await.expect("session");
+
+        assert_eq!(session.config_options.len(), 1);
+        assert_eq!(session.config_options[0].id, "mode");
+        assert_eq!(session.config_options[0].category.as_deref(), Some("mode"));
+        assert_eq!(session.config_options[0].options.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn set_config_option_sends_the_selection_and_returns_the_updated_list() {
+        let (client, _events) = AcpClient::connect(config_options_agent()).await
+                                                                          .expect("connect");
+        let session = client.session_new("/tmp/project").await.expect("session");
+
+        let updated = client.session_set_config_option(&session.session_id, "mode", "code")
+                            .await
+                            .expect("set config option");
+
+        assert_eq!(updated[0].current_value, serde_json::json!("code"));
     }
 }

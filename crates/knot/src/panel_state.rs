@@ -6,7 +6,7 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use knot_acp::{PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate};
+use knot_acp::{ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate};
 use serde_json::Value;
 
 /// One entry in the panel's message list: a user-sent prompt, streamed
@@ -46,6 +46,21 @@ pub struct PanelState {
     pub pending_permission: Option<PermissionRequest>,
     /// Set once the session ends (normally or on error); `None` while live.
     pub ended:              Option<SessionEndCause>,
+    /// True from the user's prompt until the matching `TurnEnd`, per the
+    /// response action bar design's "renders once streaming has ended"
+    /// decision - the last message's action bar (copy needs stable text)
+    /// and its track toggle are mutually exclusive on this flag.
+    pub turn_active:        bool,
+    /// Whether the in-flight response should auto-scroll to follow new
+    /// content, per the track toggle's per-response scope (design decision
+    /// "Track toggle scope"). Reset to `true` at the start of each turn.
+    pub tracking:           bool,
+    /// The agent's declared Session Config Options (permission mode,
+    /// model, reasoning effort, ...), per ACP's stabilized mechanism -
+    /// seeded from `session/new`/`session/load` and replaced wholesale on
+    /// a `config_option_update` push or a `session/set_config_option`
+    /// response.
+    pub config_options:     Vec<ConfigOption>,
 }
 
 impl PanelState {
@@ -71,9 +86,24 @@ impl PanelState {
     }
 
     /// Records a prompt the user just sent, so it shows in the
-    /// conversation - the ACP stream itself never echoes it back.
+    /// conversation - the ACP stream itself never echoes it back. Starts a
+    /// new turn: the next response tracks by default until the user
+    /// scrolls away or the turn ends.
     pub fn push_user_message(&mut self, text: String) {
         self.messages.push(PanelMessage::User(text));
+        self.turn_active = true;
+        self.tracking = true;
+    }
+
+    /// Turns off auto-scroll for the in-flight response, per the track
+    /// toggle's "detect user-initiated scroll away from bottom" scenario.
+    pub fn clear_tracking(&mut self) {
+        self.tracking = false;
+    }
+
+    /// Toggles auto-scroll for the in-flight response.
+    pub fn toggle_tracking(&mut self) {
+        self.tracking = !self.tracking;
     }
 
     fn apply_update(&mut self, update: SessionUpdate) {
@@ -111,8 +141,13 @@ impl PanelState {
             }
             // A turn-end carries only a stop reason; the tool call/message
             // list already reflects the turn's last known state and needs
-            // no change here.
-            SessionUpdate::TurnEnd { .. } | SessionUpdate::Unknown { .. } => {}
+            // no change beyond ending the turn (which flips the last
+            // response from "track toggle" to "response action bar").
+            SessionUpdate::TurnEnd { .. } => self.turn_active = false,
+            SessionUpdate::ConfigOptionUpdate { config_options } => {
+                self.config_options = config_options;
+            }
+            SessionUpdate::Unknown { .. } => {}
         }
     }
 
@@ -263,5 +298,58 @@ mod tests {
 
         assert_eq!(state.ended,
                    Some(SessionEndCause::ProcessExited { code: Some(1) }));
+    }
+
+    #[test]
+    fn user_message_starts_a_tracked_turn_and_turn_end_ends_it() {
+        let mut state = PanelState::new();
+
+        state.push_user_message("hello".to_string());
+        assert!(state.turn_active);
+        assert!(state.tracking);
+
+        state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason:
+                                                                      "end_turn".to_string(), }));
+        assert!(!state.turn_active);
+    }
+
+    #[test]
+    fn scrolling_away_clears_tracking_and_a_new_turn_resets_it() {
+        let mut state = PanelState::new();
+        state.push_user_message("hello".to_string());
+
+        state.clear_tracking();
+        assert!(!state.tracking);
+
+        state.push_user_message("again".to_string());
+        assert!(state.tracking);
+    }
+
+    #[test]
+    fn toggle_tracking_flips_the_flag() {
+        let mut state = PanelState::new();
+        state.push_user_message("hello".to_string());
+
+        state.toggle_tracking();
+        assert!(!state.tracking);
+        state.toggle_tracking();
+        assert!(state.tracking);
+    }
+
+    #[test]
+    fn config_option_update_replaces_the_declared_options() {
+        let mut state = PanelState::new();
+        let option = ConfigOption { id:            "mode".to_string(),
+                                    name:          "Mode".to_string(),
+                                    category:      Some("mode".to_string()),
+                                    kind:          "select".to_string(),
+                                    current_value: json!("code"),
+                                    options:       Vec::new(), };
+
+        state.apply(SessionEvent::Update(SessionUpdate::ConfigOptionUpdate {
+            config_options: vec![option.clone()],
+        }));
+
+        assert_eq!(state.config_options, vec![option]);
     }
 }
