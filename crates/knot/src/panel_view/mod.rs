@@ -7,14 +7,16 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
-    ClickEvent, ClipboardItem, Hsla, IntoElement, ParentElement, ScrollHandle, Styled, div,
-    relative, rgb,
+    ClickEvent, ClipboardItem, Hsla, InteractiveElement, IntoElement, ParentElement, ScrollHandle,
+    StatefulInteractiveElement, Styled, div, relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
 
@@ -125,10 +127,12 @@ pub(crate) fn risk_color(risk: RiskLevel) -> Option<u32> {
 /// `scroll` backs the conversation's scroll container (the caller applies
 /// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
 /// to a specific message. `on_toggle_track` flips auto-scroll for the
-/// in-flight response.
+/// in-flight response; `on_toggle_tool_call` records the user opening or
+/// closing one tool-call card, by its id.
 pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: &PanelStyle,
                            on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
-                           on_toggle_track: impl Fn() + Clone + 'static)
+                           on_toggle_track: impl Fn() + Clone + 'static,
+                           on_toggle_tool_call: impl Fn(String) + Clone + 'static)
                            -> impl IntoElement {
     let last_index = state.messages.len().checked_sub(1);
     // `w_full`, never `size_full`: this is the *content* of the caller's
@@ -158,6 +162,7 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: &Pa
                           scroll },
                 message,
                 on_toggle_track.clone(),
+                on_toggle_tool_call.clone(),
             )
         }))
         .children(state.pending_permission.as_ref().map(|request| {
@@ -177,7 +182,8 @@ struct Message<'a> {
 }
 
 fn render_message(ctx: Message<'_>, message: &PanelMessage,
-                  on_toggle_track: impl Fn() + Clone + 'static)
+                  on_toggle_track: impl Fn() + Clone + 'static,
+                  on_toggle_tool_call: impl Fn(String) + Clone + 'static)
                   -> gpui_kit::AnyElement {
     let Message { state,
                   index,
@@ -228,7 +234,10 @@ fn render_message(ctx: Message<'_>, message: &PanelMessage,
                               }))
                     .into_any_element()
         }
-        PanelMessage::ToolCall(card) => render_tool_call_card(card, style).into_any_element(),
+        PanelMessage::ToolCall(card) => {
+            render_tool_call_card(card, style, state.is_collapsed(card),
+                                  on_toggle_tool_call).into_any_element()
+        }
         // Left-aligned like the assistant's own text, since it stands
         // where that answer would have been, but in the error color and
         // outlined so it doesn't read as something the agent said.
@@ -318,23 +327,27 @@ fn render_response_actions(text: String, user_index: Option<usize>, scroll: &Scr
 
 /// A tool-call card: an icon/title/status header over whatever content
 /// the agent has reported so far - diff blocks as an added/removed line
-/// view, everything else as monospace output. The header separates
-/// content from chrome by font: the title is a command, a path or an
-/// identifier and renders monospace, the status is the panel's own word
-/// for the call and stays proportional. The outline is coloured by
-/// `card_outline`.
+/// view, everything else as monospace output (`render_tool_call_body`).
+/// The header separates content from chrome by font: the title is a
+/// command, a path or an identifier and renders monospace, the status is
+/// the panel's own word for the call and stays proportional. The outline
+/// is coloured by `card_outline`.
 ///
-/// An unfinished call with no content yet shows an in-progress
-/// placeholder; a *finished* one with no content shows nothing rather
-/// than a stale "Running…" (the bug this keys the placeholder on
-/// `status` to avoid).
-fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoElement {
+/// `collapsed` comes from `PanelState::is_collapsed`, so a succeeded call
+/// folds to just this header. The whole header row is the toggle's hit
+/// target, not only the chevron: a 12px icon is a poor one and the header
+/// carries no other action (design decision "The control is a disclosure
+/// chevron, and the whole header toggles").
+fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, collapsed: bool,
+                         on_toggle: impl Fn(String) + Clone + 'static)
+                         -> impl IntoElement {
     let label = if card.title.is_empty() {
         card.kind.clone()
     }
     else {
         card.title.clone()
     };
+    let id = card.id.clone();
     v_flex().w_full()
             .min_w_0()
             .gap_2()
@@ -343,10 +356,15 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoEl
             .border_1()
             .border_color(style.outline_color(card_outline(&card.status)))
             .bg(rgb(CARD_BG))
-            .child(h_flex().w_full()
+            .child(h_flex().id(("panel-tool-call-header", element_id(&card.id)))
+                           .w_full()
                            .min_w_0()
                            .gap_2()
                            .items_center()
+                           .cursor_pointer()
+                           .on_click(move |_: &ClickEvent, _, _| on_toggle(id.clone()))
+                           .child(Icon::new(disclosure_icon(collapsed)).xsmall()
+                                                                       .text_color(rgb(MUTED)))
                            .child(Icon::new(tool_call_icon(&card.kind)).xsmall()
                                                                        .text_color(rgb(MUTED)))
                            .child(div().flex_1()
@@ -359,17 +377,49 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoEl
                                        .font_family(style.ui_font_family.clone())
                                        .text_xs()
                                        .text_color(rgb(if card.failed() {
-                                                           ERROR_COLOR
-                                                       }
-                                                       else {
-                                                           MUTED
-                                                       }))
+                                                       ERROR_COLOR
+                                                   }
+                                                   else {
+                                                       MUTED
+                                                   }))
                                        .child(status_label(&card.status))))
+            .children((!collapsed).then(|| render_tool_call_body(card, style)))
+}
+
+/// A card's content, drawn only while the card is expanded. An unfinished
+/// call with no content yet shows an in-progress placeholder; a *finished*
+/// one with no content shows nothing rather than a stale "Running…".
+fn render_tool_call_body(card: &ToolCallCard, style: &PanelStyle) -> impl IntoElement {
+    v_flex().w_full()
+            .min_w_0()
+            .gap_2()
             .children(card.content
                           .iter()
                           .map(|content| render_tool_call_content(content, style)))
             .children((card.content.is_empty() && !card.is_finished())
                                                                      .then(in_progress_placeholder))
+}
+
+/// The disclosure chevron for a card in either state: pointing right at a
+/// collapsed card (its content is off to the side, unopened) and down at
+/// an expanded one (its content is below), the platform convention.
+fn disclosure_icon(collapsed: bool) -> IconName {
+    if collapsed {
+        IconName::ChevronRight
+    }
+    else {
+        IconName::ChevronDown
+    }
+}
+
+/// A stable element id for a tool call's header. GPUI element ids are
+/// `&'static str` or an integer, and a tool-call id is neither, so it is
+/// hashed - collisions only cost the wrong card's click state, and within
+/// one conversation they are not realistic.
+fn element_id(tool_call_id: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    tool_call_id.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// One tool-call content block. Diffs get the added/removed line view
@@ -619,6 +669,20 @@ mod tests {
                    vec![(ERROR_COLOR, "- old".to_string()),
                         (SAFE_COLOR, "+ new".to_string()),
                         (MUTED, " context".to_string())]);
+    }
+
+    #[test]
+    fn the_chevron_states_which_way_the_card_goes() {
+        assert_eq!(disclosure_icon(true), IconName::ChevronRight);
+        assert_eq!(disclosure_icon(false), IconName::ChevronDown);
+    }
+
+    /// Two cards in one conversation must not share a header element id,
+    /// or a click on one would carry the other's state.
+    #[test]
+    fn each_tool_call_id_gets_its_own_element_id() {
+        assert_eq!(element_id("tc1"), element_id("tc1"));
+        assert_ne!(element_id("tc1"), element_id("tc2"));
     }
 
     #[test]

@@ -6,6 +6,8 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
+use std::collections::HashMap;
+
 use knot_acp::{
     ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate, ToolCallContent,
 };
@@ -63,6 +65,13 @@ impl ToolCallCard {
     pub fn failed(&self) -> bool {
         self.status == "failed"
     }
+
+    /// Whether the call finished without failing - the one status that
+    /// collapses by default, per `acp-panel-ui`'s "A finished tool call
+    /// collapses to its header" requirement.
+    pub fn succeeded(&self) -> bool {
+        self.status == "completed"
+    }
 }
 
 /// Folded state for one ACP session, per `acp-panel-ui`'s streaming
@@ -91,6 +100,15 @@ pub struct PanelState {
     /// a `config_option_update` push or a `session/set_config_option`
     /// response.
     pub config_options:     Vec<ConfigOption>,
+    /// The user's explicit open/closed choice per tool-call id, and only
+    /// those choices - a card the user has never touched has no entry and
+    /// follows `is_collapsed`'s default. Storing overrides rather than a
+    /// collapsed flag per card is what makes the choice outlive the
+    /// automatic behaviour (design decision "Collapsed-ness is computed,
+    /// and only the user's overrides are stored"): the entry does not care
+    /// that the call's status later changed, so a card opened while running
+    /// does not slam shut on completion.
+    tool_call_collapsed:    HashMap<String, bool>,
 }
 
 impl PanelState {
@@ -150,6 +168,28 @@ impl PanelState {
     /// resumes following it, rather than flipping whatever it was.
     pub fn set_tracking(&mut self, tracking: bool) {
         self.tracking = tracking;
+    }
+
+    /// Whether `card` renders collapsed: the user's choice if they have
+    /// made one, otherwise the default - collapsed once the call has
+    /// succeeded, expanded while it runs and expanded if it failed (the
+    /// failure output is what the user is reading the conversation for).
+    pub fn is_collapsed(&self, card: &ToolCallCard) -> bool {
+        self.tool_call_collapsed
+            .get(&card.id)
+            .copied()
+            .unwrap_or_else(|| card.succeeded())
+    }
+
+    /// Records the user opening or closing one tool call, flipping
+    /// whichever state it currently renders in. Unknown ids are ignored:
+    /// the override is only meaningful against a card that exists.
+    pub fn toggle_tool_call(&mut self, id: &str) {
+        let Some(collapsed) = self.tool_call(id).map(|card| self.is_collapsed(card))
+        else {
+            return;
+        };
+        self.tool_call_collapsed.insert(id.to_string(), !collapsed);
     }
 
     fn apply_update(&mut self, update: SessionUpdate) {
@@ -232,6 +272,16 @@ impl PanelState {
         else {
             self.messages.push(PanelMessage::Assistant(text));
         }
+    }
+
+    fn tool_call(&self, id: &str) -> Option<&ToolCallCard> {
+        self.messages
+            .iter()
+            .rev()
+            .find_map(|message| match message {
+                PanelMessage::ToolCall(card) if card.id == id => Some(card),
+                _ => None,
+            })
     }
 
     fn tool_call_mut(&mut self, id: &str) -> Option<&mut ToolCallCard> {
@@ -491,6 +541,132 @@ mod tests {
         assert!(!state.tracking);
         state.toggle_tracking();
         assert!(state.tracking);
+    }
+
+    /// The card at `index`, for the collapse tests below.
+    fn card(state: &PanelState, index: usize) -> &ToolCallCard {
+        let PanelMessage::ToolCall(card) = &state.messages[index]
+        else {
+            panic!("expected a tool call card");
+        };
+        card
+    }
+
+    #[test]
+    fn an_untouched_running_call_is_expanded() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        assert!(!state.is_collapsed(card(&state, 0)),
+                "a pending call must stay open");
+
+        state.apply(tool_call_update("tc1", Some("in_progress"), Vec::new()));
+        assert!(!state.is_collapsed(card(&state, 0)),
+                "a running call's output is what the user is waiting on");
+    }
+
+    #[test]
+    fn an_untouched_completed_call_is_collapsed() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+
+        assert!(state.is_collapsed(card(&state, 0)));
+    }
+
+    /// The one place this reads past "collapse when they're done": a
+    /// failure is done, and it is also the card the user opened the
+    /// conversation to read.
+    #[test]
+    fn an_untouched_failed_call_stays_expanded() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("failed"), Vec::new()));
+
+        assert!(!state.is_collapsed(card(&state, 0)));
+    }
+
+    #[test]
+    fn a_call_opened_while_running_stays_open_when_it_completes() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("in_progress"), Vec::new()));
+
+        // Running calls render open, so a toggle closes one; toggling
+        // again is the user explicitly opening it.
+        state.toggle_tool_call("tc1");
+        state.toggle_tool_call("tc1");
+        state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+
+        assert!(!state.is_collapsed(card(&state, 0)),
+                "a call the user opened must not slam shut on completion");
+    }
+
+    #[test]
+    fn a_call_closed_while_running_stays_closed_when_it_completes() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("in_progress"), Vec::new()));
+
+        state.toggle_tool_call("tc1");
+        assert!(state.is_collapsed(card(&state, 0)),
+                "a running call can be closed and goes on streaming out of sight");
+
+        state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+        assert!(state.is_collapsed(card(&state, 0)));
+    }
+
+    #[test]
+    fn a_call_closed_while_running_stays_closed_when_it_fails() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("in_progress"), Vec::new()));
+
+        state.toggle_tool_call("tc1");
+        state.apply(tool_call_update("tc1", Some("failed"), Vec::new()));
+
+        assert!(state.is_collapsed(card(&state, 0)),
+                "the user's choice outranks the automatic expansion of a failure");
+    }
+
+    #[test]
+    fn opening_one_call_leaves_the_others_alone() {
+        let mut state = PanelState::new();
+        for id in ["tc1", "tc2"] {
+            state.apply(tool_call_start(id, "read"));
+            state.apply(tool_call_update(id, Some("completed"), Vec::new()));
+        }
+
+        state.toggle_tool_call("tc1");
+
+        assert!(!state.is_collapsed(card(&state, 0)));
+        assert!(state.is_collapsed(card(&state, 1)));
+    }
+
+    #[test]
+    fn toggling_an_unknown_call_records_nothing() {
+        let mut state = PanelState::new();
+
+        state.toggle_tool_call("no-such-call");
+
+        assert!(state.tool_call_collapsed.is_empty());
+    }
+
+    /// Nothing about the open/closed choices is persisted: the overrides
+    /// live in the panel's view state, so a reloaded conversation starts
+    /// from the automatic behaviour again.
+    #[test]
+    fn a_reloaded_conversation_collapses_a_call_the_previous_one_had_open() {
+        let mut state = PanelState::new();
+        state.apply(tool_call_start("tc1", "execute"));
+        state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+        state.toggle_tool_call("tc1");
+        assert!(!state.is_collapsed(card(&state, 0)));
+
+        let mut reloaded = PanelState::new();
+        reloaded.apply(tool_call_start("tc1", "execute"));
+        reloaded.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+
+        assert!(reloaded.is_collapsed(card(&reloaded, 0)));
     }
 
     #[test]

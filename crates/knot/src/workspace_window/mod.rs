@@ -1067,6 +1067,14 @@ impl WorkspaceWindow {
                         handle.toggle_tracking();
                     }
                 };
+                let tool_call_slot = Arc::clone(slot);
+                let on_toggle_tool_call = move |tool_call_id: String| {
+                    if let Ok(slot) = tool_call_slot.lock()
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    {
+                        handle.toggle_tool_call(&tool_call_id);
+                    }
+                };
                 let scroll_away_slot = Arc::clone(slot);
                 let follow_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
@@ -1133,7 +1141,8 @@ impl WorkspaceWindow {
                                                                     &scroll,
                                                                     &panel_style,
                                                                     on_decision,
-                                                                    on_toggle_track)))
+                                                                    on_toggle_track,
+                                                                    on_toggle_tool_call)))
                                     .children(scrolled_up.then(|| {
                                         div().absolute()
                                              .bottom_3()
