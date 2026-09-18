@@ -101,6 +101,8 @@ pub(crate) struct WorkspaceWindow {
     /// When each agent's diff stat was last *requested*, so the refresh
     /// runs on a cadence rather than once per render. Main-thread only.
     diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
+    /// Keeps the window-bounds observer alive for this window's lifetime.
+    window_bounds_subscription:       Option<gpui_kit::Subscription>,
     /// Set by a finished refresh so the repaint poll redraws the header.
     diff_stats_dirty:                 Arc<std::sync::atomic::AtomicBool>,
     /// Which config selector's popover is open, by element id, or `None`
@@ -197,7 +199,13 @@ impl WorkspaceWindow {
                                            .map(|workspace| workspace.name.clone())
                                   })
                                   .unwrap_or_else(|| "Workspace".to_string());
-        let options = workspace_window_options(cx);
+        let saved_bounds = store.lock().ok().and_then(|store| {
+                                                store.workspaces()
+                                                     .iter()
+                                                     .find(|workspace| workspace.id == workspace_id)
+                                                     .and_then(|workspace| workspace.window_bounds)
+                                            });
+        let options = workspace_window_options(saved_bounds, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
                   // The OS window title (Mission Control, Cmd+`, Window menu)
@@ -224,6 +232,7 @@ impl WorkspaceWindow {
                   let view =
                       cx.new(|cx| {
                             let mut window = WorkspaceWindow {
+                    window_bounds_subscription: None,
                     diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
                     diff_stats_requested: BTreeMap::new(),
                     diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -316,6 +325,41 @@ impl WorkspaceWindow {
                         }
                     })
                     .detach();
+                  // Remember where the user puts this workspace's window.
+                  // The observer fires continuously through a drag, so the
+                  // store's setter reports whether the frame actually
+                  // changed and only then is anything written to disk.
+                  view.update(cx, |view, cx| {
+                          let subscription =
+                              cx.observe_window_bounds(window, move |view, window, _cx| {
+                                    let bounds = window.window_bounds().get_bounds();
+                                    let saved =
+                                        knot_core::SavedWindowBounds { x:      bounds.origin
+                                                                                     .x
+                                                                                     .into(),
+                                                                       y:      bounds.origin
+                                                                                     .y
+                                                                                     .into(),
+                                                                       width:  bounds.size
+                                                                                     .width
+                                                                                     .into(),
+                                                                       height: bounds.size
+                                                                                     .height
+                                                                                     .into(), };
+                                    let changed =
+                                        view.store
+                                            .lock()
+                                            .map(|mut store| {
+                                                store.set_workspace_window_bounds(workspace_id,
+                                                                                  saved)
+                                            })
+                                            .unwrap_or(false);
+                                    if changed {
+                                        view.persist_agents();
+                                    }
+                                });
+                          view.window_bounds_subscription = Some(subscription);
+                      });
                   cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
               })
         {

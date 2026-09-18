@@ -13,7 +13,8 @@ fn workspace(name: &str) -> Workspace {
                 split_ratio:           0.5,
                 split_ratio_secondary: None,
                 show_dashboard:        None,
-                is_detached:           None, }
+                is_detached:           None,
+                window_bounds:         None, }
 }
 
 #[test]

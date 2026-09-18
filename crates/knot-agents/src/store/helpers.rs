@@ -14,7 +14,8 @@ pub(super) fn default_workspace(agent_ids: Vec<Uuid>) -> Workspace {
                 split_ratio: 0.5,
                 split_ratio_secondary: None,
                 show_dashboard: None,
-                is_detached: None }
+                is_detached: None,
+                window_bounds: None }
 }
 
 pub(super) fn last_path_component(folder: &str) -> String {
