@@ -83,6 +83,10 @@ pub(crate) struct WorkspaceWindow {
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
     /// here persists across a view-mode toggle, only stopped on restart.
     panel_sessions:                   BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
+    /// The lifecycle phase each panel session was in the last time the
+    /// repaint poll looked, so a slot moving between phases repaints - see
+    /// `panel_needs_repaint`.
+    panel_phases:                     BTreeMap<Uuid, panel_session::PanelPhase>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
@@ -179,6 +183,7 @@ impl WorkspaceWindow {
                     terminal_focus: cx.focus_handle(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
+                    panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_scroll_handles: BTreeMap::new(),
@@ -246,16 +251,7 @@ impl WorkspaceWindow {
                                                          .is_some_and(|grid| {
                                                              grid.lock().unwrap().take_dirty()
                                                          });
-                                                 let panel_dirty = view
-                                .selected_agent
-                                .and_then(|id| view.panel_sessions.get(&id))
-                                .is_some_and(|slot| {
-                                    matches!(
-                                        &*slot.lock().unwrap(),
-                                        panel_session::PanelSessionSlot::Ready(handle)
-                                            if handle.take_dirty()
-                                    )
-                                });
+                                                 let panel_dirty = view.panel_needs_repaint();
                                                  if grid_dirty || panel_dirty {
                                                      cx.notify();
                                                  }
@@ -383,13 +379,100 @@ impl WorkspaceWindow {
         }
     }
 
+    /// Whether the selected agent's panel needs a repaint: either its live
+    /// session has new events, or its slot changed lifecycle phase since
+    /// the last poll.
+    ///
+    /// The phase half matters because `ensure_panel_session` fills the slot
+    /// from a background tokio task. `Ready` carries its own dirty flag,
+    /// but `Failed` carries nothing - so before this check, a connection
+    /// that failed (a missing API key, a refused handshake) left the pane
+    /// showing "Connecting to agent…" indefinitely, making the connect
+    /// timeout look like it had never fired when in fact the error was
+    /// sitting in the slot, undrawn.
+    fn panel_needs_repaint(&mut self) -> bool {
+        let Some(id) = self.selected_agent
+        else {
+            return false;
+        };
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return false;
+        };
+        let (phase, events_arrived) = {
+            let slot = slot.lock().unwrap();
+            let events_arrived = matches!(&*slot,
+                                          panel_session::PanelSessionSlot::Ready(handle)
+                                          if handle.take_dirty());
+            (slot.phase(), events_arrived)
+        };
+        let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
+        phase_changed || events_arrived
+    }
+
     /// Tears down a session (e.g. its agent was removed or restarted).
+    /// Covers both launch paths: the PTY terminal session for shell
+    /// agents, and the ACP connection for Panel-mode ones - a non-shell
+    /// agent has no `sessions` entry at all, so without the panel half
+    /// removing it left its adapter subprocess running.
     fn remove_session(&mut self, id: Uuid) {
         if let Some(session) = self.sessions.remove(&id)
            && let Ok(mut session) = session.lock()
         {
             let _ = session.shutdown();
         }
+        self.panel_phases.remove(&id);
+        if let Some(slot) = self.panel_sessions.remove(&id) {
+            let handle = match std::mem::replace(&mut *slot.lock().unwrap(),
+                                                 panel_session::PanelSessionSlot::Connecting)
+            {
+                panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
+                _ => None,
+            };
+            if let Some(handle) = handle {
+                let _runtime_guard = self.runtime.enter();
+                self.runtime.spawn(async move { handle.stop().await });
+            }
+        }
+    }
+
+    /// Removes `id` (and its companions) from the store, tears down their
+    /// sessions, and persists the result.
+    ///
+    /// The persist is the point: `AgentStore::remove` only mutates memory,
+    /// so without writing `saved_agents`/`saved_workspaces` back out the
+    /// removal was undone by the next launch (or by any other window's
+    /// persist), which is what "Remove Agent does nothing" looked like.
+    /// Every other agent mutation (create, edit) already persists this way.
+    fn remove_agent(&mut self, id: Uuid) {
+        let removed = match self.store.lock() {
+            Ok(mut store) => store.remove(id),
+            Err(_) => return,
+        };
+        for removed_agent in removed {
+            self.remove_session(removed_agent.id);
+            self.panel_states.remove(&removed_agent.id);
+            self.panel_prompt_inputs.remove(&removed_agent.id);
+            self.panel_prompt_input_subscriptions
+                .remove(&removed_agent.id);
+            self.panel_scroll_handles.remove(&removed_agent.id);
+            self.panel_pending_context.remove(&removed_agent.id);
+            self.panel_input_expanded.remove(&removed_agent.id);
+            if self.selected_agent == Some(removed_agent.id) {
+                self.selected_agent = None;
+            }
+        }
+        self.persist_agents();
+    }
+
+    /// Writes the store's current agents and workspaces back to settings.
+    fn persist_agents(&mut self) {
+        if let Ok(store) = self.store.lock() {
+            self.settings.saved_agents =
+                store.saved_agents(self.settings.restore_conversation_on_launch);
+            self.settings.saved_workspaces = store.saved_workspaces();
+        }
+        let _ = self.settings.persist();
     }
 
     /// Starts a Panel-mode ACP connection for `id` if one isn't already
@@ -1615,6 +1698,13 @@ impl Render for WorkspaceWindow {
                                                     let _ = store.lock().unwrap().restart(id);
                                                     window_entity.update(app, |view, cx| {
                                                         view.remove_session(id);
+                                                        view.panel_states.remove(&id);
+                                                        // `restart` clears the
+                                                        // persisted session ids;
+                                                        // write them out so a
+                                                        // relaunch doesn't resume
+                                                        // the session just dropped.
+                                                        view.persist_agents();
                                                         cx.notify();
                                                     });
                                                     true
@@ -1625,35 +1715,23 @@ impl Render for WorkspaceWindow {
                             }
 
                             menu.item(PopupMenuItem::new("Remove Agent").on_click({
-                                let store = Arc::clone(&store);
                                 let window_entity = window_entity.clone();
                                 let name = name.clone();
                                 move |_, window, app| {
-                                    let store = Arc::clone(&store);
                                     let window_entity = window_entity.clone();
                                     let name = name.clone();
                                     window.open_alert_dialog(app, move |alert, _, _| {
-                                        let store = Arc::clone(&store);
                                         let window_entity = window_entity.clone();
                                         alert
                                             .title("Remove Agent")
                                             .description(format!(
-                                                "Remove \"{name}\"? This closes its terminal \
-                                                 session."
+                                                "Remove \"{name}\"? This closes its session and \
+                                                 cannot be undone."
                                             ))
                                             .confirm()
                                             .on_ok(move |_, _, app| {
-                                                let removed = store.lock().unwrap().remove(id);
                                                 window_entity.update(app, |view, cx| {
-                                                    for removed_agent in removed {
-                                                        view.remove_session(removed_agent.id);
-                                                        view.panel_states.remove(&removed_agent.id);
-                                                        if view.selected_agent
-                                                            == Some(removed_agent.id)
-                                                        {
-                                                            view.selected_agent = None;
-                                                        }
-                                                    }
+                                                    view.remove_agent(id);
                                                     cx.notify();
                                                 });
                                                 true

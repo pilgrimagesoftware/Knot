@@ -149,3 +149,26 @@ pub enum PanelSessionSlot {
     Ready(PanelSessionHandle),
     Failed(String),
 }
+
+impl PanelSessionSlot {
+    /// Which lifecycle phase this slot is in, without borrowing the
+    /// handle. The UI's repaint poll compares this against the phase it
+    /// last drew: the connecting task writes the slot from a background
+    /// thread, and neither `Connecting` nor `Failed` carries a dirty flag
+    /// of its own, so without this a failed connection would leave the
+    /// pane showing "Connecting to agent…" forever.
+    pub fn phase(&self) -> PanelPhase {
+        match self {
+            Self::Connecting => PanelPhase::Connecting,
+            Self::Ready(_) => PanelPhase::Ready,
+            Self::Failed(_) => PanelPhase::Failed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelPhase {
+    Connecting,
+    Ready,
+    Failed,
+}
