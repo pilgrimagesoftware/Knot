@@ -32,6 +32,11 @@ pub struct AcpClient {
     init_config_options: Vec<ConfigOption>,
     permission_pending:
         Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>>,
+    /// The same channel the transport loop feeds. `session_prompt` needs
+    /// it because ACP ends a turn by *responding* to `session/prompt`
+    /// with a stop reason rather than sending a `session/update`, so the
+    /// turn-end event has to be synthesized from that response.
+    events:              mpsc::UnboundedSender<SessionEvent>,
 }
 
 impl AcpClient {
@@ -62,6 +67,7 @@ impl AcpClient {
             Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>,
         > = Arc::new(Mutex::new(std::collections::HashMap::new()));
         let (events_tx, events_rx) = mpsc::unbounded_channel();
+        let events_for_client = events_tx.clone();
 
         let transport_for_loop = Arc::clone(&transport);
         let pending_for_loop = Arc::clone(&permission_pending);
@@ -144,7 +150,8 @@ impl AcpClient {
         Ok((Self { transport,
                    capabilities: init_result.capabilities,
                    init_config_options: init_result.config_options,
-                   permission_pending },
+                   permission_pending,
+                   events: events_for_client },
             events_rx))
     }
 
@@ -219,11 +226,29 @@ impl AcpClient {
               .unwrap_or_default())
     }
 
+    /// Sends one prompt and waits for the turn to finish.
+    ///
+    /// ACP ends a prompt turn by responding to *this request* with a
+    /// `stopReason` - there is no `turn_end` session update
+    /// (<https://agentclientprotocol.com/protocol/prompt-turn>, "Check for
+    /// Completion"). So the turn-end event callers rely on is synthesized
+    /// from the response here. It is emitted even when the request fails,
+    /// because a caller that gates input on "a turn is in flight" would
+    /// otherwise stay blocked forever on a failed prompt.
     pub async fn session_prompt(&self, session_id: &str, text: &str) -> Result<()> {
-        self.transport
-            .request("session/prompt", Some(json!({ "sessionId": session_id, "prompt": [{ "type": "text", "text": text }] })))
-            .await?;
-        Ok(())
+        let result = self.transport
+                         .request("session/prompt", Some(json!({ "sessionId": session_id, "prompt": [{ "type": "text", "text": text }] })))
+                         .await;
+        let stop_reason = match &result {
+            Ok(raw) => raw.get("stopReason")
+                          .and_then(Value::as_str)
+                          .unwrap_or("end_turn")
+                          .to_owned(),
+            Err(_) => "error".to_owned(),
+        };
+        let _ = self.events
+                    .send(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason }));
+        result.map(|_| ())
     }
 
     pub async fn session_cancel(&self, session_id: &str) -> Result<()> {
@@ -313,6 +338,63 @@ mod tests {
         );
         command.arg("-c").arg(script);
         command
+    }
+
+    /// A fake agent whose `session/prompt` answers with a stop reason and
+    /// sends no `turn_end` notification - which is how ACP actually ends a
+    /// turn.
+    fn prompting_agent() -> Command {
+        let mut command = Command::new("sh");
+        let script = format!(
+                             r#"while IFS= read -r line; do
+              id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+              method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+              case "$method" in
+                initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{PROTOCOL_VERSION},\"agentCapabilities\":{{}}}}}}" ;;
+                session/prompt) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"stopReason\":\"end_turn\"}}}}" ;;
+                *) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}" ;;
+              esac
+            done"#
+        );
+        command.arg("-c").arg(script);
+        command
+    }
+
+    /// The turn-end event has to be synthesized from the `session/prompt`
+    /// response, because ACP has no `turn_end` session update. Without it a
+    /// caller that gates input on "a turn is in flight" - the panel's Send
+    /// button and Enter key both do - stays blocked forever after the very
+    /// first prompt.
+    #[tokio::test]
+    async fn a_finished_prompt_emits_a_turn_end_with_the_responses_stop_reason() {
+        let (client, mut events) = AcpClient::connect(prompting_agent()).await
+                                                                        .expect("connect");
+
+        client.session_prompt("sess-1", "hello")
+              .await
+              .expect("prompt");
+
+        let event = events.recv().await.expect("a turn-end event");
+        assert!(matches!(&event,
+                         SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason })
+                         if stop_reason == "end_turn"),
+                "expected a turn end, got {event:?}");
+    }
+
+    /// A prompt that fails must still end the turn, or the same gate wedges
+    /// the panel permanently on one bad request.
+    #[tokio::test]
+    async fn a_failed_prompt_still_ends_the_turn() {
+        let (client, mut events) =
+            AcpClient::connect(fake_agent(PROTOCOL_VERSION, true)).await
+                                                                  .expect("connect");
+        drop(client.close());
+
+        let _ = client.session_prompt("sess-1", "hello").await;
+
+        let event = events.recv().await.expect("a turn-end event");
+        assert!(matches!(&event, SessionEvent::Update(SessionUpdate::TurnEnd { .. })),
+                "expected a turn end even on failure, got {event:?}");
     }
 
     #[tokio::test]
