@@ -1486,6 +1486,33 @@ pub(crate) struct SelectedAgentHeader {
 }
 
 impl WorkspaceWindow {
+    /// The selected agent's diff stat, with only the figures colored -
+    /// additions green, deletions red, the changed-file count blue - and
+    /// the words around them left muted. The count's noun goes through
+    /// `l10n::plural_noun` rather than a local `if count == 1`, so the
+    /// word (and its form) comes from the locale catalog.
+    fn render_diff_stats(stats: &knot_git::DiffStats, font_family: String,
+                         font_size: gpui_kit::Pixels, cx: &Context<Self>)
+                         -> gpui_kit::AnyElement {
+        let muted = cx.theme().muted_foreground;
+        let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
+        h_flex().font_family(font_family)
+                .text_size(font_size)
+                .text_color(muted)
+                .gap_1()
+                .items_baseline()
+                .child(div().text_color(rgb(app_state::DIFF_ADDED_COLOR))
+                            .child(format!("+{}", stats.insertions)))
+                .child(div().text_color(rgb(app_state::DIFF_REMOVED_COLOR))
+                            .child(format!("-{}", stats.deletions)))
+                .child(h_flex().items_baseline()
+                               .child(div().child("("))
+                               .child(div().text_color(rgb(app_state::DIFF_FILES_COLOR))
+                                           .child(stats.files_changed.to_string()))
+                               .child(div().ml_1().child(format!("{files})"))))
+                .into_any_element()
+    }
+
     fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
         let id = self.selected_agent?;
         let store = self.store.lock().ok()?;
@@ -2022,24 +2049,17 @@ impl Render for WorkspaceWindow {
                                                        .text_size(ui_font_size)
                                                        .text_color(cx.theme().muted_foreground)
                                                        .child(state_label(*state))))
-                            .child(div().font_family(ui_font_name.clone())
-                                        .text_size(ui_font_size)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(match git_stats {
-                                                   Some(stats) => {
-                                                       format!("+{} -{} ({} {})",
-                                                               stats.insertions,
-                                                               stats.deletions,
-                                                               stats.files_changed,
-                                                               if stats.files_changed == 1 {
-                                                                   "file"
-                                                               }
-                                                               else {
-                                                                   "files"
-                                                               })
-                                                   }
-                                                   None => "Getting stats...".to_string(),
-                                               }))
+                            .child(match git_stats {
+                                       Some(stats) => Self::render_diff_stats(stats,
+                                                                              ui_font_name.clone(),
+                                                                              ui_font_size,
+                                                                              cx),
+                                       None => div().font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(knot_core::l10n::t("git.stats_pending"))
+                                                    .into_any_element(),
+                                   })
                             .into_any_element()
                 }
                 None => div().into_any_element(),

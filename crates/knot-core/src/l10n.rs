@@ -21,8 +21,16 @@ pub fn t(key: &str) -> String {
 /// otherwise the localized value of `plural_key`.
 #[must_use]
 pub fn pluralize(count: u64, singular_key: &str, plural_key: &str) -> String {
-    let key = if count == 1 { singular_key } else { plural_key };
-    format!("{count} {}", t(key))
+    format!("{count} {}", plural_noun(count, singular_key, plural_key))
+}
+
+/// The localized noun alone, without the count in front of it, for callers
+/// that render the two separately - a diff stat that colors the number but
+/// not the word it counts, say. Same key-not-word contract as
+/// [`pluralize`], which is built on this.
+#[must_use]
+pub fn plural_noun(count: u64, singular_key: &str, plural_key: &str) -> String {
+    t(if count == 1 { singular_key } else { plural_key })
 }
 
 #[cfg(test)]
@@ -52,5 +60,12 @@ mod tests {
     #[test]
     fn many_uses_plural() {
         assert_eq!(pluralize(3, "count.file", "count.files"), "3 files");
+    }
+
+    #[test]
+    fn plural_noun_omits_the_count_but_keeps_its_form() {
+        assert_eq!(plural_noun(0, "count.file", "count.files"), "files");
+        assert_eq!(plural_noun(1, "count.file", "count.files"), "file");
+        assert_eq!(plural_noun(3, "count.file", "count.files"), "files");
     }
 }

@@ -33,6 +33,14 @@ pub(crate) fn state_label(state: knot_agents::AgentState) -> &'static str {
 /// Status-dot color for the agent's automatic state. Diverges from the
 /// Swift reference (which uses red for both input and error) by giving
 /// "awaiting input" its own blue, since it isn't a failure state.
+/// Diff-stat colors, drawn from the same palette as [`state_color`]:
+/// additions green, deletions red, the changed-file count blue. Only the
+/// numbers take these - the words around them stay muted, so the figures
+/// are what the eye lands on.
+pub(crate) const DIFF_ADDED_COLOR: u32 = 0x22C55E;
+pub(crate) const DIFF_REMOVED_COLOR: u32 = 0xEF4444;
+pub(crate) const DIFF_FILES_COLOR: u32 = 0x3B82F6;
+
 pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
     match state {
         knot_agents::AgentState::Idle => rgb(0x22C55E).into(),
