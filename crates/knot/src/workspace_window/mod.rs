@@ -643,6 +643,12 @@ impl WorkspaceWindow {
                     .child(Textarea::new(input).size_full().disabled(blocked)),
             )
             .child(
+                div().text_xs()
+                     .font_family(self.settings.ui_font_name.clone())
+                     .text_color(cx.theme().muted_foreground)
+                     .child(Self::panel_prompt_send_hint(shift_to_send)),
+            )
+            .child(
                 h_flex()
                     .gap_1()
                     .items_center()
@@ -987,7 +993,7 @@ impl WorkspaceWindow {
             return input.clone();
         }
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
-        let placeholder = Self::panel_prompt_placeholder(shift_to_send);
+        let placeholder = Self::panel_prompt_placeholder();
         let input = cx.new(|cx| {
                           TextareaState::new(window, cx).placeholder(placeholder)
                                                         .submit_on_enter(!shift_to_send)
@@ -1007,14 +1013,21 @@ impl WorkspaceWindow {
         input
     }
 
-    /// The prompt textarea's placeholder, naming the active send chord per
-    /// `agent_panel_shift_enter_sends`.
-    fn panel_prompt_placeholder(shift_to_send: bool) -> &'static str {
+    /// The prompt textarea's placeholder - just the prompt, not the key
+    /// chord (see `panel_prompt_send_hint` for that, rendered below the
+    /// textarea instead of inside it).
+    fn panel_prompt_placeholder() -> &'static str {
+        "Send a message…"
+    }
+
+    /// The send-chord hint shown below the prompt textarea, naming the
+    /// active chord per `agent_panel_shift_enter_sends`.
+    fn panel_prompt_send_hint(shift_to_send: bool) -> &'static str {
         if shift_to_send {
-            "Send a message… (Shift+Enter to send, Enter for a newline)"
+            "Shift+Enter to send, Enter for a newline"
         }
         else {
-            "Send a message… (Enter to send, Shift+Enter for a newline)"
+            "Enter to send, Shift+Enter for a newline"
         }
     }
 
