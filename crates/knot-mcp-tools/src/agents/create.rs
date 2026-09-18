@@ -128,14 +128,20 @@ pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
         repo_path
     };
     let id = store.create(folder,
-                          CreateOptions { name:          fields.name,
-                                          avatar:        fields.icon,
-                                          agent_type:    fields.agent_type,
-                                          shell_command: fields.shell_command,
-                                          persona_id:    fields.persona_id,
-                                          created_by:    Some(created_by),
-                                          is_companion:  companion,
-                                          insert_after:  None, });
+                          CreateOptions { name:            fields.name,
+                                          avatar:          fields.icon,
+                                          agent_type:      fields.agent_type,
+                                          shell_command:   fields.shell_command,
+                                          persona_id:      fields.persona_id,
+                                          created_by:      Some(created_by),
+                                          is_companion:    companion,
+                                          insert_after:    None,
+                                          // Active, not the dialog's
+                                          // `Passive` default: an agent
+                                          // created over MCP was asked for
+                                          // by another agent, and there is
+                                          // no user to select its row.
+                                          activation_mode: knot_core::ActivationMode::Active, });
     success(&CreateAgentResponse { success:  true,
                                    agent_id: Some(id.to_string()),
                                    message:  "Agent created successfully".to_string(), })

@@ -154,6 +154,12 @@ struct AgentRow {
     /// on the row so a one-letter avatar isn't the only clue to which
     /// agent is running there.
     agent_type:   String,
+    /// Whether the agent has a session. Keyed on liveness, not on
+    /// activation mode: a `passive` agent that never started and a
+    /// deactivated `active` one are in the same position - nothing is
+    /// there - and the user needs to know which agents are live, not why
+    /// each one is not.
+    is_running:   bool,
 }
 
 pub(crate) struct WorkspaceWindow {
@@ -356,6 +362,21 @@ impl WorkspaceWindow {
                                                .map(|workspace| workspace.agent_ids.clone())
                                       })
                                       .unwrap_or_default();
+                            if let Ok(mut store) = window.store.lock() {
+                                // The workspace's `active` agents start
+                                // here, and only they: `activated` is
+                                // runtime-only and loads false, so the
+                                // durable mode is consulted on every open.
+                                store.activate_on_workspace_open(&agent_ids);
+                                // An explicitly requested agent (a Command
+                                // Center card) is a selection, and starts
+                                // whatever its mode. The workspace's own
+                                // restored selection is not, so a `passive`
+                                // agent stays stopped across a relaunch.
+                                if let Some(requested) = select_agent {
+                                    store.set_activated(requested, true);
+                                }
+                            }
                             for id in agent_ids {
                                 window.ensure_session(id);
                                 window.ensure_panel_session(id);
@@ -477,6 +498,13 @@ impl WorkspaceWindow {
     /// agents launch exclusively through `ensure_panel_session`; this is a
     /// no-op for them (they have no `TerminalSession`, never did view-mode
     /// double-launch it).
+    ///
+    /// Also a no-op for an agent that is not activated - a `passive` agent
+    /// nobody has selected yet, or one that was deactivated. That single
+    /// check is the whole activation gate: every caller of this and of
+    /// `ensure_panel_session` (window open, row click, dashboard card,
+    /// repaint poll) inherits it without having to remember, per
+    /// `agent-lifecycle`'s "Activation mode" requirement.
     fn ensure_session(&mut self, id: Uuid) {
         if self.sessions.contains_key(&id) {
             return;
@@ -490,6 +518,9 @@ impl WorkspaceWindow {
             return;
         };
         if !runs_a_terminal_process(&agent.agent_type) {
+            return;
+        }
+        if !agent.activated {
             return;
         }
         self.panel_states
@@ -708,19 +739,62 @@ impl WorkspaceWindow {
             Err(_) => return,
         };
         for removed_agent in removed {
-            self.remove_session(removed_agent.id);
-            self.panel_states.remove(&removed_agent.id);
-            self.panel_prompt_inputs.remove(&removed_agent.id);
-            self.panel_prompt_input_subscriptions
-                .remove(&removed_agent.id);
-            self.panel_scroll_handles.remove(&removed_agent.id);
-            self.panel_pending_context.remove(&removed_agent.id);
-            self.panel_input_expanded.remove(&removed_agent.id);
+            self.teardown_session(removed_agent.id);
             if self.selected_agent == Some(removed_agent.id) {
                 self.selected_agent = None;
             }
         }
         self.persist_agents();
+    }
+
+    /// Tears `id`'s session and every piece of per-agent view state down,
+    /// leaving the agent itself alone. Shared by [`Self::remove_agent`],
+    /// which then drops the agent, and [`Self::deactivate_agent`], which
+    /// does not - so a field added to one path cannot be missed in the
+    /// other. That divergence is exactly the shape a session leak arrives in.
+    fn teardown_session(&mut self, id: Uuid) {
+        self.remove_session(id);
+        self.panel_states.remove(&id);
+        self.panel_prompt_inputs.remove(&id);
+        self.panel_prompt_input_subscriptions.remove(&id);
+        self.panel_scroll_handles.remove(&id);
+        self.panel_pending_context.remove(&id);
+        self.panel_input_expanded.remove(&id);
+    }
+
+    /// Makes `id` this window's selection and marks it activated, so the
+    /// next `ensure_*` starts it. Selection is the universal "I want this
+    /// one" signal: it starts a `passive` agent that has never run, and
+    /// restarts a deactivated one whatever its activation mode - otherwise
+    /// Deactivate would be a trap with no way back short of Restart.
+    ///
+    /// Deliberately not on the layout-restore path, which sets the field
+    /// directly: restoring a window must not start what the user has not
+    /// asked for.
+    fn select_agent(&mut self, id: Uuid) {
+        self.selected_agent = Some(id);
+        if let Ok(mut store) = self.store.lock() {
+            store.set_activated(id, true);
+        }
+    }
+
+    /// Stops `id`'s session without removing the agent, per
+    /// `agent-lifecycle`'s "Deactivating an agent" requirement: the agent
+    /// keeps its name, folder, ordering, persona and activation mode, and
+    /// its place in every workspace. Clearing `activated` is what stops the
+    /// repaint poll from starting it straight back up; selecting the row
+    /// sets it again, in either activation mode.
+    ///
+    /// Companions go first, mirroring the removal cascade - a companion has
+    /// no session worth keeping once its owner's is gone.
+    fn deactivate_agent(&mut self, id: Uuid) {
+        let deactivated = match self.store.lock() {
+            Ok(mut store) => store.deactivate(id),
+            Err(_) => return,
+        };
+        for agent_id in deactivated {
+            self.teardown_session(agent_id);
+        }
     }
 
     /// Writes the store's current agents and workspaces back to settings.
@@ -736,7 +810,8 @@ impl WorkspaceWindow {
     /// Starts a Panel-mode ACP connection for `id` if one isn't already
     /// running, per `agent-launch-command`'s "ACP launch path" requirement.
     /// Falls back silently (no session, no error) if the agent type has no
-    /// registered adapter - the caller renders the terminal in that case.
+    /// registered adapter - the caller renders the terminal in that case,
+    /// and likewise if the agent is not activated (see `ensure_session`).
     fn ensure_panel_session(&mut self, id: Uuid) {
         if self.panel_sessions.contains_key(&id) {
             return;
@@ -749,6 +824,9 @@ impl WorkspaceWindow {
         else {
             return;
         };
+        if !agent.activated {
+            return;
+        }
         let request = knot_agent_launch::LaunchRequest { agent_type: &agent.agent_type,
                                                          ..Default::default() };
         let knot_agent_launch::LaunchPlan::Adapter(adapter_config) =
@@ -995,6 +1073,27 @@ impl WorkspaceWindow {
                 .into_any_element()
     }
 
+    /// The content pane for a selected agent that is not running: a
+    /// `passive` agent nobody has started, or one that was deactivated.
+    ///
+    /// It exists because the alternative reads as a bug: an empty pane on an
+    /// agent whose state dot says Idle is exactly what a hung agent looks
+    /// like. Naming why it is not running, and that selecting it starts it,
+    /// is the same guard the editor's activation hint gives from the other
+    /// side.
+    fn render_stopped_pane(&self, name: String, cx: &Context<Self>) -> gpui_kit::AnyElement {
+        v_flex().size_full()
+                .items_center()
+                .justify_center()
+                .gap_1()
+                .child(div().text_color(cx.theme().foreground)
+                            .child(format!("{name} is not running")))
+                .child(div().text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Select this agent in the sidebar to start it."))
+                .into_any_element()
+    }
+
     /// Renders the Panel-mode content pane for `id`: a connecting/failed
     /// placeholder, or the folded conversation plus a prompt input once
     /// the ACP session is ready. Starts the session if it isn't already
@@ -1067,6 +1166,14 @@ impl WorkspaceWindow {
                         handle.toggle_tracking();
                     }
                 };
+                let tool_call_slot = Arc::clone(slot);
+                let on_toggle_tool_call = move |tool_call_id: String| {
+                    if let Ok(slot) = tool_call_slot.lock()
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    {
+                        handle.toggle_tool_call(&tool_call_id);
+                    }
+                };
                 let scroll_away_slot = Arc::clone(slot);
                 let follow_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
@@ -1079,13 +1186,16 @@ impl WorkspaceWindow {
                 .and_then(|option| option.current_value.as_str())
                 .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
-                let panel_style = panel_view::PanelStyle { permission_risk,
-                                                           markdown_font_size:
-                                                               px(self.settings.markdown_font_size
-                                                                  as f32),
-                                                           mono_font_family: cx.theme()
-                                                                               .mono_font_family
-                                                                               .clone() };
+                let theme = cx.theme();
+                let panel_style =
+                    panel_view::PanelStyle { permission_risk,
+                                             markdown_font_size: px(self.settings.markdown_font_size
+                                                                    as f32),
+                                             mono_font_family: theme.mono_font_family.clone(),
+                                             ui_font_family: theme.font_family.clone(),
+                                             danger_color: theme.danger,
+                                             info_color: theme.info,
+                                             border_color: theme.border };
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
@@ -1130,7 +1240,8 @@ impl WorkspaceWindow {
                                                                     &scroll,
                                                                     &panel_style,
                                                                     on_decision,
-                                                                    on_toggle_track)))
+                                                                    on_toggle_track,
+                                                                    on_toggle_tool_call)))
                                     .children(scrolled_up.then(|| {
                                         div().absolute()
                                              .bottom_3()
@@ -1941,7 +2052,7 @@ impl WorkspaceWindow {
             self.settings.saved_workspaces = store.saved_workspaces();
         }
         let _ = self.settings.persist();
-        self.selected_agent = Some(id);
+        self.select_agent(id);
         self.show_new_agent = false;
         self.error = None;
         cx.update_entity(&self.new_agent_name_input, |input, input_cx| {
@@ -1975,7 +2086,7 @@ impl WorkspaceWindow {
         move |id, _window, app| {
             if let Some(entity) = weak.upgrade() {
                 entity.update(app, |view, cx| {
-                          view.selected_agent = Some(id);
+                          view.select_agent(id);
                           view.view_mode = WorkspaceViewMode::Terminal;
                           view.ensure_session(id);
                           view.ensure_panel_session(id);
@@ -2073,7 +2184,8 @@ impl Render for WorkspaceWindow {
                                         is_companion: agent.is_companion,
                                         header_title: agent.header_title().to_string(),
                                         persona_name,
-                                        agent_type: agent.agent_type.clone() }
+                                        agent_type: agent.agent_type.clone(),
+                                        is_running: agent.activated }
                          })
                          .collect::<Vec<_>>();
             (workspace.name.clone(), agents)
@@ -2112,7 +2224,8 @@ impl Render for WorkspaceWindow {
                                                is_companion,
                                                header_title,
                                                persona_name,
-                                               agent_type, }| {
+                                               agent_type,
+                                               is_running, }| {
                                        let menu_name = name.clone();
                                        let menu_folder = folder.clone();
                                        let folder_name =
@@ -2155,6 +2268,15 @@ impl Render for WorkspaceWindow {
                     } else {
                         cx.theme().transparent
                     })
+                    // A stopped agent's row is dimmed as a whole, so a
+                    // workspace of mixed agents reads at a glance. The
+                    // state dot cannot carry this: its four values say what
+                    // a *running* agent is doing, and none of them means
+                    // "not running at all". Selection still highlights the
+                    // row underneath, so the selected-but-stopped agent
+                    // whose pane shows the stopped placeholder is still
+                    // visibly the selected one.
+                    .when(!is_running, |row| row.opacity(0.45))
                     .child(
                         h_flex()
                             .w_full()
@@ -2253,7 +2375,7 @@ impl Render for WorkspaceWindow {
                             })),
                     )
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
-                        view.selected_agent = Some(id);
+                        view.select_agent(id);
                         // Leave the dashboard, the same way tapping an
                         // agent card does - selecting a row while the
                         // dashboard was open used to change the selection
@@ -2379,7 +2501,7 @@ impl Render for WorkspaceWindow {
                     move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
                         if let Some(entity) = weak.upgrade() {
                             entity.update(app, |view, cx| {
-                                      view.selected_agent = Some(id);
+                                      view.select_agent(id);
                                       view.view_mode = WorkspaceViewMode::Terminal;
                                       view.ensure_session(id);
                                       view.ensure_panel_session(id);
@@ -2691,14 +2813,16 @@ impl Render for WorkspaceWindow {
                             .child(
                                 self.selected_agent
                                             .and_then(|id| {
-                                                let (is_panel_mode, markdown_file) = {
+                                                let (is_panel_mode, markdown_file, stopped) = {
                                                     let store = self.store.lock().unwrap();
                                                     let agent = store.agent(id);
                                                     (agent.map(|agent| agent.view_mode)
                                                      == Some(knot_core::ViewMode::Panel),
                                                      agent.and_then(|agent| {
                                                               agent.markdown_file.clone()
-                                                          }))
+                                                          }),
+                                                     agent.filter(|agent| !agent.activated)
+                                                          .map(|agent| agent.name.clone()))
                                                 };
                                                 // Ahead of both session
                                                 // panes: an open markdown
@@ -2709,6 +2833,17 @@ impl Render for WorkspaceWindow {
                                                     return Some(self.render_markdown_pane(id,
                                                                                           &file,
                                                                                           cx));
+                                                }
+                                                // Ahead of both session
+                                                // panes, which would
+                                                // otherwise render empty:
+                                                // there is no session, and
+                                                // asking for one is what
+                                                // the activation gate
+                                                // refuses.
+                                                if let Some(name) = stopped {
+                                                    return Some(self.render_stopped_pane(name,
+                                                                                         cx));
                                                 }
                                                 if is_panel_mode {
                                                     return Some(self.render_panel_pane(id,
@@ -2899,7 +3034,8 @@ pub(crate) fn agent_menu_facts(store: &knot_agents::AgentStore, id: Uuid)
                                  is_shell:             agent.is_shell(),
                                  has_move_targets:     own_workspace.is_some()
                                                        && !move_targets.is_empty(),
-                                 has_markdown_history: !history.is_empty(), };
+                                 has_markdown_history: !history.is_empty(),
+                                 is_running:           agent.activated, };
     (facts, move_targets, history)
 }
 
@@ -3051,6 +3187,14 @@ fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTargets, wind
                                          ..Default::default() };
             open_editor_from_menu(targets, prefill, Some(targets.id), None, app);
         }
+        AgentMenuEntry::Deactivate => {
+            // No confirmation: nothing is lost that selecting the row will
+            // not bring back, which is the test Restart and Remove fail.
+            targets.window_entity.update(app, |view, cx| {
+                                     view.deactivate_agent(targets.id);
+                                     cx.notify();
+                                 });
+        }
         AgentMenuEntry::NewShellCompanion => {
             let created = targets.store
                                  .lock()
@@ -3108,7 +3252,7 @@ fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTargets, wind
             };
             targets.window_entity.update(app, |view, cx| {
                                      view.persist_agents();
-                                     view.selected_agent = Some(created);
+                                     view.select_agent(created);
                                      cx.notify();
                                  });
         }

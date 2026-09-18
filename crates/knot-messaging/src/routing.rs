@@ -121,6 +121,8 @@ mod tests {
                 shell_command:      None,
                 persona_id:         None,
                 view_mode:          Default::default(),
+                activation_mode:    Default::default(),
+                activated:          false,
                 state:              AgentState::Idle,
                 status_text:        String::new(),
                 is_registered:      true,

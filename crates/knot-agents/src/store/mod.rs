@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use knot_core::Workspace;
+use knot_core::{ActivationMode, Workspace};
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -25,14 +25,17 @@ const DEFAULT_WORKSPACE_COLOR: &str = "#1B4FB2";
 /// `AgentStore::create` since it is the one field every creation supplies.
 #[derive(Debug, Clone, Default)]
 pub struct CreateOptions {
-    pub name:          Option<String>,
-    pub avatar:        Option<String>,
-    pub agent_type:    Option<String>,
-    pub shell_command: Option<String>,
-    pub persona_id:    Option<Uuid>,
-    pub created_by:    Option<Uuid>,
-    pub is_companion:  bool,
-    pub insert_after:  Option<Uuid>,
+    pub name:            Option<String>,
+    pub avatar:          Option<String>,
+    pub agent_type:      Option<String>,
+    pub shell_command:   Option<String>,
+    pub persona_id:      Option<Uuid>,
+    pub created_by:      Option<Uuid>,
+    pub is_companion:    bool,
+    pub insert_after:    Option<Uuid>,
+    /// Defaults to `Passive` - deliberately not the load default a record
+    /// with no stored mode gets (`Active`, see `knot_core::SavedAgent`).
+    pub activation_mode: ActivationMode,
 }
 
 /// Fields an edit may change. `name`/`avatar` always apply and never trigger
@@ -46,6 +49,9 @@ pub struct EditRequest {
     pub persona_id:          Option<Uuid>,
     pub persona_changed:     bool,
     pub relocate_companions: bool,
+    /// Applied verbatim; changing it never triggers a restart, per
+    /// `agent-lifecycle`'s "Activation mode" requirement.
+    pub activation_mode:     ActivationMode,
 }
 
 /// An agent removed by [`AgentStore::remove`], in cascade order (companions
@@ -89,6 +95,15 @@ impl AgentStore {
 
     pub(super) fn agent_mut(&mut self, id: Uuid) -> Option<&mut Agent> {
         self.agents.iter_mut().find(|a| a.id == id)
+    }
+
+    /// Mark whether this agent may start in this run. Set by selection and
+    /// by `create` for an `Active` agent; cleared by deactivation. Runtime
+    /// only - never persisted.
+    pub fn set_activated(&mut self, id: Uuid, activated: bool) {
+        if let Some(agent) = self.agent_mut(id) {
+            agent.activated = activated;
+        }
     }
 
     pub fn set_registered(&mut self, id: Uuid, registered: bool) {

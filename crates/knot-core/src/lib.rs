@@ -14,6 +14,6 @@ pub mod settings;
 pub use error::{Error, Result};
 pub use l10n::t;
 pub use settings::{
-    BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, SavedWindowBounds, Settings,
-    ViewMode, Workspace, detect_source_base_folder,
+    ActivationMode, BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, SavedWindowBounds,
+    Settings, ViewMode, Workspace, detect_source_base_folder,
 };

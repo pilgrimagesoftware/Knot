@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use knot_core::ActivationMode;
 use uuid::Uuid;
 
 use super::{AgentStore, CreateOptions, RemovedAgent};
@@ -22,6 +23,10 @@ impl AgentStore {
                             is_companion: opts.is_companion,
                             shell_command: opts.shell_command,
                             persona_id: opts.persona_id,
+                            activation_mode: opts.activation_mode,
+                            // An `Active` agent is activated from birth, so
+                            // it starts when its workspace next opens.
+                            activated: opts.activation_mode == ActivationMode::Active,
                             state: AgentState::Idle,
                             status_text: String::new(),
                             is_registered: false,
@@ -65,18 +70,29 @@ impl AgentStore {
         id
     }
 
+    /// A companion inherits its owner's activation mode, and starts right
+    /// away if its owner is already running: it exists to sit beside that
+    /// owner, and deactivation already takes companions with it. Given the
+    /// default `Passive` instead, adding a shell to a running agent would
+    /// produce a row that does nothing until it is clicked.
     pub fn create_shell_companion(&mut self, owner: Uuid) -> Result<Uuid> {
         let owner_agent = self.agent(owner).ok_or(AgentError::NotFound(owner))?;
         if owner_agent.is_companion {
             return Err(AgentError::CompanionCannotOwn(owner));
         }
-        Ok(self.create(owner_agent.folder.clone(),
-                       CreateOptions { name: Some("Shell".to_string()),
-                                       agent_type: Some("shell".to_string()),
-                                       created_by: Some(owner),
-                                       is_companion: true,
-                                       insert_after: Some(owner),
-                                       ..Default::default() }))
+        let folder = owner_agent.folder.clone();
+        let activation_mode = owner_agent.activation_mode;
+        let owner_activated = owner_agent.activated;
+        let id = self.create(folder,
+                             CreateOptions { name: Some("Shell".to_string()),
+                                             agent_type: Some("shell".to_string()),
+                                             created_by: Some(owner),
+                                             is_companion: true,
+                                             insert_after: Some(owner),
+                                             activation_mode,
+                                             ..Default::default() });
+        self.set_activated(id, owner_activated);
+        Ok(id)
     }
 
     pub fn companions(&self, owner: Uuid) -> Vec<Uuid> {
@@ -103,6 +119,51 @@ impl AgentStore {
             removed.push(RemovedAgent { id, was_registered });
         }
         removed
+    }
+
+    /// Marks every `Active` agent among `ids` activated, so opening a
+    /// workspace starts its `active` agents and only those, per
+    /// `agent-lifecycle`'s "Activation mode". Returns the ids it activated.
+    ///
+    /// This, not [`Self::create`]'s flag, is what survives a relaunch:
+    /// `activated` is runtime-only and loads false for every agent, so the
+    /// durable mode has to be consulted each time a workspace opens. A
+    /// `Passive` agent is left alone, and so is one the user deactivated:
+    /// deactivation lasts as long as the workspace stays open, and this
+    /// runs only when it opens.
+    pub fn activate_on_workspace_open(&mut self, ids: &[Uuid]) -> Vec<Uuid> {
+        let active = ids.iter()
+                        .copied()
+                        .filter(|id| {
+                            self.agent(*id).is_some_and(|agent| {
+                                               agent.activation_mode == ActivationMode::Active
+                                           })
+                        })
+                        .collect::<Vec<_>>();
+        for id in &active {
+            self.set_activated(*id, true);
+        }
+        active
+    }
+
+    /// Clears the `activated` flag on `id` and every companion it owns,
+    /// returning them in cascade order - companions first, then the owner -
+    /// so the caller can tear their sessions down in the same order
+    /// [`Self::remove`] hands back removals.
+    ///
+    /// Touches nothing else: the agents stay in the list, in their order,
+    /// in their workspaces, with their names, folders, personas and
+    /// activation modes, per `agent-lifecycle`'s "Deactivating an agent".
+    pub fn deactivate(&mut self, id: Uuid) -> Vec<Uuid> {
+        let mut deactivated = Vec::new();
+        for companion_id in self.companions(id) {
+            deactivated.extend(self.deactivate(companion_id));
+        }
+        if let Some(agent) = self.agent_mut(id) {
+            agent.activated = false;
+            deactivated.push(id);
+        }
+        deactivated
     }
 
     fn recreate_terminal(&mut self, id: Uuid) -> Result<()> {

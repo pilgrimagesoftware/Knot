@@ -9,10 +9,11 @@ opens; this capability says what it contains.
 
 ### Requirement: Activation control
 
-The dialog SHALL offer a control for the agent's activation mode, with the
-two modes named as `agent-lifecycle` names them, and SHALL show the mode the
-agent currently has: `passive` for a new agent, and the agent's own mode when
-editing an existing one.
+The dialog SHALL offer a control for the agent's activation mode, and SHALL
+name in words the mode the agent currently has - as `agent-lifecycle` names
+them - rather than leaving it to be read off the control's position:
+`passive` for a new agent, and the agent's own mode when editing an existing
+one.
 
 A hint SHALL sit next to that control saying what the two modes mean, in one
 short sentence per mode. The difference is not inferable from the words
