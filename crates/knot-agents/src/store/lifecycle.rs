@@ -131,4 +131,19 @@ impl AgentStore {
         agent.fork_session = false;
         self.recreate_terminal(id)
     }
+
+    /// Points a freshly created agent at an existing session as a *fork*:
+    /// it continues that conversation without the source giving it up.
+    ///
+    /// Sets the same fields as [`Self::resume_session`] plus the fork flag,
+    /// and recreates no terminal - the agent has not been started yet, so
+    /// there is nothing to recreate.
+    pub fn fork_session(&mut self, id: Uuid, session_id: impl Into<String>) -> Result<()> {
+        let session_id = session_id.into();
+        let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
+        agent.resume_session_id = Some(session_id.clone());
+        agent.session_id = Some(session_id);
+        agent.fork_session = true;
+        Ok(())
+    }
 }
