@@ -10,7 +10,7 @@ use knot_acp::{
     AcpClient, AcpError, ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult,
     SessionEvent,
 };
-use knot_agent_launch::{AdapterLaunch, InstallMethod};
+use knot_agent_launch::{AdapterConfig, InstallMethod};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
@@ -31,7 +31,9 @@ pub struct AcpSession {
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 impl AcpSession {
-    /// Spawns `launch`'s adapter and opens a session for `cwd`. If
+    /// Spawns `config`'s adapter and opens a session for `cwd`, wiring
+    /// `mcp_url` (Knot's own MCP HTTP server, when MCP is enabled) into the
+    /// session through the ACP protocol's own `mcpServers` mechanism. If
     /// `prior_session_id` is given and the adapter supports resume,
     /// attempts `session/load` first; on any failure (unsupported or an
     /// error response) falls back to a fresh `session/new` rather than
@@ -39,35 +41,33 @@ impl AcpSession {
     /// fallback requirement. Fails with `AcpError::Timeout` rather than
     /// hanging if the adapter never responds.
     pub async fn start(
-        launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        Self::start_with_timeout(launch, cwd, prior_session_id, CONNECT_TIMEOUT).await
+        Self::start_with_timeout(config, cwd, prior_session_id, mcp_url, CONNECT_TIMEOUT).await
     }
 
     async fn start_with_timeout(
-        launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>, timeout: Duration)
+        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
+        timeout: Duration)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        tokio::time::timeout(timeout, Self::start_inner(launch, cwd, prior_session_id))
+        tokio::time::timeout(timeout, Self::start_inner(config, cwd, prior_session_id, mcp_url))
             .await
             .unwrap_or(Err(AcpError::Timeout))
     }
 
     async fn start_inner(
-        launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
         let build_command = || {
-            let mut command = Command::new(launch.config.command);
-            command.args(launch.config.args);
-            if !launch.mcp_config.is_empty() {
-                command.arg(&launch.mcp_config);
-            }
+            let mut command = Command::new(config.command);
+            command.args(config.args);
             command
         };
 
         let (client, events) = match AcpClient::connect(build_command()).await {
             Err(AcpError::Spawn(error))
                 if error.kind() == std::io::ErrorKind::NotFound
-                   && let Some(install) = launch.config.install =>
+                   && let Some(install) = config.install =>
             {
                 // Auto-install, silently, on first use - per design.md
                 // decision 6, the adapter is Knot-published configuration
@@ -83,12 +83,12 @@ impl AcpSession {
 
         let session = match prior_session_id {
             Some(prior) if client.capabilities().supports_resume => {
-                match client.session_load(prior, cwd).await {
+                match client.session_load(prior, cwd, mcp_url).await {
                     Ok(session) => session,
-                    Err(_) => client.session_new(cwd).await?,
+                    Err(_) => client.session_new(cwd, mcp_url).await?,
                 }
             }
-            _ => client.session_new(cwd).await?,
+            _ => client.session_new(cwd, mcp_url).await?,
         };
 
         Ok((Self { client,
@@ -197,11 +197,11 @@ mod tests {
 
     /// A fake adapter: answers `initialize`/`session/new`, then streams one
     /// `session/update` text delta.
-    fn fake_adapter_launch() -> AdapterLaunch {
-        AdapterLaunch { config:     AdapterConfig { command:                   "sh",
-                                                    args:                      &[
-                                                                                 "-c",
-                                                                                 r#"while IFS= read -r line; do
+    fn fake_adapter_launch() -> AdapterConfig {
+        AdapterConfig { command:                   "sh",
+                        args:                      &[
+                                                     "-c",
+                                                     r#"while IFS= read -r line; do
                           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
                           method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
                           case "$method" in
@@ -213,10 +213,9 @@ mod tests {
                           esac
                         done"#,
         ],
-                                                    supports_resume:           false,
-                                                    supports_permission_modes: false,
-                                                    install:                   None, },
-                        mcp_config: String::new(), }
+                        supports_resume:           false,
+                        supports_permission_modes: false,
+                        install:                   None, }
     }
 
     #[tokio::test]
@@ -241,8 +240,8 @@ mod tests {
         terminal_session.send_text("terminal is alive").unwrap();
 
         let (session, _config_options, mut events) =
-            AcpSession::start(&fake_adapter_launch(), "/tmp/project", None).await
-                                                                           .expect("connect");
+            AcpSession::start(&fake_adapter_launch(), "/tmp/project", None, None).await
+                                                                                 .expect("connect");
         assert_eq!(session.session_id(), "sess-1");
 
         // The ACP update the fake adapter streamed right after session/new
@@ -265,20 +264,19 @@ mod tests {
     /// A fake adapter that never answers anything - simulates a hung
     /// process (e.g. blocked on an interactive prompt it can't show over
     /// stdio, as `gemini --acp` does without `--skip-trust`).
-    fn hanging_adapter_launch() -> AdapterLaunch {
-        AdapterLaunch { config:     AdapterConfig { command:                   "sh",
-                                                    args:                      &["-c",
-                                                                                 "while true; do sleep 1; done"],
-                                                    supports_resume:           false,
-                                                    supports_permission_modes: false,
-                                                    install:                   None, },
-                        mcp_config: String::new(), }
+    fn hanging_adapter_launch() -> AdapterConfig {
+        AdapterConfig { command:                   "sh",
+                        args:                      &["-c", "while true; do sleep 1; done"],
+                        supports_resume:           false,
+                        supports_permission_modes: false,
+                        install:                   None, }
     }
 
     #[tokio::test]
     async fn start_fails_closed_with_a_visible_error_instead_of_hanging() {
         let result = AcpSession::start_with_timeout(&hanging_adapter_launch(),
                                                     "/tmp/project",
+                                                    None,
                                                     None,
                                                     std::time::Duration::from_millis(50)).await;
 
@@ -301,20 +299,16 @@ mod tests {
             "-c",
             Box::leak(install_script.into_boxed_str()) as &'static str,
         ].into_boxed_slice());
-        let launch = AdapterLaunch { config:
-                                         AdapterConfig { command,
-                                                         args: &[],
-                                                         supports_resume: false,
-                                                         supports_permission_modes: false,
-                                                         install:
-                                                             Some(InstallMethod { command: "sh",
-                                                                                  args:
-                                                                                      install_args, }) },
-                                     mcp_config: String::new(), };
+        let launch = AdapterConfig { command,
+                                     args: &[],
+                                     supports_resume: false,
+                                     supports_permission_modes: false,
+                                     install: Some(InstallMethod { command: "sh",
+                                                                   args:    install_args, }) };
 
         let (session, _config_options, _events) =
-            AcpSession::start(&launch, "/tmp/project", None).await
-                                                            .expect("connect after auto-install");
+            AcpSession::start(&launch, "/tmp/project", None, None).await
+                                                                  .expect("connect after auto-install");
 
         assert_eq!(session.session_id(), "sess-installed");
         assert!(bin_path.exists(),

@@ -152,13 +152,10 @@ impl AcpClient {
         &self.capabilities
     }
 
-    pub async fn session_new(&self, cwd: &str) -> Result<NewSession> {
-        // `mcpServers` is required by at least the Gemini CLI adapter (it
-        // rejects the request with an invalid_type validation error
-        // without it, confirmed against a live `gemini --acp` handshake);
-        // an empty array is the correct "no MCP config yet" value.
+    pub async fn session_new(&self, cwd: &str, mcp_url: Option<&str>) -> Result<NewSession> {
         let raw = self.transport
-                      .request("session/new", Some(json!({ "cwd": cwd, "mcpServers": [] })))
+                      .request("session/new",
+                               Some(json!({ "cwd": cwd, "mcpServers": mcp_servers(mcp_url) })))
                       .await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
@@ -169,14 +166,15 @@ impl AcpClient {
     /// Resumes a prior session. Returns a typed "not supported" error
     /// without sending the request when the agent's capabilities don't
     /// advertise `session/load` support.
-    pub async fn session_load(&self, session_id: &str, cwd: &str) -> Result<NewSession> {
+    pub async fn session_load(&self, session_id: &str, cwd: &str, mcp_url: Option<&str>)
+                              -> Result<NewSession> {
         if !self.capabilities.supports_resume {
             return Err(AcpError::ResumeNotSupported);
         }
         let raw = self.transport
                       .request("session/load",
                                Some(json!({ "sessionId": session_id, "cwd": cwd,
-                                          "mcpServers": [] })))
+                                          "mcpServers": mcp_servers(mcp_url) })))
                       .await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
@@ -233,6 +231,19 @@ impl AcpClient {
     /// rather than being left unanswered.
     pub async fn close(&self) {
         self.transport.close().await;
+    }
+}
+
+/// The `mcpServers` array for a `session/new`/`session/load` request: one
+/// entry naming Knot's own HTTP MCP server when `mcp_url` is given, empty
+/// otherwise. `mcpServers` is required by at least the Gemini CLI adapter
+/// (it rejects the request with an invalid_type validation error without
+/// the key at all, confirmed against a live `gemini --acp` handshake), so
+/// an empty array is always sent rather than omitting the key.
+fn mcp_servers(mcp_url: Option<&str>) -> Value {
+    match mcp_url {
+        Some(url) => json!([{ "name": "knot", "type": "http", "url": url }]),
+        None => json!([]),
     }
 }
 
@@ -322,11 +333,68 @@ mod tests {
             AcpClient::connect(fake_agent(PROTOCOL_VERSION, true)).await
                                                                   .expect("connect");
 
-        let session = client.session_new("/tmp/project")
+        let session = client.session_new("/tmp/project", None)
                             .await
                             .expect("session id");
 
         assert_eq!(session.session_id, "sess-1");
+    }
+
+    /// A fake agent that appends every line it receives to `log_path`,
+    /// so the test can inspect the raw `session/new`/`session/load` params
+    /// it was sent.
+    fn logging_fake_agent(log_path: &std::path::Path) -> Command {
+        let mut command = Command::new("sh");
+        let script = format!(
+                             r#"while IFS= read -r line; do
+              echo "$line" >> '{}'
+              id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+              method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+              case "$method" in
+                initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{PROTOCOL_VERSION},\"agentCapabilities\":{{}}}}}}" ;;
+                session/new) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"sessionId\":\"sess-1\"}}}}" ;;
+                *) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}" ;;
+              esac
+            done"#,
+                             log_path.display()
+        );
+        command.arg("-c").arg(script);
+        command
+    }
+
+    #[tokio::test]
+    async fn session_new_carries_the_knot_mcp_server_when_enabled() {
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let (client, _events) =
+            AcpClient::connect(logging_fake_agent(log.path())).await
+                                                              .expect("connect");
+        client.session_new("/tmp/project", Some("http://127.0.0.1:8767/mcp"))
+              .await
+              .expect("session");
+
+        let log = std::fs::read_to_string(log.path()).unwrap();
+        let request_line = log.lines()
+                              .find(|line| line.contains("session/new"))
+                              .expect("session/new request logged");
+        assert!(request_line.contains(r#""name":"knot""#));
+        assert!(request_line.contains(r#""url":"http://127.0.0.1:8767/mcp""#));
+    }
+
+    #[tokio::test]
+    async fn session_new_sends_no_mcp_servers_when_disabled() {
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let (client, _events) =
+            AcpClient::connect(logging_fake_agent(log.path())).await
+                                                              .expect("connect");
+        client.session_new("/tmp/project", None)
+              .await
+              .expect("session");
+
+        let log = std::fs::read_to_string(log.path()).unwrap();
+        let request_line = log.lines()
+                              .find(|line| line.contains("session/new"))
+                              .expect("session/new request logged");
+        assert!(request_line.contains(r#""mcpServers":[]"#));
     }
 
     #[tokio::test]
@@ -335,7 +403,7 @@ mod tests {
             AcpClient::connect(fake_agent(PROTOCOL_VERSION, false)).await
                                                                    .expect("connect");
 
-        let result = client.session_load("sess-1", "/tmp/project").await;
+        let result = client.session_load("sess-1", "/tmp/project", None).await;
 
         assert!(matches!(result, Err(AcpError::ResumeNotSupported)));
     }
@@ -353,7 +421,7 @@ mod tests {
         );
         let (client, mut events) = AcpClient::connect(command).await.expect("connect");
 
-        let result = client.session_new("/tmp/project").await;
+        let result = client.session_new("/tmp/project", None).await;
 
         assert!(result.is_err());
         let ended = events.recv().await.expect("ended event");
@@ -399,7 +467,7 @@ mod tests {
     async fn close_while_permission_pending_ends_session_without_hanging() {
         let (client, mut events) = AcpClient::connect(permission_flow_agent()).await
                                                                               .expect("connect");
-        client.session_new("/tmp/project")
+        client.session_new("/tmp/project", None)
               .await
               .expect("session id");
         let _text = events.recv().await.expect("text delta");
@@ -419,7 +487,7 @@ mod tests {
     async fn ordered_updates_stream_text_and_turn_end() {
         let (client, mut events) = AcpClient::connect(permission_flow_agent()).await
                                                                               .expect("connect");
-        client.session_new("/tmp/project")
+        client.session_new("/tmp/project", None)
               .await
               .expect("session id");
 
@@ -434,7 +502,7 @@ mod tests {
     async fn permission_deny_decision_is_delivered_to_the_agent() {
         let (client, mut events) = AcpClient::connect(permission_flow_agent()).await
                                                                               .expect("connect");
-        client.session_new("/tmp/project")
+        client.session_new("/tmp/project", None)
               .await
               .expect("session id");
         let _text = events.recv().await.expect("text delta");
@@ -481,7 +549,9 @@ mod tests {
         let (client, _events) = AcpClient::connect(config_options_agent()).await
                                                                           .expect("connect");
 
-        let session = client.session_new("/tmp/project").await.expect("session");
+        let session = client.session_new("/tmp/project", None)
+                            .await
+                            .expect("session");
 
         assert_eq!(session.config_options.len(), 1);
         assert_eq!(session.config_options[0].id, "mode");
@@ -493,7 +563,9 @@ mod tests {
     async fn set_config_option_sends_the_selection_and_returns_the_updated_list() {
         let (client, _events) = AcpClient::connect(config_options_agent()).await
                                                                           .expect("connect");
-        let session = client.session_new("/tmp/project").await.expect("session");
+        let session = client.session_new("/tmp/project", None)
+                            .await
+                            .expect("session");
 
         let updated = client.session_set_config_option(&session.session_id, "mode", "code")
                             .await

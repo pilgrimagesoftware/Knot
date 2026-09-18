@@ -71,8 +71,16 @@ pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> Js
                                                      "capabilities": { "tools": { "listChanged": false } },
                                                      "serverInfo": { "name": consts::SERVER_NAME, "version": consts::SERVER_VERSION },
                                                  })),
-        "tools/list" => JsonRpcResponse::success(request.id.clone(),
-                                                 serde_json::json!({ "tools": catalog.list() })),
+        "tools/list" => {
+            let tools = catalog.list();
+            eprintln!("knot-mcp: tools/list -> {} tools: {}",
+                      tools.len(),
+                      tools.iter()
+                           .map(|tool| tool.name.as_str())
+                           .collect::<Vec<_>>()
+                           .join(", "));
+            JsonRpcResponse::success(request.id.clone(), serde_json::json!({ "tools": tools }))
+        }
         "tools/call" => {
             let Some(name) = request.params
                                     .as_ref()
@@ -88,6 +96,7 @@ pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> Js
                                    .and_then(|p| p.get("arguments"))
                                    .cloned()
                                    .unwrap_or_else(|| serde_json::json!({}));
+            eprintln!("knot-mcp: tools/call {name} {arguments}");
             let result = catalog.call(name, arguments).await;
             JsonRpcResponse::success(request.id.clone(), result)
         }

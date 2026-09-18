@@ -400,25 +400,19 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let Some(adapter) = knot_agent_launch::acp_adapter(&agent.agent_type)
-        else {
-            return;
-        };
         let request = knot_agent_launch::LaunchRequest { agent_type: &agent.agent_type,
-                                                         agent_id: Some(agent.id),
                                                          ..Default::default() };
-        let plan = knot_agent_launch::plan_launch(knot_core::ViewMode::Panel,
-                                                  Some(adapter),
-                                                  &self.settings,
-                                                  &request);
-        let knot_agent_launch::LaunchPlan::Adapter(adapter_launch) = plan
+        let knot_agent_launch::LaunchPlan::Adapter(adapter_config) =
+            knot_agent_launch::plan_launch(&request)
         else {
-            // plan_launch only returns Adapter when both view_mode is Panel
-            // (just passed) and an adapter is registered (just checked
-            // above) - Terminal here would mean those two checks
-            // disagreed with plan_launch's own logic.
+            // No registered ACP adapter for this agent type - only shell
+            // agents (which never reach `ensure_panel_session`) are meant
+            // to fall through to the Terminal path.
             return;
         };
+        let mcp_url = self.settings
+                          .mcp_server_enabled
+                          .then(|| knot_agent_launch::mcp_url(&self.settings));
 
         let slot = Arc::new(Mutex::new(panel_session::PanelSessionSlot::Connecting));
         self.panel_sessions.insert(id, Arc::clone(&slot));
@@ -432,9 +426,10 @@ impl WorkspaceWindow {
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
                         match panel_session::PanelSessionHandle::start(
-                &adapter_launch,
+                &adapter_config,
                 &cwd,
                 prior_session_id.as_deref(),
+                mcp_url.as_deref(),
             )
             .await
             {

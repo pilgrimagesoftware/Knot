@@ -42,6 +42,12 @@ impl Transport {
                              .get_program()
                              .to_string_lossy()
                              .into_owned();
+        let args = command.as_std()
+                          .get_args()
+                          .map(|arg| arg.to_string_lossy().into_owned())
+                          .collect::<Vec<_>>()
+                          .join(" ");
+        eprintln!("knot-acp: spawning {program} {args}");
         command.stdin(Stdio::piped())
                .stdout(Stdio::piped())
                // Piped (not discarded) and forwarded to our own stderr,
@@ -218,12 +224,23 @@ impl Transport {
         let line =
             serde_json::to_string(&request).map_err(|error| AcpError::Rpc { code:    -32700,
                                              message: error.to_string(), })?;
+        eprintln!("knot-acp: -> {method} (id {id})");
         self.write_line(line).await?;
         match rx.await {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(error)) => Err(AcpError::Rpc { code:    error.code,
-                                                  message: error.message, }),
-            Err(_) => Err(AcpError::ConnectionClosed),
+            Ok(Ok(value)) => {
+                eprintln!("knot-acp: <- {method} (id {id}) ok");
+                Ok(value)
+            }
+            Ok(Err(error)) => {
+                eprintln!("knot-acp: <- {method} (id {id}) error: {} {}",
+                          error.code, error.message);
+                Err(AcpError::Rpc { code:    error.code,
+                                    message: error.message, })
+            }
+            Err(_) => {
+                eprintln!("knot-acp: <- {method} (id {id}) connection closed before a response");
+                Err(AcpError::ConnectionClosed)
+            }
         }
     }
 

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use knot_acp::{PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent};
-use knot_agent_launch::AdapterLaunch;
+use knot_agent_launch::AdapterConfig;
 use knot_terminal::AcpSession;
 
 use crate::panel_state::PanelState;
@@ -22,11 +22,13 @@ pub struct PanelSessionHandle {
 impl PanelSessionHandle {
     /// Starts the adapter connection and spawns a background task (on the
     /// current tokio runtime) draining its event stream into `state` until
-    /// the session ends.
-    pub async fn start(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+    /// the session ends. `mcp_url` is Knot's own MCP HTTP server URL, wired
+    /// into the session when MCP is enabled.
+    pub async fn start(config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>,
+                       mcp_url: Option<&str>)
                        -> AcpResult<Self> {
         let (session, config_options, mut events) =
-            AcpSession::start(launch, cwd, prior_session_id).await?;
+            AcpSession::start(config, cwd, prior_session_id, mcp_url).await?;
         let mut initial_state = PanelState::new();
         initial_state.config_options = config_options;
         let state = Arc::new(Mutex::new(initial_state));
