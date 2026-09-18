@@ -123,6 +123,16 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Records the user opening or closing one tool-call card, per
+    /// `acp-panel-ui`'s "The user's choice outlives the automatic one"
+    /// requirement.
+    pub fn toggle_tool_call(&self, id: &str) {
+        if let Ok(mut state) = self.state.lock() {
+            state.toggle_tool_call(id);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// Sets auto-scroll directly, for the scroll-to-latest control.
     pub fn set_tracking(&self, tracking: bool) {
         if let Ok(mut state) = self.state.lock() {
