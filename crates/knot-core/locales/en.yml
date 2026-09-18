@@ -20,3 +20,6 @@ git:
 
 workspace:
   manager: "Workspaces"
+
+agent:
+  companion: "Shell companion"

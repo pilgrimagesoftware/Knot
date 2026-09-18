@@ -101,6 +101,11 @@ pub(crate) struct WorkspaceWindow {
     /// When each agent's diff stat was last *requested*, so the refresh
     /// runs on a cadence rather than once per render. Main-thread only.
     diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
+    /// Agents whose PTY process has exited, queued by the reader thread and
+    /// drained by the repaint poll - the callback runs off the main thread
+    /// and cannot touch the view directly, the same hand-off
+    /// `clipboard_writes` uses.
+    exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
     /// Keeps the window-bounds observer alive for this window's lifetime.
     window_bounds_subscription:       Option<gpui_kit::Subscription>,
     /// Set by a finished refresh so the repaint poll redraws the header.
@@ -229,9 +234,11 @@ impl WorkspaceWindow {
                     .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
                                                    });
                   let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
+                  let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
                   let view =
                       cx.new(|cx| {
                             let mut window = WorkspaceWindow {
+                    exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
                     diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
                     diff_stats_requested: BTreeMap::new(),
@@ -291,6 +298,7 @@ impl WorkspaceWindow {
                   // (a keystroke, mouse move), making output look stalled after
                   // e.g. pressing Enter.
                   let notify_view = view.clone();
+                  let exited_drain = Arc::clone(&exited_sessions);
                   cx.spawn(async move |cx| {
                         loop {
                             cx.background_executor()
@@ -300,6 +308,9 @@ impl WorkspaceWindow {
                                 clipboard_writes.lock()
                                                 .map(|mut queue| std::mem::take(&mut *queue))
                                                 .unwrap_or_default();
+                            let exited = exited_drain.lock()
+                                                     .map(|mut queue| std::mem::take(&mut *queue))
+                                                     .unwrap_or_default();
                             for text in texts {
                                 cx.update(|app| {
                                       app.write_to_clipboard(ClipboardItem::new_string(text));
@@ -307,6 +318,15 @@ impl WorkspaceWindow {
                             }
                             cx.update(|app| {
                                   notify_view.update(app, |view, cx| {
+                                                 // A shell companion whose
+                                                 // process exited has nothing
+                                                 // left to show, so close it
+                                                 // rather than leaving a dead
+                                                 // pane that looks hung.
+                                                 for id in &exited {
+                                                     view.remove_agent(*id);
+                                                     cx.notify();
+                                                 }
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))
@@ -418,7 +438,14 @@ impl WorkspaceWindow {
                     *last_output = Some(std::time::Instant::now());
                 }
             },
-            |_| {},
+            {
+                let exited = Arc::clone(&self.exited_sessions);
+                move |_status| {
+                    if let Ok(mut exited) = exited.lock() {
+                        exited.push(id);
+                    }
+                }
+            },
             move |event| match event {
                 knot_terminal::GridEvent::Title(title) => {
                     if let Ok(mut store) = title_store.lock() {
@@ -1819,6 +1846,11 @@ impl Render for WorkspaceWindow {
                     .cursor_pointer()
                     .rounded(cx.theme().radius)
                     .p_2()
+                    // A companion belongs to the agent above it, so it reads
+                    // as nested: indented, with a rule down its left edge.
+                    .when(is_companion, |row| {
+                        row.ml_4().border_l_2().border_color(cx.theme().border)
+                    })
                     .bg(if selected {
                         cx.theme().muted
                     } else {
@@ -1856,6 +1888,30 @@ impl Render for WorkspaceWindow {
                                             .font_semibold()
                                             .child(name),
                                     )
+                                    // A companion says so where a primary
+                                    // agent names its type - it has no
+                                    // coding-agent type of its own, and an
+                                    // unlabelled row gave no clue what it was.
+                                    .children(is_companion.then(|| {
+                                        h_flex()
+                                            .w_full()
+                                            .min_w_0()
+                                            .gap_1()
+                                            .items_center()
+                                            .child(
+                                                Icon::new(gpui_kit::assets::IconName::CornerDownRight)
+                                                    .xsmall()
+                                                    .text_color(cx.theme().muted_foreground),
+                                            )
+                                            .child(
+                                                div()
+                                                    .font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(knot_core::l10n::t("agent.companion")),
+                                            )
+                                    }))
                                     // The agent type reads as one of the
                                     // row's detail lines, directly under the
                                     // name and above the persona - not

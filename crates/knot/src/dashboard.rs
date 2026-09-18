@@ -15,6 +15,11 @@ use uuid::Uuid;
 use crate::{state_color, state_label};
 
 pub(crate) const CARD_WIDTH: f32 = 280.;
+/// Every agent card is this tall, whatever it has to show. Two of a card's
+/// four rows are conditional (the status line, the diff stat), so sizing to
+/// content left neighbouring cards visibly uneven; a fixed height keeps the
+/// grid uniform and the rows top-aligned within it.
+pub(crate) const CARD_HEIGHT: f32 = 124.;
 pub(crate) const GRID_SPACING: f32 = 16.;
 
 /// One agent's data as needed by a dashboard card - a plain snapshot, not a
@@ -133,6 +138,9 @@ fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
     v_flex().id(gpui_kit::ElementId::from(format!("dashboard-agent-card-{id}")))
             .cursor_pointer()
             .w(px(CARD_WIDTH))
+            .h(px(CARD_HEIGHT))
+            .overflow_hidden()
+            .justify_start()
             .gap_2()
             .p_3()
             .rounded_lg()
@@ -180,7 +188,7 @@ fn add_agent_tile(workspace_id: Uuid,
     h_flex().id(gpui_kit::ElementId::from(format!("dashboard-add-agent-{workspace_id}")))
             .cursor_pointer()
             .w(px(CARD_WIDTH))
-            .h(px(64.))
+            .h(px(CARD_HEIGHT))
             .gap_2()
             .items_center()
             .justify_center()
