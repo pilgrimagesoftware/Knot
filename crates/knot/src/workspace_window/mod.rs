@@ -665,35 +665,18 @@ impl WorkspaceWindow {
         let store = Arc::clone(&self.store);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-                        match panel_session::PanelSessionHandle::start(
-                &adapter_config,
-                &cwd,
-                prior_session_id.as_deref(),
-                mcp_url.as_deref(),
-                &progress,
-            )
-            .await
-            {
-                Ok(handle) => {
-                    if let Ok(mut store) = store.lock() {
-                        store.set_acp_session_id(id, handle.session_id().to_string());
-                    }
-                    if let Some(prompt) = registration_prompt {
-                        if let Ok(mut step) = progress.lock() {
-                            *step = knot_terminal::ConnectStep::Registering;
-                        }
-                        handle.record_user_message(prompt.clone());
-                        if let Err(error) = handle.prompt(&prompt).await {
-                            eprintln!("failed to send panel registration prompt: {error}");
-                        }
-                    }
-                    *slot.lock().unwrap() = panel_session::PanelSessionSlot::Ready(handle);
-                }
-                Err(error) => {
-                    *slot.lock().unwrap() =
-                        panel_session::PanelSessionSlot::Failed(error.to_string());
-                }
-            }
+                        let request =
+                            panel_session::ConnectRequest { config: &adapter_config,
+                                                            cwd: &cwd,
+                                                            prior_session_id:
+                                                                prior_session_id.as_deref(),
+                                                            mcp_url: mcp_url.as_deref(),
+                                                            registration_prompt };
+                        panel_session::connect_into(&slot, request, &progress, |session_id| {
+                            if let Ok(mut store) = store.lock() {
+                                store.set_acp_session_id(id, session_id.to_string());
+                            }
+                        }).await;
                     });
     }
 

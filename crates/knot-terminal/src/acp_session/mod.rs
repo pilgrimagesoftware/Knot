@@ -34,8 +34,6 @@ pub enum ConnectStep {
     Resuming,
     /// Opening a fresh session with `session/new`.
     OpeningSession,
-    /// Connected; the caller is sending its registration prompt.
-    Registering,
 }
 
 impl ConnectStep {
@@ -46,7 +44,6 @@ impl ConnectStep {
             Self::Installing { program } => format!("Installing {program}…"),
             Self::Resuming => "Resuming the previous session…".to_string(),
             Self::OpeningSession => "Opening a session…".to_string(),
-            Self::Registering => "Registering with Knot…".to_string(),
         }
     }
 }

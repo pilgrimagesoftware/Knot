@@ -200,3 +200,125 @@ pub enum PanelPhase {
     Ready,
     Failed,
 }
+
+/// What one panel connect attempt needs beyond the slot it publishes
+/// into: the adapter to spawn, where to run it, and the first prompt to
+/// send once it is live.
+pub struct ConnectRequest<'a> {
+    pub config:              &'a AdapterConfig,
+    pub cwd:                 &'a str,
+    pub prior_session_id:    Option<&'a str>,
+    pub mcp_url:             Option<&'a str>,
+    /// The registration prompt for a fresh session, or `None` when
+    /// resuming (a resumed agent is already registered).
+    pub registration_prompt: Option<String>,
+}
+
+/// Connects `request`'s adapter and drives `slot` through the connection
+/// lifecycle, calling `on_session_id` with the opened session id so the
+/// caller can persist it for a later resume.
+pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectRequest<'_>,
+                          progress: &ConnectProgress, on_session_id: impl FnOnce(&str)) {
+    let handle = match PanelSessionHandle::start(request.config,
+                                                 request.cwd,
+                                                 request.prior_session_id,
+                                                 request.mcp_url,
+                                                 progress).await
+    {
+        Ok(handle) => handle,
+        Err(error) => {
+            *slot.lock().unwrap() = PanelSessionSlot::Failed(error.to_string());
+            return;
+        }
+    };
+    on_session_id(handle.session_id());
+
+    // Publish the handle *before* sending the registration prompt.
+    // `session/prompt` resolves only when the whole turn ends, and an
+    // agent that asks permission during that turn (Gemini does, for its
+    // first Knot MCP tool call) can only be answered through a `Ready`
+    // slot - so awaiting the turn here first is a circular wait: the
+    // turn needs a permission answer, the answer needs the slot, the
+    // slot needs the turn. The registration prompt is recorded first so
+    // the panel opens on the turn already in flight rather than blank.
+    let session = handle.session();
+    if let Some(prompt) = &request.registration_prompt {
+        handle.record_user_message(prompt.clone());
+    }
+    *slot.lock().unwrap() = PanelSessionSlot::Ready(handle);
+
+    if let Some(prompt) = request.registration_prompt
+       && let Err(error) = session.prompt(&prompt).await
+    {
+        eprintln!("failed to send panel registration prompt: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use knot_agent_launch::AdapterConfig;
+
+    use super::*;
+
+    /// A fake adapter that completes the handshake but never answers
+    /// `session/prompt` - standing in for an agent whose first turn is
+    /// blocked (Gemini stalls its registration turn on a
+    /// `session/request_permission` for the first Knot MCP tool call,
+    /// which only a `Ready` slot can show and answer).
+    fn stalling_prompt_adapter() -> AdapterConfig {
+        AdapterConfig { command:                   "sh",
+                        args:                      &[
+                                                     "-c",
+                                                     r#"while IFS= read -r line; do
+                          id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+                          method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+                          case "$method" in
+                            initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}" ;;
+                            session/new) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-1\"}}" ;;
+                          esac
+                        done"#,
+        ],
+                        supports_resume:           false,
+                        supports_permission_modes: false,
+                        install:                   None, }
+    }
+
+    /// The registration turn must not gate the slot: an agent that asks
+    /// permission mid-registration can only be answered through a `Ready`
+    /// slot, so publishing the handle after the turn finishes deadlocks
+    /// the connection.
+    #[tokio::test]
+    async fn the_slot_goes_ready_before_the_registration_turn_finishes() {
+        let (connecting, progress) = PanelSessionSlot::connecting();
+        let slot = Arc::new(Mutex::new(connecting));
+        let request = ConnectRequest { config:              &stalling_prompt_adapter(),
+                                       cwd:                 "/tmp/project",
+                                       prior_session_id:    None,
+                                       mcp_url:             None,
+                                       registration_prompt: Some("register".to_string()), };
+
+        let watched = Arc::clone(&slot);
+        let became_ready = async move {
+            for _ in 0..200 {
+                let phase = watched.lock().unwrap().phase();
+                if phase == PanelPhase::Ready {
+                    return true;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            false
+        };
+
+        tokio::select! {
+            ready = became_ready => assert!(
+                ready,
+                "the slot must reach Ready while the registration turn is still in flight"
+            ),
+            () = connect_into(&slot, request, &progress, |_| {}) => {
+                panic!("the stalled registration turn should never finish")
+            }
+        }
+    }
+}
