@@ -738,10 +738,16 @@ impl WorkspaceWindow {
                             )
                     }))
             }))
+            // Attach, prompt, and Send share one row (`items_center`, so
+            // the two buttons sit centred against the prompt box however
+            // tall it is); the send hint shares the row below with the
+            // config selectors, pushed apart by `justify_between`.
             .child(
                 h_flex()
+                    .w_full()
+                    .min_w_0()
                     .gap_2()
-                    .items_start()
+                    .items_center()
                     .child(
                         Button::new("panel-add-context")
                             .icon(gpui_kit::component::Icon::new(
@@ -757,6 +763,7 @@ impl WorkspaceWindow {
                     .child(
                         div()
                             .flex_1()
+                            .min_w_0()
                             .h(if expanded { px(160.) } else { px(36.) })
                             .capture_action::<Paste>({
                                 let entity = cx.entity();
@@ -770,27 +777,32 @@ impl WorkspaceWindow {
                                 }
                             })
                             .child(Textarea::new(input).size_full().disabled(blocked)),
-                    ),
-            )
-            .child(
-                div().text_xs()
-                     .font_family(self.settings.ui_font_name.clone())
-                     .text_color(cx.theme().muted_foreground)
-                     .child(Self::panel_prompt_send_hint(shift_to_send)),
-            )
-            .child(
-                v_flex()
-                    .items_end()
-                    .gap_1()
+                    )
                     .child(
                         Button::new("panel-send-prompt")
                             .label("Send")
                             .tooltip(send_tooltip)
                             .primary()
+                            .flex_shrink_0()
                             .disabled(!can_send)
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
                             })),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .min_w_0()
+                    .gap_2()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div().flex_shrink_0()
+                             .text_xs()
+                             .font_family(self.settings.ui_font_name.clone())
+                             .text_color(cx.theme().muted_foreground)
+                             .child(Self::panel_prompt_send_hint(shift_to_send)),
                     )
                     .child(
                         h_flex()
