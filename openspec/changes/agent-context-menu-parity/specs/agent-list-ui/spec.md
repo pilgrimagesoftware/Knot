@@ -175,5 +175,11 @@ without restarting it.
 #### Scenario: Registering an agent that is not connected
 - **WHEN** the user selects Register Agent on an agent whose session is
   not live
-- **THEN** nothing is sent, and the failure is reported where the user can
-  see it rather than only on the console
+- **THEN** nothing is sent, and the agent's pane goes on showing the
+  connection state that already explains why - the menu SHALL NOT stack a
+  second message on top of it
+
+#### Scenario: The agent refuses the registration prompt
+- **WHEN** a connected agent answers the registration prompt with an error
+- **THEN** that failure appears in the agent's conversation, per
+  `acp-panel-ui`'s handling of a refused prompt

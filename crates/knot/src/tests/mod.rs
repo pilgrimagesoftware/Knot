@@ -62,6 +62,69 @@ fn agent_context_menu_omits_companion_actions_for_companions() {
                vec!["Edit Agent…", "-", "Open In…", "-", "Remove Agent"]);
 }
 
+/// The store-reading half of the menu: which workspaces an agent can move
+/// to, and whether it has markdown history. A detached workspace lives in
+/// its own window and is not a move target; neither is the agent's own.
+#[test]
+fn agent_menu_facts_exclude_the_agents_own_workspace_and_detached_ones() {
+    let mut store = knot_agents::AgentStore::new();
+    let here = workspace("Here");
+    let there = workspace("There");
+    let mut detached = workspace("Detached");
+    detached.is_detached = Some(true);
+    let (here_id, there_id) = (here.id, there.id);
+    store.add_workspace(here);
+    store.add_workspace(there);
+    store.add_workspace(detached);
+    store.set_current_workspace(here_id);
+    let id = store.create("~/alpha", knot_agents::CreateOptions::default());
+
+    let (facts, move_targets, history) = agent_menu_facts(&store, id);
+
+    assert!(facts.has_move_targets);
+    assert_eq!(move_targets.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+               vec![there_id],
+               "only the other attached workspace is a target");
+    assert!(!facts.has_markdown_history);
+    assert!(history.is_empty());
+    assert!(!facts.is_companion);
+    assert!(!facts.is_shell);
+}
+
+#[test]
+fn agent_menu_facts_report_a_companion_and_its_markdown_history() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    let ws_id = ws.id;
+    store.add_workspace(ws);
+    store.set_current_workspace(ws_id);
+    let owner = store.create("~/alpha", knot_agents::CreateOptions::default());
+    let companion = store.create_shell_companion(owner).unwrap();
+    store.set_markdown_panel(companion, PathBuf::from("/tmp/plan.md"), false)
+         .unwrap();
+
+    let (facts, move_targets, history) = agent_menu_facts(&store, companion);
+
+    assert!(facts.is_companion);
+    assert!(facts.is_shell);
+    assert!(!facts.has_move_targets,
+            "the only workspace is the agent's own");
+    assert!(move_targets.is_empty());
+    assert!(facts.has_markdown_history);
+    assert_eq!(history, vec![PathBuf::from("/tmp/plan.md")]);
+}
+
+/// A menu opened on an agent that is already gone must not invent facts
+/// for it - the row can outlive the agent by a frame.
+#[test]
+fn agent_menu_facts_are_empty_for_a_missing_agent() {
+    let store = knot_agents::AgentStore::new();
+    let (facts, move_targets, history) = agent_menu_facts(&store, Uuid::new_v4());
+    assert_eq!(facts, AgentMenuFacts::default());
+    assert!(move_targets.is_empty());
+    assert!(history.is_empty());
+}
+
 #[test]
 fn agent_context_menu_hides_register_for_a_shell_agent() {
     let facts = AgentMenuFacts { is_shell: true,
