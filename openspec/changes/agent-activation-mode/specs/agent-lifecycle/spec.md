@@ -143,6 +143,18 @@ persisted session id.
 - **THEN** the reloaded agent's resume-session id remains unset and it
   launches fresh, with no error
 
+#### Scenario: ACP session id has no analogue in terminal mode
+
+- **WHEN** an agent has never been in Panel mode
+- **THEN** its ACP session id remains none and is never persisted
+
+#### Scenario: Resume fails for the ACP adapter
+
+- **WHEN** layout restore attempts `session/load` for a Panel-mode agent and
+  the adapter reports the session no longer exists
+- **THEN** the system starts a fresh ACP session for that agent instead of
+  surfacing an error to the user
+
 #### Scenario: Manual restart is unaffected
 
 - **WHEN** `restore-conversation-on-launch` is enabled and a running agent is
