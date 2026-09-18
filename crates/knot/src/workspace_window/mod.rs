@@ -1862,6 +1862,13 @@ impl Render for WorkspaceWindow {
                                         let store = Arc::clone(&store);
                                         let window_entity = window_entity.clone();
                                         let name = name.clone();
+                                        // Deferred: a `PopupMenu` dismisses
+                                        // itself right after running this
+                                        // handler, and a dialog opened inline
+                                        // goes down with it. Opening on the
+                                        // next turn of the loop lets the menu
+                                        // finish closing first.
+                                        window.defer(app, move |window, app| {
                                         window.open_alert_dialog(app, move |alert, _, _| {
                                             let store = Arc::clone(&store);
                                             let window_entity = window_entity.clone();
@@ -1888,6 +1895,7 @@ impl Render for WorkspaceWindow {
                                                     true
                                                 })
                                         });
+                                        });
                                     }
                                 }));
                             }
@@ -1898,6 +1906,9 @@ impl Render for WorkspaceWindow {
                                 move |_, window, app| {
                                     let window_entity = window_entity.clone();
                                     let name = name.clone();
+                                    // See "Restart Agent" above: the dialog
+                                    // has to outlive the menu's dismissal.
+                                    window.defer(app, move |window, app| {
                                     window.open_alert_dialog(app, move |alert, _, _| {
                                         let window_entity = window_entity.clone();
                                         alert
@@ -1914,6 +1925,7 @@ impl Render for WorkspaceWindow {
                                                 });
                                                 true
                                             })
+                                    });
                                     });
                                 }
                             }))
