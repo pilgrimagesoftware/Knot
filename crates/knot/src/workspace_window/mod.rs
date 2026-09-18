@@ -627,31 +627,9 @@ impl WorkspaceWindow {
                     }))
             }))
             .child(
-                div()
-                    .h(if expanded { px(160.) } else { px(36.) })
-                    .capture_action::<Paste>({
-                        let entity = cx.entity();
-                        move |_, _, app| {
-                            entity.update(app, |view, cx| {
-                                if view.paste_clipboard_image_context(id, cx) {
-                                    cx.stop_propagation();
-                                    cx.notify();
-                                }
-                            });
-                        }
-                    })
-                    .child(Textarea::new(input).size_full().disabled(blocked)),
-            )
-            .child(
-                div().text_xs()
-                     .font_family(self.settings.ui_font_name.clone())
-                     .text_color(cx.theme().muted_foreground)
-                     .child(Self::panel_prompt_send_hint(shift_to_send)),
-            )
-            .child(
                 h_flex()
-                    .gap_1()
-                    .items_center()
+                    .gap_2()
+                    .items_start()
                     .child(
                         Button::new("panel-add-context")
                             .icon(gpui_kit::component::Icon::new(
@@ -664,62 +642,34 @@ impl WorkspaceWindow {
                                 view.add_panel_context(id, cx);
                             })),
                     )
-                    .child(self.render_panel_config_selector(
-                        id,
-                        "panel-permission-mode-selector",
-                        "Permission",
-                        "This agent doesn't report permission modes",
-                        Self::find_config_option(
-                            config_options,
-                            &["mode", "permission_mode", "permission-mode"],
-                        ),
-                        self.permission_selector_open,
-                        cx,
-                    ))
-                    .child(self.render_panel_config_selector(
-                        id,
-                        "panel-model-selector",
-                        "Model",
-                        "This agent doesn't report selectable models",
-                        Self::find_config_option(config_options, &["model"]),
-                        false,
-                        cx,
-                    ))
-                    .child(self.render_panel_config_selector(
-                        id,
-                        "panel-effort-selector",
-                        "Effort",
-                        "This agent doesn't report selectable effort levels",
-                        Self::find_config_option(
-                            config_options,
-                            &[
-                                "effort",
-                                "reasoning",
-                                "reasoning_effort",
-                                "reasoning-effort",
-                                "thought_level",
-                                "thought-level",
-                            ],
-                        ),
-                        false,
-                        cx,
-                    ))
                     .child(
-                        Button::new("panel-expand-input")
-                            .icon(if expanded {
-                                IconName::Minimize
-                            } else {
-                                IconName::Maximize
+                        div()
+                            .flex_1()
+                            .h(if expanded { px(160.) } else { px(36.) })
+                            .capture_action::<Paste>({
+                                let entity = cx.entity();
+                                move |_, _, app| {
+                                    entity.update(app, |view, cx| {
+                                        if view.paste_clipboard_image_context(id, cx) {
+                                            cx.stop_propagation();
+                                            cx.notify();
+                                        }
+                                    });
+                                }
                             })
-                            .tooltip(if expanded { "Collapse" } else { "Expand" })
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
-                                view.toggle_panel_input_expanded(id);
-                                cx.notify();
-                            })),
-                    )
-                    .child(div().flex_1())
+                            .child(Textarea::new(input).size_full().disabled(blocked)),
+                    ),
+            )
+            .child(
+                div().text_xs()
+                     .font_family(self.settings.ui_font_name.clone())
+                     .text_color(cx.theme().muted_foreground)
+                     .child(Self::panel_prompt_send_hint(shift_to_send)),
+            )
+            .child(
+                v_flex()
+                    .items_end()
+                    .gap_1()
                     .child(
                         Button::new("panel-send-prompt")
                             .label("Send")
@@ -729,6 +679,68 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
                             })),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(self.render_panel_config_selector(
+                                id,
+                                "panel-permission-mode-selector",
+                                "Permission",
+                                "This agent doesn't report permission modes",
+                                Self::find_config_option(
+                                    config_options,
+                                    &["mode", "permission_mode", "permission-mode"],
+                                ),
+                                self.permission_selector_open,
+                                cx,
+                            ))
+                            .child(self.render_panel_config_selector(
+                                id,
+                                "panel-model-selector",
+                                "Model",
+                                "This agent doesn't report selectable models",
+                                Self::find_config_option(config_options, &["model"]),
+                                false,
+                                cx,
+                            ))
+                            .child(self.render_panel_config_selector(
+                                id,
+                                "panel-effort-selector",
+                                "Effort",
+                                "This agent doesn't report selectable effort levels",
+                                Self::find_config_option(
+                                    config_options,
+                                    &[
+                                        "effort",
+                                        "reasoning",
+                                        "reasoning_effort",
+                                        "reasoning-effort",
+                                        "thought_level",
+                                        "thought-level",
+                                    ],
+                                ),
+                                false,
+                                cx,
+                            ))
+                            .child(
+                                Button::new("panel-expand-input")
+                                    .icon(if expanded {
+                                        IconName::Minimize
+                                    } else {
+                                        IconName::Maximize
+                                    })
+                                    .tooltip(if expanded { "Collapse" } else { "Expand" })
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(
+                                        move |view, _: &ClickEvent, _, cx| {
+                                            view.toggle_panel_input_expanded(id);
+                                            cx.notify();
+                                        },
+                                    )),
+                            ),
                     ),
             )
     }
