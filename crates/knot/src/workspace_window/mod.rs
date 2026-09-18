@@ -1578,7 +1578,9 @@ impl WorkspaceWindow {
                          -> gpui_kit::AnyElement {
         let muted = cx.theme().muted_foreground;
         let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
-        h_flex().font_family(font_family)
+        h_flex().flex_shrink_0()
+                .whitespace_nowrap()
+                .font_family(font_family)
                 .text_size(font_size)
                 .text_color(muted)
                 .gap_1()
@@ -2100,20 +2102,42 @@ impl Render for WorkspaceWindow {
         else {
             match &selected_header {
                 Some(header) => {
-                    h_flex().items_center()
+                    // The avatar and name always stay whole; the folder and
+                    // the agent's status line give up space and ellipsize,
+                    // the status line first since it is the longest and the
+                    // least identifying.
+                    h_flex().flex_1()
+                            .min_w_0()
+                            .items_center()
                             .gap_3()
-                            .child(div().text_2xl().child(header.avatar.clone()))
-                            .child(div().text_lg().font_semibold().child(header.name.clone()))
-                            .child(div().font_family(ui_font_name.clone())
+                            .child(div().flex_shrink_0()
+                                        .text_2xl()
+                                        .child(header.avatar.clone()))
+                            .child(div().flex_shrink_0()
+                                        .text_lg()
+                                        .font_semibold()
+                                        .child(header.name.clone()))
+                            .child(div().flex_shrink(1.)
+                                        .min_w_0()
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .font_family(ui_font_name.clone())
                                         .text_size(ui_font_size)
                                         .text_color(cx.theme().muted_foreground)
                                         .child(header.folder.clone()))
                             .when(!header.header_title.is_empty(), |row| {
-                                row.child(div().font_family(ui_font_name.clone())
+                                row.child(div().flex_shrink_0()
+                                               .font_family(ui_font_name.clone())
                                                .text_size(ui_font_size)
                                                .text_color(cx.theme().muted_foreground)
                                                .child("●"))
-                                   .child(div().font_family(ui_font_name.clone())
+                                   .child(div().flex_1()
+                                               .min_w_0()
+                                               .overflow_hidden()
+                                               .whitespace_nowrap()
+                                               .text_ellipsis()
+                                               .font_family(ui_font_name.clone())
                                                .text_size(ui_font_size)
                                                .text_color(cx.theme().muted_foreground)
                                                .child(header.header_title.clone()))
@@ -2285,16 +2309,27 @@ impl Render for WorkspaceWindow {
                     .min_w_0()
                     .h_full()
                     .children((!is_dashboard).then(|| {
+                        // `min_w_0` on the row and a non-shrinking right
+                        // side: at a narrow window the agent's status line
+                        // used to push the whole header wider than the
+                        // pane, clipping the title on one edge and running
+                        // the diff stat off the other.
                         h_flex()
+                            .w_full()
+                            .min_w_0()
                             .flex_shrink_0()
                             .h(px(64.))
                             .items_center()
                             .justify_between()
+                            .gap_3()
                             .px_5()
                             .bg(cx.theme().background)
                             .child(title_bar_left)
                             .child(
-                                h_flex().items_center().gap_2().child(title_bar_right),
+                                h_flex().flex_shrink_0()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(title_bar_right),
                             )
                     }))
                     .child(dashboard_content.unwrap_or_else(|| {
