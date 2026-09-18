@@ -57,6 +57,26 @@ pub(crate) fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString,
     (f32::from(width).max(1.), f32::from(ascent + descent).max(1.))
 }
 
+/// One sidebar agent row's render inputs, snapshotted out of the store
+/// while its lock is held so the row closures don't need it. A struct
+/// rather than the tuple this used to be, per the repo convention against
+/// wide positional parameter lists.
+struct AgentRow {
+    id:           Uuid,
+    avatar:       String,
+    name:         String,
+    folder:       String,
+    state:        knot_agents::AgentState,
+    is_shell:     bool,
+    is_companion: bool,
+    header_title: String,
+    persona_name: Option<String>,
+    /// The agent's coding-agent type (`claude`, `opencode`, ...), shown
+    /// on the row so a one-letter avatar isn't the only clue to which
+    /// agent is running there.
+    agent_type:   String,
+}
+
 pub(crate) struct WorkspaceWindow {
     permission_selector_open:         bool,
     store:                            Arc<Mutex<knot_agents::AgentStore>>,
@@ -1465,41 +1485,43 @@ impl Render for WorkspaceWindow {
         // font (Adamina), so it needs no override here.
         let ui_font_name = self.settings.ui_font_name.clone();
         let ui_font_size = px(self.settings.ui_font_size as f32);
-        let (_workspace_name, agents) =
-            {
-                let store = self.store.lock().unwrap();
-                let Some(workspace) = store.workspaces()
-                                           .iter()
-                                           .find(|workspace| workspace.id == self.workspace_id)
-                else {
-                    return v_flex().size_full()
+        let (_workspace_name, agents) = {
+            let store = self.store.lock().unwrap();
+            let Some(workspace) = store.workspaces()
+                                       .iter()
+                                       .find(|workspace| workspace.id == self.workspace_id)
+            else {
+                return v_flex().size_full()
                                .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
                                .child("Workspace no longer exists.");
-                };
-                let agents = workspace.agent_ids
-                                      .iter()
-                                      .filter_map(|id| store.agent(*id))
-                                      .map(|agent| {
-                                          let persona_name = agent.persona_id.and_then(|id| {
-                                                                                 self.settings
+            };
+            let agents =
+                workspace.agent_ids
+                         .iter()
+                         .filter_map(|id| store.agent(*id))
+                         .map(|agent| {
+                             let persona_name =
+                                 agent.persona_id.and_then(|id| {
+                                                     self.settings
                                                          .personas
                                                          .iter()
                                                          .find(|persona| persona.id == id)
                                                          .map(|persona| persona.name.clone())
-                                                                             });
-                                          (agent.id,
-                                           agent.avatar.clone(),
-                                           agent.name.clone(),
-                                           agent.folder.clone(),
-                                           agent.state,
-                                           agent.is_shell(),
-                                           agent.is_companion,
-                                           agent.header_title().to_string(),
-                                           persona_name)
-                                      })
-                                      .collect::<Vec<_>>();
-                (workspace.name.clone(), agents)
-            };
+                                                 });
+                             AgentRow { id: agent.id,
+                                        avatar: agent.avatar.clone(),
+                                        name: agent.name.clone(),
+                                        folder: agent.folder.clone(),
+                                        state: agent.state,
+                                        is_shell: agent.is_shell(),
+                                        is_companion: agent.is_companion,
+                                        header_title: agent.header_title().to_string(),
+                                        persona_name,
+                                        agent_type: agent.agent_type.clone() }
+                         })
+                         .collect::<Vec<_>>();
+            (workspace.name.clone(), agents)
+        };
 
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
 
@@ -1514,17 +1536,16 @@ impl Render for WorkspaceWindow {
 
         let agent_rows =
             agents.into_iter().map(
-                                   |(
-                id,
-                avatar,
-                name,
-                folder,
-                state,
-                is_shell,
-                is_companion,
-                header_title,
-                persona_name,
-            )| {
+                                   |AgentRow { id,
+                                               avatar,
+                                               name,
+                                               folder,
+                                               state,
+                                               is_shell,
+                                               is_companion,
+                                               header_title,
+                                               persona_name,
+                                               agent_type, }| {
                                        let menu_name = name.clone();
                                        let folder_name =
                                            PathBuf::from(&folder).file_name()
@@ -1583,7 +1604,34 @@ impl Render for WorkspaceWindow {
                                     .flex_1()
                                     .min_w_0()
                                     .gap_0p5()
-                                    .child(div().font_semibold().child(name))
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .min_w_0()
+                                            .gap_2()
+                                            .items_baseline()
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .min_w_0()
+                                                    .overflow_hidden()
+                                                    .whitespace_nowrap()
+                                                    .text_ellipsis()
+                                                    .font_semibold()
+                                                    .child(name),
+                                            )
+                                            .children((!is_shell).then(|| {
+                                                div()
+                                                    .flex_shrink_0()
+                                                    .font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(SettingsWindow::agent_type_label(
+                                                        &agent_type,
+                                                    ))
+                                            })),
+                                    )
                                     .children(persona_name.map(|persona_name| {
                                         div()
                                             .font_family(ui_font_name.clone())
