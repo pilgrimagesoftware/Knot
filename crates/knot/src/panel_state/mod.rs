@@ -18,14 +18,21 @@ fn render_json(output: &Value) -> String {
 }
 
 /// One entry in the panel's message list: a user-sent prompt, streamed
-/// assistant text, or a tool call's card - kept as distinct variants per
-/// `acp-panel-ui`'s "visually distinguish user messages, assistant
-/// messages, and system/tool content" requirement.
+/// assistant text, a tool call's card, or a failure the session reported
+/// out of band - kept as distinct variants per `acp-panel-ui`'s "visually
+/// distinguish user messages, assistant messages, and system/tool
+/// content" requirement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PanelMessage {
     User(String),
     Assistant(String),
     ToolCall(ToolCallCard),
+    /// Something the session could not do: a refused prompt, a send that
+    /// never reached the agent. These arrive as a JSON-RPC error response
+    /// rather than a session update, so nothing in the event stream
+    /// records them - without this entry the only trace of, say, an
+    /// exhausted model quota was a line on stderr the user never sees.
+    Error(String),
 }
 
 /// A tool call's rendered state: `kind` (execute, read, edit, ...), the
@@ -116,6 +123,16 @@ impl PanelState {
         self.messages.push(PanelMessage::User(text));
         self.turn_active = true;
         self.tracking = true;
+    }
+
+    /// Records a failure the agent reported instead of a turn - a prompt
+    /// the adapter answered with a JSON-RPC error, say. Ends the turn:
+    /// the error response *is* the turn's outcome, no `TurnEnd` follows
+    /// it, and leaving `turn_active` set would lock the composer out of
+    /// sending anything else for the rest of the session.
+    pub fn push_error(&mut self, text: String) {
+        self.messages.push(PanelMessage::Error(text));
+        self.turn_active = false;
     }
 
     /// Turns off auto-scroll for the in-flight response, per the track
@@ -260,6 +277,24 @@ mod tests {
         assert_eq!(state.messages,
                    vec![PanelMessage::User("hello".to_string()),
                         PanelMessage::Assistant("hi there".to_string())]);
+    }
+
+    /// An agent that answers a prompt with an error (an exhausted quota,
+    /// a dead transport) sends no `TurnEnd`, so the failure has to both
+    /// show in the conversation and release the composer.
+    #[test]
+    fn a_failed_prompt_is_recorded_as_an_error_and_ends_the_turn() {
+        let mut state = PanelState::new();
+
+        state.push_user_message("hello".to_string());
+        state.push_error("The agent could not answer: quota exhausted".to_string());
+
+        assert_eq!(state.messages,
+                   vec![PanelMessage::User("hello".to_string()),
+                        PanelMessage::Error("The agent could not answer: quota exhausted"
+                                                                       .to_string())]);
+        assert!(!state.turn_active,
+                "a failed turn must not keep the composer blocked");
     }
 
     fn tool_call_start(id: &str, kind: &str) -> SessionEvent {

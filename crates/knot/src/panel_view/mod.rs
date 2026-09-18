@@ -180,6 +180,20 @@ fn render_message(ctx: Message<'_>, message: &PanelMessage,
                     .into_any_element()
         }
         PanelMessage::ToolCall(card) => render_tool_call_card(card, style).into_any_element(),
+        // Left-aligned like the assistant's own text, since it stands
+        // where that answer would have been, but in the error color and
+        // outlined so it doesn't read as something the agent said.
+        PanelMessage::Error(text) => div().w_full()
+                                          .min_w_0()
+                                          .text_sm()
+                                          .text_color(rgb(ERROR_COLOR))
+                                          .px_3()
+                                          .py_1p5()
+                                          .rounded_md()
+                                          .border_1()
+                                          .border_color(rgb(ERROR_COLOR))
+                                          .child(text.clone())
+                                          .into_any_element(),
     }
 }
 
