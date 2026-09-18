@@ -14,13 +14,13 @@ use crate::registration::{inline_registration_arguments, mcp_arguments};
 /// (commands, options, MCP config) comes from `Settings` instead.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchRequest<'a> {
-    pub agent_type:        &'a str,
-    pub agent_id:          Option<Uuid>,
-    pub shell_command:     Option<&'a str>,
+    pub agent_type: &'a str,
+    pub agent_id: Option<Uuid>,
+    pub shell_command: Option<&'a str>,
     pub resume_session_id: Option<&'a str>,
-    pub fork_session:      bool,
-    pub persona:           Option<&'a Persona>,
-    pub plugin_root:       Option<&'a Path>,
+    pub fork_session: bool,
+    pub persona: Option<&'a Persona>,
+    pub plugin_root: Option<&'a Path>,
 }
 
 /// The configured base command for `agent_type`: the stored override if
@@ -57,15 +57,14 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
     let mut full = cmd;
 
     if let Some(session_id) = request.resume_session_id
-       && can_resume(request.agent_type)
+        && can_resume(request.agent_type)
     {
         let fork = request.fork_session && can_fork(request.agent_type);
         match request.agent_type {
             "codex" => {
                 if fork {
                     full.push_str(&format!(" fork {session_id}"));
-                }
-                else {
+                } else {
                     full.push_str(&format!(" resume {session_id}"));
                 }
             }
@@ -79,7 +78,7 @@ pub fn build_agent_command(settings: &Settings, request: &LaunchRequest<'_>) -> 
     }
 
     if let Some(opts) = settings.agent_options.get(request.agent_type)
-       && !opts.is_empty()
+        && !opts.is_empty()
     {
         full.push(' ');
         full.push_str(opts);
@@ -101,14 +100,24 @@ fn mcp_and_registration_args(settings: &Settings, request: &LaunchRequest<'_>) -
     }
     let mut args = mcp_arguments(request.agent_type, &mcp_url(settings), request.plugin_root);
     if let Some(agent_id) = request.agent_id
-       && supports_inline_registration(request.agent_type)
+        && supports_inline_registration(request.agent_type)
     {
-        args.push_str(&inline_registration_arguments(request.agent_type,
-                                                     agent_id,
-                                                     request.resume_session_id.is_some(),
-                                                     request.persona));
+        args.push_str(&inline_registration_arguments(
+            request.agent_type,
+            agent_id,
+            request.resume_session_id.is_some(),
+            request.persona,
+        ));
     }
     args
+}
+
+/// ACP registration is sent as a protocol prompt, not as a CLI argument.
+fn mcp_config_args(settings: &Settings, request: &LaunchRequest<'_>) -> String {
+    if !settings.mcp_server_enabled {
+        return String::new();
+    }
+    mcp_arguments(request.agent_type, &mcp_url(settings), request.plugin_root)
 }
 
 /// An ACP adapter launch: the registered adapter plus the MCP/registration
@@ -118,7 +127,7 @@ fn mcp_and_registration_args(settings: &Settings, request: &LaunchRequest<'_>) -
 /// registration" requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdapterLaunch {
-    pub config:     AdapterConfig,
+    pub config: AdapterConfig,
     pub mcp_config: String,
 }
 
@@ -136,15 +145,17 @@ pub enum LaunchPlan {
 /// with a registered adapter (`adapter`, typically `acp_adapter(request
 /// .agent_type)`) uses the adapter; Terminal mode or no registered adapter
 /// falls back to the existing terminal command unchanged.
-pub fn plan_launch(view_mode: ViewMode, adapter: Option<AdapterConfig>, settings: &Settings,
-                   request: &LaunchRequest<'_>)
-                   -> LaunchPlan {
+pub fn plan_launch(
+    view_mode: ViewMode, adapter: Option<AdapterConfig>, settings: &Settings,
+    request: &LaunchRequest<'_>,
+) -> LaunchPlan {
     if view_mode == ViewMode::Panel
-       && let Some(config) = adapter
+        && let Some(config) = adapter
     {
-        return LaunchPlan::Adapter(AdapterLaunch { config,
-                                                   mcp_config:
-                                                       mcp_and_registration_args(settings, request) });
+        return LaunchPlan::Adapter(AdapterLaunch {
+            config,
+            mcp_config: mcp_config_args(settings, request),
+        });
     }
     LaunchPlan::Terminal(build_agent_command(settings, request))
 }
@@ -152,19 +163,22 @@ pub fn plan_launch(view_mode: ViewMode, adapter: Option<AdapterConfig>, settings
 /// Build the terminal initialization command: `cd` into `folder`, clear the
 /// screen, then (for a non-empty `agent_command`) set `KNOT_AGENT_ID` and
 /// run it. The leading space suppresses shell history under `ignorespace`.
-pub fn build_initialization_command(folder: &str, agent_command: &str, agent_id: Option<Uuid>)
-                                    -> String {
+pub fn build_initialization_command(
+    folder: &str, agent_command: &str, agent_id: Option<Uuid>,
+) -> String {
     if agent_command.is_empty() {
         return format!(" cd '{folder}' && clear");
     }
-    let env_prefix = agent_id.map(|id| format!("KNOT_AGENT_ID={id} "))
-                             .unwrap_or_default();
+    let env_prefix = agent_id
+        .map(|id| format!("KNOT_AGENT_ID={id} "))
+        .unwrap_or_default();
     format!(" cd '{folder}' && clear && {env_prefix}{agent_command}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::acp_adapter;
 
     fn settings() -> Settings {
         Settings::default()
@@ -174,8 +188,10 @@ mod tests {
     fn missing_command_yields_nothing() {
         let mut s = settings();
         s.agent_commands.insert("claude".to_string(), String::new());
-        let req = LaunchRequest { agent_type: "claude",
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            ..Default::default()
+        };
         assert_eq!(build_agent_command(&s, &req), "");
     }
 
@@ -183,25 +199,31 @@ mod tests {
     fn default_command_falls_back_to_agent_type() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest { agent_type: "claude",
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            ..Default::default()
+        };
         assert_eq!(build_agent_command(&s, &req), "claude");
     }
 
     #[test]
     fn shell_agent_custom_command() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "shell",
-                                  shell_command: Some("htop"),
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "shell",
+            shell_command: Some("htop"),
+            ..Default::default()
+        };
         assert_eq!(build_agent_command(&s, &req), "htop");
     }
 
     #[test]
     fn shell_agent_no_custom_command_is_empty() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "shell",
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "shell",
+            ..Default::default()
+        };
         assert_eq!(build_agent_command(&s, &req), "");
     }
 
@@ -209,22 +231,28 @@ mod tests {
     fn claude_resume_with_fork() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest { agent_type: "claude",
-                                  resume_session_id: Some("abc123"),
-                                  fork_session: true,
-                                  ..Default::default() };
-        assert_eq!(build_agent_command(&s, &req),
-                   "claude --resume abc123 --fork-session");
+        let req = LaunchRequest {
+            agent_type: "claude",
+            resume_session_id: Some("abc123"),
+            fork_session: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            build_agent_command(&s, &req),
+            "claude --resume abc123 --fork-session"
+        );
     }
 
     #[test]
     fn codex_fork_uses_subcommand() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest { agent_type: "codex",
-                                  resume_session_id: Some("abc123"),
-                                  fork_session: true,
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "codex",
+            resume_session_id: Some("abc123"),
+            fork_session: true,
+            ..Default::default()
+        };
         let cmd = build_agent_command(&s, &req);
         assert!(cmd.contains("fork abc123"));
         assert!(!cmd.contains("--resume"));
@@ -234,18 +262,22 @@ mod tests {
     fn mcp_disabled_omits_all_mcp_and_registration_args() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest { agent_type: "claude",
-                                  agent_id: Some(Uuid::nil()),
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            agent_id: Some(Uuid::nil()),
+            ..Default::default()
+        };
         assert_eq!(build_agent_command(&s, &req), "claude");
     }
 
     #[test]
     fn mcp_enabled_appends_registration() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "claude",
-                                  agent_id: Some(Uuid::nil()),
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            agent_id: Some(Uuid::nil()),
+            ..Default::default()
+        };
         let cmd = build_agent_command(&s, &req);
         assert!(cmd.contains("--mcp-config"));
         assert!(cmd.contains("--append-system-prompt"));
@@ -254,9 +286,13 @@ mod tests {
     #[test]
     fn env_var_precedes_agent_command() {
         let cmd = build_initialization_command("/tmp/repo", "claude", Some(Uuid::nil()));
-        assert_eq!(cmd,
-                   format!(" cd '/tmp/repo' && clear && KNOT_AGENT_ID={} claude",
-                           Uuid::nil()));
+        assert_eq!(
+            cmd,
+            format!(
+                " cd '/tmp/repo' && clear && KNOT_AGENT_ID={} claude",
+                Uuid::nil()
+            )
+        );
     }
 
     #[test]
@@ -266,18 +302,22 @@ mod tests {
     }
 
     fn stub_adapter() -> AdapterConfig {
-        AdapterConfig { command:                   "claude-code-acp",
-                        args:                      &[],
-                        supports_resume:           true,
-                        supports_permission_modes: true,
-                        install:                   None, }
+        AdapterConfig {
+            command: "claude-code-acp",
+            args: &[],
+            supports_resume: true,
+            supports_permission_modes: true,
+            install: None,
+        }
     }
 
     #[test]
     fn terminal_mode_always_uses_terminal_command_even_with_an_adapter() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "claude",
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            ..Default::default()
+        };
         let plan = plan_launch(ViewMode::Terminal, Some(stub_adapter()), &s, &req);
         assert_eq!(plan, LaunchPlan::Terminal(build_agent_command(&s, &req)));
     }
@@ -285,8 +325,10 @@ mod tests {
     #[test]
     fn panel_mode_without_an_adapter_falls_back_to_terminal_command() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "claude",
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            ..Default::default()
+        };
         let plan = plan_launch(ViewMode::Panel, None, &s, &req);
         assert_eq!(plan, LaunchPlan::Terminal(build_agent_command(&s, &req)));
     }
@@ -294,22 +336,25 @@ mod tests {
     #[test]
     fn panel_mode_with_an_adapter_spawns_the_adapter_instead_of_a_terminal_command() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "claude",
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            ..Default::default()
+        };
         let plan = plan_launch(ViewMode::Panel, Some(stub_adapter()), &s, &req);
-        let LaunchPlan::Adapter(adapter_launch) = plan
-        else {
+        let LaunchPlan::Adapter(adapter_launch) = plan else {
             panic!("expected an adapter launch plan, not a terminal command");
         };
         assert_eq!(adapter_launch.config, stub_adapter());
     }
 
     #[test]
-    fn adapter_mcp_config_matches_the_terminal_paths_mcp_arguments() {
+    fn adapter_mcp_config_keeps_mcp_arguments_without_registration_flags() {
         let s = settings();
-        let req = LaunchRequest { agent_type: "claude",
-                                  agent_id: Some(Uuid::nil()),
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            agent_id: Some(Uuid::nil()),
+            ..Default::default()
+        };
 
         let terminal_cmd = build_agent_command(&s, &req);
         let LaunchPlan::Adapter(adapter_launch) =
@@ -318,17 +363,20 @@ mod tests {
             panic!("expected an adapter launch plan");
         };
 
-        assert!(terminal_cmd.ends_with(&adapter_launch.mcp_config));
+        assert!(terminal_cmd.contains("--mcp-config"));
         assert!(!adapter_launch.mcp_config.is_empty());
+        assert!(adapter_launch.mcp_config.starts_with(" --mcp-config"));
     }
 
     #[test]
     fn adapter_mcp_config_is_empty_when_mcp_disabled() {
         let mut s = settings();
         s.mcp_server_enabled = false;
-        let req = LaunchRequest { agent_type: "claude",
-                                  agent_id: Some(Uuid::nil()),
-                                  ..Default::default() };
+        let req = LaunchRequest {
+            agent_type: "claude",
+            agent_id: Some(Uuid::nil()),
+            ..Default::default()
+        };
 
         let LaunchPlan::Adapter(adapter_launch) =
             plan_launch(ViewMode::Panel, Some(stub_adapter()), &s, &req)
@@ -336,6 +384,25 @@ mod tests {
             panic!("expected an adapter launch plan");
         };
 
+        assert_eq!(adapter_launch.mcp_config, "");
+    }
+
+    #[test]
+    fn adapter_does_not_receive_terminal_registration_arguments() {
+        let s = settings();
+        let req = LaunchRequest {
+            agent_type: "opencode",
+            agent_id: Some(Uuid::nil()),
+            ..Default::default()
+        };
+        let LaunchPlan::Adapter(adapter_launch) = plan_launch(
+            ViewMode::Panel,
+            Some(acp_adapter("opencode").unwrap()),
+            &s,
+            &req,
+        ) else {
+            panic!("expected an adapter launch plan");
+        };
         assert_eq!(adapter_launch.mcp_config, "");
     }
 }
