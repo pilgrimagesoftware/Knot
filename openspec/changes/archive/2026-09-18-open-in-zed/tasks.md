@@ -18,5 +18,5 @@
 ## 3. Verification
 
 - [x] 3.1 `make rust` passes clean.
-- [ ] 3.2 In the app, select Zed from an agent's Open In… submenu and confirm
+- [x] 3.2 In the app, select Zed from an agent's Open In… submenu and confirm
       that agent's folder opens in Zed.
