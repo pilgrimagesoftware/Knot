@@ -8,6 +8,7 @@
 //! installed" from inside a context menu, and a dialog for it would be
 //! worse than nothing happening.
 
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 /// One application in the submenu.
@@ -93,7 +94,6 @@ fn run_open(arguments: &[&str], folder: &str) -> bool {
 /// builds on Linux for CI.
 #[cfg(not(target_os = "macos"))]
 fn run_open(_arguments: &[&str], _folder: &str) -> bool {
-    let _ = Command::new("true");
     false
 }
 
