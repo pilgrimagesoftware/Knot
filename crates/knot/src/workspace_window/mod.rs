@@ -206,6 +206,10 @@ impl WorkspaceWindow {
                   // the app's bundle name for every workspace
                   // window.
                   window.set_window_title(&workspace_name);
+                  // Order the new window front rather than letting it open
+                  // behind whatever has focus - matching what the settings
+                  // window already does when it reuses an open one.
+                  window.activate_window();
                   let new_agent_name_input =
                       cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
                   let new_agent_folder_input =

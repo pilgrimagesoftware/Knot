@@ -225,5 +225,11 @@ pub(crate) fn run() {
                                        })
                                  })
                                  .expect("failed to open workspace manager");
+                               // macOS launches a non-bundled binary without
+                               // making it frontmost, so without this the
+                               // window opens behind whatever was already on
+                               // screen. `activate` is the app-level
+                               // equivalent of ordering the window front.
+                               cx.activate(true);
                            });
 }
