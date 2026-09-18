@@ -43,7 +43,7 @@
       doesn't lose scrollback - `ensure_session` only spawns if the
       `sessions` map has no entry yet, and selection change never removes
       an entry. Verify: manual check (task 5.2).
-- [ ] 2.4 Tear down a session when its agent is removed or restarted
+- [x] 2.4 Tear down a session when its agent is removed or restarted
       (`agent-lifecycle`'s restart operation gets a fresh session, not a
       reused one). `remove_session` + a `Drop` impl (shuts down every
       session when the window closes) exist, but nothing in
@@ -51,6 +51,9 @@
       from - `Shell`'s dead code had `close_agent`/`restart_agent`, but
       porting those UI actions is a `dashboard-view`/agent-management
       concern, not terminal-rendering's. Revisit once that UI exists.
+      **Done:** that UI exists now (`agent-list-ui`'s Remove and Restart),
+      and both call `remove_session` - the removal cascade in `remove_agent`
+      and the Restart handler's confirm branch.
 - [x] 2.5 Delete `Shell`, the `OutputBuffer`/`OUTPUT_POLL_INTERVAL`/
       `TerminalModel`/`AgentHeader`/`terminal_model`/`visible_output`
       scaffold now that `WorkspaceWindow` spawns real sessions - this was

@@ -55,7 +55,7 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Run `make rust` (fmt + clippy + test + build) and confirm it
+- [x] 5.1 Run `make rust` (fmt + clippy + test + build) and confirm it
       passes with no new warnings.
 - [ ] 5.2 Manually exercise the full flow against a real ACP agent
       connection: switch permission modes via mouse and keyboard, trigger a
