@@ -28,6 +28,7 @@
 ## 3. Verification
 
 - [x] 3.1 `make rust` passes clean.
-- [ ] 3.2 In the app, check a row with every line present, a row with no
+- [x] 3.2 In the app, check a row with every line present, a row with no
       persona, and a shell companion - confirming no icon is drawn beside a
       line that is not there - and narrow the sidebar until a line wraps.
+      **Confirmed by the author against the running app.**
