@@ -531,45 +531,37 @@ impl Render for AgentEditor {
             );
         }
 
-        // A segmented control rather than a switch: "Active" and "Passive"
-        // are not an on/off pair - neither is the absence of the other - so
-        // two named segments say what both choices are without the user
-        // having to try one. The hint carries the difference, which the two
-        // words alone do not: guessing wrong costs either an agent that
-        // silently never starts or a workspace that launches every
-        // subprocess at once.
+        // A switch with the mode named beside it. The segmented control
+        // this replaced made the two options equally prominent and left
+        // which one was chosen to a fill colour, which did not read at a
+        // glance; a switch has one unambiguous position, and the label
+        // spells out what that position currently means so the reader
+        // never has to work it out from the switch alone.
         let activation_mode = self.activation_mode;
+        let is_active = activation_mode == knot_core::ActivationMode::Active;
         agent_rows.push(
             Self::dialog_row(
                 "Activation",
-                ToggleGroup::new("agent-activation-mode")
-                    .segmented()
+                h_flex()
+                    .gap_2()
+                    .items_center()
                     .child(
-                        Toggle::new("agent-activation-active")
-                            .label("Active")
-                            .checked(activation_mode == knot_core::ActivationMode::Active),
+                        Switch::new("agent-activation-mode").checked(is_active).on_click({
+                            let editor = editor.clone();
+                            move |checked, _, app| {
+                                let mode = if *checked {
+                                    knot_core::ActivationMode::Active
+                                } else {
+                                    knot_core::ActivationMode::Passive
+                                };
+                                editor.update(app, |e, cx| {
+                                    e.activation_mode = mode;
+                                    cx.notify();
+                                });
+                            }
+                        }),
                     )
-                    .child(
-                        Toggle::new("agent-activation-passive")
-                            .label("Passive")
-                            .checked(activation_mode == knot_core::ActivationMode::Passive),
-                    )
-                    .on_click({
-                        let editor = editor.clone();
-                        move |checked: &Vec<bool>, _window, app| {
-                            // Index 0 is the Active segment, 1 the Passive
-                            // one, in the order they were added above.
-                            let mode = if checked.first().copied().unwrap_or(false) {
-                                knot_core::ActivationMode::Active
-                            } else {
-                                knot_core::ActivationMode::Passive
-                            };
-                            editor.update(app, |e, cx| {
-                                e.activation_mode = mode;
-                                cx.notify();
-                            });
-                        }
-                    }),
+                    .child(div().child(if is_active { "Active" } else { "Passive" })),
             )
             .into_any_element(),
         );

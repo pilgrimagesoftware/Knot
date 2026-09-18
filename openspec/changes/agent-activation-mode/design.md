@@ -116,15 +116,22 @@ event*, not continuously: deactivating from the context menu does not
 re-trigger the click handler, so the agent stays down until the row is
 clicked again.
 
-### The dialog's control is a segmented control, not a switch
+### The dialog's control is a switch with the mode named beside it
 
-A switch needs a label that reads correctly in both positions, and
-"Active ⟷ Passive" is not an on/off pair - neither is the absence of the
-other. Two named segments say what both choices are without the user having
+This started as a segmented control, on the reasoning that "Active ⟷
+Passive" is not an on/off pair - neither is the absence of the other - so
+two named segments would say what both choices are without the user having
 to try one.
 
-The hint below uses the settings window's `hint()` helper, per the project's
-UI conventions, and says one sentence per mode.
+Tried against the real dialog, it read worse, not better: two equally
+prominent segments left *which one is chosen* to a fill colour, and at a
+glance the control said nothing. A switch has one unambiguous position. The
+objection it was meant to answer - that a bare switch names only one mode -
+is met by spelling the current mode out next to it, so the reader never
+infers it from the switch alone.
+
+The hint below says one sentence per mode, so both are named in the dialog
+whichever way the switch is set.
 
 ### Stopped rows are distinguished, by liveness rather than by mode
 
