@@ -57,6 +57,11 @@ pub(crate) fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString,
     (f32::from(width).max(1.), f32::from(ascent + descent).max(1.))
 }
 
+/// The permission-mode selector's element id - the one selector with
+/// risk-tinted labels and a keyboard action of its own, so it needs naming
+/// rather than matching on a literal in three places.
+const PERMISSION_SELECTOR_ID: &str = "panel-permission-mode-selector";
+
 /// One sidebar agent row's render inputs, snapshotted out of the store
 /// while its lock is held so the row closures don't need it. A struct
 /// rather than the tuple this used to be, per the repo convention against
@@ -78,7 +83,19 @@ struct AgentRow {
 }
 
 pub(crate) struct WorkspaceWindow {
-    permission_selector_open:         bool,
+    /// Last known diff stat per agent, refreshed off the render path - see
+    /// `refresh_diff_stats`.
+    diff_stats:                       Arc<Mutex<BTreeMap<Uuid, Option<knot_git::DiffStats>>>>,
+    /// When each agent's diff stat was last *requested*, so the refresh
+    /// runs on a cadence rather than once per render. Main-thread only.
+    diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
+    /// Set by a finished refresh so the repaint poll redraws the header.
+    diff_stats_dirty:                 Arc<std::sync::atomic::AtomicBool>,
+    /// Which config selector's popover is open, by element id, or `None`
+    /// when none is. One shared flag used to back all three: because every
+    /// selector's `on_open_change` wrote it and the permission selector
+    /// read it, clicking Model or Effort opened the *permission* menu.
+    open_config_selector:             Option<&'static str>,
     store:                            Arc<Mutex<knot_agents::AgentStore>>,
     settings:                         knot_core::Settings,
     workspace_id:                     Uuid,
@@ -191,7 +208,10 @@ impl WorkspaceWindow {
                   let view =
                       cx.new(|cx| {
                             let mut window = WorkspaceWindow {
-                    permission_selector_open: false,
+                    diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
+                    diff_stats_requested: BTreeMap::new(),
+                    diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    open_config_selector: None,
                     store,
                     settings,
                     workspace_id,
@@ -399,6 +419,41 @@ impl WorkspaceWindow {
         }
     }
 
+    /// How stale a cached diff stat may get before the next render asks
+    /// for a fresh one.
+    const DIFF_STATS_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(2);
+
+    /// Requests a fresh diff stat for the selected agent if the cached one
+    /// has aged out, computing it on the runtime's blocking pool.
+    ///
+    /// `git diff --numstat` is a subprocess, and this used to run inline in
+    /// `selected_agent_header` - so every render spawned one, and since a
+    /// keystroke in the prompt box re-renders, typing ran at the speed of
+    /// `git`. `knot-git` is runtime-agnostic by contract, hence
+    /// `spawn_blocking` rather than an async call.
+    fn refresh_diff_stats(&mut self, id: Uuid, folder: &str) {
+        let fresh = self.diff_stats_requested
+                        .get(&id)
+                        .is_some_and(|at| at.elapsed() < Self::DIFF_STATS_MAX_AGE);
+        if fresh {
+            return;
+        }
+        self.diff_stats_requested
+            .insert(id, std::time::Instant::now());
+        let folder = folder.to_string();
+        let cache = Arc::clone(&self.diff_stats);
+        let dirty = Arc::clone(&self.diff_stats_dirty);
+        let _runtime_guard = self.runtime.enter();
+        self.runtime.spawn_blocking(move || {
+                        let stats = Repository::open(&folder).diff_stats().ok();
+                        if let Ok(mut cache) = cache.lock()
+                           && cache.insert(id, stats) != Some(stats)
+                        {
+                            dirty.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    });
+    }
+
     /// Whether the selected agent's panel needs a repaint: either its live
     /// session has new events, or its slot changed lifecycle phase since
     /// the last poll.
@@ -411,9 +466,11 @@ impl WorkspaceWindow {
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
     fn panel_needs_repaint(&mut self) -> bool {
+        let stats_changed = self.diff_stats_dirty
+                                .swap(false, std::sync::atomic::Ordering::SeqCst);
         let Some(id) = self.selected_agent
         else {
-            return false;
+            return stats_changed;
         };
         let Some(slot) = self.panel_sessions.get(&id)
         else {
@@ -427,7 +484,7 @@ impl WorkspaceWindow {
             (slot.phase(), events_arrived)
         };
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
-        phase_changed || events_arrived
+        phase_changed || events_arrived || stats_changed
     }
 
     /// Tears down a session (e.g. its agent was removed or restarted).
@@ -814,14 +871,13 @@ impl WorkspaceWindow {
                             .items_center()
                             .child(self.render_panel_config_selector(
                                 id,
-                                "panel-permission-mode-selector",
+                                PERMISSION_SELECTOR_ID,
                                 "Permission",
                                 "This agent doesn't report permission modes",
                                 Self::find_config_option(
                                     config_options,
                                     &["mode", "permission_mode", "permission-mode"],
                                 ),
-                                self.permission_selector_open,
                                 cx,
                             ))
                             .child(self.render_panel_config_selector(
@@ -830,7 +886,6 @@ impl WorkspaceWindow {
                                 "Model",
                                 "This agent doesn't report selectable models",
                                 Self::find_config_option(config_options, &["model"]),
-                                false,
                                 cx,
                             ))
                             .child(self.render_panel_config_selector(
@@ -849,7 +904,6 @@ impl WorkspaceWindow {
                                         "thought-level",
                                     ],
                                 ),
-                                false,
                                 cx,
                             ))
                             .child(
@@ -879,11 +933,10 @@ impl WorkspaceWindow {
     /// selection via `session/set_config_option`. Disabled with an
     /// explanatory tooltip when the agent hasn't declared a matching
     /// option (adapters vary in which axes they expose).
-    #[allow(clippy::too_many_arguments)]
     fn render_panel_config_selector(&self, id: Uuid, element_id: &'static str,
                                     placeholder: &'static str, disabled_tooltip: &'static str,
                                     option: Option<&knot_acp::ConfigOption>,
-                                    selector_open: bool, cx: &mut Context<Self>)
+                                    cx: &mut Context<Self>)
                                     -> gpui_kit::AnyElement {
         let Some(option) = option
         else {
@@ -904,7 +957,7 @@ impl WorkspaceWindow {
         let values = option.options.clone();
         let entity = cx.entity();
         let session_arc = self.panel_sessions.get(&id).cloned();
-        let is_permission_selector = element_id == "panel-permission-mode-selector";
+        let is_permission_selector = element_id == PERMISSION_SELECTOR_ID;
         let selector_color = is_permission_selector.then(|| {
                                  panel_view::risk_color(panel_view::permission_risk_level(
                     current_value,
@@ -921,12 +974,12 @@ impl WorkspaceWindow {
                                              });
         Popover::new(format!("{element_id}-{id}"))
             .trigger(trigger)
-            .open(selector_open)
+            .open(self.open_config_selector == Some(element_id))
             .on_open_change({
                 let entity = entity.clone();
                 move |open, _, app| {
                     entity.update(app, |view, cx| {
-                        view.permission_selector_open = *open;
+                        view.open_config_selector = open.then_some(element_id);
                         cx.notify();
                     });
                 }
@@ -967,7 +1020,7 @@ impl WorkspaceWindow {
                             let value_id = value_id.clone();
                             let session_arc = Arc::clone(&session_arc);
                             entity.update(app, move |view, _cx| {
-                                view.permission_selector_open = false;
+                                view.open_config_selector = None;
                                 if let Ok(slot) = session_arc.lock()
                                     && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                                 {
@@ -1517,10 +1570,12 @@ impl WorkspaceWindow {
         let id = self.selected_agent?;
         let store = self.store.lock().ok()?;
         let agent = store.agent(id)?;
-        let state = (!agent.is_shell()).then(|| {
-                                           (agent.state,
-                                            Repository::open(&agent.folder).diff_stats().ok())
-                                       });
+        let stats = self.diff_stats
+                        .lock()
+                        .ok()
+                        .and_then(|stats| stats.get(&id).copied())
+                        .flatten();
+        let state = (!agent.is_shell()).then_some((agent.state, stats));
         Some(SelectedAgentHeader { avatar: agent.avatar.clone(),
                                    name: agent.name.clone(),
                                    folder: shorten_path(&agent.folder),
@@ -1579,6 +1634,17 @@ impl Render for WorkspaceWindow {
 
         if !is_dashboard && let Some(id) = self.selected_agent {
             self.resize_session_to_pane(id, window, cx);
+        }
+        // A map lookup and an `Instant` compare per render; the `git`
+        // subprocess behind it runs at most every `DIFF_STATS_MAX_AGE`.
+        if let Some(id) = self.selected_agent {
+            let folder = self.store
+                             .lock()
+                             .ok()
+                             .and_then(|store| store.agent(id).map(|agent| agent.folder.clone()));
+            if let Some(folder) = folder {
+                self.refresh_diff_stats(id, &folder);
+            }
         }
 
         let store_for_menu = Arc::clone(&self.store);
@@ -2081,7 +2147,7 @@ impl Render for WorkspaceWindow {
                         store.agent(id).map(|agent| agent.view_mode)
                     }) == Some(knot_core::ViewMode::Panel)
                 }) {
-                    view.permission_selector_open = true;
+                    view.open_config_selector = Some(PERMISSION_SELECTOR_ID);
                     cx.notify();
                 }
             }))
