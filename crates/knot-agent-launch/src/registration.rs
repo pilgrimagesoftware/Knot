@@ -22,9 +22,11 @@ pub fn registration_user_prompt() -> &'static str {
 /// knot exists not to be. Naming each tool and the moment to reach for it
 /// is the difference between a sentiment and an instruction.
 ///
-/// It also says that messages must be polled, because they must: nothing
-/// in the app pushes an inbound message into an agent's turn, so an agent
-/// that never calls `check-messages` never learns it was asked anything.
+/// It pushes outward, not inward: an agent already knows who its knot is,
+/// so what it needs telling is to *use* them - hand work to whoever owns
+/// that project, ask before guessing at their code, say what it changed
+/// that others build on. Instructions to keep checking an inbox would
+/// produce busywork instead, and messages reach an agent on their own.
 ///
 /// These name the MCP server on purpose. An agent inherits its own
 /// user-level MCP configuration on top of the server Knot hands it, and
@@ -34,7 +36,7 @@ pub fn registration_user_prompt() -> &'static str {
 /// an id it has never seen. Naming the server is what makes that
 /// unambiguous, since the tool names alone are not.
 pub fn knot_instructions(agent_id: Uuid) -> String {
-    format!("You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals, so work with your knot rather than beside it. Your knot agent ID: {agent_id}. Use list-agents to see who is on the team and what each of them is working on, and do it early - someone may already own what you are about to start. When your work touches a teammate's project, ask them with send-message instead of guessing at their code or duplicating their effort, and answer them promptly when they ask you. Use broadcast-message for anything the whole knot needs, such as an interface you changed or a decision others must build on. Messages never interrupt you: call check-messages when you begin a turn and again before you report finished, or you will not see what was asked of you. An agent that never talks to its knot is not a teammate, just another process. Your knot's tools come from the MCP server named `{MCP_SERVER_NAME}` (tools such as `{MCP_SERVER_NAME}`'s set-status, list-agents, register-agent). Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. Only ever use the `{MCP_SERVER_NAME}` server's tools. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional.")
+    format!("You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals, so work with your knot rather than beside it. Your knot agent ID: {agent_id}. You already know who your teammates are - use them. Check list-agents before you start something substantial: if it belongs to a project a teammate owns, hand it to them with send-message rather than working in their code yourself, and prefer asking them a question over reverse-engineering an answer. Tell the knot with broadcast-message when you change something others build on. When a teammate asks you for something, take it on and reply. Reach for your knot first and your own effort second: an agent that does everything alone is not a teammate, just another process. Your knot's tools come from the MCP server named `{MCP_SERVER_NAME}` (tools such as `{MCP_SERVER_NAME}`'s set-status, list-agents, register-agent). Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. Only ever use the `{MCP_SERVER_NAME}` server's tools. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional.")
 }
 
 /// The combined registration prompt for the deferred (non-inline)
@@ -111,20 +113,20 @@ mod tests {
         for tool in ["list-agents",
                      "send-message",
                      "broadcast-message",
-                     "check-messages",
                      "set-status"]
         {
             assert!(prompt.contains(tool), "the prompt never mentions {tool}");
         }
     }
 
-    /// Nothing pushes an inbound message into an agent's turn, so an agent
-    /// that does not poll never learns it was asked anything.
+    /// The instruction has to point outward - hand work over, ask first -
+    /// rather than inward at an inbox. An agent already knows its knot;
+    /// what it needs telling is to use them.
     #[test]
-    fn instructions_say_messages_must_be_polled() {
+    fn instructions_tell_an_agent_to_hand_work_to_its_knot() {
         let prompt = knot_instructions(id());
-        assert!(prompt.contains("Messages never interrupt you"));
-        assert!(prompt.contains("before you report finished"));
+        assert!(prompt.contains("hand it to them"));
+        assert!(prompt.contains("Reach for your knot first"));
     }
 
     #[test]
