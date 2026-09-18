@@ -18,16 +18,16 @@ use gpui_kit::base::Selectable;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
-use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::component::input::{Input, InputEvent, InputState, Paste, Textarea, TextareaState};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, ClickEvent, ClipboardItem, Context, Entity,
-    InteractiveElement, IntoElement, KeyBinding, Menu, MenuItem, ParentElement, PathPromptOptions,
-    Render, StatefulInteractiveElement, Styled, Subscription, SystemMenuType,
+    AnyWindowHandle, App, AppContext, ClickEvent, ClipboardEntry, ClipboardItem, Context, Entity,
+    ImageFormat, InteractiveElement, IntoElement, KeyBinding, Menu, MenuItem, ParentElement,
+    PathPromptOptions, Render, StatefulInteractiveElement, Styled, Subscription, SystemMenuType,
     SystemNotificationResponse, WeakEntity, Window, WindowBounds, WindowOptions, actions, div, px,
     rgb, size,
 };
@@ -1083,6 +1083,7 @@ impl SettingsWindow {
         let restore_conversation_on_launch = self.settings.restore_conversation_on_launch;
         let keep_in_menu_bar = self.settings.keep_in_menu_bar;
         let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
+        let agent_panel_shift_enter_sends = self.settings.agent_panel_shift_enter_sends;
         let appearance_label = Self::appearance_label(&self.settings.appearance_mode);
 
         v_flex()
@@ -1191,6 +1192,28 @@ impl SettingsWindow {
                             }
                         }),
                 )),
+            )
+            .child(
+                Self::group("Agent Panel")
+                    .child(Self::row(
+                        "Shift+Enter to send",
+                        Switch::new("agent-panel-shift-enter-sends")
+                            .checked(agent_panel_shift_enter_sends)
+                            .on_click({
+                                let settings_window = settings_window.clone();
+                                move |checked, _, app| {
+                                    let checked = *checked;
+                                    settings_window.update(app, |view, _| {
+                                        view.settings.agent_panel_shift_enter_sends = checked;
+                                        view.persist();
+                                    })
+                                }
+                            }),
+                    ))
+                    .child(Self::hint(
+                        cx,
+                        "When off, Enter sends the message and Shift+Enter adds a newline.",
+                    )),
             )
     }
 
@@ -2070,53 +2093,57 @@ fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString, font_size: 
 }
 
 struct WorkspaceWindow {
-    store:                  Arc<Mutex<knot_agents::AgentStore>>,
-    settings:               knot_core::Settings,
-    workspace_id:           Uuid,
-    selected_agent:         Option<Uuid>,
-    sessions:               BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
-    panel_states:           BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
+    store:                            Arc<Mutex<knot_agents::AgentStore>>,
+    settings:                         knot_core::Settings,
+    workspace_id:                     Uuid,
+    selected_agent:                   Option<Uuid>,
+    sessions:                         BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
+    panel_states:                     BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
     /// `TerminalSession::spawn_pty` runs `tokio::spawn` for the activity
     /// tracker; the UI thread has no tokio runtime of its own, so enter
     /// this one around each spawn (see `ensure_session`).
-    runtime:                tokio::runtime::Runtime,
+    runtime:                          tokio::runtime::Runtime,
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
-    terminal_focus:         gpui_kit::FocusHandle,
+    terminal_focus:                   gpui_kit::FocusHandle,
     /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
     /// `on_grid_event` (which runs on the PTY reader thread) and drained
     /// by a polling loop onto the OS pasteboard via GPUI's main-thread
     /// clipboard API - the same background-thread-to-main-thread hand-off
     /// pattern `SettingsWindow` already uses for the native font panel.
-    clipboard_writes:       Arc<Mutex<Vec<String>>>,
+    clipboard_writes:                 Arc<Mutex<Vec<String>>>,
     /// Live ACP connections for Panel-mode agents, keyed by agent id -
     /// independent of `sessions` (the terminal PTYs), per the
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
     /// here persists across a view-mode toggle, only stopped on restart.
-    panel_sessions:         BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
+    panel_sessions:                   BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
-    panel_prompt_inputs:    BTreeMap<Uuid, Entity<TextareaState>>,
+    panel_prompt_inputs:              BTreeMap<Uuid, Entity<TextareaState>>,
+    /// Keeps each prompt input's `PressEnter` subscription alive for the
+    /// life of the entity it was created for (dropping a `Subscription`
+    /// cancels it).
+    panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     /// One conversation scroll handle per Panel-mode agent that has been
     /// viewed, created lazily - backs the response action bar's
     /// scroll-to-user/scroll-to-top controls and the track toggle's
     /// auto-scroll.
-    panel_scroll_handles:   BTreeMap<Uuid, gpui_kit::ScrollHandle>,
+    panel_scroll_handles:             BTreeMap<Uuid, gpui_kit::ScrollHandle>,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
-    panel_pending_context:  BTreeMap<Uuid, Vec<PathBuf>>,
+    panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
-    panel_input_expanded:   BTreeSet<Uuid>,
-    view_mode:              WorkspaceViewMode,
-    dashboard_sort:         dashboard::DashboardSort,
-    new_agent_name_input:   Entity<InputState>,
-    new_agent_folder_input: Entity<InputState>,
-    show_new_agent:         bool,
-    error:                  Option<String>,
+    panel_input_expanded:             BTreeSet<Uuid>,
+    view_mode:                        WorkspaceViewMode,
+    dashboard_sort:                   dashboard::DashboardSort,
+    new_agent_name_input:             Entity<InputState>,
+    new_agent_folder_input:           Entity<InputState>,
+    show_new_agent:                   bool,
+    error:                            Option<String>,
 }
 
 impl Drop for WorkspaceWindow {
@@ -2186,6 +2213,7 @@ impl WorkspaceWindow {
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
+                    panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_scroll_handles: BTreeMap::new(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
@@ -2564,6 +2592,13 @@ impl WorkspaceWindow {
                                cx: &mut Context<Self>)
                                -> impl IntoElement {
         let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        let shift_to_send = self.settings.agent_panel_shift_enter_sends;
+        let send_tooltip = if shift_to_send {
+            "Send (Shift+Enter)"
+        }
+        else {
+            "Send (Enter)"
+        };
         v_flex().flex_shrink_0()
                 .gap_2()
                 .p_2()
@@ -2594,6 +2629,17 @@ impl WorkspaceWindow {
                     }))
                 }))
                 .child(div().h(if expanded { px(160.) } else { px(36.) })
+                            .capture_action::<Paste>({
+                                let entity = cx.entity();
+                                move |_, _, app| {
+                                    entity.update(app, |view, cx| {
+                                              if view.paste_clipboard_image_context(id, cx) {
+                                                  cx.stop_propagation();
+                                                  cx.notify();
+                                              }
+                                          });
+                                }
+                            })
                             .child(Textarea::new(input).size_full().disabled(blocked)))
                 .child(h_flex().gap_1()
                     .items_center()
@@ -2623,7 +2669,8 @@ impl WorkspaceWindow {
                         "This agent doesn't report selectable effort levels",
                         Self::find_config_option(config_options,
                                                  &["effort", "reasoning", "reasoning_effort",
-                                                   "reasoning-effort"]),
+                                                   "reasoning-effort", "thought_level",
+                                                   "thought-level"]),
                         cx,
                     ))
                     .child(Button::new("panel-expand-input").icon(if expanded {
@@ -2641,6 +2688,7 @@ impl WorkspaceWindow {
                         })))
                     .child(div().flex_1())
                     .child(Button::new("panel-send-prompt").label("Send")
+                        .tooltip(send_tooltip)
                         .primary()
                         .disabled(!can_send)
                         .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
@@ -2764,6 +2812,42 @@ impl WorkspaceWindow {
           .detach();
     }
 
+    /// Reads an image off the system clipboard (e.g. a pasted screenshot)
+    /// and attaches it to `id`'s pending message the same way
+    /// `add_panel_context` attaches a picked file, since ACP's
+    /// `session/prompt` here only carries text plus attached paths - see
+    /// `render_panel_input_area`'s `capture_action::<Paste>` wiring.
+    /// Returns `false` (leaving the paste to the textarea's own text-paste
+    /// handling) when the clipboard holds no image.
+    fn paste_clipboard_image_context(&mut self, id: Uuid, cx: &mut App) -> bool {
+        let Some(item) = cx.read_from_clipboard()
+        else {
+            return false;
+        };
+        let mut attached = false;
+        for entry in item.entries {
+            let ClipboardEntry::Image(image) = entry
+            else {
+                continue;
+            };
+            let extension = match image.format {
+                ImageFormat::Png => "png",
+                ImageFormat::Jpeg => "jpg",
+                ImageFormat::Webp => "webp",
+                ImageFormat::Gif => "gif",
+                ImageFormat::Svg => "svg",
+                ImageFormat::Bmp => "bmp",
+                _ => "png",
+            };
+            let path = std::env::temp_dir().join(format!("knot-paste-{}.{extension}", image.id));
+            if std::fs::write(&path, &image.bytes).is_ok() {
+                self.panel_pending_context.entry(id).or_default().push(path);
+                attached = true;
+            }
+        }
+        attached
+    }
+
     /// Removes one attached path from `id`'s pending context by index.
     fn remove_panel_context(&mut self, id: Uuid, index: usize) {
         if let Some(paths) = self.panel_pending_context.get_mut(&id)
@@ -2781,15 +2865,46 @@ impl WorkspaceWindow {
         }
     }
 
-    /// Gets or creates the prompt input entity for `id`'s panel.
+    /// Gets or creates the prompt input entity for `id`'s panel, wired so
+    /// `Enter`/`Shift+Enter` submits per `agent_panel_shift_enter_sends`
+    /// (the other chord always inserts a newline) - see
+    /// `render_panel_input_area`'s Send button tooltip for the matching
+    /// user-facing hint.
     fn panel_prompt_input(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>)
                           -> Entity<TextareaState> {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
-        let input = cx.new(|cx| TextareaState::new(window, cx).placeholder("Send a message…"));
+        let shift_to_send = self.settings.agent_panel_shift_enter_sends;
+        let placeholder = Self::panel_prompt_placeholder(shift_to_send);
+        let input = cx.new(|cx| {
+                          TextareaState::new(window, cx).placeholder(placeholder)
+                                                        .submit_on_enter(!shift_to_send)
+                      });
+        let subscription = cx.subscribe_in(&input,
+                                           window,
+                                           move |view: &mut Self, _, event, window, cx| {
+                                               if let InputEvent::PressEnter { shift, .. } = event
+                                                  && *shift == shift_to_send
+                                               {
+                                                   view.send_panel_prompt(id, window, cx);
+                                               }
+                                           });
         self.panel_prompt_inputs.insert(id, input.clone());
+        self.panel_prompt_input_subscriptions
+            .insert(id, subscription);
         input
+    }
+
+    /// The prompt textarea's placeholder, naming the active send chord per
+    /// `agent_panel_shift_enter_sends`.
+    fn panel_prompt_placeholder(shift_to_send: bool) -> &'static str {
+        if shift_to_send {
+            "Send a message… (Shift+Enter to send, Enter for a newline)"
+        }
+        else {
+            "Send a message… (Enter to send, Shift+Enter for a newline)"
+        }
     }
 
     /// Reads and clears `id`'s prompt input, then sends it through the

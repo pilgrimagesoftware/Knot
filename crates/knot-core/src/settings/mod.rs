@@ -71,6 +71,9 @@ pub struct Settings {
     pub voice_engine:                   String,
     pub voice_push_to_talk_key:         i32,
     pub voice_auto_insert:              bool,
+    /// Which chord sends a Panel-mode prompt: `false` (default) is Enter to
+    /// send / Shift+Enter for a newline; `true` swaps them.
+    pub agent_panel_shift_enter_sends:  bool,
 
     #[serde(deserialize_with = "de_tolerant_vec")]
     pub saved_agents:     Vec<SavedAgent>,
@@ -118,6 +121,7 @@ impl Default for Settings {
                voice_engine:                   VOICE_ENGINE_DEFAULT.to_string(),
                voice_push_to_talk_key:         VOICE_PUSH_TO_TALK_KEY_DEFAULT,
                voice_auto_insert:              true,
+               agent_panel_shift_enter_sends:  false,
                saved_agents:                   Vec::new(),
                saved_workspaces:               Vec::new(),
                personas:                       Vec::new(),

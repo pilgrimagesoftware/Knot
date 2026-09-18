@@ -9,6 +9,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
     ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, rgb,
@@ -71,7 +72,8 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
                                             .into_any_element(),
         PanelMessage::Assistant(text) => {
             v_flex().gap_1()
-                    .child(div().text_sm().child(text.clone()))
+                    .child(TextView::markdown(("panel-message-markdown", index as u64),
+                                              text.clone()).text_sm())
                     .children((is_last && state.turn_active).then(|| {
                                                                 render_track_toggle(state.tracking,
                                                                                     on_toggle_track)
