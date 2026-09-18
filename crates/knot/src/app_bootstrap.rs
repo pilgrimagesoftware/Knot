@@ -87,15 +87,25 @@ pub(crate) fn show_all_windows(_: &ShowAllWindows, cx: &mut App) {
 }
 
 pub(crate) fn about_knot(_: &AboutKnot, cx: &mut App) {
-    if let Some(window) = cx.active_window() {
-        let _ = window.update(cx, |_, window, cx| {
-                          window.open_alert_dialog(cx, |alert, _, _| {
-                                    alert
+    // Falls back to any open window: `active_window` can be empty (no
+    // window key at the moment the menu fires), and the silent `if let`
+    // this used to be made "About Knot" look like a dead menu item.
+    let window = cx.active_window().or_else(|| cx.windows().first().copied());
+    let Some(window) = window
+    else {
+        eprintln!("About Knot: no open window to show the dialog on");
+        return;
+    };
+    let result = window.update(cx, |_, window, cx| {
+                           window.open_alert_dialog(cx, |alert, _, _| {
+                                     alert
                     .title("About Knot")
                     .description("Knot is a workspace for coordinating coding agents.")
                     .show_cancel(false)
-                                });
-                      });
+                                 });
+                       });
+    if let Err(error) = result {
+        eprintln!("About Knot: window went away before the dialog opened: {error}");
     }
 }
 
