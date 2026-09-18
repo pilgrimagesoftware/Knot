@@ -60,8 +60,15 @@
 
 ## 6. Verification pass
 
-- [ ] 6.1 Run `make rust` (fmt + clippy + test + build) and fix any
+- [x] 6.1 Run `make rust` (fmt + clippy + test + build) and fix any
       failures introduced by this change. Verify: command exits 0.
+      `clippy --workspace --all-targets -D warnings`, `test --workspace`,
+      and `build --workspace` all pass clean. `cargo +nightly fmt --check`
+      could not run in this environment - the local nightly rustfmt
+      toolchain doesn't self-report as nightly-channel (its unstable
+      style options, which this repo's rustfmt.toml requires, are
+      rejected), so a real fmt-check needs a working nightly rustfmt
+      elsewhere.
 - [ ] 6.2 Manual pass against specs/acp-panel-ui/spec.md's new scenarios
       (tool icon, response action bar, track toggle, input-area controls,
       expand/collapse) in a live ACP session.
