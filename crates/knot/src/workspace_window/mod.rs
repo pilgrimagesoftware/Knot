@@ -1927,6 +1927,11 @@ impl Render for WorkspaceWindow {
                     )
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.selected_agent = Some(id);
+                        // Leave the dashboard, the same way tapping an
+                        // agent card does - selecting a row while the
+                        // dashboard was open used to change the selection
+                        // without ever showing the session.
+                        view.view_mode = WorkspaceViewMode::Terminal;
                         view.ensure_session(id);
                         view.ensure_panel_session(id);
                         cx.notify();
@@ -2326,7 +2331,7 @@ impl Render for WorkspaceWindow {
                     .bg(cx.theme().title_bar)
                     .child(
                         TitleBar::new()
-                            .h(px(64.))
+                            .h(px(window_options::WORKSPACE_TITLE_BAR_HEIGHT))
                             .border_color(gpui_kit::transparent_black())
                             .bg(cx.theme().title_bar)
                             .child(

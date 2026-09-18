@@ -1,4 +1,12 @@
 use super::*;
+/// The workspace window's title bar height. Its traffic lights are placed
+/// from this, so the bar and the buttons cannot drift apart.
+pub(crate) const WORKSPACE_TITLE_BAR_HEIGHT: f32 = 64.;
+
+/// A macOS traffic light button, and the left inset the toolkit uses.
+const TRAFFIC_LIGHT_DIAMETER: f32 = 12.;
+const TRAFFIC_LIGHT_INSET: f32 = 9.;
+
 pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
     WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(800.), px(600.)), cx)),
                     window_min_size: Some(size(px(640.), px(420.))),
@@ -18,9 +26,18 @@ pub(crate) fn workspace_window_options(saved: Option<knot_core::SavedWindowBound
                                                                               px(saved.height)), }),
         None => WindowBounds::centered(size(px(960.), px(640.)), cx),
     };
-    WindowOptions { window_bounds: Some(bounds),
-                    window_min_size: Some(size(px(760.), px(520.))),
-                    ..TitleBar::window_options() }
+    let mut options = WindowOptions { window_bounds: Some(bounds),
+                                      window_min_size: Some(size(px(760.), px(520.))),
+                                      ..TitleBar::window_options() };
+    // AppKit places the traffic lights at a fixed offset, and the toolkit's
+    // default (9px) centres them in its own ~30px bar. This window's bar is
+    // taller, which left them stranded near the top edge and out of line
+    // with the app icon and name beside them.
+    if let Some(titlebar) = options.titlebar.as_mut() {
+        let y = (WORKSPACE_TITLE_BAR_HEIGHT - TRAFFIC_LIGHT_DIAMETER) / 2.;
+        titlebar.traffic_light_position = Some(gpui_kit::point(px(TRAFFIC_LIGHT_INSET), px(y)));
+    }
+    options
 }
 
 pub(crate) fn command_center_window_options(cx: &App) -> WindowOptions {
