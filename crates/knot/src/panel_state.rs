@@ -309,7 +309,7 @@ mod tests {
         assert!(state.tracking);
 
         state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason:
-                                                                       "end_turn".to_string(), }));
+                                                                      "end_turn".to_string(), }));
         assert!(!state.turn_active);
     }
 

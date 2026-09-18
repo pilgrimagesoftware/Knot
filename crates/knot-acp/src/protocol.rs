@@ -122,16 +122,16 @@ pub struct AgentCapabilities {
 /// parsed but left unrendered until a control needs them.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct ConfigOption {
-    pub id:      String,
-    pub name:    String,
+    pub id:            String,
+    pub name:          String,
     #[serde(default)]
-    pub category: Option<String>,
+    pub category:      Option<String>,
     #[serde(default, rename = "type")]
-    pub kind:    String,
+    pub kind:          String,
     #[serde(default, rename = "currentValue")]
     pub current_value: Value,
     #[serde(default)]
-    pub options: Vec<ConfigOptionValue>,
+    pub options:       Vec<ConfigOptionValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -2494,8 +2494,10 @@ impl WorkspaceWindow {
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
-                let pending_context =
-                    self.panel_pending_context.get(&id).cloned().unwrap_or_default();
+                let pending_context = self.panel_pending_context
+                                          .get(&id)
+                                          .cloned()
+                                          .unwrap_or_default();
                 let expanded = self.panel_input_expanded.contains(&id);
                 // Per this same method's re-render-on-`take_dirty` poll
                 // loop: each new streamed delta marks the session dirty
@@ -2524,8 +2526,13 @@ impl WorkspaceWindow {
                                                                     &scroll,
                                                                     on_decision,
                                                                     on_toggle_track)))
-                        .child(self.render_panel_input_area(id, &input, &pending_context, expanded,
-                                                            blocked, turn_active, &config_options,
+                        .child(self.render_panel_input_area(id,
+                                                            &input,
+                                                            &pending_context,
+                                                            expanded,
+                                                            blocked,
+                                                            turn_active,
+                                                            &config_options,
                                                             cx))
                         .into_any_element()
             }
@@ -2540,9 +2547,9 @@ impl WorkspaceWindow {
     fn render_panel_input_area(&mut self, id: Uuid, input: &Entity<TextareaState>,
                                pending_context: &[PathBuf], expanded: bool, blocked: bool,
                                turn_active: bool, config_options: &[knot_acp::ConfigOption],
-                               cx: &mut Context<Self>) -> impl IntoElement {
-        let can_send = !blocked && !turn_active
-                       && !input.read(cx).value().trim().is_empty();
+                               cx: &mut Context<Self>)
+                               -> impl IntoElement {
+        let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
         v_flex().flex_shrink_0()
                 .gap_2()
                 .p_2()
@@ -2636,7 +2643,8 @@ impl WorkspaceWindow {
     fn render_panel_config_selector(&self, id: Uuid, element_id: &'static str,
                                     placeholder: &'static str, disabled_tooltip: &'static str,
                                     option: Option<&knot_acp::ConfigOption>,
-                                    cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+                                    cx: &mut Context<Self>)
+                                    -> gpui_kit::AnyElement {
         let Some(option) = option
         else {
             return Button::new(element_id).label(placeholder)
@@ -2701,14 +2709,12 @@ impl WorkspaceWindow {
                               -> Option<&'a knot_acp::ConfigOption> {
         options.iter().find(|option| {
                           option.kind == "select"
-                          && option.category
-                                   .as_deref()
-                                   .is_some_and(|category| {
-                                       categories.iter()
+                          && option.category.as_deref().is_some_and(|category| {
+                                                           categories.iter()
                                                  .any(|candidate| {
                                                      candidate.eq_ignore_ascii_case(category)
                                                  })
-                                   })
+                                                       })
                       })
     }
 
@@ -2722,9 +2728,9 @@ impl WorkspaceWindow {
     /// rule (`cx.prompt_for_paths` over an in-app file browser).
     fn add_panel_context(&mut self, id: Uuid, cx: &mut Context<Self>) {
         let receiver = cx.prompt_for_paths(PathPromptOptions { files:       true,
-                                                                directories: false,
-                                                                multiple:    true,
-                                                                prompt:      Some("Attach".into()), });
+                                                             directories: false,
+                                                             multiple:    true,
+                                                             prompt:      Some("Attach".into()), });
         let this = cx.entity();
         cx.spawn(async move |_this, cx| {
               let Ok(Ok(Some(paths))) = receiver.await
@@ -2733,9 +2739,12 @@ impl WorkspaceWindow {
               };
               cx.update(|app| {
                     this.update(app, |view, cx| {
-                           view.panel_pending_context.entry(id).or_default().extend(paths);
-                           cx.notify();
-                       });
+                            view.panel_pending_context
+                                .entry(id)
+                                .or_default()
+                                .extend(paths);
+                            cx.notify();
+                        });
                 });
           })
           .detach();
@@ -5663,7 +5672,8 @@ mod tests {
 
     #[test]
     fn find_config_option_matches_category_case_insensitively() {
-        let options = vec![config_option("mode", "Mode"), config_option("model", "model")];
+        let options = vec![config_option("mode", "Mode"),
+                           config_option("model", "model")];
 
         let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
         assert_eq!(found.map(|option| option.id.as_str()), Some("mode"));

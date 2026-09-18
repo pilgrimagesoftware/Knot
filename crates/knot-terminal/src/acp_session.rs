@@ -38,9 +38,9 @@ impl AcpSession {
     /// surfacing an error, per the `agent-lifecycle` layout-restore
     /// fallback requirement. Fails with `AcpError::Timeout` rather than
     /// hanging if the adapter never responds.
-    pub async fn start(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
-                       -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)>
-    {
+    pub async fn start(
+        launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+        -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
         Self::start_with_timeout(launch, cwd, prior_session_id, CONNECT_TIMEOUT).await
     }
 
@@ -90,7 +90,10 @@ impl AcpSession {
             _ => client.session_new(cwd).await?,
         };
 
-        Ok((Self { client, session_id: session.session_id }, session.config_options, events))
+        Ok((Self { client,
+                   session_id: session.session_id },
+            session.config_options,
+            events))
     }
 
     pub fn session_id(&self) -> &str {
@@ -112,7 +115,9 @@ impl AcpSession {
     /// effort, ...) and returns the agent's updated full list.
     pub async fn set_config_option(&self, config_id: &str, value: &str)
                                    -> AcpResult<Vec<ConfigOption>> {
-        self.client.session_set_config_option(&self.session_id, config_id, value).await
+        self.client
+            .session_set_config_option(&self.session_id, config_id, value)
+            .await
     }
 
     pub async fn cancel(&self) -> AcpResult<()> {

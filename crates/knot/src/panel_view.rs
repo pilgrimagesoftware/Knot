@@ -6,12 +6,13 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::assets::IconName;
-use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::{ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div,
-               rgb};
+use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::{
+    ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, rgb,
+};
 use knot_acp::{PermissionDecision, PermissionRequest};
 
 use crate::panel_state::{PanelMessage, PanelState, ToolCallCard};
@@ -52,8 +53,8 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
 }
 
 fn render_message(state: &PanelState, index: usize, is_last: bool, message: &PanelMessage,
-                   scroll: &ScrollHandle, on_toggle_track: impl Fn() + Clone + 'static)
-                   -> gpui_kit::AnyElement {
+                  scroll: &ScrollHandle, on_toggle_track: impl Fn() + Clone + 'static)
+                  -> gpui_kit::AnyElement {
     match message {
         // Right-aligned, tinted background - visually distinct from the
         // assistant's plain left-aligned text, per acp-panel-ui's
@@ -72,13 +73,13 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
             v_flex().gap_1()
                     .child(div().text_sm().child(text.clone()))
                     .children((is_last && state.turn_active).then(|| {
-                                                                  render_track_toggle(state.tracking,
-                                                                                       on_toggle_track)
-                                                              }))
+                                                                render_track_toggle(state.tracking,
+                                                                                    on_toggle_track)
+                                                            }))
                     .children((!(is_last && state.turn_active)).then(|| {
-                        let user_index = preceding_user_message(state, index);
-                        render_response_actions(text.clone(), user_index, scroll)
-                    }))
+                                  let user_index = preceding_user_message(state, index);
+                                  render_response_actions(text.clone(), user_index, scroll)
+                              }))
                     .into_any_element()
         }
         PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
@@ -97,26 +98,28 @@ fn preceding_user_message(state: &PanelState, index: usize) -> Option<usize> {
 /// response, replaced by the response action bar once it finalizes.
 fn render_track_toggle(tracking: bool, on_toggle: impl Fn() + Clone + 'static) -> impl IntoElement {
     h_flex().child(Button::new("panel-track-toggle").icon(if tracking {
-                                                               IconName::CircleDot
-                                                           }
-                                                           else {
-                                                               IconName::Circle
-                                                           })
-                                                     .tooltip(if tracking {
+                                                              IconName::CircleDot
+                                                          }
+                                                          else {
+                                                              IconName::Circle
+                                                          })
+                                                    .tooltip(if tracking {
                                                                  "Following new output"
                                                              }
                                                              else {
                                                                  "Not following new output"
                                                              })
-                                                     .ghost()
-                                                     .small()
-                                                     .on_click(move |_: &ClickEvent, _, _| on_toggle()))
+                                                    .ghost()
+                                                    .small()
+                                                    .on_click(move |_: &ClickEvent, _, _| {
+                                                        on_toggle()
+                                                    }))
 }
 
 /// A finalized response's action bar: copy, scroll to the user message that
 /// prompted it, and scroll to the top of the conversation.
 fn render_response_actions(text: String, user_index: Option<usize>, scroll: &ScrollHandle)
-                            -> impl IntoElement {
+                           -> impl IntoElement {
     let scroll_to_user = scroll.clone();
     let scroll_to_top = scroll.clone();
     h_flex().gap_1()
@@ -284,10 +287,10 @@ mod tests {
 
     #[test]
     fn every_known_kind_maps_to_a_distinct_icon_and_unknown_kinds_fall_back() {
-        let known =
-            ["read", "edit", "delete", "move", "search", "execute", "think", "fetch"];
+        let known = ["read", "edit", "delete", "move", "search", "execute", "think", "fetch"];
         for kind in known {
-            assert_ne!(tool_call_icon(kind), IconName::Wrench,
+            assert_ne!(tool_call_icon(kind),
+                       IconName::Wrench,
                        "expected a specific icon for known kind {kind:?}");
         }
         assert_eq!(tool_call_icon("some-future-kind"), IconName::Wrench);

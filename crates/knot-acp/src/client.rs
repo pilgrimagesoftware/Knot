@@ -31,8 +31,8 @@ pub enum SessionEvent {
 /// `.await` on without keeping the lock held across the await point.
 #[derive(Clone)]
 pub struct AcpClient {
-    transport:          Arc<Transport>,
-    capabilities:       AgentCapabilities,
+    transport:           Arc<Transport>,
+    capabilities:        AgentCapabilities,
     /// Session Config Options declared on `initialize`, if any - seeds a
     /// new session's config options before `session/new`'s own (possibly
     /// richer, per-session) list arrives.
@@ -177,7 +177,8 @@ impl AcpClient {
                       .await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
-        Ok(NewSession { session_id, config_options })
+        Ok(NewSession { session_id,
+                        config_options })
     }
 
     /// Resumes a prior session. Returns a typed "not supported" error
@@ -194,14 +195,14 @@ impl AcpClient {
                       .await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
-        Ok(NewSession { session_id, config_options })
+        Ok(NewSession { session_id,
+                        config_options })
     }
 
     /// Applies one Session Config Option selection (mode, model, effort,
     /// ...) and returns the agent's updated full list, per the stabilized
     /// Session Config Options `session/set_config_option` response shape.
-    pub async fn session_set_config_option(&self, session_id: &str, config_id: &str,
-                                           value: &str)
+    pub async fn session_set_config_option(&self, session_id: &str, config_id: &str, value: &str)
                                            -> Result<Vec<ConfigOption>> {
         let raw = self.transport
                       .request("session/set_config_option",
@@ -491,7 +492,8 @@ mod tests {
 
     #[tokio::test]
     async fn session_new_parses_declared_config_options() {
-        let (client, _events) = AcpClient::connect(config_options_agent()).await.expect("connect");
+        let (client, _events) = AcpClient::connect(config_options_agent()).await
+                                                                          .expect("connect");
 
         let session = client.session_new("/tmp/project").await.expect("session");
 
@@ -503,7 +505,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_config_option_sends_the_selection_and_returns_the_updated_list() {
-        let (client, _events) = AcpClient::connect(config_options_agent()).await.expect("connect");
+        let (client, _events) = AcpClient::connect(config_options_agent()).await
+                                                                          .expect("connect");
         let session = client.session_new("/tmp/project").await.expect("session");
 
         let updated = client.session_set_config_option(&session.session_id, "mode", "code")
