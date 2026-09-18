@@ -85,7 +85,14 @@ impl AcpClient {
                         if method == "session/request_permission" =>
                     {
                         let params = params.unwrap_or(Value::Null);
-                        let tool_call_id = params.get("toolCallId")
+                        // The spec nests the tool call:
+                        // `params.toolCall.toolCallId`
+                        // (<https://agentclientprotocol.com/protocol/tool-calls>,
+                        // "Requesting Permission"). The flat spelling is
+                        // kept as a fallback for adapters that send it.
+                        let tool_call_id = params.get("toolCall")
+                                                 .and_then(|call| call.get("toolCallId"))
+                                                 .or_else(|| params.get("toolCallId"))
                                                  .and_then(Value::as_str)
                                                  .unwrap_or_default()
                                                  .to_owned();
@@ -564,7 +571,7 @@ mod tests {
                   echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-1\"}}"
                   echo "{\"jsonrpc\":\"2.0\",\"method\":\"session/update\",\"params\":{\"sessionUpdate\":\"text_delta\",\"text\":\"hello\"}}"
                   echo "{\"jsonrpc\":\"2.0\",\"method\":\"session/update\",\"params\":{\"sessionUpdate\":\"turn_end\",\"stopReason\":\"end_turn\"}}"
-                  echo "{\"jsonrpc\":\"2.0\",\"id\":100,\"method\":\"session/request_permission\",\"params\":{\"toolCallId\":\"tc1\",\"options\":[{\"optionId\":\"allow-once\",\"name\":\"Allow\"},{\"optionId\":\"deny\",\"name\":\"Deny\"}]}}"
+                  echo "{\"jsonrpc\":\"2.0\",\"id\":100,\"method\":\"session/request_permission\",\"params\":{\"toolCall\":{\"toolCallId\":\"tc1\"},\"options\":[{\"optionId\":\"allow-once\",\"name\":\"Allow\"},{\"optionId\":\"deny\",\"name\":\"Deny\"}]}}"
                   ;;
                 "")
                   pid=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
