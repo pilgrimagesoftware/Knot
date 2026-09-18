@@ -2613,7 +2613,7 @@ impl WorkspaceWindow {
                     &["mode", "permission_mode", "permission-mode"],
                 )
                 .and_then(|option| option.current_value.as_str())
-                .map(panel_view::permission_risk_level)
+                .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
                 drop(state);
                 drop(slot_guard);
@@ -2857,8 +2857,15 @@ impl WorkspaceWindow {
         let values = option.options.clone();
         let entity = cx.entity();
         let session_arc = self.panel_sessions.get(&id).cloned();
-        let selector_color =
-            panel_view::risk_color(panel_view::permission_risk_level(current_value));
+        let is_permission_selector = element_id == "panel-permission-mode-selector";
+        let selector_color = is_permission_selector
+            .then(|| {
+                panel_view::risk_color(panel_view::permission_risk_level(
+                    current_value,
+                    &option.name,
+                ))
+            })
+            .flatten();
         let trigger = Button::new(element_id)
             .label(current_label)
             .ghost()
@@ -2867,7 +2874,7 @@ impl WorkspaceWindow {
             .when_some(selector_color, |button, color| {
                 button.text_color(rgb(color))
             });
-        Popover::new(format!("permission-selector-{id}"))
+        Popover::new(format!("{element_id}-{id}"))
             .trigger(trigger)
             .open(selector_open)
             .on_open_change({
@@ -2888,9 +2895,22 @@ impl WorkspaceWindow {
                         };
                         let config_id = config_id.clone();
                         let value_id = value.value.clone();
-                        let item_color =
-                            panel_view::risk_color(panel_view::permission_risk_level(&value.value));
-                        let mut item = PopupMenuItem::new(value.name.clone());
+                        let item_color = is_permission_selector
+                            .then(|| {
+                                panel_view::risk_color(panel_view::permission_risk_level(
+                                    &value.value,
+                                    &value.name,
+                                ))
+                            })
+                            .flatten();
+                        let mut item = item_color
+                            .map(|color| {
+                                let label = value.name.clone();
+                                PopupMenuItem::element(move |_, _| {
+                                    div().text_color(rgb(color)).child(label.clone())
+                                })
+                            })
+                            .unwrap_or_else(|| PopupMenuItem::new(value.name.clone()));
                         if let Some(color) = item_color {
                             item = item.icon(
                                 Icon::new(gpui_kit::assets::IconName::CircleDot)
@@ -3023,6 +3043,15 @@ impl WorkspaceWindow {
         let Some(id) = self.selected_agent else {
             return;
         };
+        if self
+            .store
+            .lock()
+            .ok()
+            .and_then(|store| store.agent(id).map(|agent| agent.view_mode))
+            != Some(knot_core::ViewMode::Panel)
+        {
+            return;
+        }
         let Some(slot) = self.panel_sessions.get(&id) else {
             return;
         };
@@ -3205,6 +3234,9 @@ impl WorkspaceWindow {
         let keystroke = &event.keystroke;
         if keystroke.modifiers.platform && keystroke.key == "c" {
             self.copy_selection(id, cx);
+            return;
+        }
+        if keystroke.modifiers.platform {
             return;
         }
         let Some(session) = self.sessions.get(&id) else {
@@ -4576,8 +4608,14 @@ impl Render for WorkspaceWindow {
                 cx.notify();
             }))
             .on_action(cx.listener(|view, _: &PanelOpenPermissionSelector, _, cx| {
-                view.permission_selector_open = true;
-                cx.notify();
+                if view.selected_agent.is_some_and(|id| {
+                    view.store.lock().ok().and_then(|store| {
+                        store.agent(id).map(|agent| agent.view_mode)
+                    }) == Some(knot_core::ViewMode::Panel)
+                }) {
+                    view.permission_selector_open = true;
+                    cx.notify();
+                }
             }))
             .child(
                 // The sidebar column owns the traffic lights (Swift's own

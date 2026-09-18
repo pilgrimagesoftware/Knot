@@ -31,8 +31,8 @@ pub(crate) enum RiskLevel {
     Neutral,
 }
 
-pub(crate) fn permission_risk_level(value: &str) -> RiskLevel {
-    let value = value.to_ascii_lowercase();
+pub(crate) fn permission_risk_level(value: &str, name: &str) -> RiskLevel {
+    let value = format!("{value} {name}").to_ascii_lowercase();
     if ["bypass", "yolo", "danger"]
         .iter()
         .any(|word| value.contains(word))
@@ -377,10 +377,13 @@ mod tests {
     #[test]
     fn permission_modes_are_classified_case_insensitively() {
         assert_eq!(
-            permission_risk_level("bypassPermissions"),
+            permission_risk_level("bypassPermissions", "Restricted"),
             RiskLevel::Danger
         );
-        assert_eq!(permission_risk_level("PLAN"), RiskLevel::Safe);
-        assert_eq!(permission_risk_level("default"), RiskLevel::Neutral);
+        assert_eq!(permission_risk_level("unknown", "PLAN"), RiskLevel::Safe);
+        assert_eq!(
+            permission_risk_level("default", "Normal"),
+            RiskLevel::Neutral
+        );
     }
 }
