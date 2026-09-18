@@ -15,17 +15,19 @@ use crate::agent::{Agent, AgentState, view_mode_for};
 /// verbatim, since a legacy/edited record could carry a mismatched value
 /// (see `view_mode_for`).
 pub fn from_saved(saved: &SavedAgent) -> Agent {
-    Agent { id:            saved.id,
-            name:          saved.name.clone(),
-            avatar:        saved.avatar.clone(),
-            folder:        saved.folder.clone(),
-            agent_type:    saved.agent_type.clone(),
-            created_by:    saved.created_by,
-            is_companion:  saved.is_companion,
-            shell_command: saved.shell_command.clone(),
-            persona_id:    saved.persona_id,
-            view_mode:     view_mode_for(&saved.agent_type),
+    Agent { id:              saved.id,
+            name:            saved.name.clone(),
+            avatar:          saved.avatar.clone(),
+            folder:          saved.folder.clone(),
+            agent_type:      saved.agent_type.clone(),
+            created_by:      saved.created_by,
+            is_companion:    saved.is_companion,
+            shell_command:   saved.shell_command.clone(),
+            persona_id:      saved.persona_id,
+            view_mode:       view_mode_for(&saved.agent_type),
+            activation_mode: saved.activation_mode,
 
+            activated:          false,
             state:              AgentState::Idle,
             status_text:        String::new(),
             is_registered:      false,
@@ -50,20 +52,21 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
 /// enabled), otherwise always persisted as `None` regardless of the agent's
 /// runtime values.
 pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
-    SavedAgent { id:             agent.id,
-                 name:           agent.name.clone(),
-                 avatar:         agent.avatar.clone(),
-                 folder:         agent.folder.clone(),
-                 agent_type:     agent.agent_type.clone(),
-                 created_by:     agent.created_by,
-                 is_companion:   agent.is_companion,
-                 shell_command:  agent.shell_command.clone(),
-                 persona_id:     agent.persona_id,
-                 view_mode:      agent.view_mode,
-                 session_id:     remember_conversation.then(|| agent.session_id.clone())
-                                                      .flatten(),
-                 acp_session_id: remember_conversation.then(|| agent.acp_session_id.clone())
-                                                      .flatten(), }
+    SavedAgent { id:              agent.id,
+                 name:            agent.name.clone(),
+                 avatar:          agent.avatar.clone(),
+                 folder:          agent.folder.clone(),
+                 agent_type:      agent.agent_type.clone(),
+                 created_by:      agent.created_by,
+                 is_companion:    agent.is_companion,
+                 shell_command:   agent.shell_command.clone(),
+                 persona_id:      agent.persona_id,
+                 view_mode:       agent.view_mode,
+                 activation_mode: agent.activation_mode,
+                 session_id:      remember_conversation.then(|| agent.session_id.clone())
+                                                       .flatten(),
+                 acp_session_id:  remember_conversation.then(|| agent.acp_session_id.clone())
+                                                       .flatten(), }
 }
 
 #[cfg(test)]
@@ -162,6 +165,20 @@ mod tests {
         assert_eq!(to_saved(&agent, true).acp_session_id,
                    Some("acp-2".to_string()));
         assert_eq!(to_saved(&agent, false).acp_session_id, None);
+    }
+
+    #[test]
+    fn a_running_passive_agent_reloads_passive_and_unactivated() {
+        let mut saved = saved_agent();
+        saved.activation_mode = knot_core::ActivationMode::Passive;
+
+        let mut agent = from_saved(&saved);
+        agent.activated = true;
+
+        let reloaded = from_saved(&to_saved(&agent, false));
+
+        assert_eq!(reloaded.activation_mode, knot_core::ActivationMode::Passive);
+        assert!(!reloaded.activated);
     }
 
     #[test]

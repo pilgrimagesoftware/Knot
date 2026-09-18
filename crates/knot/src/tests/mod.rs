@@ -32,7 +32,8 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
     let facts = AgentMenuFacts { is_companion:         false,
                                  is_shell:             false,
                                  has_move_targets:     true,
-                                 has_markdown_history: true, };
+                                 has_markdown_history: true,
+                                 is_running:           true, };
     assert_eq!(menu_labels(facts),
                vec!["New Companion…",
                     "New Shell Companion",
@@ -48,6 +49,7 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
                     "Markdown Files",
                     "-",
                     "Register Agent",
+                    "Deactivate",
                     "Restart Agent",
                     "Remove Agent"]);
 }
@@ -57,7 +59,8 @@ fn agent_context_menu_omits_companion_actions_for_companions() {
     let facts = AgentMenuFacts { is_companion:         true,
                                  is_shell:             true,
                                  has_move_targets:     true,
-                                 has_markdown_history: false, };
+                                 has_markdown_history: false,
+                                 is_running:           false, };
     assert_eq!(menu_labels(facts),
                vec!["Edit Agent…", "-", "Open In…", "-", "Remove Agent"]);
 }
@@ -136,6 +139,52 @@ fn a_companion_is_always_created_as_a_shell_agent() {
     assert_eq!(created_agent_type(false, "claude"), "claude");
 }
 
+/// 3.3: Deactivate is there only while there is a session to stop, and it
+/// sits immediately above Restart Agent when it is.
+#[test]
+fn agent_context_menu_offers_deactivate_only_for_a_running_agent() {
+    let stopped = menu_labels(AgentMenuFacts::default());
+    assert!(!stopped.contains(&"Deactivate"),
+            "a passive agent that never started has nothing to stop");
+
+    let running = menu_labels(AgentMenuFacts { is_running: true,
+                                               ..Default::default() });
+    let deactivate = running.iter().position(|label| *label == "Deactivate");
+    let restart = running.iter().position(|label| *label == "Restart Agent");
+    assert_eq!(deactivate.zip(restart).map(|(d, r)| r == d + 1),
+               Some(true),
+               "Deactivate sits immediately above Restart Agent: {running:?}");
+}
+
+/// A running companion can be stopped on its own, even though it cannot be
+/// restarted independently of its owner.
+#[test]
+fn agent_context_menu_offers_deactivate_for_a_running_companion() {
+    let labels = menu_labels(AgentMenuFacts { is_companion: true,
+                                              is_shell: true,
+                                              is_running: true,
+                                              ..Default::default() });
+    assert!(labels.contains(&"Deactivate"));
+    assert!(!labels.contains(&"Restart Agent"));
+}
+
+/// `agent_menu_facts` reads liveness from the store, so the menu reflects
+/// what is running at the moment it opens.
+#[test]
+fn agent_menu_facts_report_whether_the_agent_is_running() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    let ws_id = ws.id;
+    store.add_workspace(ws);
+    store.set_current_workspace(ws_id);
+    let id = store.create("~/alpha", knot_agents::CreateOptions::default());
+
+    assert!(!agent_menu_facts(&store, id).0.is_running);
+
+    store.set_activated(id, true);
+    assert!(agent_menu_facts(&store, id).0.is_running);
+}
+
 #[test]
 fn agent_context_menu_hides_register_for_a_shell_agent() {
     let facts = AgentMenuFacts { is_shell: true,
@@ -167,21 +216,24 @@ fn agent_context_menu_never_emits_a_stray_divider() {
         for is_shell in [false, true] {
             for has_move_targets in [false, true] {
                 for has_markdown_history in [false, true] {
-                    let facts = AgentMenuFacts { is_companion,
-                                                 is_shell,
-                                                 has_move_targets,
-                                                 has_markdown_history };
-                    let entries = agent_context_menu_entries(facts);
-                    assert_ne!(entries.first(),
-                               Some(&AgentMenuEntry::Separator),
-                               "{facts:?}");
-                    assert_ne!(entries.last(),
-                               Some(&AgentMenuEntry::Separator),
-                               "{facts:?}");
-                    assert!(!entries.windows(2).any(|pair| pair
-                                                           == [AgentMenuEntry::Separator,
-                                                               AgentMenuEntry::Separator]),
-                            "{facts:?}");
+                    for is_running in [false, true] {
+                        let facts = AgentMenuFacts { is_companion,
+                                                     is_shell,
+                                                     has_move_targets,
+                                                     has_markdown_history,
+                                                     is_running };
+                        let entries = agent_context_menu_entries(facts);
+                        assert_ne!(entries.first(),
+                                   Some(&AgentMenuEntry::Separator),
+                                   "{facts:?}");
+                        assert_ne!(entries.last(),
+                                   Some(&AgentMenuEntry::Separator),
+                                   "{facts:?}");
+                        assert!(!entries.windows(2).any(|pair| pair
+                                                               == [AgentMenuEntry::Separator,
+                                                                   AgentMenuEntry::Separator]),
+                                "{facts:?}");
+                    }
                 }
             }
         }
