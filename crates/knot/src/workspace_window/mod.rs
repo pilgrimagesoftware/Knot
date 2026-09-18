@@ -573,6 +573,17 @@ impl WorkspaceWindow {
         }
     }
 
+    /// Drops a failed connection so the next render starts a fresh one.
+    ///
+    /// Only reachable from the `Failed` slot, which owns no handle and no
+    /// subprocess - there is nothing to shut down, just the dead slot to
+    /// clear so `ensure_panel_session` stops short-circuiting on it.
+    fn retry_panel_session(&mut self, id: Uuid) {
+        self.panel_sessions.remove(&id);
+        self.panel_phases.remove(&id);
+        self.ensure_panel_session(id);
+    }
+
     /// Removes `id` (and its companions) from the store, tears down their
     /// sessions, and persists the result.
     ///
@@ -711,11 +722,27 @@ impl WorkspaceWindow {
                         .into_any_element()
             }
             panel_session::PanelSessionSlot::Failed(message) => {
-                div().size_full()
-                     .p_4()
-                     .text_color(rgb(0xEF4444))
-                     .child(format!("Failed to connect: {message}"))
-                     .into_any_element()
+                let message = message.clone();
+                drop(slot_guard);
+                // A failed connect is often transient - a loaded machine,
+                // an adapter slow to answer `initialize` - so offer the
+                // retry rather than making the user remove and re-add the
+                // agent to get another attempt.
+                v_flex().size_full()
+                        .p_4()
+                        .gap_3()
+                        .items_start()
+                        .child(div().text_color(rgb(0xEF4444))
+                                    .child(format!("Failed to connect: {message}")))
+                        .child(Button::new("panel-retry-connect")
+                            .label("Try again")
+                            .icon(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::RefreshCw))
+                            .primary()
+                            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                view.retry_panel_session(id);
+                                cx.notify();
+                            })))
+                        .into_any_element()
             }
             panel_session::PanelSessionSlot::Ready(handle) => {
                 let state_arc = handle.state();
@@ -1675,25 +1702,9 @@ impl WorkspaceWindow {
     fn render_diff_stats(stats: &knot_git::DiffStats, font_family: String,
                          font_size: gpui_kit::Pixels, cx: &Context<Self>)
                          -> gpui_kit::AnyElement {
-        let muted = cx.theme().muted_foreground;
-        let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
-        h_flex().flex_shrink_0()
-                .whitespace_nowrap()
-                .font_family(font_family)
-                .text_size(font_size)
-                .text_color(muted)
-                .gap_1()
-                .items_baseline()
-                .child(div().text_color(rgb(app_state::DIFF_ADDED_COLOR))
-                            .child(format!("+{}", stats.insertions)))
-                .child(div().text_color(rgb(app_state::DIFF_REMOVED_COLOR))
-                            .child(format!("-{}", stats.deletions)))
-                .child(h_flex().items_baseline()
-                               .child(div().child("("))
-                               .child(div().text_color(rgb(app_state::DIFF_FILES_COLOR))
-                                           .child(stats.files_changed.to_string()))
-                               .child(div().ml_1().child(format!("{files})"))))
-                .into_any_element()
+        app_state::diff_stats_row(stats, cx.theme().muted_foreground).font_family(font_family)
+                                                                     .text_size(font_size)
+                                                                     .into_any_element()
     }
 
     fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
@@ -2182,6 +2193,8 @@ impl Render for WorkspaceWindow {
                                     .overflow_hidden()
                                     .child(dashboard::workspace_section(dashboard_workspace,
                                                                         false,
+                                                                        cx.theme()
+                                                                          .muted_foreground,
                                                                         on_agent_tap,
                                                                         on_workspace_nav,
                                                                         on_add_agent)))

@@ -41,6 +41,33 @@ pub(crate) const DIFF_ADDED_COLOR: u32 = 0x22C55E;
 pub(crate) const DIFF_REMOVED_COLOR: u32 = 0xEF4444;
 pub(crate) const DIFF_FILES_COLOR: u32 = 0x3B82F6;
 
+/// A diff stat with only its figures colored - additions green, deletions
+/// red, the changed-file count blue - and the words and brackets muted, so
+/// the numbers are what the eye lands on. Shared by the workspace header
+/// and the dashboard cards so the two can't drift apart; the caller styles
+/// the row's font and size.
+///
+/// The file noun comes from `l10n::plural_noun` rather than a local
+/// `if count == 1`, and separately from the count so only the number takes
+/// the accent color.
+pub(crate) fn diff_stats_row(stats: &knot_git::DiffStats, muted: gpui_kit::Hsla) -> gpui_kit::Div {
+    let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
+    h_flex().flex_shrink_0()
+            .whitespace_nowrap()
+            .text_color(muted)
+            .gap_1()
+            .items_baseline()
+            .child(div().text_color(rgb(DIFF_ADDED_COLOR))
+                        .child(format!("+{}", stats.insertions)))
+            .child(div().text_color(rgb(DIFF_REMOVED_COLOR))
+                        .child(format!("-{}", stats.deletions)))
+            .child(h_flex().items_baseline()
+                           .child(div().child("("))
+                           .child(div().text_color(rgb(DIFF_FILES_COLOR))
+                                       .child(stats.files_changed.to_string()))
+                           .child(div().ml_1().child(format!("{files})"))))
+}
+
 pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
     match state {
         knot_agents::AgentState::Idle => rgb(0x22C55E).into(),

@@ -49,6 +49,7 @@ impl CommandCenterWindow {
 
 impl Render for CommandCenterWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
         let dashboard_workspaces = {
             let store = self.store.lock().unwrap();
             store.workspaces()
@@ -178,6 +179,7 @@ impl Render for CommandCenterWindow {
             dashboard::workspace_section(
                 workspace,
                 true,
+                muted,
                 on_agent_tap,
                 on_workspace_nav,
                 on_add_agent,

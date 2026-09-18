@@ -115,7 +115,7 @@ pub(crate) fn sort_picker(current: DashboardSort,
 }
 
 /// One agent card: avatar, name, status, folder name, and git diff stats.
-fn agent_card(agent: &DashboardAgent,
+fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
               on_tap: impl Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static)
               -> impl IntoElement {
     let id = agent.id;
@@ -168,14 +168,7 @@ fn agent_card(agent: &DashboardAgent,
                                                 }))
             .children(git_stats.filter(|stats| stats.files_changed > 0)
                                .map(|stats| {
-                                   h_flex().gap_2()
-                                           .text_xs()
-                                           .text_color(rgb(0x888888))
-                                           .child(format!("+{}", stats.insertions))
-                                           .child(format!("-{}", stats.deletions))
-                                           .child(knot_core::l10n::pluralize(stats.files_changed,
-                                                                             "count.file",
-                                                                             "count.files"))
+                                   crate::app_state::diff_stats_row(&stats, muted).text_xs()
                                }))
             .on_click(move |_: &ClickEvent, window, cx| on_tap(id, window, cx))
 }
@@ -201,6 +194,7 @@ fn add_agent_tile(workspace_id: Uuid,
 /// One workspace's section: color bar + name (+ nav when global) + agent
 /// grid, or an "No agents" empty state.
 pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
+                                muted: gpui_kit::Hsla,
                                 on_agent_tap: impl Fn(Uuid,
                                    &mut gpui_kit::Window,
                                    &mut gpui_kit::App)
@@ -258,7 +252,7 @@ pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
                                .flex_wrap()
                                .gap(px(GRID_SPACING))
                                .children(workspace.agents.iter().map(|agent| {
-                                                                    agent_card(agent, {
+                                                                    agent_card(agent, muted, {
                                                                         let on_agent_tap =
                                                                             on_agent_tap.clone();
                                                                         move |id, window, cx| {
