@@ -1,28 +1,14 @@
 # Hand-off: acp-only-agent-launch
 
-Branch: `acp-only-agent-launch`, 40 commits ahead of `develop`. `make rust`
-passes clean. Delete this file once the open items below are closed.
-
-The branch started as the OpenSpec change `acp-only-agent-launch` (ACP-only
-launch for non-shell agents, plus the MCP wiring fix). Everything after that
-came out of live testing in the running app, which surfaced a long tail of
-panel, dialog and window defects - many of them pre-existing bugs that the
-change simply made load-bearing.
-
-## Verified working in the app
-
-- Knot's own MCP server reaches ACP-launched agents; `mcp__knot__*` tools
-  register and `set-status` works.
-- Claude and OpenCode connect, stream, and render tool calls.
-- The colored diff stat in the workspace header.
-- Panel input controls and the Send button (they were rendering below the
-  window edge).
+The branch itself is merged (PR #123). This file survives it because two
+items are still open, and because the root causes below are worth keeping
+until they have a better home. Delete it once both open items close.
 
 ## Root causes worth knowing
 
-Four bugs were the same species: **the code modelled a protocol from
-plausible inference rather than from the spec, and failed silently.** If a
-feature "does nothing", suspect this shape first.
+Four bugs on that branch were the same species: **the code modelled a
+protocol from plausible inference rather than from the spec, and failed
+silently.** If a feature "does nothing", suspect this shape first.
 
 - `tools/list` serialized `input_schema`; MCP requires `inputSchema`. A
   validating client drops every tool in the list, so Knot's whole tool set
@@ -38,44 +24,53 @@ feature "does nothing", suspect this shape first.
   flat `params.toolCallId`. The existing test asserted the wrong shape, so it
   passed against the bug.
 
-Two more worth remembering:
+Three more worth remembering:
 
 - **Dialogs never rendered.** `gpui_component::Root::render` does not draw
   `active_dialogs`; the application's own root view must render
   `Root::render_dialog_layer`. No window did, so *every* confirmation in the
   app opened invisibly. Upstream documents the exact symptom on that
-  function. Found by instrumenting the click path after two wrong guesses -
-  the handler fired and the alert's build closure never did.
+  function.
+- **A window cannot open a dialog on itself from a menu action.** The macOS
+  menu dispatches through `App::dispatch_action`, which runs the handler
+  inside `active_window.update(...)`; a second `window.update` on that same
+  window is re-entrant and gpui refuses it with `"window not found"` - the
+  same message it uses for a *closed* window, which is what made this look
+  like a lifetime bug. Defer the open with `cx.defer`. (Found via "About
+  Knot"; PR #124.)
 - **`min_w_0()`** accounts for four separate layout bugs here. GPUI inherits
   CSS's `min-width: auto`: `flex_1()` says "may grow", only `min_w_0()` says
   "may shrink". Any flex row holding user text needs it.
 
-## Open items
+## Closed since the branch merged
 
-1. **Ctrl-C handling is unverified.** `quit_on_terminal_signals` builds and
-   is wired at startup but was never confirmed against a running app.
-2. **Gemini connects only intermittently.** Measured from a bare shell with
-   no Knot involved, `gemini --acp --skip-trust` failed to answer
-   `initialize` 3 runs in 5. Knot's behaviour is correct (it times out at
-   20s and now offers "Try again"). The machine was heavily loaded during
-   the measurement, so load and the `aws-mcp` entry in
-   `~/.gemini/settings.json` (gemini prints "MCP issues detected" every run)
-   are both untested explanations. Re-measure on an idle machine.
-3. **The agent context menu is missing eight items** the Swift reference has
+- **Ctrl-C handling works.** Measured 2026-09-18: the built binary exits
+  with code 130 on `SIGINT`. `quit_on_terminal_signals` does what it claims.
+- **Gemini's intermittency did not reproduce.** `gemini --acp --skip-trust`
+  answered an ACP `initialize` 5 runs out of 5, at load average ~4-5 - i.e.
+  under load comparable to the original 3-in-5 failure, with gemini 0.46.0.
+  The `aws-mcp` entry in `~/.gemini/settings.json` is ruled out as the
+  cause: gemini still prints "MCP issues detected" on every run while
+  answering `initialize` normally. Reopen with fresh numbers if it recurs.
+- **Companion-exit behaviour is now in the contract**, as the OpenSpec
+  change `shell-exit-removes-the-agent`. Note the correction it carries:
+  the implementation removes any *shell* agent whose process exits,
+  companion or not, which is what the requirement now says.
+- **Restart deliberately drops the session**, per `agent-lifecycle`'s
+  Restart requirement, with Resume as the separate operation. Reviewed and
+  left as-is; changing it would be a spec change, not a fix.
+
+## Open
+
+1. **The agent context menu is missing eight items** the Swift reference has
    (`Skwad/Views/Components/AgentContextMenu.swift`): New Companion, Fork
    Agent, Duplicate Agent, Move to Workspace, Save to Bench, Open In,
    Markdown Files, Register Agent - plus its dividers and the
-   `AgentMenuVisibility` rules. Much of the backing exists already
-   (`move_to_workspace` in the store, `BenchAgent`, `fork_session`, the MCP
-   register tool), so it is mostly UI wiring. Worth an OpenSpec change
-   rather than a patch.
-4. **Companion-exit closing the agent is new behaviour**, not in
-   `agent-lifecycle`. Write it into the contract or reconsider it.
-5. **Restart deliberately drops the session**, per `agent-lifecycle`'s
-   Restart requirement, with Resume as the separate operation. Reviewed and
-   left as-is; changing it is a spec change.
-6. `openspec/changes/acp-only-agent-launch/tasks.md` still has 5.2, 5.3 and
-   6.6 unchecked - all manual verification.
+   `AgentMenuVisibility` rules. Tracked as the OpenSpec change
+   `agent-context-menu-parity`.
+2. `openspec/changes/acp-only-agent-launch/tasks.md` still has 5.2, 5.3 and
+   6.6 unchecked. All three need a human watching the running app; that file
+   records why an agent session cannot close them.
 
 ## Notes for whoever picks this up
 

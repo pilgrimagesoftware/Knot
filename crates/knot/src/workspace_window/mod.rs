@@ -17,6 +17,17 @@ pub(crate) enum WorkspaceViewMode {
 pub(crate) const TERMINAL_SIDEBAR_WIDTH: f32 = 250.;
 pub(crate) const TERMINAL_HEADER_HEIGHT: f32 = 64.;
 
+/// Whether an agent of this type runs a terminal process of its own.
+///
+/// Under ACP-only launch only shell agents do; every other type reaches
+/// its agent through an adapter subprocess owned by the panel session.
+/// This is what scopes `agent-lifecycle`'s exit-driven removal: a shell
+/// agent whose process exits is removed, an ACP agent whose adapter exits
+/// is not.
+pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
+    agent_type == "shell"
+}
+
 /// The font family to actually render the terminal with: the user's
 /// `terminal_font_name` setting if GPUI can actually resolve it (checked
 /// against the platform's font catalog plus whatever we've embedded),
@@ -390,6 +401,10 @@ impl WorkspaceWindow {
     /// Spawns a PTY-backed terminal session for `id` if one is not already
     /// running - matches (and, per `terminal-rendering`'s tasks.md, replaces)
     /// `Shell::attach_session`'s pattern.
+    ///
+    /// Only agents that [`runs_a_terminal_process`] accepts get one, which
+    /// is also what scopes `agent-lifecycle`'s exit-driven removal: the
+    /// process-exit hook below is registered here and nowhere else.
     /// Starts `id`'s PTY terminal session - shell agents only. Non-shell
     /// agents launch exclusively through `ensure_panel_session`; this is a
     /// no-op for them (they have no `TerminalSession`, never did view-mode
@@ -406,7 +421,7 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        if agent.agent_type != "shell" {
+        if !runs_a_terminal_process(&agent.agent_type) {
             return;
         }
         self.panel_states
