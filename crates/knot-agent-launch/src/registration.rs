@@ -64,6 +64,21 @@ pub fn mcp_arguments(agent_type: &str, mcp_url: &str, plugin_root: Option<&Path>
     }
 }
 
+pub fn acp_registration_prompt(agent_id: Uuid, is_resume: bool, persona: Option<&Persona>)
+                               -> Option<String> {
+    if is_resume {
+        return None;
+    }
+    let mut prompt = knot_instructions(agent_id);
+    if let Some(p) = persona_prompt(persona) {
+        prompt.push(' ');
+        prompt.push_str(&p);
+    }
+    prompt.push(' ');
+    prompt.push_str(registration_user_prompt());
+    Some(prompt)
+}
+
 /// Inline registration arguments carrying `agent_id`, or an empty string
 /// when `agent_type` does not support inline registration or the resume
 /// rules drop them.
@@ -225,6 +240,25 @@ mod tests {
         let p = persona("Be terse.");
         let args = inline_registration_arguments("claude", id(), false, Some(&p));
         assert!(args.contains("impersonate Ada"));
+    }
+
+    #[test]
+    fn acp_registration_prompt_fresh_includes_instructions_and_user_prompt() {
+        let prompt = acp_registration_prompt(id(), false, None).unwrap();
+        assert!(prompt.contains(&id().to_string()));
+        assert!(prompt.contains(registration_user_prompt()));
+    }
+
+    #[test]
+    fn acp_registration_prompt_resume_is_none() {
+        assert!(acp_registration_prompt(id(), true, None).is_none());
+    }
+
+    #[test]
+    fn acp_registration_prompt_includes_persona() {
+        let p = persona("Be terse.");
+        let prompt = acp_registration_prompt(id(), false, Some(&p)).unwrap();
+        assert!(prompt.contains("impersonate Ada"));
     }
 
     #[test]

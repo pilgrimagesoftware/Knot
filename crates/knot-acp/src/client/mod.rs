@@ -8,22 +8,15 @@ use serde_json::{Value, json};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::error::{AcpError, Result, SessionEndCause};
+use crate::error::{AcpError, Result};
 use crate::protocol::{
     AgentCapabilities, ConfigOption, InitializeParams, InitializeResult, JsonRpcErrorPayload,
     PROTOCOL_VERSION, PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate,
 };
 use crate::transport::{Transport, TransportEvent};
 
-/// One event in a session's ordered stream: either an ACP `session/update`
-/// or a `session/request_permission` the caller must answer, plus a
-/// terminal `Ended` event when the session stops taking requests.
-#[derive(Debug)]
-pub enum SessionEvent {
-    Update(SessionUpdate),
-    PermissionRequest(PermissionRequest),
-    Ended(SessionEndCause),
-}
+mod events;
+pub use events::{NewSession, SessionEvent};
 
 /// Cheap to clone - `transport` and `permission_pending` are both `Arc`,
 /// so every clone dispatches through the same underlying connection. Lets
@@ -39,14 +32,6 @@ pub struct AcpClient {
     init_config_options: Vec<ConfigOption>,
     permission_pending:
         Arc<Mutex<std::collections::HashMap<String, oneshot::Sender<PermissionDecision>>>>,
-}
-
-/// A newly created session: its id plus whatever Session Config Options
-/// (mode, model, reasoning effort, ...) the agent declared for it.
-#[derive(Debug, Clone, Default)]
-pub struct NewSession {
-    pub session_id:     String,
-    pub config_options: Vec<ConfigOption>,
 }
 
 impl AcpClient {
@@ -291,6 +276,7 @@ fn permission_result(decision: PermissionDecision, options: &[PermissionOption])
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::SessionEndCause;
 
     /// A fake agent handling `initialize` (with a configurable protocol
     /// version and resume capability) and `session/new`/`session/load`.

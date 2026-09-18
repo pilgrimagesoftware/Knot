@@ -1,0 +1,594 @@
+use knot_core::Workspace;
+
+use super::*;
+
+fn workspace(name: &str) -> Workspace {
+    Workspace { id:                    Uuid::new_v4(),
+                name:                  name.to_string(),
+                color_hex:             "#123456".to_string(),
+                agent_ids:             Vec::new(),
+                layout_mode:           "single".to_string(),
+                active_agent_ids:      Vec::new(),
+                focused_pane_index:    0,
+                split_ratio:           0.5,
+                split_ratio_secondary: None,
+                show_dashboard:        None,
+                is_detached:           None, }
+}
+
+#[test]
+fn agent_context_menu_omits_companion_actions_for_companions() {
+    assert_eq!(agent_context_menu_items(false),
+               vec!["Edit Agent…",
+                    "New Shell Companion",
+                    "Restart Agent",
+                    "Remove Agent"]);
+    assert_eq!(agent_context_menu_items(true),
+               vec!["Edit Agent…", "Remove Agent"]);
+}
+
+#[test]
+fn empty_store_has_no_rows() {
+    let store = knot_agents::AgentStore::new();
+    let model = layout_model(&store, None, &[], &BTreeMap::new());
+    assert!(model.workspace_rows.is_empty());
+    assert!(model.selected_agent_rows.is_empty());
+}
+
+#[test]
+fn selected_workspace_marks_and_filters_rows() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws1 = workspace("One");
+    let ws2 = workspace("Two");
+    store.add_workspace(ws1.clone());
+    store.add_workspace(ws2.clone());
+
+    store.set_current_workspace(ws1.id);
+    store.create("~/alpha", knot_agents::CreateOptions::default());
+    store.create("~/beta", knot_agents::CreateOptions::default());
+
+    store.set_current_workspace(ws2.id);
+    store.create("~/gamma", knot_agents::CreateOptions::default());
+
+    store.set_current_workspace(ws1.id);
+    let model = layout_model(&store, None, &[], &BTreeMap::new());
+
+    assert_eq!(model.workspace_rows.len(), 2);
+    assert!(model.workspace_rows
+                 .iter()
+                 .find(|r| r.id == ws1.id)
+                 .unwrap()
+                 .selected);
+    assert!(!model.workspace_rows
+                  .iter()
+                  .find(|r| r.id == ws2.id)
+                  .unwrap()
+                  .selected);
+
+    let names = model.selected_agent_rows
+                     .iter()
+                     .map(|r| r.name.as_str())
+                     .collect::<Vec<_>>();
+    assert_eq!(names, vec!["alpha", "beta"]);
+    assert!(!names.contains(&"gamma"));
+    let gamma_id = store.agents()
+                        .iter()
+                        .find(|agent| agent.name == "gamma")
+                        .map(|agent| agent.id)
+                        .unwrap();
+    assert_eq!(agent_selection_for_workspace(&store, ws2.id),
+               Some(gamma_id));
+}
+
+#[test]
+fn missing_agent_ids_are_skipped() {
+    let mut store = knot_agents::AgentStore::new();
+    let mut ws = workspace("One");
+    ws.agent_ids.push(Uuid::new_v4());
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    store.create("~/alpha", knot_agents::CreateOptions::default());
+
+    let model = layout_model(&store, None, &[], &BTreeMap::new());
+    assert_eq!(model.selected_agent_rows.len(), 1);
+    assert_eq!(model.selected_agent_rows[0].name, "alpha");
+}
+
+#[test]
+fn agent_selection_marks_and_tracks_attach_state() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    let alpha_id = store.create("~/alpha", knot_agents::CreateOptions::default());
+    store.create("~/beta", knot_agents::CreateOptions::default());
+
+    let model = layout_model(&store, Some(alpha_id), &[], &BTreeMap::new());
+    let alpha = model.selected_agent_rows
+                     .iter()
+                     .find(|row| row.id == alpha_id)
+                     .unwrap();
+    assert!(alpha.selected);
+    assert!(!alpha.attached);
+    assert_eq!(alpha.state, knot_agents::AgentState::Idle);
+    let beta = model.selected_agent_rows
+                    .iter()
+                    .find(|row| row.id != alpha_id)
+                    .unwrap();
+    assert!(!beta.selected);
+
+    let model = layout_model(&store, Some(alpha_id), &[alpha_id], &BTreeMap::new());
+    assert!(model.selected_agent_rows
+                 .iter()
+                 .find(|row| row.id == alpha_id)
+                 .unwrap()
+                 .attached);
+}
+
+#[test]
+fn state_label_matches_the_swift_reference_strings() {
+    assert_eq!(state_label(knot_agents::AgentState::Idle), "Idle");
+    assert_eq!(state_label(knot_agents::AgentState::Running), "Working");
+    assert_eq!(state_label(knot_agents::AgentState::Input),
+               "Awaiting input");
+    assert_eq!(state_label(knot_agents::AgentState::Error), "Error");
+}
+
+#[test]
+fn layout_model_carries_agent_state_into_rows() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    let id = store.create("~/alpha", knot_agents::CreateOptions::default());
+    store.set_state(id, knot_agents::AgentState::Input);
+
+    let model = layout_model(&store, None, &[], &BTreeMap::new());
+    assert_eq!(model.selected_agent_rows[0].state,
+               knot_agents::AgentState::Input);
+}
+
+#[test]
+fn command_to_send_trims_input_and_rejects_empty_commands() {
+    assert_eq!(command_to_send("  cargo test  "), Some("cargo test"));
+    assert_eq!(command_to_send("\t\n"), None);
+}
+
+#[test]
+fn stale_session_ids_excludes_live_agents() {
+    let live = Uuid::new_v4();
+    let stale = Uuid::new_v4();
+    let live_ids = BTreeSet::from([live]);
+
+    assert_eq!(stale_session_ids(&[live, stale], &live_ids), vec![stale]);
+}
+
+#[test]
+fn delivery_notice_names_the_last_known_recipient_and_counts_events() {
+    let mut store = knot_agents::AgentStore::new();
+    let first = store.create("~/first", knot_agents::CreateOptions::default());
+    let second = store.create("~/second", knot_agents::CreateOptions::default());
+    let events = vec![DeliveryEvent { agent_id:   first,
+                                      message_id: Uuid::new_v4(), },
+                      DeliveryEvent { agent_id:   second,
+                                      message_id: Uuid::new_v4(), },
+                      DeliveryEvent { agent_id:   second,
+                                      message_id: Uuid::new_v4(), },];
+
+    assert_eq!(delivery_notice(&events, store.agents()),
+               Some(DeliveryNotice { recipient_name: "second".to_string(),
+                                     count:          2, }));
+    assert_eq!(delivery_notice(&[], store.agents()), None);
+}
+
+#[test]
+fn delivery_notice_ignores_unknown_recipients() {
+    let store = knot_agents::AgentStore::new();
+    let events = [DeliveryEvent { agent_id:   Uuid::new_v4(),
+                                  message_id: Uuid::new_v4(), }];
+
+    assert_eq!(delivery_notice(&events, store.agents()), None);
+}
+
+#[test]
+fn unread_counts_snapshot_includes_zero_and_ignores_other_agents() {
+    let mut messages = knot_messaging::MessageStore::new();
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    let other = Uuid::new_v4();
+    messages.add(knot_messaging::Message::new(other, first, "one"));
+    messages.add(knot_messaging::Message::new(other, first, "two"));
+    messages.add(knot_messaging::Message::new(other, other, "unrelated"));
+
+    let counts = unread_counts_snapshot(&messages, &[first, second]);
+
+    assert_eq!(counts.get(&first), Some(&2));
+    assert_eq!(counts.get(&second), Some(&0));
+    assert!(!counts.contains_key(&other));
+}
+
+#[test]
+fn layout_model_carries_unread_count_into_agent_rows() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    let id = store.create("~/alpha", knot_agents::CreateOptions::default());
+    let unread_counts = BTreeMap::from([(id, 3)]);
+
+    let model = layout_model(&store, None, &[], &unread_counts);
+
+    assert_eq!(model.selected_agent_rows[0].unread_count, 3);
+}
+
+#[test]
+fn terminal_status_updates_the_shared_agent_store() {
+    let mut store = knot_agents::AgentStore::new();
+    let id = store.create("~/alpha", knot_agents::CreateOptions::default());
+    let shared = Arc::new(Mutex::new(store));
+
+    apply_terminal_status(&shared, id, knot_agents::AgentState::Running);
+
+    assert_eq!(shared.lock().unwrap().agent(id).unwrap().state,
+               knot_agents::AgentState::Running);
+}
+
+#[test]
+fn inbox_prompt_requires_new_unread_message_for_non_shell_mcp_agent() {
+    let message = Uuid::new_v4();
+
+    assert!(should_inject_inbox_prompt("claude", true, Some(message), None));
+    assert!(!should_inject_inbox_prompt("claude", true, Some(message), Some(message)));
+    assert!(!should_inject_inbox_prompt("claude", true, None, None));
+    assert!(!should_inject_inbox_prompt("shell", true, Some(message), None));
+    assert!(!should_inject_inbox_prompt("claude", false, Some(message), None));
+}
+
+#[test]
+fn awaiting_notice_skips_active_empty_and_duplicate_messages() {
+    let agent = Uuid::new_v4();
+    assert!(should_show_awaiting_notice(None, agent, "Question?", None));
+    assert!(!should_show_awaiting_notice(Some(agent), agent, "Question?", None));
+    assert!(!should_show_awaiting_notice(None, agent, "", None));
+    assert!(!should_show_awaiting_notice(None, agent, "Question?", Some(&"Question?".to_string())));
+}
+
+#[test]
+fn agent_status_snapshot_tracks_roster_state_and_registration() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    let id = store.create("~/alpha", knot_agents::CreateOptions::default());
+    store.create("~/beta", knot_agents::CreateOptions::default());
+
+    let snapshot = agent_status_snapshot(&store);
+    assert_eq!(snapshot.len(), 2);
+    assert!(snapshot.iter()
+                    .find(|key| key.id == id)
+                    .unwrap()
+                    .status_text
+                    .is_empty());
+
+    store.set_state(id, knot_agents::AgentState::Running);
+    store.set_status_text(id, "planning".to_string());
+    store.set_registered(id, true);
+    let updated = agent_status_snapshot(&store);
+    assert_ne!(snapshot, updated);
+    let key = updated.iter().find(|key| key.id == id).unwrap();
+    assert_eq!(key.state, knot_agents::AgentState::Running);
+    assert_eq!(key.status_text, "planning");
+    assert!(key.is_registered);
+    assert_eq!(updated.iter().find(|key| key.id != id).unwrap().state,
+               knot_agents::AgentState::Idle);
+}
+
+#[test]
+fn build_agent_store_restores_layout_when_enabled() {
+    let agent_id = Uuid::new_v4();
+    let saved = knot_core::SavedAgent::new(agent_id, "alpha", None, "~/alpha");
+    let mut ws = workspace("Restored");
+    ws.agent_ids = vec![agent_id];
+
+    let mut settings = knot_core::Settings::default();
+    settings.restore_layout_on_launch = true;
+    settings.saved_agents = vec![saved];
+    settings.saved_workspaces = vec![ws.clone()];
+
+    let store = build_agent_store(&settings);
+    assert_eq!(store.agents().len(), 1);
+    assert_eq!(store.workspaces(), &[ws.clone()]);
+    assert_eq!(store.current_workspace_id(), Some(ws.id));
+}
+
+#[test]
+fn build_agent_store_restores_exact_session_id_when_conversation_enabled() {
+    let agent_id = Uuid::new_v4();
+    let mut saved = knot_core::SavedAgent::new(agent_id, "alpha", None, "~/alpha");
+    saved.session_id = Some("s7".to_string());
+
+    let mut settings = knot_core::Settings::default();
+    settings.restore_layout_on_launch = true;
+    settings.restore_conversation_on_launch = true;
+    settings.saved_agents = vec![saved];
+
+    let store = build_agent_store(&settings);
+    let agent = store.agent(agent_id).unwrap();
+    assert_eq!(agent.resume_session_id.as_deref(), Some("s7"));
+    assert!(agent.session_id.is_none());
+}
+
+#[test]
+fn build_agent_store_leaves_resume_session_unset_when_conversation_disabled() {
+    let agent_id = Uuid::new_v4();
+    let mut saved = knot_core::SavedAgent::new(agent_id, "alpha", None, "~/alpha");
+    saved.session_id = Some("s7".to_string());
+
+    let mut settings = knot_core::Settings::default();
+    settings.restore_layout_on_launch = true;
+    settings.restore_conversation_on_launch = false;
+    settings.saved_agents = vec![saved];
+
+    let store = build_agent_store(&settings);
+    let agent = store.agent(agent_id).unwrap();
+    assert!(agent.resume_session_id.is_none());
+}
+
+#[test]
+fn build_agent_store_starts_empty_when_restore_disabled() {
+    let mut settings = knot_core::Settings::default();
+    settings.restore_layout_on_launch = false;
+    settings.saved_agents =
+        vec![knot_core::SavedAgent::new(Uuid::new_v4(), "alpha", None, "~/alpha")];
+
+    let store = build_agent_store(&settings);
+    assert!(store.agents().is_empty());
+    assert!(store.workspaces().is_empty());
+}
+
+#[test]
+fn initial_selection_prefers_active_agent_and_skips_stale_ids() {
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    let first = store.create("~/first", knot_agents::CreateOptions::default());
+    let second = store.create("~/second", knot_agents::CreateOptions::default());
+
+    let mut saved = store.saved_workspaces()[0].clone();
+    saved.active_agent_ids = vec![Uuid::new_v4(), second];
+    let restored = knot_agents::AgentStore::from_saved(&store.saved_agents(false), vec![saved]);
+
+    assert_eq!(initial_agent_selection(&restored), Some(second));
+    assert_ne!(initial_agent_selection(&restored), Some(first));
+}
+
+#[test]
+fn should_notify_requires_setting_and_notice() {
+    assert!(should_notify(true, true));
+    assert!(!should_notify(false, true));
+    assert!(!should_notify(true, false));
+    assert!(!should_notify(false, false));
+}
+
+#[test]
+fn notification_body_uses_message_when_present() {
+    assert_eq!(notification_body("Grant access?"), "Grant access?");
+}
+
+#[test]
+fn notification_body_defaults_on_empty() {
+    assert_eq!(notification_body(""), AWAITING_INPUT_DEFAULT_BODY);
+}
+
+#[test]
+fn notification_response_agent_id_parses_valid_tag() {
+    let id = Uuid::new_v4();
+    let response = SystemNotificationResponse { tag:       id.to_string().into(),
+                                                action_id: None, };
+    assert_eq!(notification_response_agent_id(&response), Some(id));
+}
+
+#[test]
+fn notification_response_agent_id_none_for_invalid_tag() {
+    let response = SystemNotificationResponse { tag:       "not-a-uuid".into(),
+                                                action_id: None, };
+    assert_eq!(notification_response_agent_id(&response), None);
+}
+
+#[test]
+fn appearance_label_maps_known_modes() {
+    assert_eq!(SettingsWindow::appearance_label("system"), "System");
+    assert_eq!(SettingsWindow::appearance_label("light"), "Light");
+    assert_eq!(SettingsWindow::appearance_label("dark"), "Dark");
+}
+
+#[test]
+fn appearance_label_defaults_to_auto() {
+    assert_eq!(SettingsWindow::appearance_label("auto"), "Auto");
+    assert_eq!(SettingsWindow::appearance_label("anything-else"), "Auto");
+}
+
+#[test]
+fn agent_type_label_maps_known_types() {
+    assert_eq!(SettingsWindow::agent_type_label("codex"), "Codex");
+    assert_eq!(SettingsWindow::agent_type_label("opencode"), "OpenCode");
+    assert_eq!(SettingsWindow::agent_type_label("gemini"), "Gemini");
+    assert_eq!(SettingsWindow::agent_type_label("copilot"), "Copilot");
+    assert_eq!(SettingsWindow::agent_type_label("custom1"), "Custom 1");
+    assert_eq!(SettingsWindow::agent_type_label("custom2"), "Custom 2");
+    assert_eq!(SettingsWindow::agent_type_label("shell"), "Shell");
+}
+
+#[test]
+fn agent_type_label_defaults_to_claude() {
+    assert_eq!(SettingsWindow::agent_type_label("claude"), "Claude");
+    assert_eq!(SettingsWindow::agent_type_label("anything-else"), "Claude");
+}
+
+#[test]
+fn persona_preview_returns_short_instructions_unchanged() {
+    assert_eq!(SettingsWindow::persona_preview("be terse", 80), "be terse");
+}
+
+#[test]
+fn persona_preview_truncates_long_instructions_with_ellipsis() {
+    let instructions = "a".repeat(100);
+    let preview = SettingsWindow::persona_preview(&instructions, 80);
+    assert_eq!(preview.chars().count(), 81);
+    assert!(preview.ends_with('…'));
+    assert_eq!(&preview[..80], "a".repeat(80).as_str());
+}
+
+#[test]
+fn ai_provider_label_maps_known_providers() {
+    assert_eq!(SettingsWindow::ai_provider_label("openai"), "OpenAI");
+    assert_eq!(SettingsWindow::ai_provider_label("anthropic"), "Anthropic");
+    assert_eq!(SettingsWindow::ai_provider_label("google"), "Google");
+}
+
+#[test]
+fn ai_provider_label_defaults_to_openai() {
+    assert_eq!(SettingsWindow::ai_provider_label("anything-else"), "OpenAI");
+}
+
+#[test]
+fn ai_model_for_matches_swift_reference_defaults() {
+    assert_eq!(SettingsWindow::ai_model_for("openai"), "gpt-5-mini");
+    assert_eq!(SettingsWindow::ai_model_for("anthropic"),
+               "claude-haiku-4-5");
+    assert_eq!(SettingsWindow::ai_model_for("google"),
+               "gemini-flash-lite-latest");
+    assert_eq!(SettingsWindow::ai_model_for("anything-else"), "");
+}
+
+#[test]
+fn autopilot_action_label_maps_known_actions() {
+    assert_eq!(SettingsWindow::autopilot_action_label("mark"),
+               "Mark conversation");
+    assert_eq!(SettingsWindow::autopilot_action_label("ask"), "Ask me");
+    assert_eq!(SettingsWindow::autopilot_action_label("continue"),
+               "Auto-continue");
+    assert_eq!(SettingsWindow::autopilot_action_label("custom"), "Custom");
+}
+
+#[test]
+fn autopilot_action_label_defaults_to_mark() {
+    assert_eq!(SettingsWindow::autopilot_action_label("anything-else"),
+               "Mark conversation");
+}
+
+#[test]
+fn autopilot_action_description_is_distinct_per_action() {
+    let descriptions: BTreeSet<&str> = ["mark", "ask", "continue", "custom"]
+        .iter()
+        .map(|action| SettingsWindow::autopilot_action_description(action))
+        .collect();
+    assert_eq!(descriptions.len(), 4);
+}
+
+#[test]
+fn key_name_for_code_maps_known_modifier_codes() {
+    assert_eq!(SettingsWindow::key_name_for_code(54), "Right Command");
+    assert_eq!(SettingsWindow::key_name_for_code(56), "Left Shift");
+    assert_eq!(SettingsWindow::key_name_for_code(63), "Fn");
+}
+
+#[test]
+fn key_name_for_code_falls_back_for_unknown_codes() {
+    assert_eq!(SettingsWindow::key_name_for_code(999), "Key 999");
+}
+
+#[test]
+fn mcp_server_url_formats_localhost_with_port() {
+    assert_eq!(SettingsWindow::mcp_server_url(8767),
+               "http://127.0.0.1:8767");
+    assert_eq!(SettingsWindow::mcp_server_url(9000),
+               "http://127.0.0.1:9000");
+}
+
+#[test]
+fn mcp_install_command_matches_swift_reference_per_agent() {
+    let url = "http://127.0.0.1:8767";
+    assert_eq!(SettingsWindow::mcp_install_command("claude", url),
+               "claude mcp add --transport http --scope user knot http://127.0.0.1:8767");
+    assert_eq!(SettingsWindow::mcp_install_command("codex", url),
+               "codex mcp add knot --url http://127.0.0.1:8767");
+    assert_eq!(SettingsWindow::mcp_install_command("opencode", url),
+               "opencode mcp add");
+    assert_eq!(SettingsWindow::mcp_install_command("gemini", url),
+               "gemini mcp add --transport http knot http://127.0.0.1:8767 --scope user");
+    assert_eq!(SettingsWindow::mcp_install_command("copilot", url), "");
+}
+
+#[test]
+fn restore_conversation_toggle_enabled_only_with_layout_restore() {
+    assert!(SettingsWindow::restore_conversation_toggle_enabled(true));
+    assert!(!SettingsWindow::restore_conversation_toggle_enabled(false));
+}
+
+#[test]
+fn turning_off_layout_restore_does_not_touch_conversation_restore() {
+    let mut settings = knot_core::Settings::default();
+    settings.restore_conversation_on_launch = true;
+    settings.restore_layout_on_launch = false;
+    assert!(settings.restore_conversation_on_launch);
+}
+
+#[test]
+fn settings_tab_default_is_general() {
+    assert_eq!(SettingsTab::ALL[0], SettingsTab::General);
+}
+
+#[test]
+fn settings_tab_labels_are_distinct() {
+    let labels: BTreeSet<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
+    assert_eq!(labels.len(), SettingsTab::ALL.len());
+}
+
+#[test]
+fn settings_tab_covers_every_swift_pane() {
+    let labels: Vec<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
+    assert_eq!(labels,
+               vec!["General",
+                    "Coding",
+                    "Personas",
+                    "Autopilot",
+                    "Voice",
+                    "MCP",
+                    "Appearance"]);
+}
+
+fn config_option(id: &str, category: &str) -> knot_acp::ConfigOption {
+    knot_acp::ConfigOption { id:            id.to_string(),
+                             name:          id.to_string(),
+                             category:      Some(category.to_string()),
+                             kind:          "select".to_string(),
+                             current_value: serde_json::Value::Null,
+                             options:       Vec::new(), }
+}
+
+#[test]
+fn find_config_option_matches_category_case_insensitively() {
+    let options = vec![config_option("mode", "Mode"),
+                       config_option("model", "model"),];
+
+    let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+    assert_eq!(found.map(|option| option.id.as_str()), Some("mode"));
+}
+
+#[test]
+fn find_config_option_is_none_when_no_category_matches() {
+    let options = vec![config_option("mode", "mode")];
+
+    assert!(WorkspaceWindow::find_config_option(&options, &["model"]).is_none());
+}
+
+#[test]
+fn find_config_option_ignores_non_select_options() {
+    let mut boolean_option = config_option("brave_mode", "mode");
+    boolean_option.kind = "boolean".to_string();
+    let options = vec![boolean_option];
+
+    assert!(WorkspaceWindow::find_config_option(&options, &["mode"]).is_none());
+}

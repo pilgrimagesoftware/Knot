@@ -33,14 +33,15 @@ pub(crate) enum RiskLevel {
 
 pub(crate) fn permission_risk_level(value: &str, name: &str) -> RiskLevel {
     let value = format!("{value} {name}").to_ascii_lowercase();
-    if ["bypass", "yolo", "danger"]
-        .iter()
-        .any(|word| value.contains(word))
+    if ["bypass", "yolo", "danger"].iter()
+                                   .any(|word| value.contains(word))
     {
         RiskLevel::Danger
-    } else if ["plan", "read"].iter().any(|word| value.contains(word)) {
+    }
+    else if ["plan", "read"].iter().any(|word| value.contains(word)) {
         RiskLevel::Safe
-    } else {
+    }
+    else {
         RiskLevel::Neutral
     }
 }
@@ -60,11 +61,11 @@ pub(crate) fn risk_color(risk: RiskLevel) -> Option<u32> {
 /// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
 /// to a specific message. `on_toggle_track` flips auto-scroll for the
 /// in-flight response.
-pub(crate) fn render_panel(
-    state: &PanelState, scroll: &ScrollHandle, permission_risk: RiskLevel,
-    on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
-    on_toggle_track: impl Fn() + Clone + 'static,
-) -> impl IntoElement {
+pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
+                           permission_risk: RiskLevel,
+                           on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
+                           on_toggle_track: impl Fn() + Clone + 'static)
+                           -> impl IntoElement {
     let last_index = state.messages.len().checked_sub(1);
     v_flex()
         .size_full()
@@ -87,43 +88,37 @@ pub(crate) fn render_panel(
         .children(state.ended.as_ref().map(render_ended_banner))
 }
 
-fn render_message(
-    state: &PanelState, index: usize, is_last: bool, message: &PanelMessage, scroll: &ScrollHandle,
-    on_toggle_track: impl Fn() + Clone + 'static,
-) -> gpui_kit::AnyElement {
+fn render_message(state: &PanelState, index: usize, is_last: bool, message: &PanelMessage,
+                  scroll: &ScrollHandle, on_toggle_track: impl Fn() + Clone + 'static)
+                  -> gpui_kit::AnyElement {
     match message {
         // Right-aligned, tinted background - visually distinct from the
         // assistant's plain left-aligned text, per acp-panel-ui's
         // "visually distinguish user messages, assistant messages, and
         // system/tool content" requirement.
-        PanelMessage::User(text) => h_flex()
-            .justify_end()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(0xFFFFFF))
-                    .px_3()
-                    .py_1p5()
-                    .rounded_md()
-                    .bg(rgb(0x2563EB))
-                    .child(text.clone()),
-            )
-            .into_any_element(),
-        PanelMessage::Assistant(text) => v_flex()
-            .gap_1()
-            .child(
-                TextView::markdown(("panel-message-markdown", index as u64), text.clone())
-                    .text_sm(),
-            )
-            .children(
-                (is_last && state.turn_active)
-                    .then(|| render_track_toggle(state.tracking, on_toggle_track)),
-            )
-            .children((!(is_last && state.turn_active)).then(|| {
-                let user_index = preceding_user_message(state, index);
-                render_response_actions(text.clone(), user_index, scroll)
-            }))
-            .into_any_element(),
+        PanelMessage::User(text) => h_flex().justify_end()
+                                            .child(div().text_sm()
+                                                        .text_color(rgb(0xFFFFFF))
+                                                        .px_3()
+                                                        .py_1p5()
+                                                        .rounded_md()
+                                                        .bg(rgb(0x2563EB))
+                                                        .child(text.clone()))
+                                            .into_any_element(),
+        PanelMessage::Assistant(text) => {
+            v_flex().gap_1()
+                    .child(TextView::markdown(("panel-message-markdown", index as u64),
+                                              text.clone()).text_sm())
+                    .children((is_last && state.turn_active).then(|| {
+                                                                render_track_toggle(state.tracking,
+                                                                                    on_toggle_track)
+                                                            }))
+                    .children((!(is_last && state.turn_active)).then(|| {
+                                  let user_index = preceding_user_message(state, index);
+                                  render_response_actions(text.clone(), user_index, scroll)
+                              }))
+                    .into_any_element()
+        }
         PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
     }
 }
@@ -131,38 +126,37 @@ fn render_message(
 /// The index of the nearest `PanelMessage::User` before `index`, for the
 /// response action bar's "scroll to user input" control.
 fn preceding_user_message(state: &PanelState, index: usize) -> Option<usize> {
-    state.messages[..index]
-        .iter()
-        .rposition(|message| matches!(message, PanelMessage::User(_)))
+    state.messages[..index].iter()
+                           .rposition(|message| matches!(message, PanelMessage::User(_)))
 }
 
 /// The in-flight response's auto-scroll toggle, per the track toggle
 /// design's per-response scope - shown only on the currently streaming
 /// response, replaced by the response action bar once it finalizes.
 fn render_track_toggle(tracking: bool, on_toggle: impl Fn() + Clone + 'static) -> impl IntoElement {
-    h_flex().child(
-        Button::new("panel-track-toggle")
-            .icon(if tracking {
-                IconName::CircleDot
-            } else {
-                IconName::Circle
-            })
-            .tooltip(if tracking {
-                "Following new output"
-            } else {
-                "Not following new output"
-            })
-            .ghost()
-            .small()
-            .on_click(move |_: &ClickEvent, _, _| on_toggle()),
-    )
+    h_flex().child(Button::new("panel-track-toggle").icon(if tracking {
+                                                              IconName::CircleDot
+                                                          }
+                                                          else {
+                                                              IconName::Circle
+                                                          })
+                                                    .tooltip(if tracking {
+                                                                 "Following new output"
+                                                             }
+                                                             else {
+                                                                 "Not following new output"
+                                                             })
+                                                    .ghost()
+                                                    .small()
+                                                    .on_click(move |_: &ClickEvent, _, _| {
+                                                        on_toggle()
+                                                    }))
 }
 
 /// A finalized response's action bar: copy, scroll to the user message that
 /// prompted it, and scroll to the top of the conversation.
-fn render_response_actions(
-    text: String, user_index: Option<usize>, scroll: &ScrollHandle,
-) -> impl IntoElement {
+fn render_response_actions(text: String, user_index: Option<usize>, scroll: &ScrollHandle)
+                           -> impl IntoElement {
     let scroll_to_user = scroll.clone();
     let scroll_to_top = scroll.clone();
     h_flex()
@@ -203,45 +197,36 @@ fn render_response_actions(
 /// added/removed diff view; every other kind (including unrecognized ones)
 /// falls back to a generic status/output card.
 fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
-    v_flex()
-        .gap_2()
-        .p_3()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(CARD_BORDER))
-        .bg(rgb(CARD_BG))
-        .child(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .child(
-                    Icon::new(tool_call_icon(&card.kind))
-                        .xsmall()
-                        .text_color(rgb(MUTED)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(MUTED))
-                        .child(card.kind.clone()),
-                )
-                .children(
-                    card.status
-                        .clone()
-                        .map(|status| div().text_xs().text_color(rgb(MUTED)).child(status)),
-                ),
-        )
-        .child(if card.kind == "edit" {
-            card.diff
-                .as_ref()
-                .map(|(path, diff)| render_diff(path, diff).into_any_element())
-                .unwrap_or_else(|| in_progress_placeholder().into_any_element())
-        } else {
-            card.result
-                .as_ref()
-                .map(|output| render_generic_output(output).into_any_element())
-                .unwrap_or_else(|| in_progress_placeholder().into_any_element())
-        })
+    v_flex().gap_2()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(CARD_BORDER))
+            .bg(rgb(CARD_BG))
+            .child(h_flex().gap_2()
+                           .items_center()
+                           .child(Icon::new(tool_call_icon(&card.kind)).xsmall()
+                                                                       .text_color(rgb(MUTED)))
+                           .child(div().text_xs()
+                                       .text_color(rgb(MUTED))
+                                       .child(card.kind.clone()))
+                           .children(card.status.clone().map(|status| {
+                                                            div().text_xs()
+                                                                 .text_color(rgb(MUTED))
+                                                                 .child(status)
+                                                        })))
+            .child(if card.kind == "edit" {
+                       card.diff
+                           .as_ref()
+                           .map(|(path, diff)| render_diff(path, diff).into_any_element())
+                           .unwrap_or_else(|| in_progress_placeholder().into_any_element())
+                   }
+                   else {
+                       card.result
+                           .as_ref()
+                           .map(|output| render_generic_output(output).into_any_element())
+                           .unwrap_or_else(|| in_progress_placeholder().into_any_element())
+                   })
 }
 
 /// Maps an ACP tool-call `kind` to an identifying icon, per the response
@@ -269,48 +254,44 @@ fn in_progress_placeholder() -> impl IntoElement {
 /// A file-edit diff as an added/removed line view rather than raw text,
 /// per `acp-panel-ui`'s tool-call-rendering requirement.
 fn render_diff(path: &str, diff: &str) -> impl IntoElement {
-    v_flex()
-        .gap_1()
-        .child(
-            div()
-                .text_xs()
-                .text_color(rgb(MUTED))
-                .child(path.to_string()),
-        )
-        .children(diff.lines().map(|line| {
-            let (color, text) = if let Some(added) = line.strip_prefix('+') {
-                (0x22C55E, format!("+ {added}"))
-            } else if let Some(removed) = line.strip_prefix('-') {
-                (0xEF4444, format!("- {removed}"))
-            } else {
-                (MUTED, line.to_string())
-            };
-            div()
-                .font_family("monospace")
-                .text_xs()
-                .text_color(rgb(color))
-                .child(text)
-        }))
+    v_flex().gap_1()
+            .child(div().text_xs()
+                        .text_color(rgb(MUTED))
+                        .child(path.to_string()))
+            .children(diff.lines().map(|line| {
+                                      let (color, text) =
+                                          if let Some(added) = line.strip_prefix('+') {
+                                              (0x22C55E, format!("+ {added}"))
+                                          }
+                                          else if let Some(removed) = line.strip_prefix('-') {
+                                              (0xEF4444, format!("- {removed}"))
+                                          }
+                                          else {
+                                              (MUTED, line.to_string())
+                                          };
+                                      div().font_family("monospace")
+                                           .text_xs()
+                                           .text_color(rgb(color))
+                                           .child(text)
+                                  }))
 }
 
 /// A generic input/output fallback for tool-call kinds without a dedicated
 /// renderer (execute, read, and any unrecognized kind).
 fn render_generic_output(output: &serde_json::Value) -> impl IntoElement {
-    div()
-        .font_family("monospace")
-        .text_xs()
-        .text_color(rgb(MUTED))
-        .child(serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string()))
+    div().font_family("monospace")
+         .text_xs()
+         .text_color(rgb(MUTED))
+         .child(serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string()))
 }
 
 /// An inline permission request with actionable allow/deny controls, per
 /// `acp-panel-ui`'s permission-prompts requirement. Sending further
 /// prompts is blocked by the caller while this is rendered (the caller
 /// checks `PanelState::pending_permission` before calling `prompt`).
-fn render_permission_prompt(
-    request: &PermissionRequest, permission_risk: RiskLevel,
-    on_decision: impl Fn(PermissionDecision) + Clone + 'static,
-) -> impl IntoElement {
+fn render_permission_prompt(request: &PermissionRequest, permission_risk: RiskLevel,
+                            on_decision: impl Fn(PermissionDecision) + Clone + 'static)
+                            -> impl IntoElement {
     let allow = on_decision.clone();
     let deny = on_decision;
     v_flex()
@@ -348,10 +329,9 @@ fn render_permission_prompt(
 }
 
 fn render_ended_banner(cause: &knot_acp::SessionEndCause) -> impl IntoElement {
-    div()
-        .text_xs()
-        .text_color(rgb(ERROR_COLOR))
-        .child(format!("Session ended: {cause}"))
+    div().text_xs()
+         .text_color(rgb(ERROR_COLOR))
+         .child(format!("Session ended: {cause}"))
 }
 
 #[cfg(test)]
@@ -360,15 +340,11 @@ mod tests {
 
     #[test]
     fn every_known_kind_maps_to_a_distinct_icon_and_unknown_kinds_fall_back() {
-        let known = [
-            "read", "edit", "delete", "move", "search", "execute", "think", "fetch",
-        ];
+        let known = ["read", "edit", "delete", "move", "search", "execute", "think", "fetch"];
         for kind in known {
-            assert_ne!(
-                tool_call_icon(kind),
-                IconName::Wrench,
-                "expected a specific icon for known kind {kind:?}"
-            );
+            assert_ne!(tool_call_icon(kind),
+                       IconName::Wrench,
+                       "expected a specific icon for known kind {kind:?}");
         }
         assert_eq!(tool_call_icon("some-future-kind"), IconName::Wrench);
         assert_eq!(tool_call_icon(""), IconName::Wrench);
@@ -376,14 +352,10 @@ mod tests {
 
     #[test]
     fn permission_modes_are_classified_case_insensitively() {
-        assert_eq!(
-            permission_risk_level("bypassPermissions", "Restricted"),
-            RiskLevel::Danger
-        );
+        assert_eq!(permission_risk_level("bypassPermissions", "Restricted"),
+                   RiskLevel::Danger);
         assert_eq!(permission_risk_level("unknown", "PLAN"), RiskLevel::Safe);
-        assert_eq!(
-            permission_risk_level("default", "Normal"),
-            RiskLevel::Neutral
-        );
+        assert_eq!(permission_risk_level("default", "Normal"),
+                   RiskLevel::Neutral);
     }
 }
