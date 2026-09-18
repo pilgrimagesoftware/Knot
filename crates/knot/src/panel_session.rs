@@ -113,6 +113,14 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Sets auto-scroll directly, for the scroll-to-latest control.
+    pub fn set_tracking(&self, tracking: bool) {
+        if let Ok(mut state) = self.state.lock() {
+            state.set_tracking(tracking);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// Applies one Session Config Option selection (permission mode,
     /// model, reasoning effort, ...) and stores the agent's updated list.
     /// Returns an owned `'static` future rather than being `async fn`

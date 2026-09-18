@@ -129,6 +129,12 @@ impl PanelState {
         self.tracking = !self.tracking;
     }
 
+    /// Sets auto-scroll directly - jumping to the end of the conversation
+    /// resumes following it, rather than flipping whatever it was.
+    pub fn set_tracking(&mut self, tracking: bool) {
+        self.tracking = tracking;
+    }
+
     fn apply_update(&mut self, update: SessionUpdate) {
         match update {
             SessionUpdate::TextDelta { text } => self.append_text(text),

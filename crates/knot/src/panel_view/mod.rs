@@ -27,12 +27,17 @@ const MUTED: u32 = 0x9CA3AF;
 
 /// The panel's render-time styling inputs, grouped rather than passed as
 /// two more positional parameters to `render_panel`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct PanelStyle {
     pub(crate) permission_risk:    RiskLevel,
     /// The conversation's body text size, from `Settings`'
     /// `markdown_font_size`.
     pub(crate) markdown_font_size: gpui_kit::Pixels,
+    /// The theme's monospace family, for tool output and diffs. A real
+    /// registered family name is required: `font_family("monospace")` is
+    /// not a family GPUI resolves, so it silently fell back to the body
+    /// font and shell output rendered proportionally.
+    pub(crate) mono_font_family:   gpui_kit::SharedString,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,7 +77,7 @@ pub(crate) fn risk_color(risk: RiskLevel) -> Option<u32> {
 /// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
 /// to a specific message. `on_toggle_track` flips auto-scroll for the
 /// in-flight response.
-pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: PanelStyle,
+pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: &PanelStyle,
                            on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
                            on_toggle_track: impl Fn() + Clone + 'static)
                            -> impl IntoElement {
@@ -97,11 +102,12 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: Pan
         .text_size(style.markdown_font_size)
         .children(state.messages.iter().enumerate().map(|(index, message)| {
             render_message(
-                state,
-                index,
-                Some(index) == last_index,
+                Message { state,
+                          index,
+                          is_last: Some(index) == last_index,
+                          style,
+                          scroll },
                 message,
-                scroll,
                 on_toggle_track.clone(),
             )
         }))
@@ -111,9 +117,24 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: Pan
         .children(state.ended.as_ref().map(render_ended_banner))
 }
 
-fn render_message(state: &PanelState, index: usize, is_last: bool, message: &PanelMessage,
-                  scroll: &ScrollHandle, on_toggle_track: impl Fn() + Clone + 'static)
+/// One message's render inputs, grouped so `render_message` keeps a short
+/// parameter list as the panel gains styling.
+struct Message<'a> {
+    state:   &'a PanelState,
+    index:   usize,
+    is_last: bool,
+    style:   &'a PanelStyle,
+    scroll:  &'a ScrollHandle,
+}
+
+fn render_message(ctx: Message<'_>, message: &PanelMessage,
+                  on_toggle_track: impl Fn() + Clone + 'static)
                   -> gpui_kit::AnyElement {
+    let Message { state,
+                  index,
+                  is_last,
+                  style,
+                  scroll, } = ctx;
     match message {
         // Right-aligned, tinted background - visually distinct from the
         // assistant's plain left-aligned text, per acp-panel-ui's
@@ -158,7 +179,7 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
                               }))
                     .into_any_element()
         }
-        PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
+        PanelMessage::ToolCall(card) => render_tool_call_card(card, style).into_any_element(),
     }
 }
 
@@ -238,7 +259,7 @@ fn render_response_actions(text: String, user_index: Option<usize>, scroll: &Scr
 /// content yet shows an in-progress placeholder; a *finished* one with no
 /// content shows nothing rather than a stale "Running…" (the bug this
 /// keys the placeholder on `status` to avoid).
-fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
+fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoElement {
     let label = if card.title.is_empty() {
         card.kind.clone()
     }
@@ -273,7 +294,9 @@ fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
                                                            MUTED
                                                        }))
                                        .child(status_label(&card.status))))
-            .children(card.content.iter().map(render_tool_call_content))
+            .children(card.content
+                          .iter()
+                          .map(|content| render_tool_call_content(content, style)))
             .children((card.content.is_empty() && !card.is_finished())
                                                                      .then(in_progress_placeholder))
 }
@@ -281,16 +304,17 @@ fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
 /// One tool-call content block. Diffs get the added/removed line view
 /// `acp-panel-ui`'s tool-call-rendering requirement asks for; text and
 /// terminal references fall back to monospace output.
-fn render_tool_call_content(content: &knot_acp::ToolCallContent) -> gpui_kit::AnyElement {
+fn render_tool_call_content(content: &knot_acp::ToolCallContent, style: &PanelStyle)
+                            -> gpui_kit::AnyElement {
     match content {
         knot_acp::ToolCallContent::Diff { path,
                                           old_text,
                                           new_text, } => {
-            render_diff(path, old_text.as_deref(), new_text).into_any_element()
+            render_diff(path, old_text.as_deref(), new_text, style).into_any_element()
         }
-        knot_acp::ToolCallContent::Text(text) => render_output_text(text).into_any_element(),
+        knot_acp::ToolCallContent::Text(text) => render_output_text(text, style).into_any_element(),
         knot_acp::ToolCallContent::Terminal { terminal_id } => {
-            render_output_text(&format!("[terminal {terminal_id}]")).into_any_element()
+            render_output_text(&format!("[terminal {terminal_id}]"), style).into_any_element()
         }
     }
 }
@@ -334,7 +358,8 @@ fn in_progress_placeholder() -> impl IntoElement {
 /// per `acp-panel-ui`'s tool-call-rendering requirement. `old_text` is
 /// `None` for a newly created file, in which case every line is an
 /// addition.
-fn render_diff(path: &str, old_text: Option<&str>, new_text: &str) -> impl IntoElement {
+fn render_diff(path: &str, old_text: Option<&str>, new_text: &str, style: &PanelStyle)
+               -> impl IntoElement {
     v_flex().w_full()
             .min_w_0()
             .gap_1()
@@ -349,7 +374,7 @@ fn render_diff(path: &str, old_text: Option<&str>, new_text: &str) -> impl IntoE
                                                                    .map(|(color, text)| {
                                                                        div().w_full()
                                                                             .min_w_0()
-                                                                            .font_family("monospace")
+                                                                            .font_family(style.mono_font_family.clone())
                                                                             .text_xs()
                                                                             .text_color(rgb(color))
                                                                             .child(text)
@@ -382,10 +407,10 @@ fn diff_lines(old_text: Option<&str>, new_text: &str) -> Vec<(u32, String)> {
 /// Monospace tool output. `w_full`/`min_w_0` so a long line wraps inside
 /// the card instead of stretching the whole conversation pane, per
 /// `knot-ui-conventions.md`'s "Flex overflow" rule.
-fn render_output_text(text: &str) -> impl IntoElement {
+fn render_output_text(text: &str, style: &PanelStyle) -> impl IntoElement {
     div().w_full()
          .min_w_0()
-         .font_family("monospace")
+         .font_family(style.mono_font_family.clone())
          .text_xs()
          .text_color(rgb(MUTED))
          .child(text.to_string())

@@ -67,6 +67,10 @@ const PERMISSION_SELECTOR_ID: &str = "panel-permission-mode-selector";
 /// a fixed height: a fixed height fights the textarea's own layout, so a
 /// second line made it scroll and jump on every keystroke instead of
 /// simply getting taller.
+/// How many pixels away from the bottom still counts as "at the bottom",
+/// so the scroll-to-latest control doesn't flicker on sub-pixel offsets.
+const SCROLL_BOTTOM_EPSILON: f32 = 8.;
+
 const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
 const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
 
@@ -691,6 +695,7 @@ impl WorkspaceWindow {
                     }
                 };
                 let scroll_away_slot = Arc::clone(slot);
+                let follow_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
                 let turn_active = state.turn_active;
                 let config_options = state.config_options.clone();
@@ -704,7 +709,10 @@ impl WorkspaceWindow {
                 let panel_style = panel_view::PanelStyle { permission_risk,
                                                            markdown_font_size:
                                                                px(self.settings.markdown_font_size
-                                                                  as f32) };
+                                                                  as f32),
+                                                           mono_font_family: cx.theme()
+                                                                               .mono_font_family
+                                                                               .clone() };
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
@@ -722,10 +730,19 @@ impl WorkspaceWindow {
                     scroll.scroll_to_bottom();
                 }
                 let input = self.panel_prompt_input(id, window, cx);
+                // Offsets go negative scrolling down, so "not at the
+                // bottom" is the remaining distance still being positive.
+                // A conversation shorter than its viewport has no max
+                // offset and so never shows the control.
+                let scrolled_up =
+                    scroll.max_offset().y + scroll.offset().y > px(SCROLL_BOTTOM_EPSILON);
+                let scroll_to_bottom = scroll.clone();
                 v_flex().size_full()
-                        .child(div().id("panel-conversation")
+                        .child(div().relative()
                                     .flex_1()
                                     .min_h_0()
+                                    .child(div().id("panel-conversation")
+                                    .size_full()
                                     .overflow_y_scroll()
                                     .track_scroll(&scroll)
                                     .on_scroll_wheel(move |_: &gpui_kit::ScrollWheelEvent, _, _| {
@@ -738,9 +755,30 @@ impl WorkspaceWindow {
                                     })
                                     .child(panel_view::render_panel(&state_arc.lock().unwrap(),
                                                                     &scroll,
-                                                                    panel_style,
+                                                                    &panel_style,
                                                                     on_decision,
                                                                     on_toggle_track)))
+                                    .children(scrolled_up.then(|| {
+                                        div().absolute()
+                                             .bottom_3()
+                                             .right_4()
+                                             .child(Button::new("panel-scroll-to-bottom")
+                                                 .icon(IconName::ChevronDown)
+                                                 .tooltip("Scroll to latest")
+                                                 .small()
+                                                 .on_click(move |_: &ClickEvent, _, _| {
+                                                     scroll_to_bottom.scroll_to_bottom();
+                                                     // Jumping to the end also
+                                                     // resumes following new
+                                                     // output, which is what the
+                                                     // control implies.
+                                                     if let Ok(slot) = follow_slot.lock()
+                                                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                                                     {
+                                                         handle.set_tracking(true);
+                                                     }
+                                                 }))
+                                    })))
                         .child(self.render_panel_input_area(id,
                                                             &input,
                                                             &pending_context,
@@ -778,6 +816,19 @@ impl WorkspaceWindow {
             .p_2()
             .border_t_1()
             .border_color(cx.theme().border)
+            // Files and images dragged from Finder attach the same way the
+            // paperclip and a pasted screenshot do, per `acp-panel-ui`'s
+            // attached-context requirement.
+            .drag_over::<gpui_kit::ExternalPaths>(|style, _, _, app| {
+                style.bg(app.theme().accent)
+            })
+            .on_drop(cx.listener(move |view, paths: &gpui_kit::ExternalPaths, _, cx| {
+                view.panel_pending_context
+                    .entry(id)
+                    .or_default()
+                    .extend(paths.paths().iter().cloned());
+                cx.notify();
+            }))
             .children((!pending_context.is_empty()).then(|| {
                 h_flex()
                     .gap_1()
