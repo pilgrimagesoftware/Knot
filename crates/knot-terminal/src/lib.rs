@@ -280,7 +280,13 @@ mod tests {
 
     #[tokio::test]
     async fn command_and_lifecycle_events_reach_transport_and_tracker() {
-        let agent = agent();
+        // `AgentStore` now always coerces a non-shell agent to Panel view
+        // mode (it never actually gets a `TerminalSession` in the running
+        // app - see `ensure_session`), but the tracker mechanism itself
+        // still supports terminal-output tracking for that combination;
+        // force it directly here to exercise that branch of `tracking_for`.
+        let mut agent = agent();
+        agent.view_mode = knot_core::ViewMode::Terminal;
         let settings = Settings::default();
         let config = SessionConfig { settings:    &settings,
                                      agent:       &agent,

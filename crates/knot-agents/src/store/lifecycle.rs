@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
 
-use knot_core::ViewMode;
 use uuid::Uuid;
 
 use super::{AgentStore, CreateOptions, RemovedAgent};
-use crate::agent::{Agent, AgentState};
+use crate::agent::{Agent, AgentState, view_mode_for};
 use crate::error::{AgentError, Result};
 
 impl AgentStore {
@@ -12,16 +11,17 @@ impl AgentStore {
         let folder = folder.into();
         let name = opts.name
                        .unwrap_or_else(|| super::helpers::last_path_component(&folder));
+        let agent_type = opts.agent_type.unwrap_or_else(|| "claude".to_string());
         let agent = Agent { id: Uuid::new_v4(),
                             name,
                             avatar: opts.avatar.unwrap_or_default(),
                             folder,
-                            agent_type: opts.agent_type.unwrap_or_else(|| "claude".to_string()),
+                            view_mode: view_mode_for(&agent_type),
+                            agent_type,
                             created_by: opts.created_by,
                             is_companion: opts.is_companion,
                             shell_command: opts.shell_command,
                             persona_id: opts.persona_id,
-                            view_mode: ViewMode::Terminal,
                             state: AgentState::Idle,
                             status_text: String::new(),
                             is_registered: false,

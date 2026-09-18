@@ -208,6 +208,7 @@ impl WorkspaceWindow {
                                       .unwrap_or_default();
                             for id in agent_ids {
                                 window.ensure_session(id);
+                                window.ensure_panel_session(id);
                             }
                             window
                         });
@@ -273,13 +274,14 @@ impl WorkspaceWindow {
     /// Spawns a PTY-backed terminal session for `id` if one is not already
     /// running - matches (and, per `terminal-rendering`'s tasks.md, replaces)
     /// `Shell::attach_session`'s pattern.
+    /// Starts `id`'s PTY terminal session - shell agents only. Non-shell
+    /// agents launch exclusively through `ensure_panel_session`; this is a
+    /// no-op for them (they have no `TerminalSession`, never did view-mode
+    /// double-launch it).
     fn ensure_session(&mut self, id: Uuid) {
         if self.sessions.contains_key(&id) {
             return;
         }
-        self.panel_states
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
         let agent = {
             let store = self.store.lock().unwrap();
             store.agent(id).cloned()
@@ -288,6 +290,12 @@ impl WorkspaceWindow {
         else {
             return;
         };
+        if agent.agent_type != "shell" {
+            return;
+        }
+        self.panel_states
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
         let persona = self.settings.persona(id);
         let config = SessionConfig { settings: &self.settings,
                                      agent: &agent,
@@ -1069,32 +1077,6 @@ impl WorkspaceWindow {
         cx.notify();
     }
 
-    /// Toggles `id` between Panel and Terminal view mode, per
-    /// `acp-panel-ui`'s view-mode-toggle requirement. Switching to Panel
-    /// mode starts its ACP connection if not already running; switching
-    /// to Terminal never stops it - the turn keeps running and its
-    /// updates keep landing, per the "Switch to Terminal mid-turn"
-    /// scenario.
-    fn toggle_view_mode(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        let new_mode = {
-            let mut store = self.store.lock().unwrap();
-            let Some(agent) = store.agent(id)
-            else {
-                return;
-            };
-            let new_mode = match agent.view_mode {
-                knot_core::ViewMode::Terminal => knot_core::ViewMode::Panel,
-                knot_core::ViewMode::Panel => knot_core::ViewMode::Terminal,
-            };
-            store.set_view_mode(id, new_mode);
-            new_mode
-        };
-        if new_mode == knot_core::ViewMode::Panel {
-            self.ensure_panel_session(id);
-        }
-        cx.notify();
-    }
-
     /// Resizes `id`'s session grid/PTY to match the content pane's current
     /// size, if it changed.
     fn resize_session_to_pane(&mut self, id: Uuid, window: &Window, cx: &App) {
@@ -1331,6 +1313,7 @@ impl WorkspaceWindow {
                           view.selected_agent = Some(id);
                           view.view_mode = WorkspaceViewMode::Terminal;
                           view.ensure_session(id);
+                          view.ensure_panel_session(id);
                           cx.notify();
                       });
             }
@@ -1341,17 +1324,12 @@ impl WorkspaceWindow {
 /// Parameters for [`open_agent_editor`], grouped to keep the function's
 /// argument count in check.
 pub(crate) struct SelectedAgentHeader {
-    avatar:          String,
-    name:            String,
-    folder:          String,
-    header_title:    String,
-    agent_type:      String,
-    state:           Option<(knot_agents::AgentState, Option<knot_git::DiffStats>)>,
-    view_mode:       knot_core::ViewMode,
-    /// Whether this agent's type has a registered ACP adapter - the
-    /// Panel/Terminal toggle only shows when it does, per `acp-panel-ui`'s
-    /// "Agent type has no ACP adapter" scenario.
-    has_acp_adapter: bool,
+    avatar:       String,
+    name:         String,
+    folder:       String,
+    header_title: String,
+    agent_type:   String,
+    state:        Option<(knot_agents::AgentState, Option<knot_git::DiffStats>)>,
 }
 
 impl WorkspaceWindow {
@@ -1368,10 +1346,7 @@ impl WorkspaceWindow {
                                    folder: shorten_path(&agent.folder),
                                    header_title: agent.header_title().to_string(),
                                    agent_type: agent.agent_type.clone(),
-                                   state,
-                                   view_mode: agent.view_mode,
-                                   has_acp_adapter:
-                                       knot_agent_launch::acp_adapter(&agent.agent_type).is_some() })
+                                   state })
     }
 }
 
@@ -1543,6 +1518,7 @@ impl Render for WorkspaceWindow {
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.selected_agent = Some(id);
                         view.ensure_session(id);
+                        view.ensure_panel_session(id);
                         cx.notify();
                     }))
                     .context_menu({
@@ -1729,6 +1705,7 @@ impl Render for WorkspaceWindow {
                                       view.selected_agent = Some(id);
                                       view.view_mode = WorkspaceViewMode::Terminal;
                                       view.ensure_session(id);
+                                      view.ensure_panel_session(id);
                                       cx.notify();
                                   });
                         }
@@ -1809,29 +1786,6 @@ impl Render for WorkspaceWindow {
                                         .text_size(ui_font_size)
                                         .text_color(cx.theme().muted_foreground)
                                         .child(header.folder.clone()))
-                            .when(header.has_acp_adapter, |row| {
-                                let is_panel = header.view_mode == knot_core::ViewMode::Panel;
-                                row.child(
-                            SettingsWindow::icon_button(
-                                "workspace-panel-toggle",
-                                "icons/layout-dashboard.svg",
-                                if is_panel {
-                                    "Switch to Terminal"
-                                } else {
-                                    "Switch to Panel"
-                                },
-                                false,
-                            )
-                            .selected(is_panel)
-                            .on_click(cx.listener(
-                                move |view, _: &ClickEvent, _window, cx| {
-                                    if let Some(id) = view.selected_agent {
-                                        view.toggle_view_mode(id, cx);
-                                    }
-                                },
-                            )),
-                        )
-                            })
                             .when(!header.header_title.is_empty(), |row| {
                                 row.child(div().font_family(ui_font_name.clone())
                                                .text_size(ui_font_size)
@@ -1903,36 +1857,6 @@ impl Render for WorkspaceWindow {
                 None => div().into_any_element(),
             }
         };
-        let mode_toggle = selected_header.as_ref().and_then(|header| {
-                                                      acp_adapter(&header.agent_type).map(|_| {
-                let id = self.selected_agent.expect("header requires selected agent");
-                let label = match header.view_mode {
-                    knot_core::ViewMode::Panel => "Terminal",
-                    knot_core::ViewMode::Terminal => "Panel",
-                };
-                Button::new("agent-view-mode-toggle")
-                    .label(label)
-                    .ghost()
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        let next = view
-                            .store
-                            .lock()
-                            .ok()
-                            .and_then(|store| store.agent(id).map(|agent| agent.view_mode))
-                            .map(|mode| match mode {
-                                knot_core::ViewMode::Panel => knot_core::ViewMode::Terminal,
-                                knot_core::ViewMode::Terminal => knot_core::ViewMode::Panel,
-                            });
-                        if let Some(next) = next {
-                            if let Ok(mut store) = view.store.lock() {
-                                store.set_view_mode(id, next);
-                            }
-                            cx.notify();
-                        }
-                    }))
-            })
-                                                  });
-
         h_flex()
             .size_full()
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
@@ -2049,11 +1973,7 @@ impl Render for WorkspaceWindow {
                             .bg(cx.theme().background)
                             .child(title_bar_left)
                             .child(
-                                h_flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .children(mode_toggle)
-                                    .child(title_bar_right),
+                                h_flex().items_center().gap_2().child(title_bar_right),
                             )
                     }))
                     .child(dashboard_content.unwrap_or_else(|| {

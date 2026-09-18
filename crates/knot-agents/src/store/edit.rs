@@ -1,6 +1,7 @@
 use uuid::Uuid;
 
 use super::{AgentStore, EditRequest};
+use crate::agent::view_mode_for;
 use crate::error::{AgentError, Result};
 
 impl AgentStore {
@@ -18,6 +19,7 @@ impl AgentStore {
                && *agent_type != agent.agent_type
             {
                 agent.agent_type = agent_type.clone();
+                agent.view_mode = view_mode_for(agent_type);
                 needs_restart = true;
             }
             if req.persona_changed {
