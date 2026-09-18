@@ -288,6 +288,8 @@ pub(crate) fn run() {
                                      let view =
                                          cx.new(|_| WorkspaceManager { store:
                                                                            Arc::clone(&store),
+                                                                       messages:
+                                                                           Arc::clone(&messages),
                                                                        settings:
                                                                            settings.clone(),
                                                                        name_input,

@@ -345,13 +345,38 @@ pub(crate) fn apply_terminal_status(store: &Arc<Mutex<knot_agents::AgentStore>>,
     }
 }
 
-pub(crate) fn should_inject_inbox_prompt(agent_type: &str, mcp_enabled: bool,
-                                         latest_message: Option<Uuid>,
-                                         last_injected: Option<Uuid>)
-                                         -> bool {
-    mcp_enabled
-    && agent_type != "shell"
-    && latest_message.is_some_and(|message_id| Some(message_id) != last_injected)
+/// What the idle-time delivery nudge needs to know about one agent, per
+/// `mcp-messaging`. Grouped because the decision has six inputs and a
+/// six-argument predicate invites callers to transpose two of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NudgeCheck<'a> {
+    pub(crate) agent_type:     &'a str,
+    pub(crate) mcp_enabled:    bool,
+    /// The most recent unread message for this agent, if any.
+    pub(crate) latest_message: Option<Uuid>,
+    /// The last message this agent was already nudged about.
+    pub(crate) last_nudged:    Option<Uuid>,
+    /// The agent's state is Idle. A nudge must not land mid-work.
+    pub(crate) idle:           bool,
+    /// The agent has a live session able to take a prompt right now - for a
+    /// panel agent, a ready slot with no turn in flight and no permission
+    /// outstanding.
+    pub(crate) can_receive:    bool,
+}
+
+/// Whether to send `agent` the "check your inbox" prompt.
+///
+/// Every condition here is one the spec names: MCP off means no messaging at
+/// all; a shell agent cannot receive messages; an unread message that has
+/// already been nudged about must not nudge again on the next poll; and a
+/// busy agent, or one with no live session, is nudged later instead.
+pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
+    check.mcp_enabled
+    && check.agent_type != "shell"
+    && check.idle
+    && check.can_receive
+    && check.latest_message
+            .is_some_and(|message_id| Some(message_id) != check.last_nudged)
 }
 
 pub(crate) fn should_show_awaiting_notice(selected_agent: Option<Uuid>, agent_id: Uuid,

@@ -1,6 +1,7 @@
 use super::*;
 pub(crate) struct WorkspaceManager {
     pub(crate) store:                 Arc<Mutex<knot_agents::AgentStore>>,
+    pub(crate) messages:              Arc<Mutex<knot_messaging::MessageStore>>,
     pub(crate) settings:              knot_core::Settings,
     pub(crate) name_input:            Entity<InputState>,
     pub(crate) editing_id:            Option<Uuid>,
@@ -169,7 +170,11 @@ impl WorkspaceManager {
 
     fn open(&mut self, id: Uuid, cx: &mut Context<Self>) {
         self.select(id, cx);
-        WorkspaceWindow::open(Arc::clone(&self.store), self.settings.clone(), id, cx);
+        WorkspaceWindow::open(Arc::clone(&self.store),
+                              Arc::clone(&self.messages),
+                              self.settings.clone(),
+                              id,
+                              cx);
     }
 }
 
@@ -307,6 +312,7 @@ impl Render for WorkspaceManager {
                                     |manager, _: &ClickEvent, _window, cx| {
                                         CommandCenterWindow::open(
                                             Arc::clone(&manager.store),
+                                            Arc::clone(&manager.messages),
                                             manager.settings.clone(),
                                             cx,
                                         );

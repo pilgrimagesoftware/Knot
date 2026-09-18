@@ -1,12 +1,14 @@
 use super::*;
 pub(crate) struct CommandCenterWindow {
     store:          Arc<Mutex<knot_agents::AgentStore>>,
+    messages:       Arc<Mutex<knot_messaging::MessageStore>>,
     settings:       knot_core::Settings,
     dashboard_sort: dashboard::DashboardSort,
 }
 
 impl CommandCenterWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
                        settings: knot_core::Settings, cx: &mut App) {
         let options = command_center_window_options(cx);
         if let Err(error) =
@@ -14,6 +16,7 @@ impl CommandCenterWindow {
                   window.set_window_title(&knot_core::l10n::t("dashboard.command_center"));
                   let view =
                       cx.new(|_| CommandCenterWindow { store,
+                                                       messages,
                                                        settings,
                                                        dashboard_sort:
                                                            dashboard::DashboardSort::default() });
@@ -117,6 +120,7 @@ impl Render for CommandCenterWindow {
                         };
                         WorkspaceWindow::open_with_selection(
                             Arc::clone(&view.store),
+                            Arc::clone(&view.messages),
                             view.settings.clone(),
                             workspace_id,
                             Some(id),
@@ -134,6 +138,7 @@ impl Render for CommandCenterWindow {
                     entity.update(app, |view, cx| {
                         WorkspaceWindow::open(
                             Arc::clone(&view.store),
+                            Arc::clone(&view.messages),
                             view.settings.clone(),
                             workspace_id,
                             cx,
@@ -150,10 +155,12 @@ impl Render for CommandCenterWindow {
                     entity.update(app, |view, cx| {
                         let (folder, insert_after) = view.add_agent_prefill(workspace_id);
                         let store = Arc::clone(&view.store);
+                        let messages = Arc::clone(&view.messages);
                         let settings = view.settings.clone();
                         let on_created = move |id: Uuid, _window: &mut Window, cx: &mut App| {
                             WorkspaceWindow::open_with_selection(
                                 Arc::clone(&store),
+                                Arc::clone(&messages),
                                 settings.clone(),
                                 workspace_id,
                                 Some(id),

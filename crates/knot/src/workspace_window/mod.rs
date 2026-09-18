@@ -127,6 +127,13 @@ pub(crate) struct WorkspaceWindow {
     /// read it, clicking Model or Effort opened the *permission* menu.
     open_config_selector:             Option<&'static str>,
     store:                            Arc<Mutex<knot_agents::AgentStore>>,
+    /// Agent-to-agent messages, for the unread badge and the idle-time
+    /// delivery nudge (`mcp-messaging`). Shared with the MCP server, which
+    /// is what writes to it.
+    messages:                         Arc<Mutex<knot_messaging::MessageStore>>,
+    /// The last message each agent has been nudged about, so an unread
+    /// inbox produces one prompt rather than one per idle poll.
+    nudged_messages:                  BTreeMap<Uuid, Uuid>,
     settings:                         knot_core::Settings,
     workspace_id:                     Uuid,
     selected_agent:                   Option<Uuid>,
@@ -195,8 +202,9 @@ impl Drop for WorkspaceWindow {
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
                        settings: knot_core::Settings, workspace_id: Uuid, cx: &mut App) {
-        Self::open_with_selection(store, settings, workspace_id, None, cx);
+        Self::open_with_selection(store, messages, settings, workspace_id, None, cx);
     }
 
     /// Like `open`, but overrides the agent that would otherwise be picked
@@ -204,6 +212,7 @@ impl WorkspaceWindow {
     /// Command Center card) already knows which agent the user wants to
     /// land on.
     pub(crate) fn open_with_selection(store: Arc<Mutex<knot_agents::AgentStore>>,
+                                      messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                       settings: knot_core::Settings, workspace_id: Uuid,
                                       select_agent: Option<Uuid>, cx: &mut App) {
         let workspace_name = store.lock()
@@ -256,6 +265,8 @@ impl WorkspaceWindow {
                     diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                     open_config_selector: None,
                     store,
+                    messages,
+                    nudged_messages: BTreeMap::new(),
                     settings,
                     workspace_id,
                     selected_agent,
@@ -338,6 +349,12 @@ impl WorkspaceWindow {
                                                      view.remove_agent(*id);
                                                      cx.notify();
                                                  }
+                                                 // Messages arrive from
+                                                 // the MCP server on another
+                                                 // thread; this poll is
+                                                 // where an agent going idle
+                                                 // is noticed.
+                                                 view.deliver_inbox_nudges();
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))
@@ -719,6 +736,112 @@ impl WorkspaceWindow {
                                 store.set_acp_session_id(id, session_id.to_string());
                             }
                         }).await;
+                    });
+    }
+
+    /// Delivers the "check your inbox" prompt to any agent in this
+    /// workspace with an unread message it has not been told about, per
+    /// `mcp-messaging`'s idle-time delivery nudge.
+    ///
+    /// Driven from the repaint poll rather than from a send-time event,
+    /// because the requirement also covers a message that arrived while its
+    /// recipient was working: by the time that agent goes idle the event is
+    /// long gone, but the unread message is still in the store to be found.
+    fn deliver_inbox_nudges(&mut self) {
+        if !self.settings.mcp_server_enabled {
+            return;
+        }
+        let candidates = {
+            let (Ok(store), Ok(messages)) = (self.store.lock(), self.messages.lock())
+            else {
+                return;
+            };
+            let Some(workspace) = store.workspaces()
+                                       .iter()
+                                       .find(|workspace| workspace.id == self.workspace_id)
+            else {
+                return;
+            };
+            workspace.agent_ids
+                     .iter()
+                     .filter_map(|id| store.agent(*id))
+                     .filter_map(|agent| {
+                         let latest = messages.latest_unread_id(agent.id);
+                         let check =
+                             app_state::NudgeCheck { agent_type:     &agent.agent_type,
+                                                     mcp_enabled:    true,
+                                                     latest_message: latest,
+                                                     last_nudged:    self.nudged_messages
+                                                                         .get(&agent.id)
+                                                                         .copied(),
+                                                     idle:
+                                                         agent.state
+                                                         == knot_agents::AgentState::Idle,
+                                                     can_receive:
+                                                         self.panel_can_take_a_prompt(agent.id), };
+                         (app_state::should_inject_inbox_prompt(check)).then(|| {
+                             (agent.id, latest.expect("checked by the predicate"))
+                         })
+                     })
+                     .collect::<Vec<_>>()
+        };
+        for (id, message_id) in candidates {
+            self.send_inbox_nudge(id);
+            self.nudged_messages.insert(id, message_id);
+        }
+    }
+
+    /// Whether `id`'s panel session could take a prompt this instant: ready,
+    /// no permission outstanding, no turn in flight. The same gate the
+    /// composer uses - a nudge must not be what discovers a session is busy.
+    fn panel_can_take_a_prompt(&self, id: Uuid) -> bool {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return false;
+        };
+        let Ok(guard) = slot.lock()
+        else {
+            return false;
+        };
+        match &*guard {
+            panel_session::PanelSessionSlot::Ready(handle) => {
+                handle.state()
+                      .lock()
+                      .map(|state| state.pending_permission.is_none() && !state.turn_active)
+                      .unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
+    /// Sends the inbox prompt into `id`'s panel session, recording it in the
+    /// conversation the way any other prompt is.
+    fn send_inbox_nudge(&mut self, id: Uuid) {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return;
+        };
+        let session = {
+            let guard = slot.lock().unwrap();
+            match &*guard {
+                panel_session::PanelSessionSlot::Ready(handle) => {
+                    handle.record_user_message(app_support::CHECK_INBOX_PROMPT.to_string());
+                    Some((handle.session(), handle.recorder()))
+                }
+                _ => None,
+            }
+        };
+        let Some((session, recorder)) = session
+        else {
+            return;
+        };
+        let _runtime_guard = self.runtime.enter();
+        self.runtime.spawn(async move {
+                        if let Err(error) = session.prompt(app_support::CHECK_INBOX_PROMPT).await {
+                            recorder.error(format!("The inbox nudge could not be delivered: \
+                                                    {error}"));
+                            eprintln!("failed to deliver the inbox nudge: {error}");
+                        }
                     });
     }
 

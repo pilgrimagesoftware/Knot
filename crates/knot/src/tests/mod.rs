@@ -406,15 +406,50 @@ fn terminal_status_updates_the_shared_agent_store() {
                knot_agents::AgentState::Running);
 }
 
+/// An idle, MCP-enabled, non-shell agent with a live session and an unread
+/// message it has not been told about is the only case that nudges.
 #[test]
 fn inbox_prompt_requires_new_unread_message_for_non_shell_mcp_agent() {
     let message = Uuid::new_v4();
+    let ready = NudgeCheck { agent_type:     "claude",
+                             mcp_enabled:    true,
+                             latest_message: Some(message),
+                             last_nudged:    None,
+                             idle:           true,
+                             can_receive:    true, };
 
-    assert!(should_inject_inbox_prompt("claude", true, Some(message), None));
-    assert!(!should_inject_inbox_prompt("claude", true, Some(message), Some(message)));
-    assert!(!should_inject_inbox_prompt("claude", true, None, None));
-    assert!(!should_inject_inbox_prompt("shell", true, Some(message), None));
-    assert!(!should_inject_inbox_prompt("claude", false, Some(message), None));
+    assert!(should_inject_inbox_prompt(ready));
+    assert!(!should_inject_inbox_prompt(NudgeCheck { last_nudged: Some(message),
+                                                     ..ready }),
+            "the same message must not nudge twice");
+    assert!(!should_inject_inbox_prompt(NudgeCheck { latest_message: None,
+                                                     ..ready }));
+    assert!(!should_inject_inbox_prompt(NudgeCheck { agent_type: "shell",
+                                                     ..ready }),
+            "shell agents cannot receive messages");
+    assert!(!should_inject_inbox_prompt(NudgeCheck { mcp_enabled: false,
+                                                     ..ready }));
+    assert!(!should_inject_inbox_prompt(NudgeCheck { idle: false,
+                                                     ..ready }),
+            "a working agent is nudged when it next goes idle, not now");
+    assert!(!should_inject_inbox_prompt(NudgeCheck { can_receive: false,
+                                                     ..ready }),
+            "no live session able to take a prompt means no nudge yet");
+}
+
+/// A later message re-nudges: the rule is once per message, not once per
+/// agent.
+#[test]
+fn a_second_message_nudges_again() {
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    let check = NudgeCheck { agent_type:     "claude",
+                             mcp_enabled:    true,
+                             latest_message: Some(second),
+                             last_nudged:    Some(first),
+                             idle:           true,
+                             can_receive:    true, };
+    assert!(should_inject_inbox_prompt(check));
 }
 
 #[test]
