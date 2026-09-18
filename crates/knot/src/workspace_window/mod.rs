@@ -2134,8 +2134,15 @@ impl Render for WorkspaceWindow {
                             )
                     }))
                     .child(dashboard_content.unwrap_or_else(|| {
+                        // `flex_1().min_h_0()`, not `size_full()`: this box
+                        // is a sibling of the 64px title bar above it, so a
+                        // full height makes it overflow its container by
+                        // exactly that much and pushes the input area's
+                        // control row and Send button below the window edge.
                         v_flex()
-                            .size_full()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
                             .child(
                                 self.selected_agent
                                             .and_then(|id| {

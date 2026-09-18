@@ -13,8 +13,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
-    ClickEvent, ClipboardItem, InteractiveElement, IntoElement, ParentElement, ScrollHandle,
-    StatefulInteractiveElement, Styled, div, relative, rgb,
+    ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
 
@@ -122,16 +121,15 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
             v_flex().w_full()
                     .min_w_0()
                     .gap_1()
-                    // Markdown that can't wrap - a table, a fenced code
-                    // block - scrolls sideways inside its own container
-                    // rather than widening the pane. Without the
-                    // `min_w_0`/`overflow_x_*` pair it stretched the whole
-                    // conversation column and pushed the prompt input's
-                    // Send button off screen.
-                    .child(div().id(("panel-message-body", index as u64))
-                                .w_full()
+                    // Plain `w_full().min_w_0()`, deliberately *not* a
+                    // scroll container: a scroll parent hands its child an
+                    // unconstrained width, so the markdown measured its
+                    // runs against one width and painted them into
+                    // another, drawing words on top of each other. Wide
+                    // content clips here instead, which `min_w_0` at least
+                    // keeps from stretching the pane.
+                    .child(div().w_full()
                                 .min_w_0()
-                                .overflow_x_scroll()
                                 .child(TextView::markdown(("panel-message-markdown",
                                                            index as u64),
                                                           text.clone()).text_sm()))
