@@ -30,6 +30,9 @@ pub struct Transport {
     next_id:   AtomicI64,
     pending: Mutex<HashMap<i64, oneshot::Sender<std::result::Result<Value, JsonRpcErrorPayload>>>>,
     events_tx: mpsc::UnboundedSender<TransportEvent>,
+    /// The spawned program's name, for prefixing request/response logs so
+    /// concurrent adapter connections can be told apart in stderr.
+    program:   String,
 }
 
 impl Transport {
@@ -47,7 +50,7 @@ impl Transport {
                           .map(|arg| arg.to_string_lossy().into_owned())
                           .collect::<Vec<_>>()
                           .join(" ");
-        eprintln!("knot-acp: spawning {program} {args}");
+        eprintln!("knot-acp: [{program}] spawning {program} {args}");
         command.stdin(Stdio::piped())
                .stdout(Stdio::piped())
                // Piped (not discarded) and forwarded to our own stderr,
@@ -67,10 +70,11 @@ impl Transport {
         let stderr = child.stderr.take().expect("stderr piped");
         let (events_tx, events_rx) = mpsc::unbounded_channel();
 
+        let stderr_program = program.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                eprintln!("[{program}] {line}");
+                eprintln!("[{stderr_program}] {line}");
             }
         });
 
@@ -78,7 +82,8 @@ impl Transport {
                                                    stdin: AsyncMutex::new(stdin),
                                                    next_id: AtomicI64::new(1),
                                                    pending: Mutex::new(HashMap::new()),
-                                                   events_tx });
+                                                   events_tx,
+                                                   program });
 
         let reader_transport = std::sync::Arc::clone(&transport);
         tokio::spawn(async move {
@@ -224,21 +229,22 @@ impl Transport {
         let line =
             serde_json::to_string(&request).map_err(|error| AcpError::Rpc { code:    -32700,
                                              message: error.to_string(), })?;
-        eprintln!("knot-acp: -> {method} (id {id})");
+        let program = &self.program;
+        eprintln!("knot-acp: [{program}] -> {method} (id {id})");
         self.write_line(line).await?;
         match rx.await {
             Ok(Ok(value)) => {
-                eprintln!("knot-acp: <- {method} (id {id}) ok");
+                eprintln!("knot-acp: [{program}] <- {method} (id {id}) ok");
                 Ok(value)
             }
             Ok(Err(error)) => {
-                eprintln!("knot-acp: <- {method} (id {id}) error: {} {}",
+                eprintln!("knot-acp: [{program}] <- {method} (id {id}) error: {} {}",
                           error.code, error.message);
                 Err(AcpError::Rpc { code:    error.code,
                                     message: error.message, })
             }
             Err(_) => {
-                eprintln!("knot-acp: <- {method} (id {id}) connection closed before a response");
+                eprintln!("knot-acp: [{program}] <- {method} (id {id}) connection closed before a response");
                 Err(AcpError::ConnectionClosed)
             }
         }
