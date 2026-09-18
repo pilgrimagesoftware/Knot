@@ -71,6 +71,14 @@ squash.
 
 git-flow. `develop` is the integration branch; `main` is release-only.
 
+Always do code changes in a dedicated `git worktree` on its own feature
+branch, no exceptions - never commit directly in the primary checkout at
+`/Users/paulyhedral/Projects/Code/Knot/App` (it stays on `develop`/`main` for
+syncing and reference) and never commit straight to `develop` or `main`. Use
+the `project-start-change` skill to create the worktree; convention is
+`/Users/paulyhedral/Projects/Code/Knot/Worktrees/<issue>-<change>` on branch
+`<issue>-<change>`.
+
 1. Branch from `develop`: `feature/<change>` (or `release/x.y.z`, `hotfix/x.y.z`).
 2. Implement against the OpenSpec change / spec contract.
 3. Open a PR to `develop` (`release/*` and `hotfix/*` PR to `main`). Rulesets on
