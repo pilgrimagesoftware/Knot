@@ -16,11 +16,27 @@ on:
 
 jobs:
   release:
-    uses: sweetrpg/github-actions/.github/workflows/rust-release.yaml@master
+    uses: pilgrimagesoftware/github-actions/.github/workflows/rust-release.yaml@master
     with:
       tag: ${{ inputs.tag }}
+      # The reusable workflow tests on ubuntu-latest without the system
+      # libraries gpui needs (fontconfig, wayland, webkit, xkbcommon), so the
+      # `knot` binary crate cannot build there. rust.yml already runs the whole
+      # workspace on both Linux and macOS for every push and PR.
+      test-args: "--workspace --exclude knot"
       publish-to-crates-io: false
+      release-branch: main
       merge-back-branch: develop
     secrets:
-      SRPG_CI_APP_ID: ${{ secrets.SKWAD_CI_APP_ID }}
-      SRPG_CI_PRIVATE_KEY: ${{ secrets.SKWAD_CI_PRIVATE_KEY }}
+      PSW_CI_APP_ID: ${{ secrets.SKWAD_CI_APP_ID }}
+      PSW_CI_PRIVATE_KEY: ${{ secrets.SKWAD_CI_PRIVATE_KEY }}
+
+  # Packages Knot.app for the released tag and attaches the DMG to the release
+  # the job above created.
+  package:
+    needs: release
+    uses: ./.github/workflows/package.yml
+    with:
+      tag: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}
+      ref: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}
+    secrets: inherit

@@ -1,4 +1,4 @@
-.PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog rust rust-fmt rust-lint rust-test rust-build
+.PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog rust rust-fmt rust-lint rust-test rust-build rust-package
 
 # Load .env file if it exists
 -include .env
@@ -214,6 +214,13 @@ rust-test:
 
 rust-build:
 	cargo build --workspace
+
+# Builds Knot.app and the DMG with cargo-packager, configured in
+# crates/knot/Cargo.toml under [package.metadata.packager]. Needs
+# `cargo install cargo-packager --locked`. cargo-packager resolves that config
+# from the manifest in the current directory, hence the cd.
+rust-package:
+	cd crates/knot && cargo packager --release --formats app,dmg
 
 release: increment-build notarize
 	@echo ""
