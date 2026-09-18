@@ -19,15 +19,95 @@ fn workspace(name: &str) -> Workspace {
                 window_bounds:         None, }
 }
 
+/// The labels a given set of facts produces, separators rendered as
+/// `"-"` so ordering *and* divider placement are both asserted.
+fn menu_labels(facts: AgentMenuFacts) -> Vec<&'static str> {
+    agent_context_menu_entries(facts).into_iter()
+                                     .map(|entry| entry.label().unwrap_or("-"))
+                                     .collect()
+}
+
 #[test]
-fn agent_context_menu_omits_companion_actions_for_companions() {
-    assert_eq!(agent_context_menu_items(false),
-               vec!["Edit Agent…",
+fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
+    let facts = AgentMenuFacts { is_companion:         false,
+                                 is_shell:             false,
+                                 has_move_targets:     true,
+                                 has_markdown_history: true, };
+    assert_eq!(menu_labels(facts),
+               vec!["New Companion…",
                     "New Shell Companion",
+                    "-",
+                    "Edit Agent…",
+                    "Fork Agent",
+                    "Duplicate Agent",
+                    "-",
+                    "Move to Workspace",
+                    "Save to Bench",
+                    "-",
+                    "Open In…",
+                    "Markdown Files",
+                    "-",
+                    "Register Agent",
                     "Restart Agent",
                     "Remove Agent"]);
-    assert_eq!(agent_context_menu_items(true),
-               vec!["Edit Agent…", "Remove Agent"]);
+}
+
+#[test]
+fn agent_context_menu_omits_companion_actions_for_companions() {
+    let facts = AgentMenuFacts { is_companion:         true,
+                                 is_shell:             true,
+                                 has_move_targets:     true,
+                                 has_markdown_history: false, };
+    assert_eq!(menu_labels(facts),
+               vec!["Edit Agent…", "-", "Open In…", "-", "Remove Agent"]);
+}
+
+#[test]
+fn agent_context_menu_hides_register_for_a_shell_agent() {
+    let facts = AgentMenuFacts { is_shell: true,
+                                 ..Default::default() };
+    assert!(!menu_labels(facts).contains(&"Register Agent"));
+    assert!(menu_labels(AgentMenuFacts { is_shell: false,
+                                         ..Default::default() }).contains(&"Register Agent"));
+}
+
+#[test]
+fn agent_context_menu_hides_move_to_workspace_without_a_target() {
+    assert!(!menu_labels(AgentMenuFacts::default()).contains(&"Move to Workspace"));
+    assert!(menu_labels(AgentMenuFacts { has_move_targets: true,
+                                         ..Default::default() }).contains(&"Move to Workspace"));
+}
+
+#[test]
+fn agent_context_menu_hides_markdown_files_without_history() {
+    assert!(!menu_labels(AgentMenuFacts::default()).contains(&"Markdown Files"));
+    assert!(menu_labels(AgentMenuFacts { has_markdown_history: true,
+                                         ..Default::default() }).contains(&"Markdown Files"));
+}
+
+/// Every hidden group must take its divider with it - the menu can never
+/// open on a separator, end on one, or show two in a row.
+#[test]
+fn agent_context_menu_never_emits_a_stray_divider() {
+    for is_companion in [false, true] {
+        for is_shell in [false, true] {
+            for has_move_targets in [false, true] {
+                for has_markdown_history in [false, true] {
+                    let facts = AgentMenuFacts { is_companion,
+                                                 is_shell,
+                                                 has_move_targets,
+                                                 has_markdown_history };
+                    let entries = agent_context_menu_entries(facts);
+                    assert_ne!(entries.first(), Some(&AgentMenuEntry::Separator), "{facts:?}");
+                    assert_ne!(entries.last(), Some(&AgentMenuEntry::Separator), "{facts:?}");
+                    assert!(!entries.windows(2)
+                                    .any(|pair| pair == [AgentMenuEntry::Separator,
+                                                         AgentMenuEntry::Separator]),
+                            "{facts:?}");
+                }
+            }
+        }
+    }
 }
 
 #[test]

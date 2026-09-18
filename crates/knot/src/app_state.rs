@@ -77,18 +77,105 @@ pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
     }
 }
 
-/// The agent-row context menu's item labels, gated on whether the row is a
-/// shell companion - a companion can't own companions or restart
-/// independently of its owner (`agent-lifecycle`), so its menu omits those
-/// two items. Pure so the item set is unit-testable independent of GPUI.
-pub(crate) fn agent_context_menu_items(is_companion: bool) -> Vec<&'static str> {
-    let mut items = vec!["Edit Agent…"];
-    if !is_companion {
-        items.push("New Shell Companion");
-        items.push("Restart Agent");
+/// One entry in the agent-row context menu. An enum rather than a label,
+/// so the renderer attaches each handler by matching a variant instead of
+/// a string, and the item set stays unit-testable independent of GPUI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentMenuEntry {
+    Separator,
+    NewCompanion,
+    NewShellCompanion,
+    EditAgent,
+    ForkAgent,
+    DuplicateAgent,
+    MoveToWorkspace,
+    SaveToBench,
+    OpenIn,
+    MarkdownFiles,
+    RegisterAgent,
+    RestartAgent,
+    RemoveAgent,
+}
+
+impl AgentMenuEntry {
+    /// The user-visible label, or `None` for a separator. Matches the Swift
+    /// reference's strings (`Skwad/Views/Components/AgentContextMenu.swift`),
+    /// except that the port keeps "Remove Agent" where the reference says
+    /// "Close Agent" - `agent-list-ui` already specifies the former.
+    pub(crate) fn label(self) -> Option<&'static str> {
+        match self {
+            Self::Separator => None,
+            Self::NewCompanion => Some("New Companion…"),
+            Self::NewShellCompanion => Some("New Shell Companion"),
+            Self::EditAgent => Some("Edit Agent…"),
+            Self::ForkAgent => Some("Fork Agent"),
+            Self::DuplicateAgent => Some("Duplicate Agent"),
+            Self::MoveToWorkspace => Some("Move to Workspace"),
+            Self::SaveToBench => Some("Save to Bench"),
+            Self::OpenIn => Some("Open In…"),
+            Self::MarkdownFiles => Some("Markdown Files"),
+            Self::RegisterAgent => Some("Register Agent"),
+            Self::RestartAgent => Some("Restart Agent"),
+            Self::RemoveAgent => Some("Remove Agent"),
+        }
     }
-    items.push("Remove Agent");
-    items
+}
+
+/// What the context menu needs to know about the row it was opened on.
+/// Everything here is read when the menu opens, not when the row renders,
+/// so the item set reflects the store's current state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct AgentMenuFacts {
+    /// A companion can't own companions, be forked, duplicated, moved or
+    /// restarted independently of its owner (`agent-lifecycle`).
+    pub(crate) is_companion:         bool,
+    /// A shell agent has no coding agent to register with MCP.
+    pub(crate) is_shell:             bool,
+    /// Whether any attached workspace other than this agent's own exists.
+    pub(crate) has_move_targets:     bool,
+    /// Whether the agent has ever shown a markdown file.
+    pub(crate) has_markdown_history: bool,
+}
+
+/// The agent-row context menu's entries, in order, with dividers.
+///
+/// Dividers are emitted between non-empty groups only: a row whose whole
+/// group is hidden must not leave a doubled or leading separator behind,
+/// which is the failure mode of building this list with unconditional
+/// `separator()` calls.
+pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenuEntry> {
+    use AgentMenuEntry::*;
+
+    let owner_only = !facts.is_companion;
+    let groups = [vec![NewCompanion, NewShellCompanion].into_iter()
+                                                       .filter(|_| owner_only)
+                                                       .collect::<Vec<_>>(),
+                  [EditAgent].into_iter()
+                             .chain([ForkAgent, DuplicateAgent].into_iter()
+                                                               .filter(|_| owner_only))
+                             .collect(),
+                  [MoveToWorkspace].into_iter()
+                                   .filter(|_| owner_only && facts.has_move_targets)
+                                   .chain([SaveToBench].into_iter().filter(|_| owner_only))
+                                   .collect(),
+                  [OpenIn].into_iter()
+                          .chain([MarkdownFiles].into_iter()
+                                                .filter(|_| facts.has_markdown_history))
+                          .collect(),
+                  [RegisterAgent].into_iter()
+                                 .filter(|_| !facts.is_shell)
+                                 .chain([RestartAgent].into_iter().filter(|_| owner_only))
+                                 .chain([RemoveAgent])
+                                 .collect()];
+
+    let mut entries = Vec::new();
+    for group in groups.into_iter().filter(|group| !group.is_empty()) {
+        if !entries.is_empty() {
+            entries.push(Separator);
+        }
+        entries.extend(group);
+    }
+    entries
 }
 
 #[derive(Debug, PartialEq)]
