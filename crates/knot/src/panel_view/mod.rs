@@ -13,7 +13,8 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
-    ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, relative, rgb,
+    ClickEvent, ClipboardItem, Hsla, IntoElement, ParentElement, ScrollHandle, Styled, div,
+    relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
 
@@ -38,6 +39,54 @@ pub(crate) struct PanelStyle {
     /// not a family GPUI resolves, so it silently fell back to the body
     /// font and shell output rendered proportionally.
     pub(crate) mono_font_family:   gpui_kit::SharedString,
+    /// The theme's proportional family, for the panel's own words about a
+    /// call - named rather than inherited so a later change setting a
+    /// card header monospace cannot sweep the status text along with the
+    /// title.
+    pub(crate) ui_font_family:     gpui_kit::SharedString,
+    /// The theme's danger colour, for a failed tool call's outline.
+    pub(crate) danger_color:       Hsla,
+    /// The theme's info colour, for a pending or running call's outline.
+    pub(crate) info_color:         Hsla,
+    /// The theme's ordinary border, the neutral outline a completed call
+    /// recedes to.
+    pub(crate) border_color:       Hsla,
+}
+
+impl PanelStyle {
+    /// The outline colour a tool call card's status calls for.
+    fn outline_color(&self, outline: CardOutline) -> Hsla {
+        match outline {
+            CardOutline::Danger => self.danger_color,
+            CardOutline::Info => self.info_color,
+            CardOutline::Neutral => self.border_color,
+        }
+    }
+}
+
+/// Which of `PanelStyle`'s three outline colours a tool call card takes.
+/// Named rather than resolved directly to a colour so the mapping from
+/// status is testable without a theme.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CardOutline {
+    Danger,
+    Info,
+    Neutral,
+}
+
+/// A tool call's outline by status: danger for a failure, info while it
+/// is still going, and the panel's neutral border once it is done.
+///
+/// Completed calls deliberately get no colour of their own - success is
+/// the common case, and outlining every finished call leaves nothing
+/// standing out. `status` is a plain wire string, so an unrecognized
+/// value takes the neutral border rather than being treated as a failure.
+fn card_outline(status: &str) -> CardOutline {
+    match status {
+        "failed" => CardOutline::Danger,
+        "pending" | "in_progress" => CardOutline::Info,
+        _ => CardOutline::Neutral,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -269,10 +318,16 @@ fn render_response_actions(text: String, user_index: Option<usize>, scroll: &Scr
 
 /// A tool-call card: an icon/title/status header over whatever content
 /// the agent has reported so far - diff blocks as an added/removed line
-/// view, everything else as monospace output. An unfinished call with no
-/// content yet shows an in-progress placeholder; a *finished* one with no
-/// content shows nothing rather than a stale "Running…" (the bug this
-/// keys the placeholder on `status` to avoid).
+/// view, everything else as monospace output. The header separates
+/// content from chrome by font: the title is a command, a path or an
+/// identifier and renders monospace, the status is the panel's own word
+/// for the call and stays proportional. The outline is coloured by
+/// `card_outline`.
+///
+/// An unfinished call with no content yet shows an in-progress
+/// placeholder; a *finished* one with no content shows nothing rather
+/// than a stale "Running…" (the bug this keys the placeholder on
+/// `status` to avoid).
 fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoElement {
     let label = if card.title.is_empty() {
         card.kind.clone()
@@ -286,7 +341,7 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoEl
             .p_3()
             .rounded_md()
             .border_1()
-            .border_color(rgb(if card.failed() { ERROR_COLOR } else { CARD_BORDER }))
+            .border_color(style.outline_color(card_outline(&card.status)))
             .bg(rgb(CARD_BG))
             .child(h_flex().w_full()
                            .min_w_0()
@@ -296,10 +351,12 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoEl
                                                                        .text_color(rgb(MUTED)))
                            .child(div().flex_1()
                                        .min_w_0()
+                                       .font_family(style.mono_font_family.clone())
                                        .text_xs()
                                        .text_color(rgb(MUTED))
                                        .child(label))
                            .child(div().flex_shrink_0()
+                                       .font_family(style.ui_font_family.clone())
                                        .text_xs()
                                        .text_color(rgb(if card.failed() {
                                                            ERROR_COLOR
@@ -509,6 +566,31 @@ mod tests {
     #[test]
     fn an_unrecognized_status_passes_through_rather_than_vanishing() {
         assert_eq!(status_label("some_future_status"), "some_future_status");
+    }
+
+    #[test]
+    fn a_failed_call_is_the_only_status_outlined_in_danger() {
+        assert_eq!(card_outline("failed"), CardOutline::Danger);
+        assert_eq!(card_outline("completed"), CardOutline::Neutral);
+        assert_eq!(card_outline("pending"), CardOutline::Info);
+        assert_eq!(card_outline("in_progress"), CardOutline::Info);
+    }
+
+    /// Success is the common case: outlining every finished call in a
+    /// colour of its own would leave the two states worth noticing - a
+    /// call still running and one that failed - looking like the rest.
+    #[test]
+    fn a_completed_call_recedes_to_the_neutral_border() {
+        assert_eq!(card_outline("completed"), CardOutline::Neutral);
+    }
+
+    /// `status` is a plain wire string, so a value this build has never
+    /// heard of must render as an ordinary card rather than a failure -
+    /// or panic.
+    #[test]
+    fn an_unrecognized_status_takes_the_neutral_border() {
+        assert_eq!(card_outline("some_future_status"), CardOutline::Neutral);
+        assert_eq!(card_outline(""), CardOutline::Neutral);
     }
 
     #[test]
