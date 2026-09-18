@@ -25,6 +25,16 @@ const ERROR_COLOR: u32 = 0xEF4444;
 const SAFE_COLOR: u32 = 0x22C55E;
 const MUTED: u32 = 0x9CA3AF;
 
+/// The panel's render-time styling inputs, grouped rather than passed as
+/// two more positional parameters to `render_panel`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PanelStyle {
+    pub(crate) permission_risk:    RiskLevel,
+    /// The conversation's body text size, from `Settings`'
+    /// `markdown_font_size`.
+    pub(crate) markdown_font_size: gpui_kit::Pixels,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RiskLevel {
     Danger,
@@ -62,8 +72,7 @@ pub(crate) fn risk_color(risk: RiskLevel) -> Option<u32> {
 /// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
 /// to a specific message. `on_toggle_track` flips auto-scroll for the
 /// in-flight response.
-pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
-                           permission_risk: RiskLevel,
+pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: PanelStyle,
                            on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
                            on_toggle_track: impl Fn() + Clone + 'static)
                            -> impl IntoElement {
@@ -80,6 +89,12 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
         .min_w_0()
         .gap_3()
         .p_4()
+        // Set the body size once, here, and let it cascade: a size applied
+        // to the `TextView` itself reaches its paint but not the line
+        // wrapper's measuring pass, so runs got measured at one size and
+        // drawn at another and overlapped each other - worst around inline
+        // code, which is measured separately in the mono family.
+        .text_size(style.markdown_font_size)
         .children(state.messages.iter().enumerate().map(|(index, message)| {
             render_message(
                 state,
@@ -91,7 +106,7 @@ pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
             )
         }))
         .children(state.pending_permission.as_ref().map(|request| {
-            render_permission_prompt(request, permission_risk, on_permission_decision)
+            render_permission_prompt(request, style.permission_risk, on_permission_decision)
         }))
         .children(state.ended.as_ref().map(render_ended_banner))
 }
@@ -132,7 +147,7 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
                                 .min_w_0()
                                 .child(TextView::markdown(("panel-message-markdown",
                                                            index as u64),
-                                                          text.clone()).text_sm()))
+                                                          text.clone())))
                     .children((is_last && state.turn_active).then(|| {
                                                                 render_track_toggle(state.tracking,
                                                                                     on_toggle_track)

@@ -636,6 +636,10 @@ impl WorkspaceWindow {
                 .and_then(|option| option.current_value.as_str())
                 .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
+                let panel_style = panel_view::PanelStyle { permission_risk,
+                                                           markdown_font_size:
+                                                               px(self.settings.markdown_font_size
+                                                                  as f32) };
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
@@ -669,7 +673,7 @@ impl WorkspaceWindow {
                                     })
                                     .child(panel_view::render_panel(&state_arc.lock().unwrap(),
                                                                     &scroll,
-                                                                    permission_risk,
+                                                                    panel_style,
                                                                     on_decision,
                                                                     on_toggle_track)))
                         .child(self.render_panel_input_area(id,
