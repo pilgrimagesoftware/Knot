@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use knot_core::ViewMode;
+use knot_core::{ActivationMode, ViewMode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -44,18 +44,25 @@ pub fn view_mode_for(agent_type: &str) -> ViewMode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Agent {
     // Durable (mirrors `knot_core::SavedAgent`)
-    pub id:            Uuid,
-    pub name:          String,
-    pub avatar:        String,
-    pub folder:        String,
-    pub agent_type:    String,
-    pub created_by:    Option<Uuid>,
-    pub is_companion:  bool,
-    pub shell_command: Option<String>,
-    pub persona_id:    Option<Uuid>,
-    pub view_mode:     ViewMode,
+    pub id:              Uuid,
+    pub name:            String,
+    pub avatar:          String,
+    pub folder:          String,
+    pub agent_type:      String,
+    pub created_by:      Option<Uuid>,
+    pub is_companion:    bool,
+    pub shell_command:   Option<String>,
+    pub persona_id:      Option<Uuid>,
+    pub view_mode:       ViewMode,
+    /// When this agent's session starts on its own. Durable; distinct from
+    /// [`Agent::activated`], which is runtime-only.
+    pub activation_mode: ActivationMode,
 
     // Runtime-only
+    /// Whether this agent has been activated in this run and so may start.
+    /// Never persisted: a `Passive` agent that was running at quit comes
+    /// back stopped, or "passive" would decay into "active after first use".
+    pub activated:         bool,
     pub state:             AgentState,
     pub status_text:       String,
     pub is_registered:     bool,
@@ -144,6 +151,8 @@ mod tests {
                 shell_command:      None,
                 persona_id:         None,
                 view_mode:          ViewMode::Terminal,
+                activation_mode:    ActivationMode::Passive,
+                activated:          false,
                 state:              AgentState::Idle,
                 status_text:        String::new(),
                 is_registered:      false,

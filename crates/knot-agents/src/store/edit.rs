@@ -15,6 +15,9 @@ impl AgentStore {
             let agent = self.agent_mut(id).expect("agent checked above");
             agent.name = req.name;
             agent.avatar = req.avatar;
+            // Deliberately does not set `needs_restart`: changing when an
+            // agent would start says nothing about the session it already has.
+            agent.activation_mode = req.activation_mode;
             if let Some(agent_type) = &req.agent_type
                && *agent_type != agent.agent_type
             {

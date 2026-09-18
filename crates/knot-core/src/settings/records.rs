@@ -57,6 +57,21 @@ pub enum ViewMode {
     Panel,
 }
 
+/// When an agent's session starts on its own: an `Active` agent starts with
+/// its workspace, a `Passive` one waits to be selected. See
+/// `openspec/specs/agent-lifecycle/spec.md` - "Activation mode".
+///
+/// `Passive` is the enum's own default because that is what the new-agent
+/// dialog offers; the *load* default is deliberately different, see
+/// [`default_activation_mode`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActivationMode {
+    Active,
+    #[default]
+    Passive,
+}
+
 // ---------------------------------------------------------------------------
 // SavedAgent
 // ---------------------------------------------------------------------------
@@ -66,27 +81,33 @@ pub enum ViewMode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedAgent {
-    pub id:             Uuid,
-    pub name:           String,
+    pub id:              Uuid,
+    pub name:            String,
     #[serde(default = "default_avatar")]
-    pub avatar:         String,
-    pub folder:         String,
+    pub avatar:          String,
+    pub folder:          String,
     #[serde(default = "default_agent_type")]
-    pub agent_type:     String,
+    pub agent_type:      String,
     #[serde(default)]
-    pub created_by:     Option<Uuid>,
+    pub created_by:      Option<Uuid>,
     #[serde(default)]
-    pub is_companion:   bool,
+    pub is_companion:    bool,
     #[serde(default)]
-    pub shell_command:  Option<String>,
+    pub shell_command:   Option<String>,
     #[serde(default)]
-    pub persona_id:     Option<Uuid>,
+    pub persona_id:      Option<Uuid>,
     #[serde(default)]
-    pub session_id:     Option<String>,
+    pub session_id:      Option<String>,
     #[serde(default)]
-    pub view_mode:      ViewMode,
+    pub view_mode:       ViewMode,
     #[serde(default)]
-    pub acp_session_id: Option<String>,
+    pub acp_session_id:  Option<String>,
+    /// Loads as `Active`, not the enum's own `Passive` default: a record
+    /// written before this field existed describes an agent that started
+    /// with its workspace, and it must go on doing so. New agents get
+    /// `Passive` from `CreateOptions` instead.
+    #[serde(default = "default_activation_mode")]
+    pub activation_mode: ActivationMode,
 }
 
 impl SavedAgent {
@@ -109,7 +130,8 @@ impl SavedAgent {
                persona_id: None,
                session_id: None,
                view_mode: ViewMode::default(),
-               acp_session_id: None }
+               acp_session_id: None,
+               activation_mode: default_activation_mode() }
     }
 }
 
@@ -208,6 +230,12 @@ pub(super) fn default_agent_type() -> String {
     DEFAULT_AGENT_TYPE.to_string()
 }
 
+/// The load default for [`SavedAgent::activation_mode`]. Deliberately not
+/// `ActivationMode::default()`: see the field's comment.
+fn default_activation_mode() -> ActivationMode {
+    ActivationMode::Active
+}
+
 fn default_persona_type() -> PersonaType {
     PersonaType::User
 }
@@ -253,6 +281,26 @@ mod tests {
         assert!(!agent.is_companion);
         assert_eq!(agent.persona_id, None);
         assert_eq!(agent.session_id, None);
+    }
+
+    #[test]
+    fn legacy_saved_agent_without_activation_mode_loads_active() {
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           id());
+        let agent: SavedAgent = serde_json::from_str(&json).unwrap();
+        assert_eq!(agent.activation_mode, ActivationMode::Active);
+    }
+
+    #[test]
+    fn activation_mode_round_trips_in_lowercase() {
+        assert_eq!(serde_json::to_string(&ActivationMode::Passive).unwrap(),
+                   "\"passive\"");
+        let mut a = SavedAgent::new(id(), "A", None, "/tmp");
+        a.activation_mode = ActivationMode::Passive;
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("\"activationMode\":\"passive\""), "{json}");
+        let back: SavedAgent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, a);
     }
 
     #[test]

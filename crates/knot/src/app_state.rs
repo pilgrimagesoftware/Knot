@@ -93,6 +93,7 @@ pub(crate) enum AgentMenuEntry {
     OpenIn,
     MarkdownFiles,
     RegisterAgent,
+    Deactivate,
     RestartAgent,
     RemoveAgent,
 }
@@ -115,6 +116,7 @@ impl AgentMenuEntry {
             Self::OpenIn => Some("Open In…"),
             Self::MarkdownFiles => Some("Markdown Files"),
             Self::RegisterAgent => Some("Register Agent"),
+            Self::Deactivate => Some("Deactivate"),
             Self::RestartAgent => Some("Restart Agent"),
             Self::RemoveAgent => Some("Remove Agent"),
         }
@@ -135,6 +137,10 @@ pub(crate) struct AgentMenuFacts {
     pub(crate) has_move_targets:     bool,
     /// Whether the agent has ever shown a markdown file.
     pub(crate) has_markdown_history: bool,
+    /// Whether the agent is running, i.e. has a session to stop. Deactivate
+    /// is absent rather than disabled when it is not, matching how this
+    /// menu hides every other item that does not apply.
+    pub(crate) is_running:           bool,
 }
 
 /// The agent-row context menu's entries, in order, with dividers.
@@ -162,8 +168,13 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
                           .chain([MarkdownFiles].into_iter()
                                                 .filter(|_| facts.has_markdown_history))
                           .collect(),
+                  // Deactivate sits with the other session actions, and
+                  // immediately above Restart Agent: both act on the
+                  // session rather than on the agent, and Deactivate is
+                  // the reversible one of the pair.
                   [RegisterAgent].into_iter()
                                  .filter(|_| !facts.is_shell)
+                                 .chain([Deactivate].into_iter().filter(|_| facts.is_running))
                                  .chain([RestartAgent].into_iter().filter(|_| owner_only))
                                  .chain([RemoveAgent])
                                  .collect()];

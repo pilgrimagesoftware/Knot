@@ -123,29 +123,33 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                        .map(|a| a.persona_id)
                                                        .unwrap_or(prefill.persona_id);
                                AgentEditor { store,
-                                             settings,
-                                             workspace_id,
-                                             name_input,
-                                             shell_command_input,
-                                             avatar_input,
-                                             _avatar_subscription: avatar_subscription,
-                                             _name_subscription: name_subscription,
-                                             folder_path: editing.as_ref()
-                                                                 .map(|a| a.folder.clone())
-                                                                 .or_else(|| prefill.folder.clone())
-                                                                 .unwrap_or_default(),
-                                             agent_type:
-                                                 editing.as_ref()
-                                                        .map(|a| a.agent_type.clone())
-                                                        .or_else(|| prefill.agent_type.clone())
-                                                        .unwrap_or_else(|| "claude".to_string()),
-                                             persona_id,
-                                             original_persona_id: persona_id,
-                                             prefill,
-                                             insert_after,
-                                             edit_target,
-                                             on_created: Box::new(on_created),
-                                             error: None }
+                                          settings,
+                                          workspace_id,
+                                          name_input,
+                                          shell_command_input,
+                                          avatar_input,
+                                          _avatar_subscription: avatar_subscription,
+                                          _name_subscription: name_subscription,
+                                          folder_path: editing.as_ref()
+                                                              .map(|a| a.folder.clone())
+                                                              .or_else(|| prefill.folder.clone())
+                                                              .unwrap_or_default(),
+                                          agent_type:
+                                              editing.as_ref()
+                                                     .map(|a| a.agent_type.clone())
+                                                     .or_else(|| prefill.agent_type.clone())
+                                                     .unwrap_or_else(|| "claude".to_string()),
+                                          persona_id,
+                                          activation_mode:
+                                              editing.as_ref()
+                                                     .map(|a| a.activation_mode)
+                                                     .unwrap_or(knot_core::ActivationMode::Passive),
+                                          original_persona_id: persona_id,
+                                          prefill,
+                                          insert_after,
+                                          edit_target,
+                                          on_created: Box::new(on_created),
+                                          error: None }
                            });
               cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
           });
@@ -163,6 +167,11 @@ pub(crate) struct AgentEditor {
     folder_path:          String,
     agent_type:           String,
     persona_id:           Option<Uuid>,
+    /// When the agent starts on its own. `Passive` when creating - the
+    /// deliberate disagreement with the `Active` a record carrying no
+    /// stored mode loads as (see `knot_core::SavedAgent::activation_mode`)
+    /// - and the agent's own mode when editing.
+    activation_mode:      knot_core::ActivationMode,
     /// Snapshot of `persona_id` when the dialog opened, so `save_edit` can
     /// tell `AgentStore::edit` whether the persona actually changed
     /// (`EditRequest::persona_changed`) rather than always forcing a
@@ -223,6 +232,7 @@ impl AgentEditor {
                     insert_after: self.insert_after,
                     created_by: self.prefill.created_by,
                     is_companion: self.prefill.is_companion,
+                    activation_mode: self.activation_mode,
                 },
             );
             // A fork continues the source's conversation rather than
@@ -278,6 +288,7 @@ impl AgentEditor {
                     persona_id: self.persona_id,
                     persona_changed,
                     relocate_companions: false,
+                    activation_mode: self.activation_mode,
                 },
             );
             if let Err(error) = result {
@@ -370,6 +381,18 @@ impl AgentEditor {
                 .gap_3()
                 .child(div().child(label))
                 .child(control)
+    }
+
+    /// Muted description text under a row, mirroring the settings window's
+    /// `hint()` but laid out for this dialog: its rows are
+    /// leading-label/trailing-control rather than the settings window's
+    /// fixed label column, so the hint spans the card instead of being
+    /// indented past a column that isn't there.
+    fn dialog_hint(cx: &Context<Self>, text: &'static str) -> impl IntoElement {
+        div().text_sm()
+             .whitespace_normal()
+             .text_color(cx.theme().muted_foreground)
+             .child(text)
     }
 
     /// A card grouping related rows - the Swift reference's `Form` sections
@@ -507,6 +530,54 @@ impl Render for AgentEditor {
                 .into_any_element(),
             );
         }
+
+        // A segmented control rather than a switch: "Active" and "Passive"
+        // are not an on/off pair - neither is the absence of the other - so
+        // two named segments say what both choices are without the user
+        // having to try one. The hint carries the difference, which the two
+        // words alone do not: guessing wrong costs either an agent that
+        // silently never starts or a workspace that launches every
+        // subprocess at once.
+        let activation_mode = self.activation_mode;
+        agent_rows.push(
+            Self::dialog_row(
+                "Activation",
+                ToggleGroup::new("agent-activation-mode")
+                    .segmented()
+                    .child(
+                        Toggle::new("agent-activation-active")
+                            .label("Active")
+                            .checked(activation_mode == knot_core::ActivationMode::Active),
+                    )
+                    .child(
+                        Toggle::new("agent-activation-passive")
+                            .label("Passive")
+                            .checked(activation_mode == knot_core::ActivationMode::Passive),
+                    )
+                    .on_click({
+                        let editor = editor.clone();
+                        move |checked: &Vec<bool>, _window, app| {
+                            // Index 0 is the Active segment, 1 the Passive
+                            // one, in the order they were added above.
+                            let mode = if checked.first().copied().unwrap_or(false) {
+                                knot_core::ActivationMode::Active
+                            } else {
+                                knot_core::ActivationMode::Passive
+                            };
+                            editor.update(app, |e, cx| {
+                                e.activation_mode = mode;
+                                cx.notify();
+                            });
+                        }
+                    }),
+            )
+            .into_any_element(),
+        );
+        agent_rows.push(Self::dialog_hint(
+            cx,
+            "Active starts this agent whenever its workspace opens. \
+                 Passive leaves it stopped until you select it.",
+        ).into_any_element());
 
         let folder_rows = vec![
             Self::dialog_row(
