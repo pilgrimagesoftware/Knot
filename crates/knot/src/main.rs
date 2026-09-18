@@ -48,7 +48,6 @@ use gpui_kit::{
     rgb, size,
 };
 use knot_activity::EventSink;
-use knot_agent_launch::acp_adapter;
 use knot_git::Repository;
 use knot_mcp::ToolCatalog;
 use knot_messaging::{DeliveryEvent, QueuedNotifier};

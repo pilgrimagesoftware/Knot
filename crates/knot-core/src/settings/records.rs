@@ -179,6 +179,21 @@ pub struct Workspace {
     pub show_dashboard:        Option<bool>,
     #[serde(default)]
     pub is_detached:           Option<bool>,
+    /// Where this workspace's window was last seen, so reopening it puts
+    /// it back rather than re-centring. `None` until the window has been
+    /// opened once.
+    #[serde(default)]
+    pub window_bounds:         Option<SavedWindowBounds>,
+}
+
+/// A window's position and size in logical pixels, as plain numbers -
+/// `knot-core` has no GPUI dependency, so the UI converts.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SavedWindowBounds {
+    pub x:      f32,
+    pub y:      f32,
+    pub width:  f32,
+    pub height: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -280,9 +295,25 @@ mod tests {
                              split_ratio:           0.5,
                              split_ratio_secondary: Some(0.3),
                              show_dashboard:        Some(false),
-                             is_detached:           Some(true), };
+                             is_detached:           Some(true),
+                             window_bounds:         Some(SavedWindowBounds { x:      12.,
+                                                                             y:      34.,
+                                                                             width:  960.,
+                                                                             height: 640., }), };
         let json = serde_json::to_string(&ws).unwrap();
         let back: Workspace = serde_json::from_str(&json).unwrap();
         assert_eq!(ws, back);
+    }
+
+    /// A workspace saved before window frames were remembered must still
+    /// load - the field is absent from every existing settings file.
+    #[test]
+    fn a_workspace_without_saved_window_bounds_still_loads() {
+        let json = r##"{"id":"00000000-0000-0000-0000-000000000001","name":"Main",
+                        "colorHex":"#1B4FB2"}"##;
+
+        let ws: Workspace = serde_json::from_str(json).unwrap();
+
+        assert_eq!(ws.window_bounds, None);
     }
 }

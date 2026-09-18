@@ -57,8 +57,64 @@ pub(crate) fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString,
     (f32::from(width).max(1.), f32::from(ascent + descent).max(1.))
 }
 
+/// The permission-mode selector's element id - the one selector with
+/// risk-tinted labels and a keyboard action of its own, so it needs naming
+/// rather than matching on a literal in three places.
+const PERMISSION_SELECTOR_ID: &str = "panel-permission-mode-selector";
+
+/// How far the prompt box grows with its content before it starts
+/// scrolling, collapsed and expanded. It auto-grows rather than sitting at
+/// a fixed height: a fixed height fights the textarea's own layout, so a
+/// second line made it scroll and jump on every keystroke instead of
+/// simply getting taller.
+/// How many pixels away from the bottom still counts as "at the bottom",
+/// so the scroll-to-latest control doesn't flicker on sub-pixel offsets.
+const SCROLL_BOTTOM_EPSILON: f32 = 8.;
+
+const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
+const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
+
+/// One sidebar agent row's render inputs, snapshotted out of the store
+/// while its lock is held so the row closures don't need it. A struct
+/// rather than the tuple this used to be, per the repo convention against
+/// wide positional parameter lists.
+struct AgentRow {
+    id:           Uuid,
+    avatar:       String,
+    name:         String,
+    folder:       String,
+    state:        knot_agents::AgentState,
+    is_shell:     bool,
+    is_companion: bool,
+    header_title: String,
+    persona_name: Option<String>,
+    /// The agent's coding-agent type (`claude`, `opencode`, ...), shown
+    /// on the row so a one-letter avatar isn't the only clue to which
+    /// agent is running there.
+    agent_type:   String,
+}
+
 pub(crate) struct WorkspaceWindow {
-    permission_selector_open:         bool,
+    /// Last known diff stat per agent, refreshed off the render path - see
+    /// `refresh_diff_stats`.
+    diff_stats:                       Arc<Mutex<BTreeMap<Uuid, Option<knot_git::DiffStats>>>>,
+    /// When each agent's diff stat was last *requested*, so the refresh
+    /// runs on a cadence rather than once per render. Main-thread only.
+    diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
+    /// Agents whose PTY process has exited, queued by the reader thread and
+    /// drained by the repaint poll - the callback runs off the main thread
+    /// and cannot touch the view directly, the same hand-off
+    /// `clipboard_writes` uses.
+    exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
+    /// Keeps the window-bounds observer alive for this window's lifetime.
+    window_bounds_subscription:       Option<gpui_kit::Subscription>,
+    /// Set by a finished refresh so the repaint poll redraws the header.
+    diff_stats_dirty:                 Arc<std::sync::atomic::AtomicBool>,
+    /// Which config selector's popover is open, by element id, or `None`
+    /// when none is. One shared flag used to back all three: because every
+    /// selector's `on_open_change` wrote it and the permission selector
+    /// read it, clicking Model or Effort opened the *permission* menu.
+    open_config_selector:             Option<&'static str>,
     store:                            Arc<Mutex<knot_agents::AgentStore>>,
     settings:                         knot_core::Settings,
     workspace_id:                     Uuid,
@@ -83,6 +139,10 @@ pub(crate) struct WorkspaceWindow {
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
     /// here persists across a view-mode toggle, only stopped on restart.
     panel_sessions:                   BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
+    /// The lifecycle phase each panel session was in the last time the
+    /// repaint poll looked, so a slot moving between phases repaints - see
+    /// `panel_needs_repaint`.
+    panel_phases:                     BTreeMap<Uuid, panel_session::PanelPhase>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
@@ -144,7 +204,13 @@ impl WorkspaceWindow {
                                            .map(|workspace| workspace.name.clone())
                                   })
                                   .unwrap_or_else(|| "Workspace".to_string());
-        let options = workspace_window_options(cx);
+        let saved_bounds = store.lock().ok().and_then(|store| {
+                                                store.workspaces()
+                                                     .iter()
+                                                     .find(|workspace| workspace.id == workspace_id)
+                                                     .and_then(|workspace| workspace.window_bounds)
+                                            });
+        let options = workspace_window_options(saved_bounds, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
                   // The OS window title (Mission Control, Cmd+`, Window menu)
@@ -153,6 +219,10 @@ impl WorkspaceWindow {
                   // the app's bundle name for every workspace
                   // window.
                   window.set_window_title(&workspace_name);
+                  // Order the new window front rather than letting it open
+                  // behind whatever has focus - matching what the settings
+                  // window already does when it reuses an open one.
+                  window.activate_window();
                   let new_agent_name_input =
                       cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
                   let new_agent_folder_input =
@@ -164,10 +234,16 @@ impl WorkspaceWindow {
                     .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
                                                    });
                   let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
+                  let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
                   let view =
                       cx.new(|cx| {
                             let mut window = WorkspaceWindow {
-                    permission_selector_open: false,
+                    exited_sessions: Arc::clone(&exited_sessions),
+                    window_bounds_subscription: None,
+                    diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
+                    diff_stats_requested: BTreeMap::new(),
+                    diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    open_config_selector: None,
                     store,
                     settings,
                     workspace_id,
@@ -179,6 +255,7 @@ impl WorkspaceWindow {
                     terminal_focus: cx.focus_handle(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
+                    panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_scroll_handles: BTreeMap::new(),
@@ -208,6 +285,7 @@ impl WorkspaceWindow {
                                       .unwrap_or_default();
                             for id in agent_ids {
                                 window.ensure_session(id);
+                                window.ensure_panel_session(id);
                             }
                             window
                         });
@@ -220,6 +298,7 @@ impl WorkspaceWindow {
                   // (a keystroke, mouse move), making output look stalled after
                   // e.g. pressing Enter.
                   let notify_view = view.clone();
+                  let exited_drain = Arc::clone(&exited_sessions);
                   cx.spawn(async move |cx| {
                         loop {
                             cx.background_executor()
@@ -229,6 +308,9 @@ impl WorkspaceWindow {
                                 clipboard_writes.lock()
                                                 .map(|mut queue| std::mem::take(&mut *queue))
                                                 .unwrap_or_default();
+                            let exited = exited_drain.lock()
+                                                     .map(|mut queue| std::mem::take(&mut *queue))
+                                                     .unwrap_or_default();
                             for text in texts {
                                 cx.update(|app| {
                                       app.write_to_clipboard(ClipboardItem::new_string(text));
@@ -236,6 +318,15 @@ impl WorkspaceWindow {
                             }
                             cx.update(|app| {
                                   notify_view.update(app, |view, cx| {
+                                                 // A shell companion whose
+                                                 // process exited has nothing
+                                                 // left to show, so close it
+                                                 // rather than leaving a dead
+                                                 // pane that looks hung.
+                                                 for id in &exited {
+                                                     view.remove_agent(*id);
+                                                     cx.notify();
+                                                 }
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))
@@ -245,16 +336,7 @@ impl WorkspaceWindow {
                                                          .is_some_and(|grid| {
                                                              grid.lock().unwrap().take_dirty()
                                                          });
-                                                 let panel_dirty = view
-                                .selected_agent
-                                .and_then(|id| view.panel_sessions.get(&id))
-                                .is_some_and(|slot| {
-                                    matches!(
-                                        &*slot.lock().unwrap(),
-                                        panel_session::PanelSessionSlot::Ready(handle)
-                                            if handle.take_dirty()
-                                    )
-                                });
+                                                 let panel_dirty = view.panel_needs_repaint();
                                                  if grid_dirty || panel_dirty {
                                                      cx.notify();
                                                  }
@@ -263,6 +345,41 @@ impl WorkspaceWindow {
                         }
                     })
                     .detach();
+                  // Remember where the user puts this workspace's window.
+                  // The observer fires continuously through a drag, so the
+                  // store's setter reports whether the frame actually
+                  // changed and only then is anything written to disk.
+                  view.update(cx, |view, cx| {
+                          let subscription =
+                              cx.observe_window_bounds(window, move |view, window, _cx| {
+                                    let bounds = window.window_bounds().get_bounds();
+                                    let saved =
+                                        knot_core::SavedWindowBounds { x:      bounds.origin
+                                                                                     .x
+                                                                                     .into(),
+                                                                       y:      bounds.origin
+                                                                                     .y
+                                                                                     .into(),
+                                                                       width:  bounds.size
+                                                                                     .width
+                                                                                     .into(),
+                                                                       height: bounds.size
+                                                                                     .height
+                                                                                     .into(), };
+                                    let changed =
+                                        view.store
+                                            .lock()
+                                            .map(|mut store| {
+                                                store.set_workspace_window_bounds(workspace_id,
+                                                                                  saved)
+                                            })
+                                            .unwrap_or(false);
+                                    if changed {
+                                        view.persist_agents();
+                                    }
+                                });
+                          view.window_bounds_subscription = Some(subscription);
+                      });
                   cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
               })
         {
@@ -273,13 +390,14 @@ impl WorkspaceWindow {
     /// Spawns a PTY-backed terminal session for `id` if one is not already
     /// running - matches (and, per `terminal-rendering`'s tasks.md, replaces)
     /// `Shell::attach_session`'s pattern.
+    /// Starts `id`'s PTY terminal session - shell agents only. Non-shell
+    /// agents launch exclusively through `ensure_panel_session`; this is a
+    /// no-op for them (they have no `TerminalSession`, never did view-mode
+    /// double-launch it).
     fn ensure_session(&mut self, id: Uuid) {
         if self.sessions.contains_key(&id) {
             return;
         }
-        self.panel_states
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
         let agent = {
             let store = self.store.lock().unwrap();
             store.agent(id).cloned()
@@ -288,6 +406,12 @@ impl WorkspaceWindow {
         else {
             return;
         };
+        if agent.agent_type != "shell" {
+            return;
+        }
+        self.panel_states
+            .entry(id)
+            .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
         let persona = self.settings.persona(id);
         let config = SessionConfig { settings: &self.settings,
                                      agent: &agent,
@@ -314,7 +438,14 @@ impl WorkspaceWindow {
                     *last_output = Some(std::time::Instant::now());
                 }
             },
-            |_| {},
+            {
+                let exited = Arc::clone(&self.exited_sessions);
+                move |_status| {
+                    if let Ok(mut exited) = exited.lock() {
+                        exited.push(id);
+                    }
+                }
+            },
             move |event| match event {
                 knot_terminal::GridEvent::Title(title) => {
                     if let Ok(mut store) = title_store.lock() {
@@ -375,13 +506,148 @@ impl WorkspaceWindow {
         }
     }
 
+    /// How stale a cached diff stat may get before the next render asks
+    /// for a fresh one.
+    const DIFF_STATS_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(2);
+
+    /// Requests a fresh diff stat for the selected agent if the cached one
+    /// has aged out, computing it on the runtime's blocking pool.
+    ///
+    /// `git diff --numstat` is a subprocess, and this used to run inline in
+    /// `selected_agent_header` - so every render spawned one, and since a
+    /// keystroke in the prompt box re-renders, typing ran at the speed of
+    /// `git`. `knot-git` is runtime-agnostic by contract, hence
+    /// `spawn_blocking` rather than an async call.
+    fn refresh_diff_stats(&mut self, id: Uuid, folder: &str) {
+        let fresh = self.diff_stats_requested
+                        .get(&id)
+                        .is_some_and(|at| at.elapsed() < Self::DIFF_STATS_MAX_AGE);
+        if fresh {
+            return;
+        }
+        self.diff_stats_requested
+            .insert(id, std::time::Instant::now());
+        let folder = folder.to_string();
+        let cache = Arc::clone(&self.diff_stats);
+        let dirty = Arc::clone(&self.diff_stats_dirty);
+        let _runtime_guard = self.runtime.enter();
+        self.runtime.spawn_blocking(move || {
+                        let stats = Repository::open(&folder).diff_stats().ok();
+                        if let Ok(mut cache) = cache.lock()
+                           && cache.insert(id, stats) != Some(stats)
+                        {
+                            dirty.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    });
+    }
+
+    /// Whether the selected agent's panel needs a repaint: either its live
+    /// session has new events, or its slot changed lifecycle phase since
+    /// the last poll.
+    ///
+    /// The phase half matters because `ensure_panel_session` fills the slot
+    /// from a background tokio task. `Ready` carries its own dirty flag,
+    /// but `Failed` carries nothing - so before this check, a connection
+    /// that failed (a missing API key, a refused handshake) left the pane
+    /// showing "Connecting to agent…" indefinitely, making the connect
+    /// timeout look like it had never fired when in fact the error was
+    /// sitting in the slot, undrawn.
+    fn panel_needs_repaint(&mut self) -> bool {
+        let stats_changed = self.diff_stats_dirty
+                                .swap(false, std::sync::atomic::Ordering::SeqCst);
+        let Some(id) = self.selected_agent
+        else {
+            return stats_changed;
+        };
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return false;
+        };
+        let (phase, events_arrived) = {
+            let slot = slot.lock().unwrap();
+            let events_arrived = matches!(&*slot,
+                                          panel_session::PanelSessionSlot::Ready(handle)
+                                          if handle.take_dirty());
+            (slot.phase(), events_arrived)
+        };
+        let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
+        phase_changed || events_arrived || stats_changed
+    }
+
     /// Tears down a session (e.g. its agent was removed or restarted).
+    /// Covers both launch paths: the PTY terminal session for shell
+    /// agents, and the ACP connection for Panel-mode ones - a non-shell
+    /// agent has no `sessions` entry at all, so without the panel half
+    /// removing it left its adapter subprocess running.
     fn remove_session(&mut self, id: Uuid) {
         if let Some(session) = self.sessions.remove(&id)
            && let Ok(mut session) = session.lock()
         {
             let _ = session.shutdown();
         }
+        self.panel_phases.remove(&id);
+        if let Some(slot) = self.panel_sessions.remove(&id) {
+            let handle = match std::mem::replace(&mut *slot.lock().unwrap(),
+                                                 panel_session::PanelSessionSlot::connecting().0)
+            {
+                panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
+                _ => None,
+            };
+            if let Some(handle) = handle {
+                let _runtime_guard = self.runtime.enter();
+                self.runtime.spawn(async move { handle.stop().await });
+            }
+        }
+    }
+
+    /// Drops a failed connection so the next render starts a fresh one.
+    ///
+    /// Only reachable from the `Failed` slot, which owns no handle and no
+    /// subprocess - there is nothing to shut down, just the dead slot to
+    /// clear so `ensure_panel_session` stops short-circuiting on it.
+    fn retry_panel_session(&mut self, id: Uuid) {
+        self.panel_sessions.remove(&id);
+        self.panel_phases.remove(&id);
+        self.ensure_panel_session(id);
+    }
+
+    /// Removes `id` (and its companions) from the store, tears down their
+    /// sessions, and persists the result.
+    ///
+    /// The persist is the point: `AgentStore::remove` only mutates memory,
+    /// so without writing `saved_agents`/`saved_workspaces` back out the
+    /// removal was undone by the next launch (or by any other window's
+    /// persist), which is what "Remove Agent does nothing" looked like.
+    /// Every other agent mutation (create, edit) already persists this way.
+    fn remove_agent(&mut self, id: Uuid) {
+        let removed = match self.store.lock() {
+            Ok(mut store) => store.remove(id),
+            Err(_) => return,
+        };
+        for removed_agent in removed {
+            self.remove_session(removed_agent.id);
+            self.panel_states.remove(&removed_agent.id);
+            self.panel_prompt_inputs.remove(&removed_agent.id);
+            self.panel_prompt_input_subscriptions
+                .remove(&removed_agent.id);
+            self.panel_scroll_handles.remove(&removed_agent.id);
+            self.panel_pending_context.remove(&removed_agent.id);
+            self.panel_input_expanded.remove(&removed_agent.id);
+            if self.selected_agent == Some(removed_agent.id) {
+                self.selected_agent = None;
+            }
+        }
+        self.persist_agents();
+    }
+
+    /// Writes the store's current agents and workspaces back to settings.
+    fn persist_agents(&mut self) {
+        if let Ok(store) = self.store.lock() {
+            self.settings.saved_agents =
+                store.saved_agents(self.settings.restore_conversation_on_launch);
+            self.settings.saved_workspaces = store.saved_workspaces();
+        }
+        let _ = self.settings.persist();
     }
 
     /// Starts a Panel-mode ACP connection for `id` if one isn't already
@@ -400,27 +666,22 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let Some(adapter) = knot_agent_launch::acp_adapter(&agent.agent_type)
-        else {
-            return;
-        };
         let request = knot_agent_launch::LaunchRequest { agent_type: &agent.agent_type,
-                                                         agent_id: Some(agent.id),
                                                          ..Default::default() };
-        let plan = knot_agent_launch::plan_launch(knot_core::ViewMode::Panel,
-                                                  Some(adapter),
-                                                  &self.settings,
-                                                  &request);
-        let knot_agent_launch::LaunchPlan::Adapter(adapter_launch) = plan
+        let knot_agent_launch::LaunchPlan::Adapter(adapter_config) =
+            knot_agent_launch::plan_launch(&request)
         else {
-            // plan_launch only returns Adapter when both view_mode is Panel
-            // (just passed) and an adapter is registered (just checked
-            // above) - Terminal here would mean those two checks
-            // disagreed with plan_launch's own logic.
+            // No registered ACP adapter for this agent type - only shell
+            // agents (which never reach `ensure_panel_session`) are meant
+            // to fall through to the Terminal path.
             return;
         };
+        let mcp_url = self.settings
+                          .mcp_server_enabled
+                          .then(|| knot_agent_launch::mcp_url(&self.settings));
 
-        let slot = Arc::new(Mutex::new(panel_session::PanelSessionSlot::Connecting));
+        let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
+        let slot = Arc::new(Mutex::new(connecting));
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
         let prior_session_id = agent.acp_session_id.clone();
@@ -431,30 +692,18 @@ impl WorkspaceWindow {
         let store = Arc::clone(&self.store);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-                        match panel_session::PanelSessionHandle::start(
-                &adapter_launch,
-                &cwd,
-                prior_session_id.as_deref(),
-            )
-            .await
-            {
-                Ok(handle) => {
-                    if let Ok(mut store) = store.lock() {
-                        store.set_acp_session_id(id, handle.session_id().to_string());
-                    }
-                    if let Some(prompt) = registration_prompt {
-                        handle.record_user_message(prompt.clone());
-                        if let Err(error) = handle.prompt(&prompt).await {
-                            eprintln!("failed to send panel registration prompt: {error}");
-                        }
-                    }
-                    *slot.lock().unwrap() = panel_session::PanelSessionSlot::Ready(handle);
-                }
-                Err(error) => {
-                    *slot.lock().unwrap() =
-                        panel_session::PanelSessionSlot::Failed(error.to_string());
-                }
-            }
+                        let request =
+                            panel_session::ConnectRequest { config: &adapter_config,
+                                                            cwd: &cwd,
+                                                            prior_session_id:
+                                                                prior_session_id.as_deref(),
+                                                            mcp_url: mcp_url.as_deref(),
+                                                            registration_prompt };
+                        panel_session::connect_into(&slot, request, &progress, |session_id| {
+                            if let Ok(mut store) = store.lock() {
+                                store.set_acp_session_id(id, session_id.to_string());
+                            }
+                        }).await;
                     });
     }
 
@@ -471,19 +720,39 @@ impl WorkspaceWindow {
         };
         let slot_guard = slot.lock().unwrap();
         match &*slot_guard {
-            panel_session::PanelSessionSlot::Connecting => div().size_full()
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_center()
-                                                                .text_color(rgb(0x9CA3AF))
-                                                                .child("Connecting to agent…")
-                                                                .into_any_element(),
+            panel_session::PanelSessionSlot::Connecting(progress) => {
+                let step = progress.lock().map(|step| step.label()).unwrap_or_default();
+                v_flex().size_full()
+                        .items_center()
+                        .justify_center()
+                        .gap_1()
+                        .child(div().text_color(rgb(0x9CA3AF))
+                                    .child("Connecting to agent…"))
+                        .child(div().text_xs().text_color(rgb(0x6B7280)).child(step))
+                        .into_any_element()
+            }
             panel_session::PanelSessionSlot::Failed(message) => {
-                div().size_full()
-                     .p_4()
-                     .text_color(rgb(0xEF4444))
-                     .child(format!("Failed to connect: {message}"))
-                     .into_any_element()
+                let message = message.clone();
+                drop(slot_guard);
+                // A failed connect is often transient - a loaded machine,
+                // an adapter slow to answer `initialize` - so offer the
+                // retry rather than making the user remove and re-add the
+                // agent to get another attempt.
+                v_flex().size_full()
+                        .p_4()
+                        .gap_3()
+                        .items_start()
+                        .child(div().text_color(rgb(0xEF4444))
+                                    .child(format!("Failed to connect: {message}")))
+                        .child(Button::new("panel-retry-connect")
+                            .label("Try again")
+                            .icon(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::RefreshCw))
+                            .primary()
+                            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                view.retry_panel_session(id);
+                                cx.notify();
+                            })))
+                        .into_any_element()
             }
             panel_session::PanelSessionSlot::Ready(handle) => {
                 let state_arc = handle.state();
@@ -511,6 +780,7 @@ impl WorkspaceWindow {
                     }
                 };
                 let scroll_away_slot = Arc::clone(slot);
+                let follow_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
                 let turn_active = state.turn_active;
                 let config_options = state.config_options.clone();
@@ -521,6 +791,13 @@ impl WorkspaceWindow {
                 .and_then(|option| option.current_value.as_str())
                 .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
+                let panel_style = panel_view::PanelStyle { permission_risk,
+                                                           markdown_font_size:
+                                                               px(self.settings.markdown_font_size
+                                                                  as f32),
+                                                           mono_font_family: cx.theme()
+                                                                               .mono_font_family
+                                                                               .clone() };
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
@@ -538,10 +815,19 @@ impl WorkspaceWindow {
                     scroll.scroll_to_bottom();
                 }
                 let input = self.panel_prompt_input(id, window, cx);
+                // Offsets go negative scrolling down, so "not at the
+                // bottom" is the remaining distance still being positive.
+                // A conversation shorter than its viewport has no max
+                // offset and so never shows the control.
+                let scrolled_up =
+                    scroll.max_offset().y + scroll.offset().y > px(SCROLL_BOTTOM_EPSILON);
+                let scroll_to_bottom = scroll.clone();
                 v_flex().size_full()
-                        .child(div().id("panel-conversation")
+                        .child(div().relative()
                                     .flex_1()
                                     .min_h_0()
+                                    .child(div().id("panel-conversation")
+                                    .size_full()
                                     .overflow_y_scroll()
                                     .track_scroll(&scroll)
                                     .on_scroll_wheel(move |_: &gpui_kit::ScrollWheelEvent, _, _| {
@@ -554,9 +840,30 @@ impl WorkspaceWindow {
                                     })
                                     .child(panel_view::render_panel(&state_arc.lock().unwrap(),
                                                                     &scroll,
-                                                                    permission_risk,
+                                                                    &panel_style,
                                                                     on_decision,
                                                                     on_toggle_track)))
+                                    .children(scrolled_up.then(|| {
+                                        div().absolute()
+                                             .bottom_3()
+                                             .right_4()
+                                             .child(Button::new("panel-scroll-to-bottom")
+                                                 .icon(IconName::ChevronDown)
+                                                 .tooltip("Scroll to latest")
+                                                 .small()
+                                                 .on_click(move |_: &ClickEvent, _, _| {
+                                                     scroll_to_bottom.scroll_to_bottom();
+                                                     // Jumping to the end also
+                                                     // resumes following new
+                                                     // output, which is what the
+                                                     // control implies.
+                                                     if let Ok(slot) = follow_slot.lock()
+                                                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                                                     {
+                                                         handle.set_tracking(true);
+                                                     }
+                                                 }))
+                                    })))
                         .child(self.render_panel_input_area(id,
                                                             &input,
                                                             &pending_context,
@@ -594,6 +901,19 @@ impl WorkspaceWindow {
             .p_2()
             .border_t_1()
             .border_color(cx.theme().border)
+            // Files and images dragged from Finder attach the same way the
+            // paperclip and a pasted screenshot do, per `acp-panel-ui`'s
+            // attached-context requirement.
+            .drag_over::<gpui_kit::ExternalPaths>(|style, _, _, app| {
+                style.bg(app.theme().accent)
+            })
+            .on_drop(cx.listener(move |view, paths: &gpui_kit::ExternalPaths, _, cx| {
+                view.panel_pending_context
+                    .entry(id)
+                    .or_default()
+                    .extend(paths.paths().iter().cloned());
+                cx.notify();
+            }))
             .children((!pending_context.is_empty()).then(|| {
                 h_flex()
                     .gap_1()
@@ -623,25 +943,15 @@ impl WorkspaceWindow {
                             )
                     }))
             }))
-            .child(
-                div()
-                    .h(if expanded { px(160.) } else { px(36.) })
-                    .capture_action::<Paste>({
-                        let entity = cx.entity();
-                        move |_, _, app| {
-                            entity.update(app, |view, cx| {
-                                if view.paste_clipboard_image_context(id, cx) {
-                                    cx.stop_propagation();
-                                    cx.notify();
-                                }
-                            });
-                        }
-                    })
-                    .child(Textarea::new(input).size_full().disabled(blocked)),
-            )
+            // Attach, prompt, and Send share one row (`items_center`, so
+            // the two buttons sit centred against the prompt box however
+            // tall it is); the send hint shares the row below with the
+            // config selectors, pushed apart by `justify_between`.
             .child(
                 h_flex()
-                    .gap_1()
+                    .w_full()
+                    .min_w_0()
+                    .gap_2()
                     .items_center()
                     .child(
                         Button::new("panel-add-context")
@@ -655,71 +965,107 @@ impl WorkspaceWindow {
                                 view.add_panel_context(id, cx);
                             })),
                     )
-                    .child(self.render_panel_config_selector(
-                        id,
-                        "panel-permission-mode-selector",
-                        "Permission",
-                        "This agent doesn't report permission modes",
-                        Self::find_config_option(
-                            config_options,
-                            &["mode", "permission_mode", "permission-mode"],
-                        ),
-                        self.permission_selector_open,
-                        cx,
-                    ))
-                    .child(self.render_panel_config_selector(
-                        id,
-                        "panel-model-selector",
-                        "Model",
-                        "This agent doesn't report selectable models",
-                        Self::find_config_option(config_options, &["model"]),
-                        false,
-                        cx,
-                    ))
-                    .child(self.render_panel_config_selector(
-                        id,
-                        "panel-effort-selector",
-                        "Effort",
-                        "This agent doesn't report selectable effort levels",
-                        Self::find_config_option(
-                            config_options,
-                            &[
-                                "effort",
-                                "reasoning",
-                                "reasoning_effort",
-                                "reasoning-effort",
-                                "thought_level",
-                                "thought-level",
-                            ],
-                        ),
-                        false,
-                        cx,
-                    ))
                     .child(
-                        Button::new("panel-expand-input")
-                            .icon(if expanded {
-                                IconName::Minimize
-                            } else {
-                                IconName::Maximize
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .capture_action::<Paste>({
+                                let entity = cx.entity();
+                                move |_, _, app| {
+                                    entity.update(app, |view, cx| {
+                                        if view.paste_clipboard_image_context(id, cx) {
+                                            cx.stop_propagation();
+                                            cx.notify();
+                                        }
+                                    });
+                                }
                             })
-                            .tooltip(if expanded { "Collapse" } else { "Expand" })
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
-                                view.toggle_panel_input_expanded(id);
-                                cx.notify();
-                            })),
+                            .child(Textarea::new(input).w_full().disabled(blocked)),
                     )
-                    .child(div().flex_1())
                     .child(
                         Button::new("panel-send-prompt")
                             .label("Send")
                             .tooltip(send_tooltip)
                             .primary()
+                            .flex_shrink_0()
                             .disabled(!can_send)
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
                             })),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .min_w_0()
+                    .gap_2()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div().flex_shrink_0()
+                             .text_xs()
+                             .font_family(self.settings.ui_font_name.clone())
+                             .text_color(cx.theme().muted_foreground)
+                             .child(Self::panel_prompt_send_hint(shift_to_send)),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(self.render_panel_config_selector(
+                                id,
+                                PERMISSION_SELECTOR_ID,
+                                "Permission",
+                                "This agent doesn't report permission modes",
+                                Self::find_config_option(
+                                    config_options,
+                                    &["mode", "permission_mode", "permission-mode"],
+                                ),
+                                cx,
+                            ))
+                            .child(self.render_panel_config_selector(
+                                id,
+                                "panel-model-selector",
+                                "Model",
+                                "This agent doesn't report selectable models",
+                                Self::find_config_option(config_options, &["model"]),
+                                cx,
+                            ))
+                            .child(self.render_panel_config_selector(
+                                id,
+                                "panel-effort-selector",
+                                "Effort",
+                                "This agent doesn't report selectable effort levels",
+                                Self::find_config_option(
+                                    config_options,
+                                    &[
+                                        "effort",
+                                        "reasoning",
+                                        "reasoning_effort",
+                                        "reasoning-effort",
+                                        "thought_level",
+                                        "thought-level",
+                                    ],
+                                ),
+                                cx,
+                            ))
+                            .child(
+                                Button::new("panel-expand-input")
+                                    .icon(if expanded {
+                                        IconName::Minimize
+                                    } else {
+                                        IconName::Maximize
+                                    })
+                                    .tooltip(if expanded { "Collapse" } else { "Expand" })
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(
+                                        move |view, _: &ClickEvent, _, cx| {
+                                            view.toggle_panel_input_expanded(id, cx);
+                                            cx.notify();
+                                        },
+                                    )),
+                            ),
                     ),
             )
     }
@@ -730,11 +1076,10 @@ impl WorkspaceWindow {
     /// selection via `session/set_config_option`. Disabled with an
     /// explanatory tooltip when the agent hasn't declared a matching
     /// option (adapters vary in which axes they expose).
-    #[allow(clippy::too_many_arguments)]
     fn render_panel_config_selector(&self, id: Uuid, element_id: &'static str,
                                     placeholder: &'static str, disabled_tooltip: &'static str,
                                     option: Option<&knot_acp::ConfigOption>,
-                                    selector_open: bool, cx: &mut Context<Self>)
+                                    cx: &mut Context<Self>)
                                     -> gpui_kit::AnyElement {
         let Some(option) = option
         else {
@@ -755,7 +1100,7 @@ impl WorkspaceWindow {
         let values = option.options.clone();
         let entity = cx.entity();
         let session_arc = self.panel_sessions.get(&id).cloned();
-        let is_permission_selector = element_id == "panel-permission-mode-selector";
+        let is_permission_selector = element_id == PERMISSION_SELECTOR_ID;
         let selector_color = is_permission_selector.then(|| {
                                  panel_view::risk_color(panel_view::permission_risk_level(
                     current_value,
@@ -772,12 +1117,12 @@ impl WorkspaceWindow {
                                              });
         Popover::new(format!("{element_id}-{id}"))
             .trigger(trigger)
-            .open(selector_open)
+            .open(self.open_config_selector == Some(element_id))
             .on_open_change({
                 let entity = entity.clone();
                 move |open, _, app| {
                     entity.update(app, |view, cx| {
-                        view.permission_selector_open = *open;
+                        view.open_config_selector = open.then_some(element_id);
                         cx.notify();
                     });
                 }
@@ -818,7 +1163,7 @@ impl WorkspaceWindow {
                             let value_id = value_id.clone();
                             let session_arc = Arc::clone(&session_arc);
                             entity.update(app, move |view, _cx| {
-                                view.permission_selector_open = false;
+                                view.open_config_selector = None;
                                 if let Ok(slot) = session_arc.lock()
                                     && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                                 {
@@ -930,9 +1275,24 @@ impl WorkspaceWindow {
 
     /// Toggles `id`'s input area between its default and expanded
     /// multi-line editing size.
-    fn toggle_panel_input_expanded(&mut self, id: Uuid) {
-        if !self.panel_input_expanded.remove(&id) {
+    fn toggle_panel_input_expanded(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        let expanded = if self.panel_input_expanded.remove(&id) {
+            false
+        }
+        else {
             self.panel_input_expanded.insert(id);
+            true
+        };
+        // The cap is part of the textarea's own layout mode, so expanding
+        // has to update the live entity rather than just the render height.
+        let max_rows = if expanded {
+            PANEL_INPUT_ROWS_EXPANDED
+        }
+        else {
+            PANEL_INPUT_ROWS_COLLAPSED
+        };
+        if let Some(input) = self.panel_prompt_inputs.get(&id).cloned() {
+            cx.update_entity(&input, |state, cx| state.set_auto_grow(1, max_rows, cx));
         }
     }
 
@@ -984,10 +1344,17 @@ impl WorkspaceWindow {
             return input.clone();
         }
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
-        let placeholder = Self::panel_prompt_placeholder(shift_to_send);
+        let placeholder = Self::panel_prompt_placeholder();
+        let max_rows = if self.panel_input_expanded.contains(&id) {
+            PANEL_INPUT_ROWS_EXPANDED
+        }
+        else {
+            PANEL_INPUT_ROWS_COLLAPSED
+        };
         let input = cx.new(|cx| {
                           TextareaState::new(window, cx).placeholder(placeholder)
                                                         .submit_on_enter(!shift_to_send)
+                                                        .auto_grow(1, max_rows)
                       });
         let subscription = cx.subscribe_in(&input,
                                            window,
@@ -1004,14 +1371,21 @@ impl WorkspaceWindow {
         input
     }
 
-    /// The prompt textarea's placeholder, naming the active send chord per
-    /// `agent_panel_shift_enter_sends`.
-    fn panel_prompt_placeholder(shift_to_send: bool) -> &'static str {
+    /// The prompt textarea's placeholder - just the prompt, not the key
+    /// chord (see `panel_prompt_send_hint` for that, rendered below the
+    /// textarea instead of inside it).
+    fn panel_prompt_placeholder() -> &'static str {
+        "Send a message…"
+    }
+
+    /// The send-chord hint shown below the prompt textarea, naming the
+    /// active chord per `agent_panel_shift_enter_sends`.
+    fn panel_prompt_send_hint(shift_to_send: bool) -> &'static str {
         if shift_to_send {
-            "Send a message… (Shift+Enter to send, Enter for a newline)"
+            "Shift+Enter to send, Enter for a newline"
         }
         else {
-            "Send a message… (Enter to send, Shift+Enter for a newline)"
+            "Enter to send, Shift+Enter for a newline"
         }
     }
 
@@ -1071,32 +1445,6 @@ impl WorkspaceWindow {
                             eprintln!("failed to send panel prompt: {error}");
                         }
                     });
-        cx.notify();
-    }
-
-    /// Toggles `id` between Panel and Terminal view mode, per
-    /// `acp-panel-ui`'s view-mode-toggle requirement. Switching to Panel
-    /// mode starts its ACP connection if not already running; switching
-    /// to Terminal never stops it - the turn keeps running and its
-    /// updates keep landing, per the "Switch to Terminal mid-turn"
-    /// scenario.
-    fn toggle_view_mode(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        let new_mode = {
-            let mut store = self.store.lock().unwrap();
-            let Some(agent) = store.agent(id)
-            else {
-                return;
-            };
-            let new_mode = match agent.view_mode {
-                knot_core::ViewMode::Terminal => knot_core::ViewMode::Panel,
-                knot_core::ViewMode::Panel => knot_core::ViewMode::Terminal,
-            };
-            store.set_view_mode(id, new_mode);
-            new_mode
-        };
-        if new_mode == knot_core::ViewMode::Panel {
-            self.ensure_panel_session(id);
-        }
         cx.notify();
     }
 
@@ -1336,6 +1684,7 @@ impl WorkspaceWindow {
                           view.selected_agent = Some(id);
                           view.view_mode = WorkspaceViewMode::Terminal;
                           view.ensure_session(id);
+                          view.ensure_panel_session(id);
                           cx.notify();
                       });
             }
@@ -1346,37 +1695,44 @@ impl WorkspaceWindow {
 /// Parameters for [`open_agent_editor`], grouped to keep the function's
 /// argument count in check.
 pub(crate) struct SelectedAgentHeader {
-    avatar:          String,
-    name:            String,
-    folder:          String,
-    header_title:    String,
-    agent_type:      String,
-    state:           Option<(knot_agents::AgentState, Option<knot_git::DiffStats>)>,
-    view_mode:       knot_core::ViewMode,
-    /// Whether this agent's type has a registered ACP adapter - the
-    /// Panel/Terminal toggle only shows when it does, per `acp-panel-ui`'s
-    /// "Agent type has no ACP adapter" scenario.
-    has_acp_adapter: bool,
+    avatar:       String,
+    name:         String,
+    folder:       String,
+    header_title: String,
+    agent_type:   String,
+    state:        Option<(knot_agents::AgentState, Option<knot_git::DiffStats>)>,
 }
 
 impl WorkspaceWindow {
+    /// The selected agent's diff stat, with only the figures colored -
+    /// additions green, deletions red, the changed-file count blue - and
+    /// the words around them left muted. The count's noun goes through
+    /// `l10n::plural_noun` rather than a local `if count == 1`, so the
+    /// word (and its form) comes from the locale catalog.
+    fn render_diff_stats(stats: &knot_git::DiffStats, font_family: String,
+                         font_size: gpui_kit::Pixels, cx: &Context<Self>)
+                         -> gpui_kit::AnyElement {
+        app_state::diff_stats_row(stats, cx.theme().muted_foreground).font_family(font_family)
+                                                                     .text_size(font_size)
+                                                                     .into_any_element()
+    }
+
     fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
         let id = self.selected_agent?;
         let store = self.store.lock().ok()?;
         let agent = store.agent(id)?;
-        let state = (!agent.is_shell()).then(|| {
-                                           (agent.state,
-                                            Repository::open(&agent.folder).diff_stats().ok())
-                                       });
+        let stats = self.diff_stats
+                        .lock()
+                        .ok()
+                        .and_then(|stats| stats.get(&id).copied())
+                        .flatten();
+        let state = (!agent.is_shell()).then_some((agent.state, stats));
         Some(SelectedAgentHeader { avatar: agent.avatar.clone(),
                                    name: agent.name.clone(),
                                    folder: shorten_path(&agent.folder),
                                    header_title: agent.header_title().to_string(),
                                    agent_type: agent.agent_type.clone(),
-                                   state,
-                                   view_mode: agent.view_mode,
-                                   has_acp_adapter:
-                                       knot_agent_launch::acp_adapter(&agent.agent_type).is_some() })
+                                   state })
     }
 }
 
@@ -1387,46 +1743,59 @@ impl Render for WorkspaceWindow {
         // font (Adamina), so it needs no override here.
         let ui_font_name = self.settings.ui_font_name.clone();
         let ui_font_size = px(self.settings.ui_font_size as f32);
-        let (_workspace_name, agents) =
-            {
-                let store = self.store.lock().unwrap();
-                let Some(workspace) = store.workspaces()
-                                           .iter()
-                                           .find(|workspace| workspace.id == self.workspace_id)
-                else {
-                    return v_flex().size_full()
+        let (_workspace_name, agents) = {
+            let store = self.store.lock().unwrap();
+            let Some(workspace) = store.workspaces()
+                                       .iter()
+                                       .find(|workspace| workspace.id == self.workspace_id)
+            else {
+                return v_flex().size_full()
                                .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
                                .child("Workspace no longer exists.");
-                };
-                let agents = workspace.agent_ids
-                                      .iter()
-                                      .filter_map(|id| store.agent(*id))
-                                      .map(|agent| {
-                                          let persona_name = agent.persona_id.and_then(|id| {
-                                                                                 self.settings
+            };
+            let agents =
+                workspace.agent_ids
+                         .iter()
+                         .filter_map(|id| store.agent(*id))
+                         .map(|agent| {
+                             let persona_name =
+                                 agent.persona_id.and_then(|id| {
+                                                     self.settings
                                                          .personas
                                                          .iter()
                                                          .find(|persona| persona.id == id)
                                                          .map(|persona| persona.name.clone())
-                                                                             });
-                                          (agent.id,
-                                           agent.avatar.clone(),
-                                           agent.name.clone(),
-                                           agent.folder.clone(),
-                                           agent.state,
-                                           agent.is_shell(),
-                                           agent.is_companion,
-                                           agent.header_title().to_string(),
-                                           persona_name)
-                                      })
-                                      .collect::<Vec<_>>();
-                (workspace.name.clone(), agents)
-            };
+                                                 });
+                             AgentRow { id: agent.id,
+                                        avatar: agent.avatar.clone(),
+                                        name: agent.name.clone(),
+                                        folder: agent.folder.clone(),
+                                        state: agent.state,
+                                        is_shell: agent.is_shell(),
+                                        is_companion: agent.is_companion,
+                                        header_title: agent.header_title().to_string(),
+                                        persona_name,
+                                        agent_type: agent.agent_type.clone() }
+                         })
+                         .collect::<Vec<_>>();
+            (workspace.name.clone(), agents)
+        };
 
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
 
         if !is_dashboard && let Some(id) = self.selected_agent {
             self.resize_session_to_pane(id, window, cx);
+        }
+        // A map lookup and an `Instant` compare per render; the `git`
+        // subprocess behind it runs at most every `DIFF_STATS_MAX_AGE`.
+        if let Some(id) = self.selected_agent {
+            let folder = self.store
+                             .lock()
+                             .ok()
+                             .and_then(|store| store.agent(id).map(|agent| agent.folder.clone()));
+            if let Some(folder) = folder {
+                self.refresh_diff_stats(id, &folder);
+            }
         }
 
         let store_for_menu = Arc::clone(&self.store);
@@ -1436,17 +1805,16 @@ impl Render for WorkspaceWindow {
 
         let agent_rows =
             agents.into_iter().map(
-                                   |(
-                id,
-                avatar,
-                name,
-                folder,
-                state,
-                is_shell,
-                is_companion,
-                header_title,
-                persona_name,
-            )| {
+                                   |AgentRow { id,
+                                               avatar,
+                                               name,
+                                               folder,
+                                               state,
+                                               is_shell,
+                                               is_companion,
+                                               header_title,
+                                               persona_name,
+                                               agent_type, }| {
                                        let menu_name = name.clone();
                                        let folder_name =
                                            PathBuf::from(&folder).file_name()
@@ -1478,6 +1846,11 @@ impl Render for WorkspaceWindow {
                     .cursor_pointer()
                     .rounded(cx.theme().radius)
                     .p_2()
+                    // A companion belongs to the agent above it, so it reads
+                    // as nested: indented, with a rule down its left edge.
+                    .when(is_companion, |row| {
+                        row.ml_4().border_l_2().border_color(cx.theme().border)
+                    })
                     .bg(if selected {
                         cx.theme().muted
                     } else {
@@ -1505,7 +1878,70 @@ impl Render for WorkspaceWindow {
                                     .flex_1()
                                     .min_w_0()
                                     .gap_0p5()
-                                    .child(div().font_semibold().child(name))
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .text_ellipsis()
+                                            .font_semibold()
+                                            .child(name),
+                                    )
+                                    // A companion says so where a primary
+                                    // agent names its type - it has no
+                                    // coding-agent type of its own, and an
+                                    // unlabelled row gave no clue what it was.
+                                    .children(is_companion.then(|| {
+                                        h_flex()
+                                            .w_full()
+                                            .min_w_0()
+                                            .gap_1()
+                                            .items_center()
+                                            .child(
+                                                Icon::new(gpui_kit::assets::IconName::CornerDownRight)
+                                                    .xsmall()
+                                                    .text_color(cx.theme().muted_foreground),
+                                            )
+                                            .child(
+                                                div()
+                                                    .font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(knot_core::l10n::t("agent.companion")),
+                                            )
+                                    }))
+                                    // The agent type reads as one of the
+                                    // row's detail lines, directly under the
+                                    // name and above the persona - not
+                                    // right-aligned opposite it, where it
+                                    // floated away from the name it
+                                    // describes and crowded the state dot.
+                                    .children((!is_shell).then(|| {
+                                        h_flex()
+                                            .w_full()
+                                            .min_w_0()
+                                            .gap_1()
+                                            .items_center()
+                                            .child(
+                                                Icon::new(SettingsWindow::agent_type_icon(
+                                                    &agent_type,
+                                                ))
+                                                .xsmall()
+                                                .text_color(cx.theme().muted_foreground),
+                                            )
+                                            .child(
+                                                div()
+                                                    .font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_xs()
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(SettingsWindow::agent_type_label(
+                                                        &agent_type,
+                                                    )),
+                                            )
+                                    }))
                                     .children(persona_name.map(|persona_name| {
                                         div()
                                             .font_family(ui_font_name.clone())
@@ -1547,7 +1983,13 @@ impl Render for WorkspaceWindow {
                     )
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.selected_agent = Some(id);
+                        // Leave the dashboard, the same way tapping an
+                        // agent card does - selecting a row while the
+                        // dashboard was open used to change the selection
+                        // without ever showing the session.
+                        view.view_mode = WorkspaceViewMode::Terminal;
                         view.ensure_session(id);
+                        view.ensure_panel_session(id);
                         cx.notify();
                     }))
                     .context_menu({
@@ -1605,6 +2047,13 @@ impl Render for WorkspaceWindow {
                                         let store = Arc::clone(&store);
                                         let window_entity = window_entity.clone();
                                         let name = name.clone();
+                                        // Deferred: a `PopupMenu` dismisses
+                                        // itself right after running this
+                                        // handler, and a dialog opened inline
+                                        // goes down with it. Opening on the
+                                        // next turn of the loop lets the menu
+                                        // finish closing first.
+                                        window.defer(app, move |window, app| {
                                         window.open_alert_dialog(app, move |alert, _, _| {
                                             let store = Arc::clone(&store);
                                             let window_entity = window_entity.clone();
@@ -1619,49 +2068,49 @@ impl Render for WorkspaceWindow {
                                                     let _ = store.lock().unwrap().restart(id);
                                                     window_entity.update(app, |view, cx| {
                                                         view.remove_session(id);
+                                                        view.panel_states.remove(&id);
+                                                        // `restart` clears the
+                                                        // persisted session ids;
+                                                        // write them out so a
+                                                        // relaunch doesn't resume
+                                                        // the session just dropped.
+                                                        view.persist_agents();
                                                         cx.notify();
                                                     });
                                                     true
                                                 })
+                                        });
                                         });
                                     }
                                 }));
                             }
 
                             menu.item(PopupMenuItem::new("Remove Agent").on_click({
-                                let store = Arc::clone(&store);
                                 let window_entity = window_entity.clone();
                                 let name = name.clone();
                                 move |_, window, app| {
-                                    let store = Arc::clone(&store);
                                     let window_entity = window_entity.clone();
                                     let name = name.clone();
+                                    // See "Restart Agent" above: the dialog
+                                    // has to outlive the menu's dismissal.
+                                    window.defer(app, move |window, app| {
                                     window.open_alert_dialog(app, move |alert, _, _| {
-                                        let store = Arc::clone(&store);
                                         let window_entity = window_entity.clone();
                                         alert
                                             .title("Remove Agent")
                                             .description(format!(
-                                                "Remove \"{name}\"? This closes its terminal \
-                                                 session."
+                                                "Remove \"{name}\"? This closes its session and \
+                                                 cannot be undone."
                                             ))
                                             .confirm()
                                             .on_ok(move |_, _, app| {
-                                                let removed = store.lock().unwrap().remove(id);
                                                 window_entity.update(app, |view, cx| {
-                                                    for removed_agent in removed {
-                                                        view.remove_session(removed_agent.id);
-                                                        view.panel_states.remove(&removed_agent.id);
-                                                        if view.selected_agent
-                                                            == Some(removed_agent.id)
-                                                        {
-                                                            view.selected_agent = None;
-                                                        }
-                                                    }
+                                                    view.remove_agent(id);
                                                     cx.notify();
                                                 });
                                                 true
                                             })
+                                    });
                                     });
                                 }
                             }))
@@ -1734,6 +2183,7 @@ impl Render for WorkspaceWindow {
                                       view.selected_agent = Some(id);
                                       view.view_mode = WorkspaceViewMode::Terminal;
                                       view.ensure_session(id);
+                                      view.ensure_panel_session(id);
                                       cx.notify();
                                   });
                         }
@@ -1787,6 +2237,8 @@ impl Render for WorkspaceWindow {
                                     .overflow_hidden()
                                     .child(dashboard::workspace_section(dashboard_workspace,
                                                                         false,
+                                                                        cx.theme()
+                                                                          .muted_foreground,
                                                                         on_agent_tap,
                                                                         on_workspace_nav,
                                                                         on_add_agent)))
@@ -1806,43 +2258,42 @@ impl Render for WorkspaceWindow {
         else {
             match &selected_header {
                 Some(header) => {
-                    h_flex().items_center()
+                    // The avatar and name always stay whole; the folder and
+                    // the agent's status line give up space and ellipsize,
+                    // the status line first since it is the longest and the
+                    // least identifying.
+                    h_flex().flex_1()
+                            .min_w_0()
+                            .items_center()
                             .gap_3()
-                            .child(div().text_2xl().child(header.avatar.clone()))
-                            .child(div().text_lg().font_semibold().child(header.name.clone()))
-                            .child(div().font_family(ui_font_name.clone())
+                            .child(div().flex_shrink_0()
+                                        .text_2xl()
+                                        .child(header.avatar.clone()))
+                            .child(div().flex_shrink_0()
+                                        .text_lg()
+                                        .font_semibold()
+                                        .child(header.name.clone()))
+                            .child(div().flex_shrink(1.)
+                                        .min_w_0()
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .font_family(ui_font_name.clone())
                                         .text_size(ui_font_size)
                                         .text_color(cx.theme().muted_foreground)
                                         .child(header.folder.clone()))
-                            .when(header.has_acp_adapter, |row| {
-                                let is_panel = header.view_mode == knot_core::ViewMode::Panel;
-                                row.child(
-                            SettingsWindow::icon_button(
-                                "workspace-panel-toggle",
-                                "icons/layout-dashboard.svg",
-                                if is_panel {
-                                    "Switch to Terminal"
-                                } else {
-                                    "Switch to Panel"
-                                },
-                                false,
-                            )
-                            .selected(is_panel)
-                            .on_click(cx.listener(
-                                move |view, _: &ClickEvent, _window, cx| {
-                                    if let Some(id) = view.selected_agent {
-                                        view.toggle_view_mode(id, cx);
-                                    }
-                                },
-                            )),
-                        )
-                            })
                             .when(!header.header_title.is_empty(), |row| {
-                                row.child(div().font_family(ui_font_name.clone())
+                                row.child(div().flex_shrink_0()
+                                               .font_family(ui_font_name.clone())
                                                .text_size(ui_font_size)
                                                .text_color(cx.theme().muted_foreground)
                                                .child("●"))
-                                   .child(div().font_family(ui_font_name.clone())
+                                   .child(div().flex_1()
+                                               .min_w_0()
+                                               .overflow_hidden()
+                                               .whitespace_nowrap()
+                                               .text_ellipsis()
+                                               .font_family(ui_font_name.clone())
                                                .text_size(ui_font_size)
                                                .text_color(cx.theme().muted_foreground)
                                                .child(header.header_title.clone()))
@@ -1885,59 +2336,22 @@ impl Render for WorkspaceWindow {
                                                        .text_size(ui_font_size)
                                                        .text_color(cx.theme().muted_foreground)
                                                        .child(state_label(*state))))
-                            .child(div().font_family(ui_font_name.clone())
-                                        .text_size(ui_font_size)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(match git_stats {
-                                                   Some(stats) => {
-                                                       format!("+{} -{} ({} {})",
-                                                               stats.insertions,
-                                                               stats.deletions,
-                                                               stats.files_changed,
-                                                               if stats.files_changed == 1 {
-                                                                   "file"
-                                                               }
-                                                               else {
-                                                                   "files"
-                                                               })
-                                                   }
-                                                   None => "Getting stats...".to_string(),
-                                               }))
+                            .child(match git_stats {
+                                       Some(stats) => Self::render_diff_stats(stats,
+                                                                              ui_font_name.clone(),
+                                                                              ui_font_size,
+                                                                              cx),
+                                       None => div().font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(knot_core::l10n::t("git.stats_pending"))
+                                                    .into_any_element(),
+                                   })
                             .into_any_element()
                 }
                 None => div().into_any_element(),
             }
         };
-        let mode_toggle = selected_header.as_ref().and_then(|header| {
-                                                      acp_adapter(&header.agent_type).map(|_| {
-                let id = self.selected_agent.expect("header requires selected agent");
-                let label = match header.view_mode {
-                    knot_core::ViewMode::Panel => "Terminal",
-                    knot_core::ViewMode::Terminal => "Panel",
-                };
-                Button::new("agent-view-mode-toggle")
-                    .label(label)
-                    .ghost()
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        let next = view
-                            .store
-                            .lock()
-                            .ok()
-                            .and_then(|store| store.agent(id).map(|agent| agent.view_mode))
-                            .map(|mode| match mode {
-                                knot_core::ViewMode::Panel => knot_core::ViewMode::Terminal,
-                                knot_core::ViewMode::Terminal => knot_core::ViewMode::Panel,
-                            });
-                        if let Some(next) = next {
-                            if let Ok(mut store) = view.store.lock() {
-                                store.set_view_mode(id, next);
-                            }
-                            cx.notify();
-                        }
-                    }))
-            })
-                                                  });
-
         h_flex()
             .size_full()
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
@@ -1954,7 +2368,7 @@ impl Render for WorkspaceWindow {
                         store.agent(id).map(|agent| agent.view_mode)
                     }) == Some(knot_core::ViewMode::Panel)
                 }) {
-                    view.permission_selector_open = true;
+                    view.open_config_selector = Some(PERMISSION_SELECTOR_ID);
                     cx.notify();
                 }
             }))
@@ -1973,7 +2387,7 @@ impl Render for WorkspaceWindow {
                     .bg(cx.theme().title_bar)
                     .child(
                         TitleBar::new()
-                            .h(px(64.))
+                            .h(px(window_options::WORKSPACE_TITLE_BAR_HEIGHT))
                             .border_color(gpui_kit::transparent_black())
                             .bg(cx.theme().title_bar)
                             .child(
@@ -2041,29 +2455,49 @@ impl Render for WorkspaceWindow {
                     ),
             )
             .child(
+                // `min_w_0` so a wide panel message (a markdown table, a
+                // long command line) wraps inside this column instead of
+                // stretching it past the window and pushing the prompt
+                // input's Send button off screen - see
+                // `knot-ui-conventions.md`'s "Flex overflow" rule.
                 v_flex()
                     .flex_1()
+                    .min_w_0()
                     .h_full()
                     .children((!is_dashboard).then(|| {
+                        // `min_w_0` on the row and a non-shrinking right
+                        // side: at a narrow window the agent's status line
+                        // used to push the whole header wider than the
+                        // pane, clipping the title on one edge and running
+                        // the diff stat off the other.
                         h_flex()
+                            .w_full()
+                            .min_w_0()
                             .flex_shrink_0()
                             .h(px(64.))
                             .items_center()
                             .justify_between()
+                            .gap_3()
                             .px_5()
                             .bg(cx.theme().background)
                             .child(title_bar_left)
                             .child(
-                                h_flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .children(mode_toggle)
-                                    .child(title_bar_right),
+                                h_flex().flex_shrink_0()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(title_bar_right),
                             )
                     }))
                     .child(dashboard_content.unwrap_or_else(|| {
+                        // `flex_1().min_h_0()`, not `size_full()`: this box
+                        // is a sibling of the 64px title bar above it, so a
+                        // full height makes it overflow its container by
+                        // exactly that much and pushes the input area's
+                        // control row and Send button below the window edge.
                         v_flex()
-                            .size_full()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
                             .child(
                                 self.selected_agent
                                             .and_then(|id| {
@@ -2212,5 +2646,6 @@ impl Render for WorkspaceWindow {
                                     .into_any_element()
                             })),
                     )
+                    .children(app_support::root_overlays(window, cx))
     }
 }

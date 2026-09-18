@@ -1,8 +1,9 @@
 //! Renders `panel_state::PanelState` as a chat-like panel: streaming
-//! messages, tool-call cards (by ACP `kind`, with a diff view for edit-kind
-//! calls), and an inline permission prompt. Sibling to `terminal_view.rs`
-//! (which renders a `Grid`) per design decision 5 - this renders a
-//! completely different data model.
+//! messages, tool-call cards (icon by ACP `kind`, body from the call's
+//! reported content, with a diff view for diff blocks), and an inline
+//! permission prompt. Sibling to `terminal_view.rs` (which renders a
+//! `Grid`) per design decision 5 - this renders a completely different
+//! data model.
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
@@ -12,7 +13,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
-    ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, rgb,
+    ClickEvent, ClipboardItem, IntoElement, ParentElement, ScrollHandle, Styled, div, relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
 
@@ -23,6 +24,21 @@ const CARD_BORDER: u32 = 0x333333;
 const ERROR_COLOR: u32 = 0xEF4444;
 const SAFE_COLOR: u32 = 0x22C55E;
 const MUTED: u32 = 0x9CA3AF;
+
+/// The panel's render-time styling inputs, grouped rather than passed as
+/// two more positional parameters to `render_panel`.
+#[derive(Clone, Debug)]
+pub(crate) struct PanelStyle {
+    pub(crate) permission_risk:    RiskLevel,
+    /// The conversation's body text size, from `Settings`'
+    /// `markdown_font_size`.
+    pub(crate) markdown_font_size: gpui_kit::Pixels,
+    /// The theme's monospace family, for tool output and diffs. A real
+    /// registered family name is required: `font_family("monospace")` is
+    /// not a family GPUI resolves, so it silently fell back to the body
+    /// font and shell output rendered proportionally.
+    pub(crate) mono_font_family:   gpui_kit::SharedString,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RiskLevel {
@@ -61,43 +77,75 @@ pub(crate) fn risk_color(risk: RiskLevel) -> Option<u32> {
 /// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
 /// to a specific message. `on_toggle_track` flips auto-scroll for the
 /// in-flight response.
-pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle,
-                           permission_risk: RiskLevel,
+pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: &PanelStyle,
                            on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
                            on_toggle_track: impl Fn() + Clone + 'static)
                            -> impl IntoElement {
     let last_index = state.messages.len().checked_sub(1);
+    // `w_full`, never `size_full`: this is the *content* of the caller's
+    // `overflow_y_scroll` container, so a full height would pin it to the
+    // viewport and clip everything past one screenful instead of letting
+    // the container scroll. `min_w_0` for the same reason horizontally -
+    // without it a wide child (a markdown table, a long command line)
+    // stretches the pane and pushes the input row's Send button off
+    // screen, per `knot-ui-conventions.md`'s "Flex overflow" rule.
     v_flex()
-        .size_full()
+        .w_full()
+        .min_w_0()
         .gap_3()
         .p_4()
-        .overflow_y_hidden()
+        // Set the body size once, here, and let it cascade: a size applied
+        // to the `TextView` itself reaches its paint but not the line
+        // wrapper's measuring pass, so runs got measured at one size and
+        // drawn at another and overlapped each other - worst around inline
+        // code, which is measured separately in the mono family.
+        .text_size(style.markdown_font_size)
         .children(state.messages.iter().enumerate().map(|(index, message)| {
             render_message(
-                state,
-                index,
-                Some(index) == last_index,
+                Message { state,
+                          index,
+                          is_last: Some(index) == last_index,
+                          style,
+                          scroll },
                 message,
-                scroll,
                 on_toggle_track.clone(),
             )
         }))
         .children(state.pending_permission.as_ref().map(|request| {
-            render_permission_prompt(request, permission_risk, on_permission_decision)
+            render_permission_prompt(request, style.permission_risk, on_permission_decision)
         }))
         .children(state.ended.as_ref().map(render_ended_banner))
 }
 
-fn render_message(state: &PanelState, index: usize, is_last: bool, message: &PanelMessage,
-                  scroll: &ScrollHandle, on_toggle_track: impl Fn() + Clone + 'static)
+/// One message's render inputs, grouped so `render_message` keeps a short
+/// parameter list as the panel gains styling.
+struct Message<'a> {
+    state:   &'a PanelState,
+    index:   usize,
+    is_last: bool,
+    style:   &'a PanelStyle,
+    scroll:  &'a ScrollHandle,
+}
+
+fn render_message(ctx: Message<'_>, message: &PanelMessage,
+                  on_toggle_track: impl Fn() + Clone + 'static)
                   -> gpui_kit::AnyElement {
+    let Message { state,
+                  index,
+                  is_last,
+                  style,
+                  scroll, } = ctx;
     match message {
         // Right-aligned, tinted background - visually distinct from the
         // assistant's plain left-aligned text, per acp-panel-ui's
         // "visually distinguish user messages, assistant messages, and
         // system/tool content" requirement.
-        PanelMessage::User(text) => h_flex().justify_end()
-                                            .child(div().text_sm()
+        PanelMessage::User(text) => h_flex().w_full()
+                                            .min_w_0()
+                                            .justify_end()
+                                            .child(div().max_w(relative(0.85))
+                                                        .min_w_0()
+                                                        .text_sm()
                                                         .text_color(rgb(0xFFFFFF))
                                                         .px_3()
                                                         .py_1p5()
@@ -106,9 +154,21 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
                                                         .child(text.clone()))
                                             .into_any_element(),
         PanelMessage::Assistant(text) => {
-            v_flex().gap_1()
-                    .child(TextView::markdown(("panel-message-markdown", index as u64),
-                                              text.clone()).text_sm())
+            v_flex().w_full()
+                    .min_w_0()
+                    .gap_1()
+                    // Plain `w_full().min_w_0()`, deliberately *not* a
+                    // scroll container: a scroll parent hands its child an
+                    // unconstrained width, so the markdown measured its
+                    // runs against one width and painted them into
+                    // another, drawing words on top of each other. Wide
+                    // content clips here instead, which `min_w_0` at least
+                    // keeps from stretching the pane.
+                    .child(div().w_full()
+                                .min_w_0()
+                                .child(TextView::markdown(("panel-message-markdown",
+                                                           index as u64),
+                                                          text.clone())))
                     .children((is_last && state.turn_active).then(|| {
                                                                 render_track_toggle(state.tracking,
                                                                                     on_toggle_track)
@@ -119,7 +179,7 @@ fn render_message(state: &PanelState, index: usize, is_last: bool, message: &Pan
                               }))
                     .into_any_element()
         }
-        PanelMessage::ToolCall(card) => render_tool_call_card(card).into_any_element(),
+        PanelMessage::ToolCall(card) => render_tool_call_card(card, style).into_any_element(),
     }
 }
 
@@ -193,40 +253,83 @@ fn render_response_actions(text: String, user_index: Option<usize>, scroll: &Scr
         )
 }
 
-/// A tool-call card, rendered by ACP `kind`: edit-kind calls show an
-/// added/removed diff view; every other kind (including unrecognized ones)
-/// falls back to a generic status/output card.
-fn render_tool_call_card(card: &ToolCallCard) -> impl IntoElement {
-    v_flex().gap_2()
+/// A tool-call card: an icon/title/status header over whatever content
+/// the agent has reported so far - diff blocks as an added/removed line
+/// view, everything else as monospace output. An unfinished call with no
+/// content yet shows an in-progress placeholder; a *finished* one with no
+/// content shows nothing rather than a stale "Running…" (the bug this
+/// keys the placeholder on `status` to avoid).
+fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle) -> impl IntoElement {
+    let label = if card.title.is_empty() {
+        card.kind.clone()
+    }
+    else {
+        card.title.clone()
+    };
+    v_flex().w_full()
+            .min_w_0()
+            .gap_2()
             .p_3()
             .rounded_md()
             .border_1()
-            .border_color(rgb(CARD_BORDER))
+            .border_color(rgb(if card.failed() { ERROR_COLOR } else { CARD_BORDER }))
             .bg(rgb(CARD_BG))
-            .child(h_flex().gap_2()
+            .child(h_flex().w_full()
+                           .min_w_0()
+                           .gap_2()
                            .items_center()
                            .child(Icon::new(tool_call_icon(&card.kind)).xsmall()
                                                                        .text_color(rgb(MUTED)))
-                           .child(div().text_xs()
+                           .child(div().flex_1()
+                                       .min_w_0()
+                                       .text_xs()
                                        .text_color(rgb(MUTED))
-                                       .child(card.kind.clone()))
-                           .children(card.status.clone().map(|status| {
-                                                            div().text_xs()
-                                                                 .text_color(rgb(MUTED))
-                                                                 .child(status)
-                                                        })))
-            .child(if card.kind == "edit" {
-                       card.diff
-                           .as_ref()
-                           .map(|(path, diff)| render_diff(path, diff).into_any_element())
-                           .unwrap_or_else(|| in_progress_placeholder().into_any_element())
-                   }
-                   else {
-                       card.result
-                           .as_ref()
-                           .map(|output| render_generic_output(output).into_any_element())
-                           .unwrap_or_else(|| in_progress_placeholder().into_any_element())
-                   })
+                                       .child(label))
+                           .child(div().flex_shrink_0()
+                                       .text_xs()
+                                       .text_color(rgb(if card.failed() {
+                                                           ERROR_COLOR
+                                                       }
+                                                       else {
+                                                           MUTED
+                                                       }))
+                                       .child(status_label(&card.status))))
+            .children(card.content
+                          .iter()
+                          .map(|content| render_tool_call_content(content, style)))
+            .children((card.content.is_empty() && !card.is_finished())
+                                                                     .then(in_progress_placeholder))
+}
+
+/// One tool-call content block. Diffs get the added/removed line view
+/// `acp-panel-ui`'s tool-call-rendering requirement asks for; text and
+/// terminal references fall back to monospace output.
+fn render_tool_call_content(content: &knot_acp::ToolCallContent, style: &PanelStyle)
+                            -> gpui_kit::AnyElement {
+    match content {
+        knot_acp::ToolCallContent::Diff { path,
+                                          old_text,
+                                          new_text, } => {
+            render_diff(path, old_text.as_deref(), new_text, style).into_any_element()
+        }
+        knot_acp::ToolCallContent::Text(text) => render_output_text(text, style).into_any_element(),
+        knot_acp::ToolCallContent::Terminal { terminal_id } => {
+            render_output_text(&format!("[terminal {terminal_id}]"), style).into_any_element()
+        }
+    }
+}
+
+/// Human-readable form of an ACP tool-call status. Unrecognized statuses
+/// pass through unchanged rather than being swallowed - `status` is a
+/// plain wire string, and a future value is more useful shown than hidden.
+fn status_label(status: &str) -> String {
+    match status {
+        "pending" => "Pending".to_string(),
+        "in_progress" => "Running…".to_string(),
+        "completed" => "Done".to_string(),
+        "failed" => "Failed".to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// Maps an ACP tool-call `kind` to an identifying icon, per the response
@@ -252,37 +355,65 @@ fn in_progress_placeholder() -> impl IntoElement {
 }
 
 /// A file-edit diff as an added/removed line view rather than raw text,
-/// per `acp-panel-ui`'s tool-call-rendering requirement.
-fn render_diff(path: &str, diff: &str) -> impl IntoElement {
-    v_flex().gap_1()
-            .child(div().text_xs()
+/// per `acp-panel-ui`'s tool-call-rendering requirement. `old_text` is
+/// `None` for a newly created file, in which case every line is an
+/// addition.
+fn render_diff(path: &str, old_text: Option<&str>, new_text: &str, style: &PanelStyle)
+               -> impl IntoElement {
+    v_flex().w_full()
+            .min_w_0()
+            .gap_1()
+            .child(div().w_full()
+                        .min_w_0()
+                        .text_xs()
                         .text_color(rgb(MUTED))
                         .child(path.to_string()))
-            .children(diff.lines().map(|line| {
-                                      let (color, text) =
-                                          if let Some(added) = line.strip_prefix('+') {
-                                              (0x22C55E, format!("+ {added}"))
-                                          }
-                                          else if let Some(removed) = line.strip_prefix('-') {
-                                              (0xEF4444, format!("- {removed}"))
-                                          }
-                                          else {
-                                              (MUTED, line.to_string())
-                                          };
-                                      div().font_family("monospace")
-                                           .text_xs()
-                                           .text_color(rgb(color))
-                                           .child(text)
-                                  }))
+            .child(v_flex().w_full()
+                           .min_w_0()
+                           .children(diff_lines(old_text, new_text).into_iter()
+                                                                   .map(|(color, text)| {
+                                                                       div().w_full()
+                                                                            .min_w_0()
+                                                                            .font_family(style.mono_font_family.clone())
+                                                                            .text_xs()
+                                                                            .text_color(rgb(color))
+                                                                            .child(text)
+                                                                   })))
 }
 
-/// A generic input/output fallback for tool-call kinds without a dedicated
-/// renderer (execute, read, and any unrecognized kind).
-fn render_generic_output(output: &serde_json::Value) -> impl IntoElement {
-    div().font_family("monospace")
+/// The `(color, text)` line list for a diff. With an `old_text` this is a
+/// whole-file replacement, so every old line reads as removed and every
+/// new line as added; without one the `new_text` is already in unified
+/// form (or is a brand-new file) and its own `+`/`-` prefixes decide.
+fn diff_lines(old_text: Option<&str>, new_text: &str) -> Vec<(u32, String)> {
+    match old_text {
+        Some(old) => old.lines()
+                        .map(|line| (ERROR_COLOR, format!("- {line}")))
+                        .chain(new_text.lines()
+                                       .map(|line| (SAFE_COLOR, format!("+ {line}"))))
+                        .collect(),
+        None => new_text.lines()
+                        .map(|line| match line.strip_prefix('+') {
+                            Some(added) => (SAFE_COLOR, format!("+ {added}")),
+                            None => match line.strip_prefix('-') {
+                                Some(removed) => (ERROR_COLOR, format!("- {removed}")),
+                                None => (MUTED, line.to_string()),
+                            },
+                        })
+                        .collect(),
+    }
+}
+
+/// Monospace tool output. `w_full`/`min_w_0` so a long line wraps inside
+/// the card instead of stretching the whole conversation pane, per
+/// `knot-ui-conventions.md`'s "Flex overflow" rule.
+fn render_output_text(text: &str, style: &PanelStyle) -> impl IntoElement {
+    div().w_full()
+         .min_w_0()
+         .font_family(style.mono_font_family.clone())
          .text_xs()
          .text_color(rgb(MUTED))
-         .child(serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string()))
+         .child(text.to_string())
 }
 
 /// An inline permission request with actionable allow/deny controls, per
@@ -348,6 +479,50 @@ mod tests {
         }
         assert_eq!(tool_call_icon("some-future-kind"), IconName::Wrench);
         assert_eq!(tool_call_icon(""), IconName::Wrench);
+    }
+
+    /// The bug this guards: keying the in-progress placeholder on "no
+    /// output yet" left a completed call showing "Running…" forever,
+    /// because a call can finish without ever reporting content.
+    #[test]
+    fn only_a_running_status_reads_as_running() {
+        assert_eq!(status_label("in_progress"), "Running…");
+        assert_eq!(status_label("pending"), "Pending");
+        assert_eq!(status_label("completed"), "Done");
+        assert_eq!(status_label("failed"), "Failed");
+    }
+
+    #[test]
+    fn an_unrecognized_status_passes_through_rather_than_vanishing() {
+        assert_eq!(status_label("some_future_status"), "some_future_status");
+    }
+
+    #[test]
+    fn a_replacement_diff_reads_as_removals_then_additions() {
+        let lines = diff_lines(Some("a\nb"), "a\nc");
+
+        assert_eq!(lines,
+                   vec![(ERROR_COLOR, "- a".to_string()),
+                        (ERROR_COLOR, "- b".to_string()),
+                        (SAFE_COLOR, "+ a".to_string()),
+                        (SAFE_COLOR, "+ c".to_string())]);
+    }
+
+    #[test]
+    fn a_new_file_diff_is_all_additions_with_no_prefixes_to_strip() {
+        let lines = diff_lines(None, "fn main() {}");
+
+        assert_eq!(lines, vec![(MUTED, "fn main() {}".to_string())]);
+    }
+
+    #[test]
+    fn a_unified_diff_without_old_text_colors_by_prefix() {
+        let lines = diff_lines(None, "-old\n+new\n context");
+
+        assert_eq!(lines,
+                   vec![(ERROR_COLOR, "- old".to_string()),
+                        (SAFE_COLOR, "+ new".to_string()),
+                        (MUTED, " context".to_string())]);
     }
 
     #[test]

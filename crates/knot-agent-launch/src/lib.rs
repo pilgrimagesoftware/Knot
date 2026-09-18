@@ -1,7 +1,6 @@
-//! Builds the shell command that launches an agent in its terminal: base
-//! command and user options, resume/fork arguments, MCP configuration and
-//! hook plugin injection, inline registration arguments, persona injection,
-//! and the working-directory initialization wrapper.
+//! Decides how to launch an agent - a shell agent's terminal command, or a
+//! non-shell agent's ACP adapter - and builds the registration prompts sent
+//! to it.
 //!
 //! Contract: `openspec/specs/agent-launch-command/spec.md`.
 
@@ -14,14 +13,11 @@ mod registration;
 
 pub use adapter::{AdapterConfig, InstallMethod, acp_adapter};
 pub use builders::{
-    AdapterLaunch, LaunchPlan, LaunchRequest, build_agent_command, build_initialization_command,
+    LaunchPlan, LaunchRequest, build_agent_command, build_initialization_command, mcp_url,
     plan_launch,
 };
-pub use capabilities::{
-    can_fork, can_resume, supports_inline_registration, supports_system_prompt,
-};
-pub use escape::{persona_prompt, shell_escape};
+pub use capabilities::supports_inline_registration;
+pub use escape::persona_prompt;
 pub use registration::{
-    acp_registration_prompt, inline_registration_arguments, knot_instructions, mcp_arguments,
-    registration_prompt, registration_user_prompt,
+    acp_registration_prompt, knot_instructions, registration_prompt, registration_user_prompt,
 };

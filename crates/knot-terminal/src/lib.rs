@@ -13,7 +13,7 @@ mod mouse;
 mod pty;
 mod session;
 
-pub use acp_session::AcpSession;
+pub use acp_session::{AcpSession, ConnectProgress, ConnectStep};
 pub use grid::{Cell, ClipboardType, Grid, GridEvent, GridSize};
 pub use keys::{KeyInput, key_to_bytes};
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};
@@ -225,6 +225,18 @@ mod tests {
 
     use super::*;
 
+    /// Failsafe for the tests that drive a real PTY subprocess. It is
+    /// deliberately far longer than the work normally takes (milliseconds),
+    /// because its only job is to fail a genuinely hung test instead of
+    /// blocking forever. It is not a latency assertion.
+    ///
+    /// A tight budget here is exactly what made these tests flaky: `cargo
+    /// test` runs them in parallel with the rest of the workspace
+    /// compiling, and spawning a shell through a PTY on a saturated machine
+    /// can take seconds. They failed under `make rust` and passed on a
+    /// rerun, which is the worst possible signal.
+    const PTY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
     #[derive(Default)]
     struct FakeTransport {
         sent:       Vec<String>,
@@ -280,7 +292,13 @@ mod tests {
 
     #[tokio::test]
     async fn command_and_lifecycle_events_reach_transport_and_tracker() {
-        let agent = agent();
+        // `AgentStore` now always coerces a non-shell agent to Panel view
+        // mode (it never actually gets a `TerminalSession` in the running
+        // app - see `ensure_session`), but the tracker mechanism itself
+        // still supports terminal-output tracking for that combination;
+        // force it directly here to exercise that branch of `tracking_for`.
+        let mut agent = agent();
+        agent.view_mode = knot_core::ViewMode::Terminal;
         let settings = Settings::default();
         let config = SessionConfig { settings:    &settings,
                                      agent:       &agent,
@@ -338,7 +356,7 @@ mod tests {
         session.start(&SessionPlan { agent_command:          String::new(),
                               initialization_command: "printf ready; exit 0\n".to_string(), })
         .unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + PTY_TIMEOUT;
         let mut output = Vec::new();
         while std::time::Instant::now() < deadline {
             let remaining = deadline.saturating_duration_since(std::time::Instant::now());
@@ -353,8 +371,7 @@ mod tests {
             }
         }
         assert!(String::from_utf8_lossy(&output).contains("ready"));
-        assert_eq!(exit_rx.recv_timeout(std::time::Duration::from_secs(5)),
-                   Ok(Some(0)));
+        assert_eq!(exit_rx.recv_timeout(PTY_TIMEOUT), Ok(Some(0)));
     }
 
     #[tokio::test]
@@ -376,7 +393,7 @@ mod tests {
                                      initialization_command: "printf ready\n".to_string(), })
                .unwrap();
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + PTY_TIMEOUT;
         loop {
             if grid.lock().unwrap().row_text(0).contains("ready")
                || (1..24).any(|row| grid.lock().unwrap().row_text(row).contains("ready"))
@@ -416,7 +433,7 @@ mod tests {
                                      initialization_command: "stty size\n".to_string(), })
                .unwrap();
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + PTY_TIMEOUT;
         loop {
             let rows: Vec<String> = (0..20).map(|row| grid.lock().unwrap().row_text(row))
                                            .collect();
@@ -461,7 +478,7 @@ mod tests {
         // The shell itself may set its own title (e.g. via prompt
         // integration) before our command runs, so keep reading until the
         // expected title arrives rather than asserting on the first one.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + PTY_TIMEOUT;
         loop {
             match title_rx.recv_timeout(std::time::Duration::from_millis(200)) {
                 Ok(title) if title == "my session" => break,

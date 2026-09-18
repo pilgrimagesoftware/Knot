@@ -71,8 +71,16 @@ pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> Js
                                                      "capabilities": { "tools": { "listChanged": false } },
                                                      "serverInfo": { "name": consts::SERVER_NAME, "version": consts::SERVER_VERSION },
                                                  })),
-        "tools/list" => JsonRpcResponse::success(request.id.clone(),
-                                                 serde_json::json!({ "tools": catalog.list() })),
+        "tools/list" => {
+            let tools = catalog.list();
+            eprintln!("knot-mcp: tools/list -> {} tools: {}",
+                      tools.len(),
+                      tools.iter()
+                           .map(|tool| tool.name.as_str())
+                           .collect::<Vec<_>>()
+                           .join(", "));
+            JsonRpcResponse::success(request.id.clone(), serde_json::json!({ "tools": tools }))
+        }
         "tools/call" => {
             let Some(name) = request.params
                                     .as_ref()
@@ -88,6 +96,7 @@ pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> Js
                                    .and_then(|p| p.get("arguments"))
                                    .cloned()
                                    .unwrap_or_else(|| serde_json::json!({}));
+            eprintln!("knot-mcp: tools/call {name} {arguments}");
             let result = catalog.call(name, arguments).await;
             JsonRpcResponse::success(request.id.clone(), result)
         }
@@ -153,6 +162,23 @@ mod tests {
         async fn call(&self, _name: &str, _arguments: Value) -> ToolCallResult {
             ToolCallResult::ok("pong")
         }
+    }
+
+    /// MCP spells this field `inputSchema`. Under the snake_case
+    /// spelling a validating client drops every tool in the list, which
+    /// made Knot's whole tool set invisible to ACP-launched agents while a
+    /// same-named MCP server elsewhere in the user's config still
+    /// answered - so this asserts the wire key, not the Rust field.
+    #[tokio::test]
+    async fn tools_list_names_the_schema_field_the_way_mcp_does() {
+        let response = dispatch(&request("tools/list", None), &OneToolCatalog).await;
+        let tool = &response.result.unwrap()["tools"][0];
+
+        assert!(tool.get("inputSchema").is_some(),
+                "tools/list must carry `inputSchema`, got {tool}");
+        assert!(tool.get("input_schema").is_none(),
+                "the snake_case spelling must not reach the wire");
+        assert_eq!(tool["inputSchema"]["type"], "object");
     }
 
     #[tokio::test]

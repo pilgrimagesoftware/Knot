@@ -14,3 +14,12 @@ dashboard:
 count:
   file: "file"
   files: "files"
+
+git:
+  stats_pending: "Getting stats…"
+
+workspace:
+  manager: "Workspaces"
+
+agent:
+  companion: "Shell companion"

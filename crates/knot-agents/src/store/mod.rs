@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use knot_core::{ViewMode, Workspace};
+use knot_core::Workspace;
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -106,12 +106,6 @@ impl AgentStore {
     pub fn set_acp_session_id(&mut self, id: Uuid, session_id: String) {
         if let Some(agent) = self.agent_mut(id) {
             agent.acp_session_id = Some(session_id);
-        }
-    }
-
-    pub fn set_view_mode(&mut self, id: Uuid, view_mode: ViewMode) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.view_mode = view_mode;
         }
     }
 

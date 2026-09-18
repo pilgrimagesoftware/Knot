@@ -15,6 +15,25 @@ impl AgentStore {
         self.current_workspace_id = Some(id);
     }
 
+    /// Records where `id`'s window was last seen, so reopening the
+    /// workspace restores its frame. Returns whether the workspace exists
+    /// and the frame actually changed - the caller persists only then,
+    /// since bounds observers fire continuously through a drag.
+    pub fn set_workspace_window_bounds(&mut self, id: Uuid, bounds: knot_core::SavedWindowBounds)
+                                       -> bool {
+        let Some(workspace) = self.workspaces
+                                  .iter_mut()
+                                  .find(|workspace| workspace.id == id)
+        else {
+            return false;
+        };
+        if workspace.window_bounds == Some(bounds) {
+            return false;
+        }
+        workspace.window_bounds = Some(bounds);
+        true
+    }
+
     pub fn rename_workspace(&mut self, id: Uuid, name: impl Into<String>) -> bool {
         let Some(workspace) = self.workspaces
                                   .iter_mut()

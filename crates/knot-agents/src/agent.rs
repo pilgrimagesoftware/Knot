@@ -21,6 +21,21 @@ pub enum AgentState {
     Error,
 }
 
+/// The only view mode `agent_type` is allowed to hold: `Terminal` for a
+/// shell agent (no ACP equivalent for a bare shell), `Panel` for every
+/// other type (they launch exclusively through their ACP adapter - see
+/// `agent-lifecycle`'s "View mode is fixed by agent type" requirement).
+/// The single place that decides this, consulted by `create`, `edit`, and
+/// `from_saved` so a non-shell agent can never end up in `Terminal`.
+pub fn view_mode_for(agent_type: &str) -> ViewMode {
+    if agent_type == "shell" {
+        ViewMode::Terminal
+    }
+    else {
+        ViewMode::Panel
+    }
+}
+
 /// A running agent: the durable fields mirrored from `SavedAgent` plus
 /// runtime-only state that resets to its default on every reload.
 ///

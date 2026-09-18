@@ -16,6 +16,11 @@ pub trait TerminalTransport: Send {
     }
 }
 
+/// `persona`/`plugin_root` are unused now that the terminal path only
+/// launches shell agents (they mattered to the removed non-shell
+/// registration/persona-injection arguments); kept on the struct so
+/// callers built around a full agent config don't need a separate
+/// shell-only variant.
 pub struct SessionConfig<'a> {
     pub settings:    &'a Settings,
     pub agent:       &'a Agent,
@@ -30,17 +35,11 @@ pub struct SessionPlan {
 
 impl SessionPlan {
     pub fn build(config: &SessionConfig<'_>) -> Self {
-        let request = LaunchRequest { agent_type:        &config.agent.agent_type,
-                                      agent_id:          Some(config.agent.id),
-                                      shell_command:     config.agent.shell_command.as_deref(),
-                                      resume_session_id: config.agent.resume_session_id.as_deref(),
-                                      fork_session:      config.agent.fork_session,
-                                      persona:           config.persona,
-                                      plugin_root:       config.plugin_root, };
-        let agent_command = build_agent_command(config.settings, &request);
-        let initialization_command = build_initialization_command(&config.agent.folder,
-                                                                  &agent_command,
-                                                                  Some(config.agent.id));
+        let request = LaunchRequest { agent_type:    &config.agent.agent_type,
+                                      shell_command: config.agent.shell_command.as_deref(), };
+        let agent_command = build_agent_command(&request);
+        let initialization_command =
+            build_initialization_command(&config.agent.folder, &agent_command);
         Self { agent_command,
                initialization_command }
     }

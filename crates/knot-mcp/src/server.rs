@@ -208,7 +208,16 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         return StatusCode::ACCEPTED.into_response();
     }
 
+    eprintln!("knot-mcp: [{response_session_id}] -> {}", request.method);
     let response = rpc::dispatch(&request, state.catalog.as_ref()).await;
+    eprintln!("knot-mcp: [{response_session_id}] <- {} {}",
+              request.method,
+              if response.error.is_some() {
+                  "error"
+              }
+              else {
+                  "ok"
+              });
 
     if accepts_sse {
         let data = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());

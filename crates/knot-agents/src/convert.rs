@@ -7,10 +7,13 @@ use std::collections::BTreeMap;
 use knot_core::SavedAgent;
 use uuid::Uuid;
 
-use crate::agent::{Agent, AgentState};
+use crate::agent::{Agent, AgentState, view_mode_for};
 
 /// Build a runtime agent from its persisted record. Runtime fields always
-/// start at their documented defaults, never copied from anywhere.
+/// start at their documented defaults, never copied from anywhere. The
+/// persisted `view_mode` is coerced by `agent_type` rather than trusted
+/// verbatim, since a legacy/edited record could carry a mismatched value
+/// (see `view_mode_for`).
 pub fn from_saved(saved: &SavedAgent) -> Agent {
     Agent { id:            saved.id,
             name:          saved.name.clone(),
@@ -21,7 +24,7 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
             is_companion:  saved.is_companion,
             shell_command: saved.shell_command.clone(),
             persona_id:    saved.persona_id,
-            view_mode:     saved.view_mode,
+            view_mode:     view_mode_for(&saved.agent_type),
 
             state:              AgentState::Idle,
             status_text:        String::new(),
@@ -67,8 +70,13 @@ pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
 mod tests {
     use super::*;
 
+    /// `agent_type` defaults to `claude` (non-shell), so `view_mode` is set
+    /// to what `view_mode_for` coerces it to on load - keeps the round-trip
+    /// test below meaningful without re-deriving the coercion itself.
     fn saved_agent() -> SavedAgent {
-        SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj")
+        let mut saved = SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
+        saved.view_mode = crate::agent::view_mode_for(&saved.agent_type);
+        saved
     }
 
     #[test]
@@ -108,14 +116,35 @@ mod tests {
 
     #[test]
     fn view_mode_round_trips_through_save_and_load() {
-        let mut saved = saved_agent();
-        saved.view_mode = knot_core::ViewMode::Panel;
+        let saved = saved_agent();
 
         let agent = from_saved(&saved);
 
         assert_eq!(agent.view_mode, knot_core::ViewMode::Panel);
         assert_eq!(to_saved(&agent, false).view_mode,
                    knot_core::ViewMode::Panel);
+    }
+
+    #[test]
+    fn non_shell_agent_always_loads_as_panel_even_if_persisted_as_terminal() {
+        let mut saved = saved_agent();
+        saved.agent_type = "claude".to_string();
+        saved.view_mode = knot_core::ViewMode::Terminal;
+
+        let agent = from_saved(&saved);
+
+        assert_eq!(agent.view_mode, knot_core::ViewMode::Panel);
+    }
+
+    #[test]
+    fn shell_agent_always_loads_as_terminal_even_if_persisted_as_panel() {
+        let mut saved = saved_agent();
+        saved.agent_type = "shell".to_string();
+        saved.view_mode = knot_core::ViewMode::Panel;
+
+        let agent = from_saved(&saved);
+
+        assert_eq!(agent.view_mode, knot_core::ViewMode::Terminal);
     }
 
     #[test]

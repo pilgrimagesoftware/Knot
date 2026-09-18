@@ -64,7 +64,8 @@ impl WorkspaceManager {
                                                        split_ratio: 0.5,
                                                        split_ratio_secondary: None,
                                                        show_dashboard: None,
-                                                       is_detached: None });
+                                                       is_detached: None,
+                                                       window_bounds: None });
             store.set_current_workspace(id);
         }
         drop(store);
@@ -173,7 +174,7 @@ impl WorkspaceManager {
 }
 
 impl Render for WorkspaceManager {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let workspaces = self.store.lock().unwrap().workspaces().to_vec();
         let delete_name =
             self.delete_workspace_id.and_then(|id| {
@@ -194,6 +195,19 @@ impl Render for WorkspaceManager {
                         manager.move_before(drag.0, id, cx);
                     }),
                 )
+                // Double-click opens, matching the row's own "Open
+                // workspace" button; a single click only selects, so a
+                // click on the way to a rename or delete doesn't open a
+                // window.
+                .on_click(cx.listener(move |manager, event: &ClickEvent, _window, cx| {
+                    if event.click_count() >= 2 {
+                        manager.open(id, cx);
+                    }
+                    else {
+                        manager.select(id, cx);
+                    }
+                }))
+                .cursor_pointer()
                 .w_full()
                 .items_center()
                 .gap_3()
@@ -426,5 +440,6 @@ impl Render for WorkspaceManager {
                             )
                     })),
             )
+            .children(crate::app_support::root_overlays(window, cx))
     }
 }

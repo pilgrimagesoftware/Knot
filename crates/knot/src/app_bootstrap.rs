@@ -74,6 +74,50 @@ pub(crate) fn quit(_: &Quit, cx: &mut App) {
     cx.quit();
 }
 
+/// Quits on Ctrl-C (or `kill`) from the launching terminal.
+///
+/// Under `cargo run` the signal appeared to be swallowed: the Cocoa run
+/// loop keeps the process alive and nothing here handled it, so the only
+/// way out was Cmd+Q or killing the process from another shell. A
+/// terminal-launched process is expected to die on Ctrl-C, so this restores
+/// that. It exits rather than routing through `cx.quit()` because the
+/// handler runs off the main thread and cannot reach the app; the child
+/// PTYs go with the process, and the MCP server's listener is closed by the
+/// same exit.
+#[cfg(unix)]
+pub(crate) fn quit_on_terminal_signals() {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    std::thread::spawn(|| {
+        let runtime = match tokio::runtime::Builder::new_current_thread().enable_all()
+                                                                         .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                eprintln!("failed to start the signal runtime: {error}");
+                return;
+            }
+        };
+        runtime.block_on(async {
+                   let (Ok(mut interrupt), Ok(mut terminate)) =
+                       (signal(SignalKind::interrupt()), signal(SignalKind::terminate()))
+                   else {
+                       eprintln!("failed to install terminal signal handlers");
+                       return;
+                   };
+                   tokio::select! {
+                       _ = interrupt.recv() => {}
+                       _ = terminate.recv() => {}
+                   }
+                   // 128 + SIGINT, the conventional shell exit code.
+                   std::process::exit(130);
+               });
+    });
+}
+
+#[cfg(not(unix))]
+pub(crate) fn quit_on_terminal_signals() {}
+
 pub(crate) fn hide_app(_: &HideApp, cx: &mut App) {
     cx.hide();
 }
@@ -87,15 +131,25 @@ pub(crate) fn show_all_windows(_: &ShowAllWindows, cx: &mut App) {
 }
 
 pub(crate) fn about_knot(_: &AboutKnot, cx: &mut App) {
-    if let Some(window) = cx.active_window() {
-        let _ = window.update(cx, |_, window, cx| {
-                          window.open_alert_dialog(cx, |alert, _, _| {
-                                    alert
+    // Falls back to any open window: `active_window` can be empty (no
+    // window key at the moment the menu fires), and the silent `if let`
+    // this used to be made "About Knot" look like a dead menu item.
+    let window = cx.active_window().or_else(|| cx.windows().first().copied());
+    let Some(window) = window
+    else {
+        eprintln!("About Knot: no open window to show the dialog on");
+        return;
+    };
+    let result = window.update(cx, |_, window, cx| {
+                           window.open_alert_dialog(cx, |alert, _, _| {
+                                     alert
                     .title("About Knot")
                     .description("Knot is a workspace for coordinating coding agents.")
                     .show_cancel(false)
-                                });
-                      });
+                                 });
+                       });
+    if let Err(error) = result {
+        eprintln!("About Knot: window went away before the dialog opened: {error}");
     }
 }
 
@@ -145,6 +199,7 @@ pub(crate) fn run() {
     if let Err(err) = settings.install_default_personas() {
         eprintln!("failed to install default personas: {err}");
     }
+    quit_on_terminal_signals();
     let store = Arc::new(Mutex::new(build_agent_store(&settings)));
     let notifier = Arc::new(QueuedNotifier::new());
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
@@ -162,6 +217,9 @@ pub(crate) fn run() {
                            // rendered invisible. `AllAssets` embeds the complete Lucide catalog.
                            .with_assets(gpui_kit::assets::AllAssets)
                            .run(move |cx| {
+                               // Before `set_app_menus`: AppKit labels the
+                               // application menu from the process name.
+                               app_support::set_process_name(&knot_core::l10n::t("app.name"));
                                gpui_kit::init(cx);
                                Theme::change(cx.window_appearance(), None, cx);
                                apply_visual_identity(&settings, cx);
@@ -171,7 +229,15 @@ pub(crate) fn run() {
                                cx.on_action(hide_app);
                                cx.on_action(hide_others);
                                cx.on_action(show_all_windows);
-                               cx.bind_keys([KeyBinding::new("cmd-,", OpenSettings, None)]);
+                               // The standard macOS application-menu
+                               // shortcuts. A `MenuItem::action` only shows a
+                               // shortcut next to its label if the action has
+                               // a binding, so without these the menu read as
+                               // if Knot had none.
+                               cx.bind_keys([KeyBinding::new("cmd-q", Quit, None),
+                                             KeyBinding::new("cmd-,", OpenSettings, None),
+                                             KeyBinding::new("cmd-h", HideApp, None),
+                                             KeyBinding::new("cmd-alt-h", HideOthers, None)]);
                                cx.bind_keys([KeyBinding::new("cmd-shift-a",
                                                              PanelPermissionAllow,
                                                              None),
@@ -202,6 +268,10 @@ pub(crate) fn run() {
 
                                let options = manager_window_options(cx);
                                cx.open_window(options, |window, cx| {
+                                     // macOS leaves untitled windows out of
+                                     // the Window menu, which is why only
+                                     // open workspaces were listed there.
+                                     window.set_window_title(&knot_core::l10n::t("workspace.manager"));
                                      let name_input =
                     cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
                                      let view =
@@ -225,5 +295,11 @@ pub(crate) fn run() {
                                        })
                                  })
                                  .expect("failed to open workspace manager");
+                               // macOS launches a non-bundled binary without
+                               // making it frontmost, so without this the
+                               // window opens behind whatever was already on
+                               // screen. `activate` is the app-level
+                               // equivalent of ordering the window front.
+                               cx.activate(true);
                            });
 }

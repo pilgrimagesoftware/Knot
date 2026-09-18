@@ -15,6 +15,11 @@ use uuid::Uuid;
 use crate::{state_color, state_label};
 
 pub(crate) const CARD_WIDTH: f32 = 280.;
+/// Every agent card is this tall, whatever it has to show. Two of a card's
+/// four rows are conditional (the status line, the diff stat), so sizing to
+/// content left neighbouring cards visibly uneven; a fixed height keeps the
+/// grid uniform and the rows top-aligned within it.
+pub(crate) const CARD_HEIGHT: f32 = 124.;
 pub(crate) const GRID_SPACING: f32 = 16.;
 
 /// One agent's data as needed by a dashboard card - a plain snapshot, not a
@@ -115,7 +120,7 @@ pub(crate) fn sort_picker(current: DashboardSort,
 }
 
 /// One agent card: avatar, name, status, folder name, and git diff stats.
-fn agent_card(agent: &DashboardAgent,
+fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
               on_tap: impl Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static)
               -> impl IntoElement {
     let id = agent.id;
@@ -133,6 +138,9 @@ fn agent_card(agent: &DashboardAgent,
     v_flex().id(gpui_kit::ElementId::from(format!("dashboard-agent-card-{id}")))
             .cursor_pointer()
             .w(px(CARD_WIDTH))
+            .h(px(CARD_HEIGHT))
+            .overflow_hidden()
+            .justify_start()
             .gap_2()
             .p_3()
             .rounded_lg()
@@ -168,14 +176,7 @@ fn agent_card(agent: &DashboardAgent,
                                                 }))
             .children(git_stats.filter(|stats| stats.files_changed > 0)
                                .map(|stats| {
-                                   h_flex().gap_2()
-                                           .text_xs()
-                                           .text_color(rgb(0x888888))
-                                           .child(format!("+{}", stats.insertions))
-                                           .child(format!("-{}", stats.deletions))
-                                           .child(knot_core::l10n::pluralize(stats.files_changed,
-                                                                             "count.file",
-                                                                             "count.files"))
+                                   crate::app_state::diff_stats_row(&stats, muted).text_xs()
                                }))
             .on_click(move |_: &ClickEvent, window, cx| on_tap(id, window, cx))
 }
@@ -187,7 +188,7 @@ fn add_agent_tile(workspace_id: Uuid,
     h_flex().id(gpui_kit::ElementId::from(format!("dashboard-add-agent-{workspace_id}")))
             .cursor_pointer()
             .w(px(CARD_WIDTH))
-            .h(px(64.))
+            .h(px(CARD_HEIGHT))
             .gap_2()
             .items_center()
             .justify_center()
@@ -201,6 +202,7 @@ fn add_agent_tile(workspace_id: Uuid,
 /// One workspace's section: color bar + name (+ nav when global) + agent
 /// grid, or an "No agents" empty state.
 pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
+                                muted: gpui_kit::Hsla,
                                 on_agent_tap: impl Fn(Uuid,
                                    &mut gpui_kit::Window,
                                    &mut gpui_kit::App)
@@ -258,7 +260,7 @@ pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
                                .flex_wrap()
                                .gap(px(GRID_SPACING))
                                .children(workspace.agents.iter().map(|agent| {
-                                                                    agent_card(agent, {
+                                                                    agent_card(agent, muted, {
                                                                         let on_agent_tap =
                                                                             on_agent_tap.clone();
                                                                         move |id, window, cx| {

@@ -1,23 +1,6 @@
-//! Shell escaping and persona-to-prompt text, shared by every registration
-//! argument builder.
+//! Persona-to-prompt text for the ACP registration prompt.
 
 use knot_core::Persona;
-
-/// Escape a string for embedding inside a double-quoted shell argument:
-/// backslash, double quote, dollar sign, backtick, and exclamation mark.
-pub fn shell_escape(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for c in value.chars() {
-        match c {
-            '\\' | '"' | '$' | '`' | '!' => {
-                out.push('\\');
-                out.push(c);
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
 
 /// Build the "impersonate this persona" instruction text, or `None` when the
 /// persona has no instructions.
@@ -36,12 +19,6 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-
-    #[test]
-    fn shell_escape_covers_every_special_character() {
-        assert_eq!(shell_escape(r#"a\b"c$d`e!f"#), r#"a\\b\"c\$d\`e\!f"#);
-        assert_eq!(shell_escape("plain text"), "plain text");
-    }
 
     fn persona(instructions: &str) -> Persona {
         Persona { id:           Uuid::nil(),
