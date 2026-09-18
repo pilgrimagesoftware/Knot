@@ -41,10 +41,10 @@
 - [x] 4.3 Add the permission-mode selector, sourced from the session's
       available modes; disable with a tooltip when the adapter reports
       none. Verify: unit test covers the populated and disabled cases.
-- [ ] 4.4 Add the model selector, sourced from session capabilities, same
+- [x] 4.4 Add the model selector, sourced from session capabilities, same
       disabled-with-tooltip fallback. Verify: unit test covers populated
       and disabled cases.
-- [ ] 4.5 Add the effort selector, same pattern as 4.3/4.4. Verify: unit
+- [x] 4.5 Add the effort selector, same pattern as 4.3/4.4. Verify: unit
       test covers populated and disabled cases.
 - [x] 4.6 Add the send control: disabled while input is empty, and while a
       turn is in flight if the session doesn't support concurrent input.
