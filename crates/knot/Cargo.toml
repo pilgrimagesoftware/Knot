@@ -1,0 +1,39 @@
+[package]
+name = "knot"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+default-run = "knot"
+
+[dependencies]
+knot-acp = { path = "../knot-acp" }
+knot-agent-launch = { path = "../knot-agent-launch" }
+knot-core = { path = "../knot-core" }
+knot-agents = { path = "../knot-agents" }
+knot-git = { path = "../knot-git" }
+knot-activity = { path = "../knot-activity" }
+knot-discovery = { path = "../knot-discovery" }
+knot-messaging = { path = "../knot-messaging" }
+knot-mcp = { path = "../knot-mcp" }
+knot-mcp-tools = { path = "../knot-mcp-tools" }
+knot-terminal = { path = "../knot-terminal" }
+alacritty_terminal = "0.26.0"
+knot-history = { path = "../knot-history" }
+tokio.workspace = true
+uuid.workspace = true
+serde_json.workspace = true
+gpui-kit = "0.6"
+unicode-segmentation = "1.13"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = { version = "0.3", features = [
+    "NSFont",
+    "NSFontManager",
+    "NSFontPanel",
+    "NSApplication",
+    "objc2-core-foundation",
+] }

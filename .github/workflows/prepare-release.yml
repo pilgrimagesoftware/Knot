@@ -1,0 +1,20 @@
+name: Prepare Release
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    uses: sweetrpg/github-actions/.github/workflows/rust-prepare-release.yaml@master
+    with:
+      project-number: 5
+      base-branch: main
+      reviewer: paulyhedral
+      release-label: release
+    secrets:
+      SRPG_CI_APP_ID: ${{ secrets.SKWAD_CI_APP_ID }}
+      SRPG_CI_PRIVATE_KEY: ${{ secrets.SKWAD_CI_PRIVATE_KEY }}

@@ -48,7 +48,7 @@ Use this repo's fixed worktree convention (do not use `EnterWorktree` - it creat
 under `.claude/worktrees/`, which conflicts with the path used here):
 
 ```
-git worktree add /Users/paulyhedral/Projects/Code/skwad-rust-worktrees/<branch-slug> -b <branch-name> origin/main
+git worktree add /Users/paulyhedral/Projects/Code/Knot/Worktrees/<branch-slug> -b <branch-name> origin/main
 ```
 
 - `<branch-name>`: `<issue-number>-<change-name>`, matching GitHub's own suggested linked
