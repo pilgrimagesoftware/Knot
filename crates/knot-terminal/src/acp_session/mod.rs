@@ -47,8 +47,9 @@ impl AcpSession {
     async fn start_with_timeout(
         launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>, timeout: Duration)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        tokio::time::timeout(timeout, Self::start_inner(launch, cwd, prior_session_id)).await
-                                                                                       .unwrap_or(Err(AcpError::Timeout))
+        tokio::time::timeout(timeout, Self::start_inner(launch, cwd, prior_session_id))
+            .await
+            .unwrap_or(Err(AcpError::Timeout))
     }
 
     async fn start_inner(
@@ -296,8 +297,10 @@ mod tests {
         let install_script = format!("cat > '{bin_path_string}' <<'SCRIPT'\n#!/bin/sh\nwhile IFS= read -r line; do\n  id=$(echo \"$line\" | sed -E 's/.*\"id\":([0-9]+).*/\\1/')\n  method=$(echo \"$line\" | sed -nE 's/.*\"method\":\"([^\"]+)\".*/\\1/p')\n  case \"$method\" in\n    initialize) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"protocolVersion\\\":1,\\\"capabilities\\\":{{}}}}}}\" ;;\n    session/new) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"sessionId\\\":\\\"sess-installed\\\"}}}}\" ;;\n  esac\ndone\nSCRIPT\nchmod +x '{bin_path_string}'");
 
         let command: &'static str = Box::leak(bin_path_string.clone().into_boxed_str());
-        let install_args: &'static [&'static str] =
-            Box::leak(vec!["-c", Box::leak(install_script.into_boxed_str()) as &'static str].into_boxed_slice());
+        let install_args: &'static [&'static str] = Box::leak(vec![
+            "-c",
+            Box::leak(install_script.into_boxed_str()) as &'static str,
+        ].into_boxed_slice());
         let launch = AdapterLaunch { config:
                                          AdapterConfig { command,
                                                          args: &[],

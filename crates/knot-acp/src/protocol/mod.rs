@@ -5,6 +5,11 @@
 //! passthrough), since the agent's response may carry ACP fields this
 //! client doesn't yet use.
 
+mod json_rpc;
+
+pub use json_rpc::{
+    IncomingMessage, JsonRpcErrorPayload, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -12,76 +17,6 @@ use serde_json::Value;
 /// capability-negotiation requirement, a mismatched agent version fails the
 /// connection rather than guessing at compatibility.
 pub const PROTOCOL_VERSION: u32 = 1;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: &'static str,
-    pub id:      i64,
-    pub method:  String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub params:  Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct JsonRpcNotification {
-    pub jsonrpc: &'static str,
-    pub method:  String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub params:  Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: &'static str,
-    pub id:      Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result:  Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error:   Option<JsonRpcErrorPayload>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonRpcErrorPayload {
-    pub code:    i64,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data:    Option<Value>,
-}
-
-/// A message read off the subprocess's stdout: an id-bearing response to a
-/// request we sent, an id-bearing request the agent is sending us
-/// (e.g. `session/request_permission`), or an id-less notification
-/// (e.g. `session/update`).
-#[derive(Debug, Clone, Deserialize)]
-pub struct IncomingMessage {
-    #[serde(default)]
-    pub id:     Option<Value>,
-    #[serde(default)]
-    pub method: Option<String>,
-    #[serde(default)]
-    pub params: Option<Value>,
-    #[serde(default)]
-    pub result: Option<Value>,
-    #[serde(default)]
-    pub error:  Option<JsonRpcErrorPayload>,
-}
-
-impl IncomingMessage {
-    /// A server-to-client request (has both an id and a method).
-    pub fn is_request(&self) -> bool {
-        self.id.is_some() && self.method.is_some()
-    }
-
-    /// A notification (no id).
-    pub fn is_notification(&self) -> bool {
-        self.id.is_none() && self.method.is_some()
-    }
-
-    /// A response to a request we sent (has an id, no method).
-    pub fn is_response(&self) -> bool {
-        self.id.is_some() && self.method.is_none()
-    }
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct InitializeParams {

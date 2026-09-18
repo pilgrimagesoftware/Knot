@@ -4,7 +4,6 @@
 //! PTY transport can implement [`TerminalTransport`] without changing session
 //! lifecycle behavior.
 
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 mod acp_session;
@@ -12,19 +11,20 @@ mod grid;
 mod keys;
 mod mouse;
 mod pty;
+mod session;
 
 pub use acp_session::AcpSession;
 pub use grid::{Cell, ClipboardType, Grid, GridEvent, GridSize};
 pub use keys::{KeyInput, key_to_bytes};
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};
-use knot_agent_launch::{
-    LaunchRequest, build_agent_command, build_initialization_command, registration_prompt,
-    supports_inline_registration,
-};
+use knot_agent_launch::{registration_prompt, supports_inline_registration};
+#[cfg(test)]
 use knot_agents::Agent;
-use knot_core::{Persona, Settings};
+#[cfg(test)]
+use knot_core::Settings;
 pub use mouse::{MouseButton, MouseInput, mouse_to_bytes};
 pub use pty::PtyTransport;
+pub use session::{SessionConfig, SessionPlan, TerminalTransport};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -34,48 +34,6 @@ pub enum TerminalError {
 }
 
 pub type Result<T> = std::result::Result<T, TerminalError>;
-
-pub trait TerminalTransport: Send {
-    fn send_text(&mut self, text: &str) -> Result<()>;
-    fn send_return(&mut self) -> Result<()>;
-    fn terminate(&mut self) -> Result<()>;
-
-    /// Resizes the underlying terminal device, if any (a no-op for
-    /// transports with no such concept, e.g. tests' `FakeTransport`).
-    fn resize(&mut self, _rows: u16, _cols: u16) -> Result<()> {
-        Ok(())
-    }
-}
-
-pub struct SessionConfig<'a> {
-    pub settings:    &'a Settings,
-    pub agent:       &'a Agent,
-    pub persona:     Option<&'a Persona>,
-    pub plugin_root: Option<&'a Path>,
-}
-
-pub struct SessionPlan {
-    pub agent_command:          String,
-    pub initialization_command: String,
-}
-
-impl SessionPlan {
-    pub fn build(config: &SessionConfig<'_>) -> Self {
-        let request = LaunchRequest { agent_type:        &config.agent.agent_type,
-                                      agent_id:          Some(config.agent.id),
-                                      shell_command:     config.agent.shell_command.as_deref(),
-                                      resume_session_id: config.agent.resume_session_id.as_deref(),
-                                      fork_session:      config.agent.fork_session,
-                                      persona:           config.persona,
-                                      plugin_root:       config.plugin_root, };
-        let agent_command = build_agent_command(config.settings, &request);
-        let initialization_command = build_initialization_command(&config.agent.folder,
-                                                                  &agent_command,
-                                                                  Some(config.agent.id));
-        Self { agent_command,
-               initialization_command }
-    }
-}
 
 /// Default grid size for a freshly spawned session, before the UI resizes
 /// it to match the actual terminal pane (task 2.6 in the terminal-rendering

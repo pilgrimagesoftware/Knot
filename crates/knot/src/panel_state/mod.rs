@@ -213,18 +213,18 @@ mod tests {
     fn tool_call_lifecycle_builds_one_card() {
         let mut state = PanelState::new();
 
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart { tool_call_id:
-                                                                             "tc1".to_string(),
-                                                                         kind:
-                                                                             "execute".to_string() }));
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallUpdate { tool_call_id:
-                                                                              "tc1".to_string(),
-                                                                          status:
-                                                                              "running".to_string() }));
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallResult { tool_call_id:
-                                                                              "tc1".to_string(),
-                                                                          output:
-                                                                              json!({"exitCode": 0}) }));
+        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart {
+            tool_call_id: "tc1".to_string(),
+            kind: "execute".to_string(),
+        }));
+        state.apply(SessionEvent::Update(SessionUpdate::ToolCallUpdate {
+            tool_call_id: "tc1".to_string(),
+            status: "running".to_string(),
+        }));
+        state.apply(SessionEvent::Update(SessionUpdate::ToolCallResult {
+            tool_call_id: "tc1".to_string(),
+            output: json!({"exitCode": 0}),
+        }));
 
         assert_eq!(state.messages,
                    vec![PanelMessage::ToolCall(ToolCallCard { id:     "tc1".to_string(),
@@ -256,14 +256,14 @@ mod tests {
     #[test]
     fn turn_end_mid_tool_call_keeps_the_cards_last_known_state() {
         let mut state = PanelState::new();
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart { tool_call_id:
-                                                                             "tc1".to_string(),
-                                                                         kind:
-                                                                             "execute".to_string() }));
-        state.apply(SessionEvent::Update(SessionUpdate::ToolCallUpdate { tool_call_id:
-                                                                              "tc1".to_string(),
-                                                                          status:
-                                                                              "running".to_string() }));
+        state.apply(SessionEvent::Update(SessionUpdate::ToolCallStart {
+            tool_call_id: "tc1".to_string(),
+            kind: "execute".to_string(),
+        }));
+        state.apply(SessionEvent::Update(SessionUpdate::ToolCallUpdate {
+            tool_call_id: "tc1".to_string(),
+            status: "running".to_string(),
+        }));
 
         state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason:
                                                                       "end_turn".to_string(), }));

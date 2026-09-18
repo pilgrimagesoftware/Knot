@@ -21,21 +21,8 @@ use crate::protocol::{
     IncomingMessage, JsonRpcErrorPayload, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
 };
 
-/// One message the agent subprocess sent us that isn't a response to a
-/// request we made.
-#[derive(Debug, Clone)]
-pub enum TransportEvent {
-    Request {
-        id:     Value,
-        method: String,
-        params: Option<Value>,
-    },
-    Notification {
-        method: String,
-        params: Option<Value>,
-    },
-    Ended(SessionEndCause),
-}
+mod events;
+pub use events::TransportEvent;
 
 pub struct Transport {
     child:     Mutex<Child>,
