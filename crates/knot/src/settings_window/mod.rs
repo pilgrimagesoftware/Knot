@@ -1422,7 +1422,7 @@ impl PersonaEditor {
 }
 
 impl Render for PersonaEditor {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .gap_3()
@@ -1468,11 +1468,12 @@ impl Render for PersonaEditor {
                             .on_click(cx.listener(|editor, _, window, cx| editor.save(window, cx))),
                     ),
             )
+            .children(crate::app_support::root_overlays(window, cx))
     }
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match self.selected_tab {
             SettingsTab::General => self.render_general(cx).into_any_element(),
             SettingsTab::Coding => self.render_coding(cx).into_any_element(),
@@ -1501,5 +1502,6 @@ impl Render for SettingsWindow {
                 .bg(cx.theme().background)
                 .child(self.render_tab_strip(cx))
                 .child(settings_body.child(body))
+                .children(crate::app_support::root_overlays(window, cx))
     }
 }

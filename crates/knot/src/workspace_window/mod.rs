@@ -2545,5 +2545,6 @@ impl Render for WorkspaceWindow {
                                     .into_any_element()
                             })),
                     )
+                    .children(app_support::root_overlays(window, cx))
     }
 }

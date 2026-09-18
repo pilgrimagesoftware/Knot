@@ -162,6 +162,9 @@ pub(crate) fn run() {
                            // rendered invisible. `AllAssets` embeds the complete Lucide catalog.
                            .with_assets(gpui_kit::assets::AllAssets)
                            .run(move |cx| {
+                               // Before `set_app_menus`: AppKit labels the
+                               // application menu from the process name.
+                               app_support::set_process_name(&knot_core::l10n::t("app.name"));
                                gpui_kit::init(cx);
                                Theme::change(cx.window_appearance(), None, cx);
                                apply_visual_identity(&settings, cx);

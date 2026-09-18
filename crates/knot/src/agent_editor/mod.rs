@@ -306,7 +306,7 @@ impl AgentEditor {
 }
 
 impl Render for AgentEditor {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let editor = cx.entity();
         let personas = self.settings.personas.clone();
         let is_shell = self.agent_type == "shell";
@@ -507,5 +507,6 @@ impl Render for AgentEditor {
                             })),
                     ),
             )
+            .children(crate::app_support::root_overlays(window, cx))
     }
 }

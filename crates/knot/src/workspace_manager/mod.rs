@@ -173,7 +173,7 @@ impl WorkspaceManager {
 }
 
 impl Render for WorkspaceManager {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let workspaces = self.store.lock().unwrap().workspaces().to_vec();
         let delete_name =
             self.delete_workspace_id.and_then(|id| {
@@ -426,5 +426,6 @@ impl Render for WorkspaceManager {
                             )
                     })),
             )
+            .children(crate::app_support::root_overlays(window, cx))
     }
 }

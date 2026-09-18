@@ -191,3 +191,56 @@ pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App
     // mirrored Base layer that only `Theme::sync_base` re-derives.
     Theme::sync_base(cx);
 }
+
+/// The overlay layers `gpui_component::Root` does not draw for you.
+///
+/// `Root::render` paints its view plus the tooltip and menu overlays, but
+/// *not* `active_dialogs` - a dialog opened with `open_alert_dialog` is
+/// pushed onto the `Root` and then only appears if the application's own
+/// root view renders this layer. Upstream says as much on
+/// `render_dialog_layer`: "A dialog that opens into a root which never
+/// renders this layer looks exactly like one that does not open." No window
+/// in Knot rendered it, so every confirmation dialog in the app - restart
+/// and remove agent, delete workspace, restore defaults, About - opened
+/// invisibly and the click appeared to do nothing.
+///
+/// Every root view calls this, because `about_knot` opens its dialog on
+/// whichever window happens to be active.
+pub(crate) fn root_overlays(window: &mut Window, cx: &mut App) -> Vec<gpui_kit::AnyElement> {
+    let mut layers = Vec::new();
+    if let Some(layer) = Root::render_dialog_layer(window, cx) {
+        layers.push(layer.into_any_element());
+    }
+    if let Some(layer) = Root::render_sheet_layer(window, cx) {
+        layers.push(layer.into_any_element());
+    }
+    if let Some(layer) = Root::render_notification_layer(window, cx) {
+        layers.push(layer.into_any_element());
+    }
+    layers
+}
+
+/// Names the running process, so macOS shows "Knot" in the application
+/// menu rather than the executable's own lowercase name.
+///
+/// AppKit ignores the title given to the first `Menu` and labels the
+/// application menu from the process name, which for an unbundled binary
+/// is `argv[0]` - hence `knot`. `CFBundleName` would cover it once the
+/// Rust app ships as a real `.app`; until then this sets the same thing at
+/// runtime. Must run before the menu bar is built.
+#[cfg(target_os = "macos")]
+pub(crate) fn set_process_name(name: &str) {
+    use objc2_foundation::{NSProcessInfo, NSString};
+
+    let info = NSProcessInfo::processInfo();
+    let name = NSString::from_str(name);
+    // `setProcessName:` is declared on NSProcessInfo but not exposed by
+    // objc2-foundation's generated bindings, so it goes through a raw
+    // message send.
+    unsafe {
+        let _: () = objc2::msg_send![&*info, setProcessName: &*name];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn set_process_name(_name: &str) {}
