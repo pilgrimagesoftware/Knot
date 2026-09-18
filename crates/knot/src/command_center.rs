@@ -165,7 +165,10 @@ impl Render for CommandCenterWindow {
                             view.settings.clone(),
                             AgentEditorRequest {
                                 workspace_id,
-                                prefill_folder: folder,
+                                prefill: AgentPrefill {
+                                    folder,
+                                    ..Default::default()
+                                },
                                 insert_after,
                                 edit_target: None,
                             },

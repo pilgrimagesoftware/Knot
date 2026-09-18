@@ -52,3 +52,26 @@ fn edit_restarts_folder_changes_and_relocates_companions() {
     assert_ne!(store.agent(owner).unwrap().restart_token, owner_token);
     assert_eq!(store.agent(companion).unwrap().folder, "/tmp/new");
 }
+
+/// A fork continues the source's conversation without taking it away:
+/// the source keeps its own session, and the fork is marked as a fork so a
+/// later restart knows to clear the flag rather than resume into it.
+#[test]
+fn fork_session_points_a_new_agent_at_an_existing_session() {
+    let mut store = AgentStore::new();
+    let source = store.create("/tmp/a", CreateOptions::default());
+    store.set_session_id(source, "s1".to_string());
+    let fork = store.create("/tmp/a",
+                            CreateOptions { insert_after: Some(source),
+                                            ..Default::default() });
+
+    store.fork_session(fork, "s1").unwrap();
+
+    let forked = store.agent(fork).unwrap();
+    assert_eq!(forked.session_id.as_deref(), Some("s1"));
+    assert_eq!(forked.resume_session_id.as_deref(), Some("s1"));
+    assert!(forked.fork_session);
+    assert_eq!(store.agent(source).unwrap().session_id.as_deref(),
+               Some("s1"),
+               "forking must not take the session from the source");
+}

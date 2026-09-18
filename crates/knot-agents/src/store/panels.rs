@@ -15,6 +15,15 @@ impl AgentStore {
         Ok(())
     }
 
+    /// Closes the markdown panel without touching the history, so the file
+    /// stays reachable from that agent's "Markdown Files" menu afterwards.
+    pub fn clear_markdown_panel(&mut self, id: Uuid) -> Result<()> {
+        let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
+        agent.markdown_file = None;
+        agent.markdown_maximized = false;
+        Ok(())
+    }
+
     pub fn set_mermaid_panel(&mut self, id: Uuid, source: String, title: Option<String>)
                              -> Result<()> {
         let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
