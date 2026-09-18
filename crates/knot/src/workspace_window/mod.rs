@@ -2133,6 +2133,45 @@ impl Render for WorkspaceWindow {
                                    },
             );
 
+        // The dashboard sits at the top of the agent list, the way the
+        // Swift reference's `overviewRow` does (`SidebarView.swift`), and
+        // not as an icon in the bottom bar: it is the workspace's overview
+        // of every agent, so it belongs above them, shaped like the rows it
+        // summarises. As a bare icon beside "New agent" it read as a minor
+        // control and went unnoticed.
+        let dashboard_row =
+            div().id("workspace-dashboard-row")
+                 .cursor_pointer()
+                 .rounded(cx.theme().radius)
+                 .p_2()
+                 .bg(if is_dashboard {
+                     cx.theme().muted
+                 }
+                 else {
+                     cx.theme().transparent
+                 })
+                 .child(h_flex().w_full()
+                                .gap_3()
+                                .items_center()
+                                .child(div().w(px(40.))
+                                            .h(px(40.))
+                                            .flex_shrink_0()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .child(Icon::default().path("icons/layout-dashboard.svg")))
+                                .child(div().flex_1()
+                                            .min_w_0()
+                                            .font_semibold()
+                                            .child(knot_core::l10n::t("dashboard.title"))))
+                 .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                     view.view_mode = match view.view_mode {
+                         WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,
+                         _ => WorkspaceViewMode::Dashboard,
+                     };
+                     cx.notify();
+                 }));
+
         let selected_header = self.selected_agent_header();
 
         let dashboard_workspace =
@@ -2426,7 +2465,10 @@ impl Render for WorkspaceWindow {
                             .flex_1()
                             .min_h_0()
                             .overflow_y_scroll()
-                            .child(v_flex().gap_1().p_4().children(agent_rows)),
+                            .child(v_flex().gap_1()
+                                           .p_4()
+                                           .child(dashboard_row)
+                                           .children(agent_rows)),
                     )
                     .children(
                         self.error
@@ -2454,26 +2496,6 @@ impl Render for WorkspaceWindow {
                                         },
                                     )),
                             )
-                            .child(
-                                SettingsWindow::icon_button(
-                                    "workspace-dashboard",
-                                    "icons/layout-dashboard.svg",
-                                    "Dashboard",
-                                    false,
-                                )
-                                .selected(is_dashboard)
-                                .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
-                                    view.view_mode = match view.view_mode {
-                                        WorkspaceViewMode::Terminal => {
-                                            WorkspaceViewMode::Dashboard
-                                        }
-                                        WorkspaceViewMode::Dashboard => {
-                                            WorkspaceViewMode::Terminal
-                                        }
-                                    };
-                                    cx.notify();
-                                })),
-                            ),
                     ),
             )
             .child(
