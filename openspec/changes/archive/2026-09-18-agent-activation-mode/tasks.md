@@ -69,16 +69,16 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Confirm layout restore does not activate a passive agent: restoring
+- [x] 4.1 Confirm layout restore does not activate a passive agent: restoring
       a layout sets the selection without going through the activation path.
       Verify by relaunching with a restored workspace holding a passive
       agent and confirming no adapter subprocess is spawned for it
       (`ps` for the adapter, or the absence of its connecting pane).
-- [ ] 4.2 Confirm an existing settings file is unaffected: with a settings
+- [x] 4.2 Confirm an existing settings file is unaffected: with a settings
       file written before this change, every agent still starts when its
       workspace opens.
 - [x] 4.3 `make rust` passes clean.
-- [ ] 4.4 Manually, in the app: open a workspace of mixed agents and confirm
+- [x] 4.4 Manually, in the app: open a workspace of mixed agents and confirm
       only the active ones start; activate a passive one; deactivate it;
       deactivate an owner with companions; change a running agent's mode and
       confirm it keeps running.
