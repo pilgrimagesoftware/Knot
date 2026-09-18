@@ -444,7 +444,7 @@ impl WorkspaceWindow {
         self.panel_phases.remove(&id);
         if let Some(slot) = self.panel_sessions.remove(&id) {
             let handle = match std::mem::replace(&mut *slot.lock().unwrap(),
-                                                 panel_session::PanelSessionSlot::Connecting)
+                                                 panel_session::PanelSessionSlot::connecting().0)
             {
                 panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
                 _ => None,
@@ -525,7 +525,8 @@ impl WorkspaceWindow {
                           .mcp_server_enabled
                           .then(|| knot_agent_launch::mcp_url(&self.settings));
 
-        let slot = Arc::new(Mutex::new(panel_session::PanelSessionSlot::Connecting));
+        let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
+        let slot = Arc::new(Mutex::new(connecting));
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
         let prior_session_id = agent.acp_session_id.clone();
@@ -541,6 +542,7 @@ impl WorkspaceWindow {
                 &cwd,
                 prior_session_id.as_deref(),
                 mcp_url.as_deref(),
+                &progress,
             )
             .await
             {
@@ -549,6 +551,9 @@ impl WorkspaceWindow {
                         store.set_acp_session_id(id, handle.session_id().to_string());
                     }
                     if let Some(prompt) = registration_prompt {
+                        if let Ok(mut step) = progress.lock() {
+                            *step = knot_terminal::ConnectStep::Registering;
+                        }
                         handle.record_user_message(prompt.clone());
                         if let Err(error) = handle.prompt(&prompt).await {
                             eprintln!("failed to send panel registration prompt: {error}");
@@ -577,13 +582,17 @@ impl WorkspaceWindow {
         };
         let slot_guard = slot.lock().unwrap();
         match &*slot_guard {
-            panel_session::PanelSessionSlot::Connecting => div().size_full()
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_center()
-                                                                .text_color(rgb(0x9CA3AF))
-                                                                .child("Connecting to agent…")
-                                                                .into_any_element(),
+            panel_session::PanelSessionSlot::Connecting(progress) => {
+                let step = progress.lock().map(|step| step.label()).unwrap_or_default();
+                v_flex().size_full()
+                        .items_center()
+                        .justify_center()
+                        .gap_1()
+                        .child(div().text_color(rgb(0x9CA3AF))
+                                    .child("Connecting to agent…"))
+                        .child(div().text_xs().text_color(rgb(0x6B7280)).child(step))
+                        .into_any_element()
+            }
             panel_session::PanelSessionSlot::Failed(message) => {
                 div().size_full()
                      .p_4()

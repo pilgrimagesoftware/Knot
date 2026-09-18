@@ -4,6 +4,7 @@
 //! `openspec/specs/acp-panel-ui/spec.md`'s "Switch to Terminal mid-turn"
 //! scenario.
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use knot_acp::{
@@ -13,6 +14,52 @@ use knot_acp::{
 use knot_agent_launch::{AdapterConfig, InstallMethod};
 use tokio::process::Command;
 use tokio::sync::mpsc;
+
+/// What a connection attempt is currently doing, so the caller can show
+/// progress instead of an unchanging "Connecting…" through a spawn, a
+/// package install, and a session handshake - steps that between them can
+/// take tens of seconds.
+///
+/// `Copy` and `Eq` on purpose: the UI detects progress by comparing the
+/// step it last drew against the current one, so a step must be cheap to
+/// snapshot and compare.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectStep {
+    /// Spawning the adapter and negotiating capabilities with it.
+    Starting { program: &'static str },
+    /// Running the adapter's declared install command, because the binary
+    /// wasn't on `PATH`. Much the slowest step when it happens.
+    Installing { program: &'static str },
+    /// Attempting `session/load` for a previously saved session.
+    Resuming,
+    /// Opening a fresh session with `session/new`.
+    OpeningSession,
+    /// Connected; the caller is sending its registration prompt.
+    Registering,
+}
+
+impl ConnectStep {
+    /// A sentence for the connecting placeholder, in the caller's voice.
+    pub fn label(self) -> String {
+        match self {
+            Self::Starting { program } => format!("Starting {program}…"),
+            Self::Installing { program } => format!("Installing {program}…"),
+            Self::Resuming => "Resuming the previous session…".to_string(),
+            Self::OpeningSession => "Opening a session…".to_string(),
+            Self::Registering => "Registering with Knot…".to_string(),
+        }
+    }
+}
+
+/// A connection attempt's current [`ConnectStep`], shared between the
+/// background connect task and whatever is rendering its progress.
+pub type ConnectProgress = Arc<Mutex<ConnectStep>>;
+
+fn report(progress: &ConnectProgress, step: ConnectStep) {
+    if let Ok(mut current) = progress.lock() {
+        *current = step;
+    }
+}
 
 /// A live ACP connection for one agent: the adapter subprocess plus its
 /// open session id. Cheap to clone - see `knot_acp::AcpClient`'s doc
@@ -41,22 +88,31 @@ impl AcpSession {
     /// fallback requirement. Fails with `AcpError::Timeout` rather than
     /// hanging if the adapter never responds.
     pub async fn start(
-        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>)
+        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
+        progress: &ConnectProgress)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        Self::start_with_timeout(config, cwd, prior_session_id, mcp_url, CONNECT_TIMEOUT).await
+        Self::start_with_timeout(config,
+                                 cwd,
+                                 prior_session_id,
+                                 mcp_url,
+                                 progress,
+                                 CONNECT_TIMEOUT).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn start_with_timeout(
         config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        timeout: Duration)
+        progress: &ConnectProgress, timeout: Duration)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        tokio::time::timeout(timeout, Self::start_inner(config, cwd, prior_session_id, mcp_url))
+        tokio::time::timeout(timeout,
+                             Self::start_inner(config, cwd, prior_session_id, mcp_url, progress))
             .await
             .unwrap_or(Err(AcpError::Timeout))
     }
 
     async fn start_inner(
-        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>)
+        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
+        progress: &ConnectProgress)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
         let build_command = || {
             let mut command = Command::new(config.command);
@@ -64,6 +120,7 @@ impl AcpSession {
             command
         };
 
+        report(progress, ConnectStep::Starting { program: config.command, });
         let (client, events) = match AcpClient::connect(build_command()).await {
             Err(AcpError::Spawn(error))
                 if error.kind() == std::io::ErrorKind::NotFound
@@ -75,7 +132,10 @@ impl AcpSession {
                 // for confirmation. Adapters with no declared install
                 // method (`install: None`) fall through to the original
                 // spawn error unchanged.
+                report(progress,
+                       ConnectStep::Installing { program: install.command, });
                 run_install(install).await?;
+                report(progress, ConnectStep::Starting { program: config.command, });
                 AcpClient::connect(build_command()).await?
             }
             other => other?,
@@ -83,12 +143,19 @@ impl AcpSession {
 
         let session = match prior_session_id {
             Some(prior) if client.capabilities().supports_resume => {
+                report(progress, ConnectStep::Resuming);
                 match client.session_load(prior, cwd, mcp_url).await {
                     Ok(session) => session,
-                    Err(_) => client.session_new(cwd, mcp_url).await?,
+                    Err(_) => {
+                        report(progress, ConnectStep::OpeningSession);
+                        client.session_new(cwd, mcp_url).await?
+                    }
                 }
             }
-            _ => client.session_new(cwd, mcp_url).await?,
+            _ => {
+                report(progress, ConnectStep::OpeningSession);
+                client.session_new(cwd, mcp_url).await?
+            }
         };
 
         Ok((Self { client,
@@ -175,6 +242,11 @@ mod tests {
     use super::*;
     use crate::{TerminalError, TerminalTransport};
 
+    /// A throwaway progress cell for tests that don't assert on progress.
+    fn no_progress() -> ConnectProgress {
+        Arc::new(Mutex::new(ConnectStep::Starting { program: "test" }))
+    }
+
     #[derive(Default)]
     struct FakeTransport {
         sent: Arc<Mutex<Vec<String>>>,
@@ -240,8 +312,12 @@ mod tests {
         terminal_session.send_text("terminal is alive").unwrap();
 
         let (session, _config_options, mut events) =
-            AcpSession::start(&fake_adapter_launch(), "/tmp/project", None, None).await
-                                                                                 .expect("connect");
+            AcpSession::start(&fake_adapter_launch(),
+                              "/tmp/project",
+                              None,
+                              None,
+                              &no_progress()).await
+                                             .expect("connect");
         assert_eq!(session.session_id(), "sess-1");
 
         // The ACP update the fake adapter streamed right after session/new
@@ -278,6 +354,7 @@ mod tests {
                                                     "/tmp/project",
                                                     None,
                                                     None,
+                                                    &no_progress(),
                                                     std::time::Duration::from_millis(50)).await;
 
         assert!(matches!(result, Err(AcpError::Timeout)));
@@ -307,8 +384,8 @@ mod tests {
                                                                    args:    install_args, }) };
 
         let (session, _config_options, _events) =
-            AcpSession::start(&launch, "/tmp/project", None, None).await
-                                                                  .expect("connect after auto-install");
+            AcpSession::start(&launch, "/tmp/project", None, None, &no_progress()).await
+                                                                                  .expect("connect after auto-install");
 
         assert_eq!(session.session_id(), "sess-installed");
         assert!(bin_path.exists(),

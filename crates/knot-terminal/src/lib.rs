@@ -13,7 +13,7 @@ mod mouse;
 mod pty;
 mod session;
 
-pub use acp_session::AcpSession;
+pub use acp_session::{AcpSession, ConnectProgress, ConnectStep};
 pub use grid::{Cell, ClipboardType, Grid, GridEvent, GridSize};
 pub use keys::{KeyInput, key_to_bytes};
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use knot_acp::{PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent};
 use knot_agent_launch::AdapterConfig;
-use knot_terminal::AcpSession;
+use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
 
 use crate::panel_state::PanelState;
 
@@ -25,10 +25,10 @@ impl PanelSessionHandle {
     /// the session ends. `mcp_url` is Knot's own MCP HTTP server URL, wired
     /// into the session when MCP is enabled.
     pub async fn start(config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>,
-                       mcp_url: Option<&str>)
+                       mcp_url: Option<&str>, progress: &ConnectProgress)
                        -> AcpResult<Self> {
         let (session, config_options, mut events) =
-            AcpSession::start(config, cwd, prior_session_id, mcp_url).await?;
+            AcpSession::start(config, cwd, prior_session_id, mcp_url, progress).await?;
         let mut initial_state = PanelState::new();
         initial_state.config_options = config_options;
         let state = Arc::new(Mutex::new(initial_state));
@@ -145,21 +145,41 @@ impl PanelSessionHandle {
 /// with a visible error" requirement - the caller renders `Failed`'s
 /// message rather than hanging on `Connecting` forever).
 pub enum PanelSessionSlot {
-    Connecting,
+    /// Connecting, carrying the step the attempt is currently on so the
+    /// placeholder can say what it's waiting for.
+    Connecting(ConnectProgress),
     Ready(PanelSessionHandle),
     Failed(String),
 }
 
 impl PanelSessionSlot {
+    /// A fresh `Connecting` slot and the progress cell the connect task
+    /// writes to - the two halves of the same handle, so the caller can't
+    /// accidentally hand the task a cell the slot isn't watching.
+    pub fn connecting() -> (Self, ConnectProgress) {
+        let progress: ConnectProgress =
+            Arc::new(Mutex::new(ConnectStep::Starting { program: "the agent", }));
+        (Self::Connecting(Arc::clone(&progress)), progress)
+    }
+
     /// Which lifecycle phase this slot is in, without borrowing the
     /// handle. The UI's repaint poll compares this against the phase it
     /// last drew: the connecting task writes the slot from a background
     /// thread, and neither `Connecting` nor `Failed` carries a dirty flag
     /// of its own, so without this a failed connection would leave the
     /// pane showing "Connecting to agent…" forever.
+    ///
+    /// `Connecting` carries its step, so advancing through the connect
+    /// sequence counts as a change and repaints too - that is what keeps
+    /// the progress line live without a second dirty channel.
     pub fn phase(&self) -> PanelPhase {
         match self {
-            Self::Connecting => PanelPhase::Connecting,
+            Self::Connecting(progress) => {
+                PanelPhase::Connecting(progress.lock()
+                                               .map(|step| *step)
+                                               .unwrap_or(ConnectStep::Starting { program:
+                                                                                      "the agent", }))
+            }
             Self::Ready(_) => PanelPhase::Ready,
             Self::Failed(_) => PanelPhase::Failed,
         }
@@ -168,7 +188,7 @@ impl PanelSessionSlot {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelPhase {
-    Connecting,
+    Connecting(ConnectStep),
     Ready,
     Failed,
 }
