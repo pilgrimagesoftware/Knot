@@ -19,12 +19,12 @@
 
 ## 3. The card
 
-- [ ] 3.1 Render the header's disclosure control, reflecting
+- [x] 3.1 Render the header's disclosure control, reflecting
       `is_collapsed`, and hide the content when collapsed. Verify in the app
       that a succeeding call folds to its header and a failing one does not.
-- [ ] 3.2 Make the header row toggle the card, not only the chevron. Verify
+- [x] 3.2 Make the header row toggle the card, not only the chevron. Verify
       in the app by clicking the title.
-- [ ] 3.3 Confirm collapsing does not move the viewport: with auto-scroll
+- [x] 3.3 Confirm collapsing does not move the viewport: with auto-scroll
       following, the panel stays at the end; with the user scrolled back, the
       content they are reading stays put. Verify in the app with a turn long
       enough to scroll.
@@ -32,6 +32,6 @@
 ## 4. Verification
 
 - [x] 4.1 `make rust` passes clean.
-- [ ] 4.2 In the app, run a turn with several tool calls and confirm the
+- [x] 4.2 In the app, run a turn with several tool calls and confirm the
       conversation reads as the agent's replies with folded calls between
       them, and that opening one leaves the rest alone.
