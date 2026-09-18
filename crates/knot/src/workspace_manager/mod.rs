@@ -194,6 +194,19 @@ impl Render for WorkspaceManager {
                         manager.move_before(drag.0, id, cx);
                     }),
                 )
+                // Double-click opens, matching the row's own "Open
+                // workspace" button; a single click only selects, so a
+                // click on the way to a rename or delete doesn't open a
+                // window.
+                .on_click(cx.listener(move |manager, event: &ClickEvent, _window, cx| {
+                    if event.click_count() >= 2 {
+                        manager.open(id, cx);
+                    }
+                    else {
+                        manager.select(id, cx);
+                    }
+                }))
+                .cursor_pointer()
                 .w_full()
                 .items_center()
                 .gap_3()
