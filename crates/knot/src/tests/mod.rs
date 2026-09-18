@@ -125,6 +125,17 @@ fn agent_menu_facts_are_empty_for_a_missing_agent() {
     assert!(history.is_empty());
 }
 
+/// "New Companion…" routes through the editor, which has an agent-type
+/// picker; a companion created as anything but `shell` is one the MCP
+/// `create-agent` tool would refuse and `create_shell_companion` cannot
+/// produce, so the editor must not be able to make one either.
+#[test]
+fn a_companion_is_always_created_as_a_shell_agent() {
+    assert_eq!(created_agent_type(true, "claude"), "shell");
+    assert_eq!(created_agent_type(true, "shell"), "shell");
+    assert_eq!(created_agent_type(false, "claude"), "claude");
+}
+
 #[test]
 fn agent_context_menu_hides_register_for_a_shell_agent() {
     let facts = AgentMenuFacts { is_shell: true,

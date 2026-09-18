@@ -25,6 +25,22 @@ pub(crate) struct AgentPrefill {
     pub(crate) session_id:   Option<String>,
 }
 
+/// The agent type a submitted create actually uses.
+///
+/// A companion is a shell agent by definition - `create_shell_companion`
+/// hardcodes the type, and the MCP `create-agent` tool refuses `companion`
+/// for anything else - so a companion-creating editor ignores whatever the
+/// type field holds rather than creating a companion the rest of the stack
+/// rejects.
+pub(crate) fn created_agent_type(creating_a_companion: bool, chosen: &str) -> String {
+    if creating_a_companion {
+        "shell".to_string()
+    }
+    else {
+        chosen.to_string()
+    }
+}
+
 pub(crate) struct AgentEditorRequest {
     pub(crate) workspace_id: Uuid,
     /// What the new agent starts from. Ignored when `edit_target` is set.
@@ -190,7 +206,8 @@ impl AgentEditor {
             return;
         }
         let avatar = self.avatar_input.read(cx).value().trim().to_string();
-        let agent_type = self.agent_type.clone();
+        // Defence in depth for the same invariant the form states above.
+        let agent_type = created_agent_type(self.creating_a_companion(), &self.agent_type);
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
         let created_id = {
             let mut store = self.store.lock().unwrap();
@@ -275,6 +292,13 @@ impl AgentEditor {
         let _ = self.settings.persist();
         (self.on_created)(id, window, cx);
         window.remove_window();
+    }
+
+    /// Whether this editor is creating a companion rather than a standalone
+    /// agent - true only in create mode, since editing never turns an agent
+    /// into a companion.
+    fn creating_a_companion(&self) -> bool {
+        self.edit_target.is_none() && self.prefill.is_companion
     }
 
     fn choose_folder(&mut self, cx: &mut Context<Self>) {
@@ -385,7 +409,19 @@ impl Render for AgentEditor {
             .into_any_element(),
         ];
 
-        let mut agent_rows = vec![
+        // A companion is a shell agent by definition: `create_shell_companion`
+        // hardcodes the type, and the MCP `create-agent` tool refuses
+        // `companion` for anything else. Offering the picker here would let
+        // this one path create a companion the rest of the stack rejects, so
+        // it states the type instead of asking for it.
+        let mut agent_rows = if self.creating_a_companion() {
+            vec![Self::dialog_row("Coding agent",
+                                  div().text_color(cx.theme().muted_foreground)
+                                       .child(SettingsWindow::agent_type_label("shell")))
+                 .into_any_element()]
+        }
+        else {
+            vec![
             Self::dialog_row(
                 "Coding agent",
                 Button::new("agent-type-picker")
@@ -420,7 +456,8 @@ impl Render for AgentEditor {
                     }),
             )
             .into_any_element(),
-        ];
+        ]
+        };
         if is_shell && self.edit_target.is_none() {
             agent_rows.push(
                 Self::dialog_row(
