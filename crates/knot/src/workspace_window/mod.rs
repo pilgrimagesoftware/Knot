@@ -1669,10 +1669,10 @@ impl WorkspaceWindow {
     fn open_new_agent_dialog(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         open_agent_editor(Arc::clone(&self.store),
                           self.settings.clone(),
-                          AgentEditorRequest { workspace_id:   self.workspace_id,
-                                               prefill_folder: None,
-                                               insert_after:   None,
-                                               edit_target:    None, },
+                          AgentEditorRequest { workspace_id: self.workspace_id,
+                                               prefill:      AgentPrefill::default(),
+                                               insert_after: None,
+                                               edit_target:  None, },
                           Self::select_and_focus_created_agent(cx),
                           cx);
     }
@@ -2019,7 +2019,7 @@ impl Render for WorkspaceWindow {
                                         settings.clone(),
                                         AgentEditorRequest {
                                             workspace_id,
-                                            prefill_folder: None,
+                                            prefill: AgentPrefill::default(),
                                             insert_after: None,
                                             edit_target: Some(id),
                                         },
@@ -2230,8 +2230,9 @@ impl Render for WorkspaceWindow {
                                       open_agent_editor(Arc::clone(&view.store),
                                                         view.settings.clone(),
                                                         AgentEditorRequest { workspace_id,
-                                                                             prefill_folder:
-                                                                                 folder,
+                                                                             prefill:
+                                                                                 AgentPrefill { folder,
+                                                                                                ..Default::default() },
                                                                              insert_after,
                                                                              edit_target: None },
                                                         on_created,

@@ -98,11 +98,15 @@ fn agent_context_menu_never_emits_a_stray_divider() {
                                                  has_move_targets,
                                                  has_markdown_history };
                     let entries = agent_context_menu_entries(facts);
-                    assert_ne!(entries.first(), Some(&AgentMenuEntry::Separator), "{facts:?}");
-                    assert_ne!(entries.last(), Some(&AgentMenuEntry::Separator), "{facts:?}");
-                    assert!(!entries.windows(2)
-                                    .any(|pair| pair == [AgentMenuEntry::Separator,
-                                                         AgentMenuEntry::Separator]),
+                    assert_ne!(entries.first(),
+                               Some(&AgentMenuEntry::Separator),
+                               "{facts:?}");
+                    assert_ne!(entries.last(),
+                               Some(&AgentMenuEntry::Separator),
+                               "{facts:?}");
+                    assert!(!entries.windows(2).any(|pair| pair
+                                                           == [AgentMenuEntry::Separator,
+                                                               AgentMenuEntry::Separator]),
                             "{facts:?}");
                 }
             }

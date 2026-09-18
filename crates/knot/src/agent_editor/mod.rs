@@ -1,18 +1,41 @@
 use super::*;
+
+/// What a new agent starts out as when the editor is opened to create one
+/// *derived* from an existing agent - a fork, or a companion of it -
+/// rather than from nothing. Mirrors the Swift reference's `AgentPrefill`
+/// (`Skwad/Models/Agent.swift`). Every field is ignored when the editor
+/// opens in edit mode.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AgentPrefill {
+    pub(crate) name:         Option<String>,
+    pub(crate) avatar:       Option<String>,
+    /// Folder for the new agent, the way the Swift reference's
+    /// `addAgent(to:)` does from a dashboard's "Add Agent" tile: copied
+    /// from an existing agent in the workspace.
+    pub(crate) folder:       Option<String>,
+    pub(crate) agent_type:   Option<String>,
+    pub(crate) persona_id:   Option<Uuid>,
+    /// The owner, when creating a companion of an existing agent.
+    pub(crate) created_by:   Option<Uuid>,
+    pub(crate) is_companion: bool,
+    /// The session the new agent continues, when forking. The created
+    /// agent carries it as both its session id and its resume target, with
+    /// the fork flag set, so the fork picks the conversation up rather than
+    /// taking it over.
+    pub(crate) session_id:   Option<String>,
+}
+
 pub(crate) struct AgentEditorRequest {
-    pub(crate) workspace_id:   Uuid,
-    /// Prefilled folder for a new agent, the way the Swift reference's
-    /// `addAgent(to:)` does when launched from a dashboard's "Add Agent"
-    /// tile: folder copied from an existing agent in the workspace. Ignored
-    /// when `edit_target` is set.
-    pub(crate) prefill_folder: Option<String>,
+    pub(crate) workspace_id: Uuid,
+    /// What the new agent starts from. Ignored when `edit_target` is set.
+    pub(crate) prefill:      AgentPrefill,
     /// Where to insert a newly created agent. Ignored when `edit_target` is
     /// set - editing never moves an agent's position.
-    pub(crate) insert_after:   Option<Uuid>,
+    pub(crate) insert_after: Option<Uuid>,
     /// `Some(id)` opens the dialog in edit mode for that existing agent
     /// (prefilled from it, submitting via `AgentStore::edit`) instead of
     /// creating a new one.
-    pub(crate) edit_target:    Option<Uuid>,
+    pub(crate) edit_target:  Option<Uuid>,
 }
 
 /// Opens the agent editor dialog, in create or edit mode depending on
@@ -23,7 +46,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                 on_created: impl Fn(Uuid, &mut Window, &mut App) + 'static,
                                 cx: &mut App) {
     let AgentEditorRequest { workspace_id,
-                             prefill_folder,
+                             prefill,
                              insert_after,
                              edit_target, } = request;
     // Re-read from disk rather than trusting the caller's copy. Every
@@ -47,7 +70,10 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
               let name_input = cx.new(|cx| {
                                      InputState::new(window, cx)
                 .placeholder("Name")
-                .default_value(editing.as_ref().map(|a| a.name.clone()).unwrap_or_default())
+                .default_value(editing.as_ref()
+                                      .map(|a| a.name.clone())
+                                      .or_else(|| prefill.name.clone())
+                                      .unwrap_or_default())
                                  });
               let shell_command_input =
                   cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
@@ -56,6 +82,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                 editing
                     .as_ref()
                     .map(|a| a.avatar.clone())
+                    .or_else(|| prefill.avatar.clone())
                     .unwrap_or_else(|| "🤖".to_string()),
             )
                                    });
@@ -76,7 +103,9 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                         cx.notify();
                                                     }
                                                 });
-                               let persona_id = editing.as_ref().and_then(|a| a.persona_id);
+                               let persona_id = editing.as_ref()
+                                                       .map(|a| a.persona_id)
+                                                       .unwrap_or(prefill.persona_id);
                                AgentEditor { store,
                                              settings,
                                              workspace_id,
@@ -87,14 +116,16 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                              _name_subscription: name_subscription,
                                              folder_path: editing.as_ref()
                                                                  .map(|a| a.folder.clone())
-                                                                 .or(prefill_folder)
+                                                                 .or_else(|| prefill.folder.clone())
                                                                  .unwrap_or_default(),
                                              agent_type:
                                                  editing.as_ref()
                                                         .map(|a| a.agent_type.clone())
+                                                        .or_else(|| prefill.agent_type.clone())
                                                         .unwrap_or_else(|| "claude".to_string()),
                                              persona_id,
                                              original_persona_id: persona_id,
+                                             prefill,
                                              insert_after,
                                              edit_target,
                                              on_created: Box::new(on_created),
@@ -121,6 +152,10 @@ pub(crate) struct AgentEditor {
     /// (`EditRequest::persona_changed`) rather than always forcing a
     /// restart.
     original_persona_id:  Option<Uuid>,
+    /// What this editor was opened to derive the new agent from - carries
+    /// the owner for a companion and the session for a fork, neither of
+    /// which the form itself can express.
+    prefill:              AgentPrefill,
     insert_after:         Option<Uuid>,
     /// `Some(id)` when editing an existing agent instead of creating one -
     /// gates prefill, the submit button's label/handler, and whether the
@@ -169,9 +204,18 @@ impl AgentEditor {
                     shell_command: (!shell_command.is_empty()).then_some(shell_command),
                     persona_id: self.persona_id,
                     insert_after: self.insert_after,
-                    ..Default::default()
+                    created_by: self.prefill.created_by,
+                    is_companion: self.prefill.is_companion,
                 },
             );
+            // A fork continues the source's conversation rather than
+            // starting its own, so the new agent carries the session as
+            // both its id and its resume target with the fork flag set -
+            // `CreateOptions` has no field for any of the three, because
+            // every other creation path starts a session from scratch.
+            if let Some(session) = self.prefill.session_id.clone() {
+                let _ = store.fork_session(id, session);
+            }
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
