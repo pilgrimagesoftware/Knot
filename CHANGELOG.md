@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - Branch protection on `main` requiring the Rust workspace CI matrix
 - `docs/adr/0001-git-flow.md` recording the git-flow adoption
 - `prepare-release.yml` / `tag-release.yml` / `release.yml` workflows automating the git-flow release cycle
+- `cargo-packager` config for `crates/knot` and `make rust-package`, building `Knot.app` and a DMG
+- `package.yml` workflow packaging `Knot.app` on every merge to `develop` and attaching the DMG to each GitHub Release
 
 ### Changed
 - `AGENTS.md` rewritten around the Rust port; `CLAUDE.md` is now a symlink to it

@@ -44,3 +44,26 @@ objc2-app-kit = { version = "0.3", features = [
 # dialogs) can be covered without a display. Dev-only: the shipped binary
 # still builds against the default features.
 gpui-kit = { version = "0.6", features = ["test-support"] }
+
+# Packaging config for cargo-packager, which assembles Knot.app and the DMG.
+# Paths are relative to this manifest. Mirrors the layout the other
+# pilgrimagesoftware Rust apps use (dtrpg-app.rs, crates/dtrpg-core/Cargo.toml).
+[package.metadata.packager]
+name = "knot"
+product-name = "Knot"
+identifier = "net.kochava-studios.knot"
+description = "AI coding agents, tied together"
+homepage = "https://github.com/pilgrimagesoftware/Knot"
+authors = ["Paul Schifferer <paul@schifferers.net>"]
+publisher = "Kochava Studios"
+license_file = "../../LICENSE.md"
+copyright = "Copyright (c) 2026 Kochava Studios"
+category = "DeveloperTool"
+before-packaging-command = "cargo build --release --package knot"
+icons = ["assets/icon/icon.png", "assets/icon/icon.icns"]
+
+[package.metadata.packager.macos]
+minimum-system-version = "14.0"
+
+[package.metadata.packager.dmg]
+window-size = { width = 660, height = 400 }

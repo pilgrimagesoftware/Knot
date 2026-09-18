@@ -99,6 +99,14 @@ make rust-test     # cargo test --workspace
 make rust-build    # cargo build --workspace
 ```
 
+```bash
+make rust-package  # Knot.app + DMG via cargo-packager (macOS only)
+```
+
+Packaging is configured in `crates/knot/Cargo.toml` under
+`[package.metadata.packager]` and needs `cargo install cargo-packager --locked`.
+CI runs the same command from `.github/workflows/package.yml`.
+
 Run `cargo +nightly fmt` before committing (needs `rustup toolchain install
 nightly`). `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
 
@@ -111,7 +119,8 @@ are unrelated to port work.
 `prepare-release.yml` / `tag-release.yml` / `release.yml` automate the
 git-flow release cycle (version bump + changelog via `cargo-edit`/`git-cliff`,
 tag `main`, cut a GitHub Release, merge `main` back into `develop`), calling
-the reusable `sweetrpg/github-actions` `rust-*-release` workflows. Details and
+the reusable `pilgrimagesoftware/github-actions` `rust-*-release` workflows, and
+`package.yml` builds `Knot.app` with `cargo-packager`. Details and
 required secrets: `CONTRIBUTING.md` - Releases. Rationale: `docs/adr/0001-git-flow.md`.
 
 ## Architecture Decisions

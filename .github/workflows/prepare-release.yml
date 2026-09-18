@@ -9,12 +9,16 @@ on:
 
 jobs:
   prepare:
-    uses: sweetrpg/github-actions/.github/workflows/rust-prepare-release.yaml@master
+    uses: pilgrimagesoftware/github-actions/.github/workflows/rust-prepare-release.yaml@master
     with:
       project-number: 5
       base-branch: main
       reviewer: paulyhedral
       release-label: release
+      # `cargo set-version` bumps every workspace member, and the lockfile
+      # follows; the default (Cargo.toml CHANGELOG.md) would leave those out of
+      # the release commit.
+      commit-files: "Cargo.toml Cargo.lock crates/*/Cargo.toml CHANGELOG.md"
     secrets:
-      SRPG_CI_APP_ID: ${{ secrets.SKWAD_CI_APP_ID }}
-      SRPG_CI_PRIVATE_KEY: ${{ secrets.SKWAD_CI_PRIVATE_KEY }}
+      PSW_CI_APP_ID: ${{ secrets.SKWAD_CI_APP_ID }}
+      PSW_CI_PRIVATE_KEY: ${{ secrets.SKWAD_CI_PRIVATE_KEY }}
