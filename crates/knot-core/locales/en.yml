@@ -17,3 +17,6 @@ count:
 
 git:
   stats_pending: "Getting stats…"
+
+workspace:
+  manager: "Workspaces"

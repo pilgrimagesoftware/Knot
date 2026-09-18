@@ -213,6 +213,10 @@ pub(crate) fn run() {
 
                                let options = manager_window_options(cx);
                                cx.open_window(options, |window, cx| {
+                                     // macOS leaves untitled windows out of
+                                     // the Window menu, which is why only
+                                     // open workspaces were listed there.
+                                     window.set_window_title(&knot_core::l10n::t("workspace.manager"));
                                      let name_input =
                     cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
                                      let view =
