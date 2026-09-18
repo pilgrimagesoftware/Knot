@@ -6,6 +6,7 @@ mod app_state;
 mod app_support;
 mod command_center;
 mod dashboard;
+mod open_in;
 mod panel_session;
 mod panel_state;
 mod panel_view;
@@ -19,7 +20,7 @@ mod workspace_window;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
@@ -38,6 +39,7 @@ use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMe
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::text::TextView;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{

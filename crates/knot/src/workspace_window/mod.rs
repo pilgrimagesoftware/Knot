@@ -707,6 +707,68 @@ impl WorkspaceWindow {
                     });
     }
 
+    /// Renders the markdown pane for `id`, which takes over the content
+    /// area while the agent has a markdown file open.
+    ///
+    /// The `display-markdown` MCP tool and the "Markdown Files" context
+    /// menu item both set that file; until this existed, both wrote state
+    /// no UI ever read, so an agent calling the tool appeared to be
+    /// ignored. Closing the pane clears the file but keeps the history, so
+    /// the menu can bring it back.
+    fn render_markdown_pane(&self, id: Uuid, file: &Path, cx: &mut Context<Self>)
+                            -> gpui_kit::AnyElement {
+        let title = file.file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| file.to_string_lossy().into_owned());
+        // Read at render time rather than cached: the file is written by
+        // an agent that may still be editing it, and re-reading is what
+        // makes a second `display-markdown` of the same path show the new
+        // content.
+        let body = std::fs::read_to_string(file).unwrap_or_else(|error| {
+                       format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
+                   });
+        v_flex().size_full()
+                .child(h_flex().w_full()
+                               .flex_shrink_0()
+                               .items_center()
+                               .justify_between()
+                               .gap_2()
+                               .px_3()
+                               .py_2()
+                               .border_b_1()
+                               .border_color(cx.theme().border)
+                               .child(div().flex_1()
+                                           .min_w_0()
+                                           .overflow_hidden()
+                                           .whitespace_nowrap()
+                                           .text_ellipsis()
+                                           .font_semibold()
+                                           .child(title))
+                               .child(Button::new("markdown-pane-close").icon(IconName::Close)
+                                                                        .ghost()
+                                                                        .small()
+                                                                        .tooltip("Close")
+                                                                        .on_click(cx.listener(move |view, _, _window, cx| {
+                                                                            if let Ok(mut store) =
+                                                                                view.store.lock()
+                                                                            {
+                                                                                let _ = store.clear_markdown_panel(id);
+                                                                            }
+                                                                            cx.notify();
+                                                                        }))))
+                .child(div().id(("markdown-pane", id.as_u128() as u64))
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
+                            .min_w_0()
+                            .overflow_y_scroll()
+                            .p_4()
+                            .child(TextView::markdown(("markdown-pane-body",
+                                                       id.as_u128() as u64),
+                                                      body)))
+                .into_any_element()
+    }
+
     /// Renders the Panel-mode content pane for `id`: a connecting/failed
     /// placeholder, or the folded conversation plus a prompt input once
     /// the ACP session is ready. Starts the session if it isn't already
@@ -2519,11 +2581,25 @@ impl Render for WorkspaceWindow {
                             .child(
                                 self.selected_agent
                                             .and_then(|id| {
-                                                let is_panel_mode = {
+                                                let (is_panel_mode, markdown_file) = {
                                                     let store = self.store.lock().unwrap();
-                                                    store.agent(id).map(|agent| agent.view_mode)
-                                                         == Some(knot_core::ViewMode::Panel)
+                                                    let agent = store.agent(id);
+                                                    (agent.map(|agent| agent.view_mode)
+                                                     == Some(knot_core::ViewMode::Panel),
+                                                     agent.and_then(|agent| {
+                                                              agent.markdown_file.clone()
+                                                          }))
                                                 };
+                                                // Ahead of both session
+                                                // panes: an open markdown
+                                                // file takes the content
+                                                // area, whichever mode the
+                                                // agent otherwise runs in.
+                                                if let Some(file) = markdown_file {
+                                                    return Some(self.render_markdown_pane(id,
+                                                                                          &file,
+                                                                                          cx));
+                                                }
                                                 if is_panel_mode {
                                                     return Some(self.render_panel_pane(id,
                                                                                        window,
