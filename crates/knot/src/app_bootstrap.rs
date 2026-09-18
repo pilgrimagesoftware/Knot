@@ -261,9 +261,11 @@ pub(crate) fn run() {
                                {
                                    let settings_window = Rc::clone(&settings_window);
                                    let settings = settings.clone();
+                                   let store = Arc::clone(&store);
                                    cx.on_action(move |_: &OpenSettings, cx| {
                                          open_settings_window(&settings_window,
                                                               settings.clone(),
+                                                              Arc::clone(&store),
                                                               cx);
                                      });
                                }

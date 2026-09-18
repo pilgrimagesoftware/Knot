@@ -434,6 +434,39 @@ fn persona_preview_returns_short_instructions_unchanged() {
     assert_eq!(SettingsWindow::persona_preview("be terse", 80), "be terse");
 }
 
+/// A persona assigned to an agent can't be deleted - the count drives
+/// both the disabled delete button and its tooltip.
+#[test]
+fn personas_in_use_counts_only_the_agents_that_reference_each_persona() {
+    let assigned = Uuid::new_v4();
+    let unused = Uuid::new_v4();
+    let mut store = knot_agents::AgentStore::new();
+    let ws = workspace("One");
+    store.add_workspace(ws.clone());
+    store.set_current_workspace(ws.id);
+    store.create("~/alpha",
+                 knot_agents::CreateOptions { persona_id: Some(assigned),
+                                              ..Default::default() });
+    store.create("~/beta",
+                 knot_agents::CreateOptions { persona_id: Some(assigned),
+                                              ..Default::default() });
+    store.create("~/gamma", knot_agents::CreateOptions::default());
+
+    let in_use = SettingsWindow::personas_in_use(store.agents());
+
+    assert_eq!(in_use.get(&assigned).copied(), Some(2));
+    assert_eq!(in_use.get(&unused).copied(), None);
+}
+
+#[test]
+fn persona_delete_tooltip_names_the_reason_it_is_disabled() {
+    assert_eq!(SettingsWindow::persona_delete_tooltip(0), "Delete persona");
+    assert_eq!(SettingsWindow::persona_delete_tooltip(1),
+               "In use by 1 agent");
+    assert_eq!(SettingsWindow::persona_delete_tooltip(3),
+               "In use by 3 agents");
+}
+
 #[test]
 fn persona_preview_truncates_long_instructions_with_ellipsis() {
     let instructions = "a".repeat(100);
