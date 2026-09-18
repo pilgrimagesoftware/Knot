@@ -16,6 +16,18 @@ pub fn registration_user_prompt() -> &'static str {
 
 /// The knot system instructions, with `agent_id` embedded.
 ///
+/// The collaboration paragraph is concrete on purpose. "Engage with them"
+/// alone told an agent nothing it could act on, and the tools it would
+/// need went unnamed, so agents worked alone in parallel - which is what a
+/// knot exists not to be. Naming each tool and the moment to reach for it
+/// is the difference between a sentiment and an instruction.
+///
+/// It pushes outward, not inward: an agent already knows who its knot is,
+/// so what it needs telling is to *use* them - hand work to whoever owns
+/// that project, ask before guessing at their code, say what it changed
+/// that others build on. Instructions to keep checking an inbox would
+/// produce busywork instead, and messages reach an agent on their own.
+///
 /// These name the MCP server on purpose. An agent inherits its own
 /// user-level MCP configuration on top of the server Knot hands it, and
 /// another server there can expose tools with exactly these names -
@@ -24,7 +36,7 @@ pub fn registration_user_prompt() -> &'static str {
 /// an id it has never seen. Naming the server is what makes that
 /// unambiguous, since the tool names alone are not.
 pub fn knot_instructions(agent_id: Uuid) -> String {
-    format!("You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals so engage with them: ask for help and in return help them succeed. Your knot agent ID: {agent_id}. Your knot's tools come from the MCP server named `{MCP_SERVER_NAME}` (tools such as `{MCP_SERVER_NAME}`'s set-status, list-agents, register-agent). Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. Only ever use the `{MCP_SERVER_NAME}` server's tools. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional.")
+    format!("You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals, so work with your knot rather than beside it. Your knot agent ID: {agent_id}. You already know who your teammates are - use them. Check list-agents before you start something substantial: if it belongs to a project a teammate owns, hand it to them with send-message rather than working in their code yourself, and prefer asking them a question over reverse-engineering an answer. Tell the knot with broadcast-message when you change something others build on. When a teammate asks you for something, take it on and reply. Reach for your knot first and your own effort second: an agent that does everything alone is not a teammate, just another process. Your knot's tools come from the MCP server named `{MCP_SERVER_NAME}` (tools such as `{MCP_SERVER_NAME}`'s set-status, list-agents, register-agent). Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. Only ever use the `{MCP_SERVER_NAME}` server's tools. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional.")
 }
 
 /// The combined registration prompt for the deferred (non-inline)
@@ -88,6 +100,33 @@ mod tests {
         assert!(prompt.contains(MCP_SERVER_NAME));
         assert!(prompt.contains("Another MCP server may offer tools with those same names"),
                 "the prompt must say why the name matters, not just state it");
+    }
+
+    /// The collaboration tools have to be named, and the moment to use
+    /// each one given, or the instruction is a sentiment an agent can obey
+    /// by doing nothing. These names are the MCP tool names in
+    /// `knot-mcp-tools`; this crate deliberately does not depend on that
+    /// one, so a rename there has to be mirrored here.
+    #[test]
+    fn instructions_name_every_tool_an_agent_collaborates_with() {
+        let prompt = knot_instructions(id());
+        for tool in ["list-agents",
+                     "send-message",
+                     "broadcast-message",
+                     "set-status"]
+        {
+            assert!(prompt.contains(tool), "the prompt never mentions {tool}");
+        }
+    }
+
+    /// The instruction has to point outward - hand work over, ask first -
+    /// rather than inward at an inbox. An agent already knows its knot;
+    /// what it needs telling is to use them.
+    #[test]
+    fn instructions_tell_an_agent_to_hand_work_to_its_knot() {
+        let prompt = knot_instructions(id());
+        assert!(prompt.contains("hand it to them"));
+        assert!(prompt.contains("Reach for your knot first"));
     }
 
     #[test]
