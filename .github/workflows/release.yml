@@ -28,8 +28,8 @@ jobs:
       release-branch: main
       merge-back-branch: develop
     secrets:
-      PSW_CI_APP_ID: ${{ secrets.SKWAD_CI_APP_ID }}
-      PSW_CI_PRIVATE_KEY: ${{ secrets.SKWAD_CI_PRIVATE_KEY }}
+      PSW_CI_APP_ID: ${{ secrets.PSW_CI_APP_ID }}
+      PSW_CI_PRIVATE_KEY: ${{ secrets.PSW_CI_PRIVATE_KEY }}
 
   # Packages Knot.app for the released tag and attaches the DMG to the release
   # the job above created.

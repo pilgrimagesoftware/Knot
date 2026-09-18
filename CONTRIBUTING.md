@@ -80,8 +80,8 @@ calling the reusable `pilgrimagesoftware/github-actions` `rust-*-release` workfl
    merges `main` back into `develop` so the two branches stay in sync. It then
    calls **Package** for the tag and attaches the build to the release.
 
-These need repo secrets `SKWAD_CI_APP_ID` / `SKWAD_CI_PRIVATE_KEY`, passed as the
-reusable workflows' `PSW_CI_APP_ID` / `PSW_CI_PRIVATE_KEY` (a GitHub App
+These need `PSW_CI_APP_ID` / `PSW_CI_PRIVATE_KEY`, organization secrets on
+`pilgrimagesoftware` and available to this repo (a GitHub App
 with `contents: write` + `pull-requests: write`, installed on this repo) before
 Prepare/Tag Release can run - they mint a bot token so the release commit and
 the develop merge-back satisfy branch protection. No crate here publishes to
