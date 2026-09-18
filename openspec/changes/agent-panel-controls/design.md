@@ -23,10 +23,15 @@ design adds the first structured input bar.
   introducing new state machines.
 
 **Non-Goals:**
-- No new ACP protocol surface — model/effort/permission selection use
-  whatever `knot-acp` already exposes for a session; if an agent's
-  adapter doesn't support switching a given axis (e.g. effort) mid-session,
-  the selector is disabled, not stubbed with fake options.
+- No protocol surface beyond ACP's own stabilized Session Config Options
+  mechanism (`session/new`/`session/load`'s `configOptions`, `session/
+  set_config_option`, and the `config_option_update` session update) —
+  `knot-acp` now implements that mechanism (added partway through this
+  change, once it was clear the mechanism exists and is what Zed's own
+  agent panel relies on for these same three selectors), but nothing
+  beyond it: no per-adapter special-casing, no invented ACP methods. If
+  an agent doesn't declare a `select` option for a given axis (e.g.
+  effort), that selector is disabled, not stubbed with fake options.
 - No terminal-view changes; this is panel-only chrome, per acp-panel-ui's
   existing "terminal remains available" requirement.
 - No persistence of per-conversation input-area state (expanded/collapsed,

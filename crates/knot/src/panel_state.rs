@@ -6,7 +6,7 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use knot_acp::{PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate};
+use knot_acp::{ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate};
 use serde_json::Value;
 
 /// One entry in the panel's message list: a user-sent prompt, streamed
@@ -55,6 +55,12 @@ pub struct PanelState {
     /// content, per the track toggle's per-response scope (design decision
     /// "Track toggle scope"). Reset to `true` at the start of each turn.
     pub tracking:           bool,
+    /// The agent's declared Session Config Options (permission mode,
+    /// model, reasoning effort, ...), per ACP's stabilized mechanism -
+    /// seeded from `session/new`/`session/load` and replaced wholesale on
+    /// a `config_option_update` push or a `session/set_config_option`
+    /// response.
+    pub config_options:     Vec<ConfigOption>,
 }
 
 impl PanelState {
@@ -138,6 +144,9 @@ impl PanelState {
             // no change beyond ending the turn (which flips the last
             // response from "track toggle" to "response action bar").
             SessionUpdate::TurnEnd { .. } => self.turn_active = false,
+            SessionUpdate::ConfigOptionUpdate { config_options } => {
+                self.config_options = config_options;
+            }
             SessionUpdate::Unknown { .. } => {}
         }
     }
@@ -325,5 +334,22 @@ mod tests {
         assert!(!state.tracking);
         state.toggle_tracking();
         assert!(state.tracking);
+    }
+
+    #[test]
+    fn config_option_update_replaces_the_declared_options() {
+        let mut state = PanelState::new();
+        let option = ConfigOption { id:            "mode".to_string(),
+                                    name:          "Mode".to_string(),
+                                    category:      Some("mode".to_string()),
+                                    kind:          "select".to_string(),
+                                    current_value: json!("code"),
+                                    options:       Vec::new(), };
+
+        state.apply(SessionEvent::Update(SessionUpdate::ConfigOptionUpdate {
+            config_options: vec![option.clone()],
+        }));
+
+        assert_eq!(state.config_options, vec![option]);
     }
 }

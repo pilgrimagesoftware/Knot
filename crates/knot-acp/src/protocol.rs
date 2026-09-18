@@ -101,6 +101,11 @@ pub struct InitializeResult {
     // field.
     #[serde(default, rename = "agentCapabilities")]
     pub capabilities:     AgentCapabilities,
+    /// Session Config Options some agents declare on `initialize` rather
+    /// than (or in addition to) `session/new` - both locations are parsed
+    /// the same way, since the stabilized spec allows either.
+    #[serde(default, rename = "configOptions")]
+    pub config_options:   Vec<ConfigOption>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -109,6 +114,32 @@ pub struct AgentCapabilities {
     pub supports_resume:  bool,
     #[serde(default, rename = "permissionModes")]
     pub permission_modes: Vec<String>,
+}
+
+/// One agent-declared session setting (mode, model, reasoning effort, ...)
+/// per ACP's stabilized Session Config Options mechanism - a `select`-type
+/// option renders as a picker; other declared `type`s (e.g. `boolean`) are
+/// parsed but left unrendered until a control needs them.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+pub struct ConfigOption {
+    pub id:      String,
+    pub name:    String,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default, rename = "type")]
+    pub kind:    String,
+    #[serde(default, rename = "currentValue")]
+    pub current_value: Value,
+    #[serde(default)]
+    pub options: Vec<ConfigOptionValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ConfigOptionValue {
+    pub value:       String,
+    pub name:        String,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// A decoded `session/update` notification, per `acp-client`'s streaming
@@ -137,6 +168,12 @@ pub enum SessionUpdate {
     },
     TurnEnd {
         stop_reason: String,
+    },
+    /// A `config_option_update` push - the full current set of Session
+    /// Config Options, e.g. after `session/set_config_option` changes one
+    /// option's value or an agent-initiated change elsewhere.
+    ConfigOptionUpdate {
+        config_options: Vec<ConfigOption>,
     },
     Unknown {
         raw: Value,
@@ -176,6 +213,14 @@ impl SessionUpdate {
                                                   diff: field_str(&update, "diff"), },
             Some("turn_end") => {
                 SessionUpdate::TurnEnd { stop_reason: field_str(&update, "stopReason"), }
+            }
+            Some("config_option_update") => {
+                let config_options = update.get("configOptions")
+                                           .cloned()
+                                           .map(serde_json::from_value)
+                                           .and_then(std::result::Result::ok)
+                                           .unwrap_or_default();
+                SessionUpdate::ConfigOptionUpdate { config_options }
             }
             _ => SessionUpdate::Unknown { raw: params },
         }

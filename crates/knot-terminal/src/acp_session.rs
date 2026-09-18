@@ -7,7 +7,8 @@
 use std::time::Duration;
 
 use knot_acp::{
-    AcpClient, AcpError, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
+    AcpClient, AcpError, ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult,
+    SessionEvent,
 };
 use knot_agent_launch::{AdapterLaunch, InstallMethod};
 use tokio::process::Command;
@@ -38,19 +39,21 @@ impl AcpSession {
     /// fallback requirement. Fails with `AcpError::Timeout` rather than
     /// hanging if the adapter never responds.
     pub async fn start(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
-                       -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+                       -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)>
+    {
         Self::start_with_timeout(launch, cwd, prior_session_id, CONNECT_TIMEOUT).await
     }
 
-    async fn start_with_timeout(launch: &AdapterLaunch, cwd: &str,
-                                prior_session_id: Option<&str>, timeout: Duration)
-                                -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+    async fn start_with_timeout(
+        launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>, timeout: Duration)
+        -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
         tokio::time::timeout(timeout, Self::start_inner(launch, cwd, prior_session_id)).await
                                                                                        .unwrap_or(Err(AcpError::Timeout))
     }
 
-    async fn start_inner(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
-                         -> AcpResult<(Self, mpsc::UnboundedReceiver<SessionEvent>)> {
+    async fn start_inner(
+        launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
+        -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
         let build_command = || {
             let mut command = Command::new(launch.config.command);
             command.args(launch.config.args);
@@ -77,17 +80,17 @@ impl AcpSession {
             other => other?,
         };
 
-        let session_id = match prior_session_id {
+        let session = match prior_session_id {
             Some(prior) if client.capabilities().supports_resume => {
                 match client.session_load(prior, cwd).await {
-                    Ok(id) => id,
+                    Ok(session) => session,
                     Err(_) => client.session_new(cwd).await?,
                 }
             }
             _ => client.session_new(cwd).await?,
         };
 
-        Ok((Self { client, session_id }, events))
+        Ok((Self { client, session_id: session.session_id }, session.config_options, events))
     }
 
     pub fn session_id(&self) -> &str {
@@ -103,6 +106,13 @@ impl AcpSession {
 
     pub async fn prompt(&self, text: &str) -> AcpResult<()> {
         self.client.session_prompt(&self.session_id, text).await
+    }
+
+    /// Applies one Session Config Option selection (mode, model, reasoning
+    /// effort, ...) and returns the agent's updated full list.
+    pub async fn set_config_option(&self, config_id: &str, value: &str)
+                                   -> AcpResult<Vec<ConfigOption>> {
+        self.client.session_set_config_option(&self.session_id, config_id, value).await
     }
 
     pub async fn cancel(&self) -> AcpResult<()> {
@@ -224,7 +234,7 @@ mod tests {
                                                         knot_activity::EventSink::default());
         terminal_session.send_text("terminal is alive").unwrap();
 
-        let (session, mut events) =
+        let (session, _config_options, mut events) =
             AcpSession::start(&fake_adapter_launch(), "/tmp/project", None).await
                                                                            .expect("connect");
         assert_eq!(session.session_id(), "sess-1");
@@ -294,7 +304,7 @@ mod tests {
                                                                                       install_args, }) },
                                      mcp_config: String::new(), };
 
-        let (session, _events) =
+        let (session, _config_options, _events) =
             AcpSession::start(&launch, "/tmp/project", None).await
                                                             .expect("connect after auto-install");
 

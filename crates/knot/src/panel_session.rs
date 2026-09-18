@@ -25,8 +25,11 @@ impl PanelSessionHandle {
     /// the session ends.
     pub async fn start(launch: &AdapterLaunch, cwd: &str, prior_session_id: Option<&str>)
                        -> AcpResult<Self> {
-        let (session, mut events) = AcpSession::start(launch, cwd, prior_session_id).await?;
-        let state = Arc::new(Mutex::new(PanelState::new()));
+        let (session, config_options, mut events) =
+            AcpSession::start(launch, cwd, prior_session_id).await?;
+        let mut initial_state = PanelState::new();
+        initial_state.config_options = config_options;
+        let state = Arc::new(Mutex::new(initial_state));
         let dirty = Arc::new(AtomicBool::new(false));
 
         let drain_state = Arc::clone(&state);
@@ -106,6 +109,28 @@ impl PanelSessionHandle {
             state.toggle_tracking();
         }
         self.dirty.store(true, Ordering::SeqCst);
+    }
+
+    /// Applies one Session Config Option selection (permission mode,
+    /// model, reasoning effort, ...) and stores the agent's updated list.
+    /// Returns an owned `'static` future rather than being `async fn`
+    /// itself, so a caller with only `&mut App` (a popup-menu click
+    /// handler, not a `Context<Self>` listener) can spawn it without
+    /// holding this handle - or the session lock it came from - across
+    /// the await point.
+    pub fn set_config_option(&self, config_id: String, value: String)
+                             -> impl std::future::Future<Output = ()> + Send + 'static {
+        let session = self.session.clone();
+        let state = Arc::clone(&self.state);
+        let dirty = Arc::clone(&self.dirty);
+        async move {
+            if let Ok(config_options) = session.set_config_option(&config_id, &value).await {
+                if let Ok(mut state) = state.lock() {
+                    state.config_options = config_options;
+                }
+                dirty.store(true, Ordering::SeqCst);
+            }
+        }
     }
 
     pub async fn stop(&self) {

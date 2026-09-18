@@ -2490,6 +2490,7 @@ impl WorkspaceWindow {
                 let scroll_away_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
                 let turn_active = state.turn_active;
+                let config_options = state.config_options.clone();
                 drop(state);
                 drop(slot_guard);
                 let scroll = self.panel_scroll_handle(id);
@@ -2524,7 +2525,8 @@ impl WorkspaceWindow {
                                                                     on_decision,
                                                                     on_toggle_track)))
                         .child(self.render_panel_input_area(id, &input, &pending_context, expanded,
-                                                            blocked, turn_active, cx))
+                                                            blocked, turn_active, &config_options,
+                                                            cx))
                         .into_any_element()
             }
         }
@@ -2537,7 +2539,8 @@ impl WorkspaceWindow {
     #[allow(clippy::too_many_arguments)]
     fn render_panel_input_area(&mut self, id: Uuid, input: &Entity<TextareaState>,
                                pending_context: &[PathBuf], expanded: bool, blocked: bool,
-                               turn_active: bool, cx: &mut Context<Self>) -> impl IntoElement {
+                               turn_active: bool, config_options: &[knot_acp::ConfigOption],
+                               cx: &mut Context<Self>) -> impl IntoElement {
         let can_send = !blocked && !turn_active
                        && !input.read(cx).value().trim().is_empty();
         v_flex().flex_shrink_0()
@@ -2581,17 +2584,27 @@ impl WorkspaceWindow {
                         .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
                             view.add_panel_context(id, cx);
                         })))
-                    .child(self.render_panel_mode_selector(id))
-                    .child(Button::new("panel-model-selector").label("Model")
-                        .tooltip("This agent doesn't report selectable models")
-                        .ghost()
-                        .small()
-                        .disabled(true))
-                    .child(Button::new("panel-effort-selector").label("Effort")
-                        .tooltip("This agent doesn't report selectable effort levels")
-                        .ghost()
-                        .small()
-                        .disabled(true))
+                    .child(self.render_panel_config_selector(
+                        id, "panel-permission-mode-selector", "Permission",
+                        "This agent doesn't report permission modes",
+                        Self::find_config_option(config_options, &["mode", "permission_mode",
+                                                                    "permission-mode"]),
+                        cx,
+                    ))
+                    .child(self.render_panel_config_selector(
+                        id, "panel-model-selector", "Model",
+                        "This agent doesn't report selectable models",
+                        Self::find_config_option(config_options, &["model"]),
+                        cx,
+                    ))
+                    .child(self.render_panel_config_selector(
+                        id, "panel-effort-selector", "Effort",
+                        "This agent doesn't report selectable effort levels",
+                        Self::find_config_option(config_options,
+                                                 &["effort", "reasoning", "reasoning_effort",
+                                                   "reasoning-effort"]),
+                        cx,
+                    ))
                     .child(Button::new("panel-expand-input").icon(if expanded {
                                                                        IconName::Minimize
                                                                    }
@@ -2614,29 +2627,89 @@ impl WorkspaceWindow {
                         }))))
     }
 
-    /// The permission-mode selector: sourced from the agent's declared
-    /// modes when it has any, disabled with an explanatory tooltip
-    /// otherwise. `knot-acp` has no `session/set_mode` (or equivalent) RPC
-    /// yet, so even a populated list has nowhere on the wire to send a
-    /// selection - this renders the real capability list but stays
-    /// disabled until that RPC exists, rather than accepting clicks that
-    /// silently do nothing.
-    fn render_panel_mode_selector(&self, id: Uuid) -> impl IntoElement {
-        let modes = self.panel_sessions
-                        .get(&id)
-                        .and_then(|slot| slot.lock().ok())
-                        .and_then(|slot| match &*slot {
-                            panel_session::PanelSessionSlot::Ready(handle) => {
-                                Some(handle.session().capabilities().permission_modes.clone())
-                            }
-                            _ => None,
-                        })
-                        .unwrap_or_default();
-        Button::new("panel-permission-mode-selector").label("Permission")
-                                                      .tooltip(permission_mode_tooltip(&modes))
-                                                      .ghost()
-                                                      .small()
-                                                      .disabled(true)
+    /// One of the input area's three selector slots (permission mode,
+    /// model, effort), sourced from the agent's Session Config Options -
+    /// per ACP's stabilized mechanism, a live control that applies the
+    /// selection via `session/set_config_option`. Disabled with an
+    /// explanatory tooltip when the agent hasn't declared a matching
+    /// option (adapters vary in which axes they expose).
+    fn render_panel_config_selector(&self, id: Uuid, element_id: &'static str,
+                                    placeholder: &'static str, disabled_tooltip: &'static str,
+                                    option: Option<&knot_acp::ConfigOption>,
+                                    cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let Some(option) = option
+        else {
+            return Button::new(element_id).label(placeholder)
+                                          .tooltip(disabled_tooltip)
+                                          .ghost()
+                                          .small()
+                                          .disabled(true)
+                                          .into_any_element();
+        };
+        let current_value = option.current_value.as_str().unwrap_or_default();
+        let current_label = option.options
+                                  .iter()
+                                  .find(|value| value.value == current_value)
+                                  .map(|value| value.name.clone())
+                                  .unwrap_or_else(|| option.name.clone());
+        let config_id = option.id.clone();
+        let values = option.options.clone();
+        let entity = cx.entity();
+        let session_arc = self.panel_sessions.get(&id).cloned();
+        Button::new(element_id).label(current_label)
+                               .ghost()
+                               .small()
+                               .dropdown_caret(true)
+                               .dropdown_menu(move |menu, _, _| {
+                                   let mut menu = menu;
+                                   for value in &values {
+                                       let entity = entity.clone();
+                                       let Some(session_arc) = session_arc.clone()
+                                       else {
+                                           continue;
+                                       };
+                                       let config_id = config_id.clone();
+                                       let value_id = value.value.clone();
+                                       menu = menu.item(PopupMenuItem::new(value.name.clone())
+                                           .on_click(move |_, _, app| {
+                                               let config_id = config_id.clone();
+                                               let value_id = value_id.clone();
+                                               let session_arc = Arc::clone(&session_arc);
+                                               entity.update(app, move |view, _cx| {
+                                                   if let Ok(slot) = session_arc.lock()
+                                                      && let panel_session::PanelSessionSlot::Ready(handle) =
+                                                          &*slot
+                                                   {
+                                                       let future =
+                                                           handle.set_config_option(config_id,
+                                                                                    value_id);
+                                                       let _guard = view.runtime.enter();
+                                                       view.runtime.spawn(future);
+                                                   }
+                                               });
+                                           }));
+                                   }
+                                   menu
+                               })
+                               .into_any_element()
+    }
+
+    /// Finds the declared config option matching one of `categories`
+    /// (case-insensitive), for bucketing the agent's arbitrary option list
+    /// into the input area's three fixed selector slots.
+    fn find_config_option<'a>(options: &'a [knot_acp::ConfigOption], categories: &[&str])
+                              -> Option<&'a knot_acp::ConfigOption> {
+        options.iter().find(|option| {
+                          option.kind == "select"
+                          && option.category
+                                   .as_deref()
+                                   .is_some_and(|category| {
+                                       categories.iter()
+                                                 .any(|candidate| {
+                                                     candidate.eq_ignore_ascii_case(category)
+                                                 })
+                                   })
+                      })
     }
 
     /// Gets or creates the conversation scroll handle for `id`'s panel.
@@ -5024,19 +5097,6 @@ fn main() {
                            });
 }
 
-/// The permission-mode selector's tooltip: distinguishes "this agent
-/// declares no modes" from "modes exist but switching isn't wired up yet"
-/// (see `render_panel_mode_selector`), so the button stays honestly
-/// disabled either way while still surfacing what the agent reported.
-fn permission_mode_tooltip(modes: &[String]) -> String {
-    if modes.is_empty() {
-        "This agent doesn't report permission modes".to_string()
-    }
-    else {
-        format!("Switching permission mode isn't wired up yet ({} reported)", modes.len())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use knot_core::Workspace;
@@ -5592,12 +5652,36 @@ mod tests {
                         "Appearance"]);
     }
 
+    fn config_option(id: &str, category: &str) -> knot_acp::ConfigOption {
+        knot_acp::ConfigOption { id:            id.to_string(),
+                                 name:          id.to_string(),
+                                 category:      Some(category.to_string()),
+                                 kind:          "select".to_string(),
+                                 current_value: serde_json::Value::Null,
+                                 options:       Vec::new(), }
+    }
+
     #[test]
-    fn permission_mode_tooltip_distinguishes_no_modes_from_unwired_modes() {
-        assert_eq!(permission_mode_tooltip(&[]), "This agent doesn't report permission modes");
-        let modes = vec!["default".to_string(), "yolo".to_string()];
-        let tooltip = permission_mode_tooltip(&modes);
-        assert!(tooltip.contains('2'));
-        assert_ne!(tooltip, permission_mode_tooltip(&[]));
+    fn find_config_option_matches_category_case_insensitively() {
+        let options = vec![config_option("mode", "Mode"), config_option("model", "model")];
+
+        let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+        assert_eq!(found.map(|option| option.id.as_str()), Some("mode"));
+    }
+
+    #[test]
+    fn find_config_option_is_none_when_no_category_matches() {
+        let options = vec![config_option("mode", "mode")];
+
+        assert!(WorkspaceWindow::find_config_option(&options, &["model"]).is_none());
+    }
+
+    #[test]
+    fn find_config_option_ignores_non_select_options() {
+        let mut boolean_option = config_option("brave_mode", "mode");
+        boolean_option.kind = "boolean".to_string();
+        let options = vec![boolean_option];
+
+        assert!(WorkspaceWindow::find_config_option(&options, &["mode"]).is_none());
     }
 }
