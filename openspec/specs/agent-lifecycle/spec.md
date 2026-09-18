@@ -30,28 +30,27 @@ after a named sibling agent; absent a sibling, the new agent is appended.
   list and the sibling's workspace ordering
 
 ### Requirement: Durable versus runtime fields
-
 The system SHALL persist only these agent fields: id, name, avatar, folder,
-agent type, created-by, is-companion, shell command, persona id, and,
-conditionally, session id (see below). All other fields are runtime-only and
-MUST reset to defaults when agents are loaded: state (Idle), status text
-(empty), registered (false), pending-start (false), terminal title (empty),
-resume-session id (none), hook metadata (empty), git stats (none).
+agent type, created-by, is-companion, shell command, persona id, view mode
+(Panel or Terminal), and, conditionally, session id and ACP session id (see
+below). All other fields are runtime-only and MUST reset to defaults when
+agents are loaded: state (Idle), status text (empty), registered (false),
+pending-start (false), terminal title (empty), resume-session id (none),
+hook metadata (empty), git stats (none).
 
 When the `restore-conversation-on-launch` scalar setting is enabled,
-persisting an agent SHALL additionally record its current session id. When
-the setting is disabled, session id SHALL NOT be persisted (recorded as
-none), regardless of the agent's runtime session id at persist time.
+persisting an agent SHALL additionally record its current session id and, if
+the agent has an active ACP session, its ACP session id. When the setting is
+disabled, neither id SHALL be persisted (both recorded as none), regardless
+of the agent's runtime values at persist time.
 
 When `restore-conversation-on-launch` is enabled, loading agents as part of a
 layout restore SHALL, for each restored agent, resolve a resume-session id
 as follows, applied before that agent's terminal session is launched:
-
 1. If the agent's persisted session id is present, use it directly.
 2. Otherwise, look up the most recent session for that agent's `(folder,
-   agent type)` via the conversation-history provider registry, and use its
-   id if found.
-
+agent type)` via the conversation-history provider registry, and use its
+id if found.
 If neither step yields an id — `restore-conversation-on-launch` is disabled,
 no persisted session id exists, no history provider exists for the agent's
 type, or no session is found — resume-session id SHALL remain at its default
@@ -59,11 +58,17 @@ type, or no session is found — resume-session id SHALL remain at its default
 agent's runtime session id itself remains unset by this resolution; it is
 set by the normal resume flow when the terminal actually resumes.
 
+For an agent in Panel view mode with a persisted ACP session id, layout
+restore SHALL instead attempt `session/load` with that id through the ACP
+client; on failure (adapter reports resume unsupported, or the load
+request errors) the agent SHALL start a fresh ACP session with no error
+surfaced, mirroring the terminal path's fallback.
+
 This resolution applies only to loading agents for layout restore (e.g. cold
 app launch). It SHALL NOT apply to a manual "Restart" of an already-running
-agent, which continues to always clear session id and resume-session id per
-the Restart requirement; a manual restart does not alter the agent's
-persisted session id.
+agent, which continues to always clear session id, ACP session id, and
+resume-session id per the Restart requirement; a manual restart does not
+alter the agent's persisted session id.
 
 #### Scenario: Reload drops runtime state
 
@@ -134,6 +139,16 @@ persisted session id.
   no history lookup is performed, and its persisted session id is untouched
   until the next persist
 
+#### Scenario: ACP session id has no analogue in terminal mode
+- **WHEN** an agent has never been in Panel mode
+- **THEN** its ACP session id remains none and is never persisted
+
+#### Scenario: Resume fails for the ACP adapter
+- **WHEN** layout restore attempts `session/load` for a Panel-mode agent and
+  the adapter reports the session no longer exists
+- **THEN** the system starts a fresh ACP session for that agent instead of
+  surfacing an error to the user
+
 ### Requirement: Three distinct status fields
 
 The system SHALL keep three independent per-agent strings: `state` (the
@@ -180,17 +195,23 @@ collapse split panes so no pane references the removed agent.
 - **THEN** an MCP unregister is issued for its id before teardown
 
 ### Requirement: Restart
-
 Restarting an agent SHALL preserve its id and regenerate its restart token,
-which forces its terminal session to be destroyed and recreated. Restart SHALL
-clear session id, resume-session id, and fork flag; reset state to Idle; set
-registered to false; and clear the terminal title.
+which forces its terminal session to be destroyed and recreated, and — when
+the agent is in Panel mode — forces its ACP session to be closed and a new
+one created. Restart SHALL clear session id, ACP session id, resume-session
+id, and fork flag; reset state to Idle; set registered to false; and clear
+the terminal title.
 
 #### Scenario: Restart keeps identity, drops session
 
 - **WHEN** a registered agent with session id `s1` is restarted
 - **THEN** its id is unchanged, its restart token differs, its session id is
   cleared, it is unregistered, and its state is Idle
+
+#### Scenario: Restart a Panel-mode agent
+- **WHEN** the user restarts an agent currently in Panel mode
+- **THEN** its active ACP session is closed, its ACP session id is cleared,
+  and a new ACP session is created on relaunch
 
 ### Requirement: Resume session
 
@@ -246,3 +267,57 @@ name, avatar, agent type, shell command, and persona.
 
 - **WHEN** a bench agent whose folder no longer exists is deployed
 - **THEN** no agent is created and the bench entry is removed
+
+### Requirement: Shell agent removal on process exit
+
+When a shell agent's terminal process exits, the system SHALL remove that
+agent, following the same removal sequence as a user-initiated removal
+(companions first, MCP unregister if registered, session teardown, then
+removal from every workspace and the master list, re-selecting or
+collapsing split panes). This removal SHALL NOT prompt for confirmation:
+the process has already exited and there is nothing left to cancel.
+
+This trigger applies only to agents whose agent type is `shell` - a shell
+companion or a standalone shell agent. A non-shell agent has no terminal
+process of its own and is unaffected.
+
+#### Scenario: A shell companion's shell exits
+
+- **WHEN** a shell companion's process exits (the user types `exit`, or the
+  shell dies)
+- **THEN** the companion is removed without a confirmation prompt, and the
+  split pane that showed it is collapsed
+
+#### Scenario: A standalone shell agent's shell exits
+
+- **WHEN** a shell agent that owns no companions and is owned by none has
+  its process exit
+- **THEN** that agent is removed without a confirmation prompt
+
+#### Scenario: A non-shell agent is unaffected
+
+- **WHEN** an ACP-launched agent's adapter subprocess exits
+- **THEN** the agent is not removed; its panel reports the ended session
+  per `acp-panel-ui`
+
+### Requirement: View mode is fixed by agent type
+
+Non-shell agent types (`claude`, `codex`, `opencode`, `gemini`, `copilot`)
+SHALL always launch through the Panel (ACP) path; Terminal mode SHALL NOT be
+offered or selectable for them. Shell agents (always companions, per the
+shell-companion requirement) SHALL always launch through the Terminal (PTY)
+path; Panel mode SHALL NOT apply to them, since a bare shell has no ACP
+session to connect to.
+
+#### Scenario: Non-shell agent has no Terminal mode
+
+- **WHEN** a `claude`, `codex`, `opencode`, `gemini`, or `copilot` agent is
+  created or restarted
+- **THEN** it launches through the Panel/ACP path and no Terminal/Panel
+  toggle is presented for it
+
+#### Scenario: Shell companion stays in Terminal mode
+
+- **WHEN** a shell companion agent is created or restarted
+- **THEN** it launches through its PTY terminal session, never through the
+  ACP/Panel path

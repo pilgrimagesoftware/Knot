@@ -44,6 +44,8 @@ divider.
   Agent, Duplicate Agent, Move to Workspace, Save to Bench, Register Agent
   or Restart Agent
 
+## ADDED Requirements
+
 ### Requirement: Agent row context menu visibility rules
 Each item's presence SHALL be decided by the agent it was opened on:
 
@@ -74,7 +76,6 @@ Each item's presence SHALL be decided by the agent it was opened on:
 - **THEN** Move to Workspace is present, and its submenu lists that second
   workspace and not the agent's own
 
-## ADDED Requirements
 
 ### Requirement: New Companion from the context menu
 Selecting New Companion… SHALL open the agent editor to create a

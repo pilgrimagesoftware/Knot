@@ -12,143 +12,15 @@ the shell-agent path.
 
 ### Requirement: Base command and user options
 
-For a non-shell agent, the system SHALL start from the configured command for
-that agent type and append the configured user options for that type. An empty
-configured command SHALL produce an empty agent command (nothing is launched).
+For a shell agent, the system SHALL start from the agent's configured custom
+shell command, if any, and otherwise produce an empty agent command (a plain
+interactive shell). This builder no longer applies to non-shell agent types,
+which launch exclusively through the ACP adapter path.
 
 #### Scenario: Missing command yields nothing
 
-- **WHEN** the configured command for an agent type is empty
+- **WHEN** a shell agent has no custom command configured
 - **THEN** the built agent command is empty
-
-### Requirement: Resume and fork arguments
-
-When a resume-session id is present and the agent type supports resuming, the
-system SHALL add resume arguments before user options. Codex SHALL use
-subcommands (`resume <id>`, or `fork <id>` when forking is requested and
-supported). Other types SHALL use flags (`--resume <id>`, plus `--fork-session`
-when forking is requested and supported).
-
-#### Scenario: Claude resume with fork
-
-- **WHEN** a Claude agent has a resume-session id and fork is requested
-- **THEN** the command includes `--resume <id> --fork-session`
-
-#### Scenario: Codex fork uses a subcommand
-
-- **WHEN** a Codex agent has a resume-session id and fork is requested
-- **THEN** the command includes `fork <id>`, not `--resume`
-
-### Requirement: MCP configuration injection
-
-When the MCP server is enabled, the system SHALL append per-agent-type MCP
-arguments, and SHALL inject the activity hook when a plugin directory is
-resolved. The arguments differ by type:
-
-- Claude: `--mcp-config` with the knot HTTP server, `--allowed-tools
-  'mcp__knot__*'`, and `--plugin-dir <path>` when the plugin dir resolves.
-- Codex: only `-c 'notify=["bash","<plugin>/scripts/notify.sh"]'` when the
-  plugin dir resolves. This builder does not wire Codex's MCP server URL; that
-  comes from the user options or the agent's own config.
-- Gemini: only `--allowed-mcp-server-names knot` (no URL; assumes the server
-  is configured for the agent elsewhere).
-- Copilot: `--additional-mcp-config` with the knot HTTP server plus one
-  `--allow-tool 'knot(<tool>)'` flag per messaging tool.
-
-When MCP is disabled, none of these — nor the inline registration arguments —
-are added.
-
-#### Scenario: MCP disabled omits all MCP args
-
-- **WHEN** the MCP server is disabled
-- **THEN** the built command contains no MCP config, allow-list, hook, or
-  inline-registration arguments
-
-#### Scenario: Claude gets plugin dir when resolvable
-
-- **WHEN** the Claude plugin directory resolves
-- **THEN** the command includes `--plugin-dir` with that path
-
-#### Scenario: Codex gets only the notify hook
-
-- **WHEN** a Codex agent is launched with MCP enabled and the plugin dir
-  resolves
-- **THEN** the command includes the `-c 'notify=[...]'` argument and no
-  `--mcp-config`
-
-### Requirement: Inline registration arguments
-
-When MCP is enabled and the agent type supports inline registration
-(`claude`, `codex`, `opencode`, `gemini`, `copilot`, `shell`), the system SHALL
-append registration arguments carrying the agent id: for types that support a
-system prompt, the knot system instructions plus the registration user prompt;
-for others, the combined registration prompt. Agents that do not support inline
-registration SHALL instead be registered by the deferred prompt-injection path
-(see `activity-detection`).
-
-#### Scenario: Claude registers inline
-
-- **WHEN** a Claude agent is launched with MCP enabled and an agent id
-- **THEN** the command includes an appended system prompt and the registration
-  user prompt
-
-### Requirement: Persona injection
-
-When a persona with non-empty instructions is supplied, the system SHALL append
-its text — phrased as an instruction to impersonate that persona — to the
-system prompt, shell-escaped, for system-prompt-capable agent types only
-(`claude`, `codex`). For every other agent type the persona SHALL be ignored in
-the launch command.
-
-#### Scenario: Persona reaches a Claude agent
-
-- **WHEN** a Claude agent is launched with a persona that has instructions
-- **THEN** the appended system prompt includes the persona text
-
-#### Scenario: Persona dropped for Gemini
-
-- **WHEN** a Gemini agent is launched with a persona
-- **THEN** the built command contains no persona text
-
-### Requirement: Registration arguments on resume or fork
-
-When the agent is resuming or forking a session, the registration user prompt
-SHALL be omitted because the agent already has context. For `claude` and
-`codex` the system prompt (with any persona) SHALL still be appended. For
-`opencode`, `gemini`, and `copilot` no registration arguments SHALL be added at
-all on resume or fork.
-
-#### Scenario: Claude resume keeps system prompt only
-
-- **WHEN** a Claude agent is launched with a resume-session id
-- **THEN** the command appends the system prompt but not the registration user
-  prompt
-
-#### Scenario: Gemini resume adds no registration args
-
-- **WHEN** a Gemini agent is launched with a resume-session id
-- **THEN** the command contains no `--prompt-interactive` registration
-  argument
-
-### Requirement: Initialization wrapper
-
-The final terminal command SHALL be
-`<space>cd '<folder>' && clear && KNOT_AGENT_ID=<id> <agent-command>`. The
-leading space suppresses shell history (given `ignorespace` / zsh default).
-When the agent command is empty (shell agent), the wrapper SHALL be
-`<space>cd '<folder>' && clear` with no env prefix.
-
-#### Scenario: Env var precedes the agent command
-
-- **WHEN** a non-shell agent is launched
-- **THEN** the command sets `KNOT_AGENT_ID` to the agent's id immediately
-  before the agent command
-
-#### Scenario: Shell agent wrapper
-
-- **WHEN** a shell agent with no custom command is launched
-- **THEN** the command is `cd '<folder>' && clear` (leading space) and sets no
-  `KNOT_AGENT_ID`
 
 ### Requirement: Shell agent command
 
@@ -159,3 +31,79 @@ when set, otherwise empty (a plain interactive shell).
 
 - **WHEN** a shell agent has a custom command `htop`
 - **THEN** the built agent command is `htop`
+
+### Requirement: ACP launch path
+When an agent's type has a registered ACP adapter and the agent is in Panel
+view mode, the system SHALL launch that adapter as a subprocess (the
+adapter's declared command plus the agent's working directory) and connect
+to it as an ACP client, instead of assembling a terminal shell command for
+that agent. Terminal mode and agent types with no registered adapter SHALL
+continue to use the existing terminal launch command exactly as today.
+
+#### Scenario: Panel-mode agent with no adapter
+- **WHEN** an agent is in Panel view mode but its agent type has no
+  registered ACP adapter
+- **THEN** the system SHALL fall back to the existing terminal launch command
+  for that agent rather than failing to start
+
+#### Scenario: Switching an agent to Panel mode after launch
+- **WHEN** the user switches an already-running Terminal-mode agent to Panel
+  mode
+- **THEN** the system SHALL start a new ACP connection for that agent without
+  restarting or otherwise disturbing its existing terminal process
+
+### Requirement: Adapter-carried MCP and registration
+For an agent launched via its ACP adapter, MCP server configuration and
+knot's inline registration arguments (per `agent-launch-command`'s existing
+per-agent-type rules) SHALL be passed to the adapter subprocess through its
+own configuration mechanism (arguments or ACP session configuration),
+producing the same effective MCP/registration behavior as the terminal
+launch path for that agent type.
+
+#### Scenario: MCP disabled
+- **WHEN** the MCP server is disabled
+- **THEN** an ACP-launched agent SHALL start with no MCP configuration and no
+  registration arguments, matching the terminal launch path's behavior when
+  MCP is disabled
+
+### Requirement: Shell agent initialization wrapper
+
+The final terminal command SHALL be `<space>cd '<folder>' && clear` (a shell
+agent's custom command, if any, appended after `clear && `). The leading
+space suppresses shell history (given `ignorespace` / zsh default). Since
+this path now only launches shell agents, no `KNOT_AGENT_ID` environment
+variable is set (shell agents do not register with MCP).
+
+#### Scenario: Shell agent wrapper with no custom command
+
+- **WHEN** a shell agent with no custom command is launched
+- **THEN** the command is `cd '<folder>' && clear` (leading space) and sets no
+  `KNOT_AGENT_ID`
+
+#### Scenario: Shell agent wrapper with a custom command
+
+- **WHEN** a shell agent has a custom command `htop`
+- **THEN** the command is `cd '<folder>' && clear && htop` (leading space)
+
+### Requirement: MCP configuration for ACP-launched agents
+
+The system SHALL configure MCP access for every ACP-launched (non-shell)
+agent through the ACP protocol's own session-scoped mechanism (the
+`session/new`/`session/load` request's MCP server parameters), naming the
+knot HTTP MCP server and its URL, rather than through a CLI argument string
+passed to the adapter subprocess. This SHALL apply uniformly across every
+agent type with a registered ACP adapter, replacing the previous
+per-type CLI-flag behavior, which never reached the subprocess correctly.
+
+#### Scenario: ACP session carries MCP server config
+
+- **WHEN** a non-shell agent with a registered ACP adapter is launched and
+  the MCP server is enabled
+- **THEN** its `session/new` (or `session/load`) request includes the knot
+  MCP server's URL, and the agent can successfully call knot tools (e.g.
+  `set-status`, `register-agent`) once the session starts
+
+#### Scenario: MCP disabled omits ACP MCP config
+
+- **WHEN** the MCP server is disabled
+- **THEN** the ACP session request includes no MCP server configuration
