@@ -174,7 +174,15 @@ pub(crate) fn run() {
                                cx.on_action(hide_app);
                                cx.on_action(hide_others);
                                cx.on_action(show_all_windows);
-                               cx.bind_keys([KeyBinding::new("cmd-,", OpenSettings, None)]);
+                               // The standard macOS application-menu
+                               // shortcuts. A `MenuItem::action` only shows a
+                               // shortcut next to its label if the action has
+                               // a binding, so without these the menu read as
+                               // if Knot had none.
+                               cx.bind_keys([KeyBinding::new("cmd-q", Quit, None),
+                                             KeyBinding::new("cmd-,", OpenSettings, None),
+                                             KeyBinding::new("cmd-h", HideApp, None),
+                                             KeyBinding::new("cmd-alt-h", HideOthers, None)]);
                                cx.bind_keys([KeyBinding::new("cmd-shift-a",
                                                              PanelPermissionAllow,
                                                              None),
