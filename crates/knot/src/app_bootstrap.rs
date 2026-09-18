@@ -74,6 +74,50 @@ pub(crate) fn quit(_: &Quit, cx: &mut App) {
     cx.quit();
 }
 
+/// Quits on Ctrl-C (or `kill`) from the launching terminal.
+///
+/// Under `cargo run` the signal appeared to be swallowed: the Cocoa run
+/// loop keeps the process alive and nothing here handled it, so the only
+/// way out was Cmd+Q or killing the process from another shell. A
+/// terminal-launched process is expected to die on Ctrl-C, so this restores
+/// that. It exits rather than routing through `cx.quit()` because the
+/// handler runs off the main thread and cannot reach the app; the child
+/// PTYs go with the process, and the MCP server's listener is closed by the
+/// same exit.
+#[cfg(unix)]
+pub(crate) fn quit_on_terminal_signals() {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    std::thread::spawn(|| {
+        let runtime = match tokio::runtime::Builder::new_current_thread().enable_all()
+                                                                         .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                eprintln!("failed to start the signal runtime: {error}");
+                return;
+            }
+        };
+        runtime.block_on(async {
+                   let (Ok(mut interrupt), Ok(mut terminate)) =
+                       (signal(SignalKind::interrupt()), signal(SignalKind::terminate()))
+                   else {
+                       eprintln!("failed to install terminal signal handlers");
+                       return;
+                   };
+                   tokio::select! {
+                       _ = interrupt.recv() => {}
+                       _ = terminate.recv() => {}
+                   }
+                   // 128 + SIGINT, the conventional shell exit code.
+                   std::process::exit(130);
+               });
+    });
+}
+
+#[cfg(not(unix))]
+pub(crate) fn quit_on_terminal_signals() {}
+
 pub(crate) fn hide_app(_: &HideApp, cx: &mut App) {
     cx.hide();
 }
@@ -155,6 +199,7 @@ pub(crate) fn run() {
     if let Err(err) = settings.install_default_personas() {
         eprintln!("failed to install default personas: {err}");
     }
+    quit_on_terminal_signals();
     let store = Arc::new(Mutex::new(build_agent_store(&settings)));
     let notifier = Arc::new(QueuedNotifier::new());
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
