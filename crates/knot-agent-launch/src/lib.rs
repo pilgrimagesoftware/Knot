@@ -11,7 +11,7 @@ mod consts;
 mod escape;
 mod registration;
 
-pub use adapter::{AdapterConfig, InstallMethod, acp_adapter};
+pub use adapter::{AdapterConfig, InstallMethod, acp_adapter, adapter_path, adapter_path_for};
 pub use builders::{
     LaunchPlan, LaunchRequest, build_agent_command, build_initialization_command, mcp_url,
     mcp_url_for_port, plan_launch,
