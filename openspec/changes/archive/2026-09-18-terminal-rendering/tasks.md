@@ -1,0 +1,149 @@
+## 1. `knot-terminal`: grid parsing layer
+
+- [x] 1.1 Add `alacritty_terminal` as a dependency of `knot-terminal` and
+      pin an exact version. Verify: `cargo build -p knot-terminal`
+      succeeds.
+- [x] 1.2 A `Grid`-owning type wrapping `alacritty_terminal::Term` plus an
+      `EventListener` impl that records title/bell/clipboard events for
+      later consumption (a plain queue or callback, matching
+      `knot-activity::EventSink`'s existing style). Verify: unit test
+      feeds known ANSI byte sequences (SGR color codes, cursor movement,
+      a title-setting OSC) and asserts the resulting grid cells/cursor
+      position/recorded events match expectations.
+- [x] 1.3 Wire PTY output bytes (already captured by `TerminalSession`)
+      into the grid type's `Term::input`, replacing/extending whatever
+      currently only counts bytes for activity detection. Verify: an
+      integration test spawns a real PTY session running a command with
+      known output (e.g. `printf`) and asserts the grid reflects it.
+- [x] 1.4 Resize: a method that resizes both the `Term`'s grid dimensions
+      and the underlying PTY (`SIGWINCH` via the existing PTY resize
+      call, if `knot-terminal` doesn't already expose one - add it if
+      not). Verify: unit test resizes a running session and asserts both
+      the grid's row/column count and a subsequent `stty size` in the
+      PTY reflect the new size.
+
+## 2. GPUI grid rendering in `WorkspaceWindow`
+
+- [x] 2.1 Renders every visible row's cells (foreground/background,
+      bold/italic/underline/strikeout, consecutive same-style cells
+      merged into one span for reasonable element count) plus a cursor
+      (fg/bg swap at the cursor cell) via a plain function
+      (`terminal_view::render_grid`) rather than a custom GPUI `Element`
+      impl - simpler for a first cut since nothing here needs
+      layout/paint-level control; revisit only if profiling shows the
+      per-frame div count is a real cost. Verify: `cargo build`/`clippy`
+      clean; manual check in the running app (task 5.2).
+- [x] 2.2 Session lifecycle in `WorkspaceWindow`: on agent selection (or
+      workspace open with a pre-selected agent), spawn a session via
+      `SessionPlan`/`SessionConfig` if none exists yet (`ensure_session`),
+      and show its grid. Verify: selecting a non-shell agent shows its
+      shell prompt in the content pane (manual check, task 5.2).
+- [x] 2.3 Detach (hide, don't destroy) the previously-selected agent's
+      grid on selection change; keep the session alive so switching back
+      doesn't lose scrollback - `ensure_session` only spawns if the
+      `sessions` map has no entry yet, and selection change never removes
+      an entry. Verify: manual check (task 5.2).
+- [x] 2.4 Tear down a session when its agent is removed or restarted
+      (`agent-lifecycle`'s restart operation gets a fresh session, not a
+      reused one). `remove_session` + a `Drop` impl (shuts down every
+      session when the window closes) exist, but nothing in
+      `WorkspaceWindow` yet exposes remove/restart-agent UI to call it
+      from - `Shell`'s dead code had `close_agent`/`restart_agent`, but
+      porting those UI actions is a `dashboard-view`/agent-management
+      concern, not terminal-rendering's. Revisit once that UI exists.
+      **Done:** that UI exists now (`agent-list-ui`'s Remove and Restart),
+      and both call `remove_session` - the removal cascade in `remove_agent`
+      and the Restart handler's confirm branch.
+- [x] 2.5 Delete `Shell`, the `OutputBuffer`/`OUTPUT_POLL_INTERVAL`/
+      `TerminalModel`/`AgentHeader`/`terminal_model`/`visible_output`
+      scaffold now that `WorkspaceWindow` spawns real sessions - this was
+      dead code (unreachable from `main`), not a behavior change.
+      Verified: `cargo build --workspace`/`test --workspace` pass with it
+      removed; `grep` confirms no remaining references.
+- [x] 2.6 Window resize calls the grid's resize (task 1.4) so the PTY and
+      rendered grid track the content pane's size, via
+      `resize_session_to_pane` reading `window.viewport_size()` each
+      render and diffing against the grid's current size. Cell dimensions
+      are an approximation (not a real glyph measurement) - revisit if
+      layout drifts noticeably. Verify: manual check (task 5.2).
+
+## 3. Input dispatch
+
+- [x] 3.1 Keyboard: translate GPUI key events (including modifier
+      combinations) from the focused grid element to the bytes/escape
+      sequences the PTY expects (printable text, control codes, arrow/
+      function keys) - `knot_terminal::key_to_bytes` (framework-agnostic,
+      takes a plain `KeyInput`), wired via a focusable pane
+      (`WorkspaceWindow::dispatch_key`, click the pane to focus it).
+      Verified: 9 table-driven unit tests cover letters, shifted letters,
+      Ctrl combos, Enter (sends `\r` not its key_char), arrows, function
+      keys, Alt-prefixing, and bare modifier presses; manual check
+      pending (task 5.2).
+- [x] 3.2 Mouse: click/scroll events translated (`knot_terminal::mouse_to_bytes`,
+      5 unit tests covering left/middle/right buttons, press vs. release,
+      and wheel up/down) and written to the PTY when the running program
+      has enabled SGR mouse reporting (`Grid::sgr_mouse_mode`, checks
+      `TermMode::SGR_MOUSE` + `MOUSE_MODE`), via
+      `WorkspaceWindow::dispatch_mouse_button`/`dispatch_scroll`. Drag
+      isn't sent (no motion-mode tracking yet), and the non-mouse-reporting
+      fallback is a no-op rather than driving scrollback/selection - that
+      view doesn't exist yet (see task 3.3). Verify: manual check pending
+      (task 5.2).
+- [x] 3.3 Text selection: click-drag over the grid selects text, using
+      `alacritty_terminal`'s own `Selection`/`selection_to_string`
+      (`Grid::start_selection`/`update_selection`/`selection_text`/
+      `is_selected`, wired to left-button press/drag when SGR mouse mode
+      is off) - `terminal_view` highlights selected cells the same way as
+      the cursor (fg/bg swap). Cmd+C copies via `WorkspaceWindow::copy_selection`,
+      trimming trailing whitespace per line (ANSI stripping is
+      inherently satisfied - `Grid`'s cells are already-parsed characters,
+      never raw escape bytes). Verified: 4 new `Grid` unit tests
+      (no-selection, drag-captures-text, `is_selected` boundaries, clear).
+      Manual select-and-copy check pending (task 5.2).
+
+## 4. Action routing
+
+- [x] 4.1 Title-change events update `Agent::terminal_title` through the
+      existing `AgentStore` mutation path - `AgentStore::set_terminal_title`
+      (new), wired via `TerminalSession::spawn_pty_with_exit`'s new
+      `on_grid_event` callback (drains `Grid`'s queued events after each
+      `feed`, see task 1.2). Verified: `set_terminal_title_updates_terminal_title`
+      unit test, plus a real-PTY integration test
+      (`title_escape_sequences_reach_the_grid_event_callback`) asserting a
+      `printf '\e]0;...\a'` title reaches the callback. Manual sidebar
+      check pending (task 5.2); note title updates mutate the store from
+      the PTY reader thread without an explicit `cx.notify()`, same
+      as the existing `apply_terminal_status` precedent this mirrors.
+- [x] 4.2 Terminal-output activity and process-exit events call
+      `Tracker::on_terminal_activity`/`on_process_exit` - unchanged from
+      before this change (`TerminalSession::spawn_pty_with_exit` already
+      called these; task 2.5 removed the old polling loop's *separate*
+      caller in `Shell`, which was redundant with this one, not the only
+      one). `knot-activity`'s own test suite is untouched (API unchanged).
+- [x] 4.3 OSC 52 clipboard write requests (`GridEvent::ClipboardStore`,
+      already captured by task 1.2's event queue) serve the OS pasteboard.
+      `WorkspaceWindow::clipboard_writes` (an `Arc<Mutex<Vec<String>>>`)
+      is filled from `ensure_session`'s `on_grid_event` (PTY reader
+      thread) and drained every 100ms by a `cx.spawn` poll loop that
+      calls `App::write_to_clipboard` on the main thread - the same
+      background-to-main-thread hand-off pattern `SettingsWindow` already
+      uses for the native font panel. Only `ClipboardType::Clipboard` is
+      handled; `Selection` (X11 primary-selection semantics) isn't
+      meaningful on macOS. Verify: manual check a program using OSC 52
+      (e.g. `printf '\e]52;c;%s\a' "$(echo -n hello | base64)"`) updates
+      the OS pasteboard (task 5.2).
+
+## 5. Final verification
+
+- [x] 5.1 `cargo fmt --all --check` (or stable `cargo fmt` if nightly is
+      unavailable), `cargo clippy --workspace --all-targets -- -D
+      warnings`, `cargo test --workspace`, `cargo build --workspace` all
+      pass clean. Verified continuously throughout tasks 1-4, and CI
+      (`workspace (ubuntu-latest)`/`(macos-latest)`) green on the
+      preceding `feature/terminal-rendering` PR.
+- [ ] 5.2 Manual verification end-to-end: create an agent, watch its real
+      shell prompt render, type a command and see output, switch agents
+      and back, restart an agent and confirm a fresh session, remove an
+      agent and confirm no leaked session/process, resize the window,
+      select and copy text, and paste - all in one pass against a debug
+      build.

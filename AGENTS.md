@@ -1,10 +1,10 @@
-# Skwad (Rust port) - Agent Development Guide
+# Knot (Rust port) - Agent Development Guide
 
 Context for AI agents working on this codebase.
 
 ## About This Project
 
-Skwad is a macOS app that runs a team of AI coding agents, each in an embedded
+Knot is a macOS app that runs a team of AI coding agents, each in an embedded
 terminal, and lets them coordinate over MCP. It was built in Swift/SwiftUI; this
 repo ports it to Rust.
 
@@ -24,20 +24,20 @@ the crate's module docs link back to.
 
 ```
 crates/
-├── skwad-core/        Shared types, error model, constants, localization (l10n::t)
-├── skwad-git/         Runs `git`, parses porcelain v2 status, unified diffs,
+├── knot-core/        Shared types, error model, constants, localization (l10n::t)
+├── knot-git/         Runs `git`, parses porcelain v2 status, unified diffs,
 │                      numstat; staging/commit, branch + ahead/behind, worktrees.
 │                      Runtime-agnostic (no async runtime; wrap in spawn_blocking).
-├── skwad-discovery/   Maps a source folder to repos + linked worktrees via
+├── knot-discovery/   Maps a source folder to repos + linked worktrees via
 │                      filesystem reads only (no `git` process); tokio-driven
 │                      debounced folder watch. `scan()` is a pure function.
-└── skwad/             Binary. GPUI Kit window shell (gpui-kit crate).
+└── knot/             Binary. GPUI Kit window shell (gpui-kit crate).
 ```
 
 ### Dependency relationships
 
-- `skwad` depends on `skwad-core` and `gpui-kit` (external, the UI toolkit).
-- `skwad-git` and `skwad-discovery` are standalone: they depend on `thiserror`
+- `knot` depends on `knot-core` and `gpui-kit` (external, the UI toolkit).
+- `knot-git` and `knot-discovery` are standalone: they depend on `thiserror`
   (via workspace) and, for discovery, `notify` + `tokio`.
 - Shared dep versions are pinned in the root `Cargo.toml` `[workspace.dependencies]`.
   Add new shared deps there, reference with `dep.workspace = true`.
@@ -45,9 +45,9 @@ crates/
 
 ### Contracts (OpenSpec)
 
-- `openspec/specs/repo-discovery/spec.md` - `skwad-discovery`
-- `openspec/specs/git-operations/spec.md` - `skwad-git`
-- `openspec/specs/worktree-management/spec.md` - `skwad-git` worktree module
+- `openspec/specs/repo-discovery/spec.md` - `knot-discovery`
+- `openspec/specs/git-operations/spec.md` - `knot-git`
+- `openspec/specs/worktree-management/spec.md` - `knot-git` worktree module
 
 In-progress and archived changes are under `openspec/changes/`. Use the
 `opsx:*` / OpenSpec skills to propose, apply, and archive changes.
@@ -58,8 +58,8 @@ In-progress and archived changes are under `openspec/changes/`. Use the
 name (or `openspec`, `rust`, `ci`):
 
 ```
-feat(skwad-git): parse ahead/behind from status
-fix(skwad-discovery): debounce watch events per folder
+feat(knot-git): parse ahead/behind from status
+fix(knot-discovery): debounce watch events per folder
 docs(openspec): archive worktree-management-port change
 build(rust): add dependabot config
 ```
@@ -70,6 +70,14 @@ squash.
 ## Branches and Workflow
 
 git-flow. `develop` is the integration branch; `main` is release-only.
+
+Always do code changes in a dedicated `git worktree` on its own feature
+branch, no exceptions - never commit directly in the primary checkout at
+`/Users/paulyhedral/Projects/Code/Knot/App` (it stays on `develop`/`main` for
+syncing and reference) and never commit straight to `develop` or `main`. Use
+the `project-start-change` skill to create the worktree; convention is
+`/Users/paulyhedral/Projects/Code/Knot/Worktrees/<issue>-<change>` on branch
+`<issue>-<change>`.
 
 1. Branch from `develop`: `feature/<change>` (or `release/x.y.z`, `hotfix/x.y.z`).
 2. Implement against the OpenSpec change / spec contract.
@@ -91,12 +99,29 @@ make rust-test     # cargo test --workspace
 make rust-build    # cargo build --workspace
 ```
 
+```bash
+make rust-package  # Knot.app + DMG via cargo-packager (macOS only)
+```
+
+Packaging is configured in `crates/knot/Cargo.toml` under
+`[package.metadata.packager]` and needs `cargo install cargo-packager --locked`.
+CI runs the same command from `.github/workflows/package.yml`.
+
 Run `cargo +nightly fmt` before committing (needs `rustup toolchain install
-nightly`). `skwad-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
+nightly`). `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
 
 The Swift app has its own targets in the same `Makefile` (`make build`,
 `make test`, `make notarize`) and its own CI (`tests.yml`, `build.yml`); those
 are unrelated to port work.
+
+## Releases
+
+`prepare-release.yml` / `tag-release.yml` / `release.yml` automate the
+git-flow release cycle (version bump + changelog via `cargo-edit`/`git-cliff`,
+tag `main`, cut a GitHub Release, merge `main` back into `develop`), calling
+the reusable `pilgrimagesoftware/github-actions` `rust-*-release` workflows, and
+`package.yml` builds `Knot.app` with `cargo-packager`. Details and
+required secrets: `CONTRIBUTING.md` - Releases. Rationale: `docs/adr/0001-git-flow.md`.
 
 ## Architecture Decisions
 
@@ -109,6 +134,6 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 - Constants live in a single `consts.rs` per crate.
 - Errors: `thiserror` enums per crate (`GitError`, `DiscoveryError`, core
   `Error`), re-exported with a crate `Result` alias.
-- User-facing text goes through `skwad_core::l10n::t`.
+- User-facing text goes through `knot_core::l10n::t`.
 - Keep functions to <= 5-6 args; group related args in a struct.
 - No statement-hugging brace style; format with nightly `rustfmt`.

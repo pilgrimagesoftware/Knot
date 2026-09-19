@@ -1,0 +1,107 @@
+name: Package
+
+# Builds the installable Knot.app and DMG with cargo-packager, the way the
+# other pilgrimagesoftware Rust apps do it (see dtrpg-app.rs package.yaml).
+#
+# Runs on every merge into develop, keeping the result as a workflow artifact,
+# and is called by release.yml with a tag, which also attaches the DMG to the
+# GitHub Release.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to attach the packages to. Empty to only keep them as an artifact."
+        type: string
+        default: ""
+      ref:
+        description: "Git ref to build. Defaults to the ref that triggered the caller."
+        type: string
+        default: ""
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+# A merge into develop supersedes the build in flight for the one before it; a
+# release build has its own group and is never cancelled.
+concurrency:
+  group: package-${{ inputs.tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  package:
+    name: Package (macOS)
+    # macos-latest runners are Apple Silicon. Knot links AppKit through objc2
+    # and has no other supported platform, so this is the only leg.
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          target: aarch64-apple-darwin
+          cache-key: package
+
+      - name: Install cargo-packager
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-packager
+
+      # cargo-packager resolves `[package.metadata.packager]` from the manifest
+      # in the current directory, not from a workspace root with `--packages`
+      # (see the same note in dtrpg-app.rs package.yaml).
+      - name: Package
+        working-directory: crates/knot
+        env:
+          # cargo-packager reads the signing certificate and the notarization
+          # credentials from the environment only - they cannot be set in the
+          # manifest. All five are unset until the Apple secrets are added to
+          # this repo, and cargo-packager then packages without signing.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # `before-packaging-command` runs a plain `cargo build` with no
+          # `--target`, which would write to target/release while packaging
+          # looks under target/<triple>/release.
+          CARGO_BUILD_TARGET: aarch64-apple-darwin
+        run: |
+          cargo packager \
+            --release \
+            --target aarch64-apple-darwin \
+            --formats app,dmg \
+            --verbose
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Knot-macOS-${{ github.run_number }}
+          path: |
+            target/aarch64-apple-darwin/release/*.dmg
+            target/aarch64-apple-darwin/release/*.app
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.tag }}" \
+            target/aarch64-apple-darwin/release/*.dmg --clobber

@@ -1,0 +1,364 @@
+# agent-list-ui Specification
+
+## Purpose
+
+Defines the workspace sidebar's per-agent row interactions - specifically the
+right-click context menu that surfaces edit, restart, companion-creation, and
+removal actions the agent list otherwise has no way to reach.
+
+## Requirements
+
+### Requirement: Agent row context menu
+Right-clicking an agent row in the workspace sidebar SHALL open a context
+menu scoped to that agent. The menu SHALL present the following items, in
+this order, separated into groups by dividers:
+
+1. New Companion…
+2. New Shell Companion
+   - divider -
+3. Edit Agent…
+4. Fork Agent
+5. Duplicate Agent
+   - divider -
+6. Move to Workspace (submenu)
+7. Save to Bench
+   - divider -
+8. Open In… (submenu)
+9. Markdown Files (submenu)
+   - divider -
+10. Register Agent
+11. Restart Agent
+12. Remove Agent
+
+Which of these a given row shows depends on the agent, per the visibility
+rules below. A divider SHALL NOT render when the group it would separate
+is empty, so a menu never opens with a leading, trailing, or doubled
+divider.
+
+#### Scenario: Right-click a non-companion agent
+- **WHEN** the user right-clicks a non-companion, non-shell agent's row in
+  a workspace that is the only attached workspace, and the agent has no
+  markdown history
+- **THEN** the menu shows New Companion…, New Shell Companion, Edit
+  Agent…, Fork Agent, Duplicate Agent, Save to Bench, Open In…, Register
+  Agent, Restart Agent and Remove Agent
+- **AND** it does not show Move to Workspace (no other workspace to move
+  to) or Markdown Files (no history)
+
+#### Scenario: Right-click a shell companion
+- **WHEN** the user right-clicks a shell companion's row
+- **THEN** the menu shows Edit Agent…, Open In… and Remove Agent
+- **AND** it does not show New Companion…, New Shell Companion, Fork
+  Agent, Duplicate Agent, Move to Workspace, Save to Bench, Register Agent
+  or Restart Agent
+
+### Requirement: Edit Agent from the context menu
+Selecting Edit Agent... SHALL open the same agent editor dialog already
+reachable elsewhere in the UI, pre-populated for the selected agent.
+
+#### Scenario: Edit from the context menu
+- **WHEN** the user selects Edit Agent... for a row
+- **THEN** the agent editor dialog opens for that agent's id
+
+### Requirement: New Shell Companion from the context menu
+Selecting New Shell Companion on a non-companion agent SHALL create a shell
+companion bound to that agent, per `agent-lifecycle`'s companion-creation
+requirement (placed after its owner, split layout pairing owner and
+companion).
+
+#### Scenario: Create a companion
+- **WHEN** the user selects New Shell Companion for a non-companion agent
+- **THEN** a new shell companion agent is created with that agent as its
+  owner, and the two appear in a split layout
+
+### Requirement: Restart Agent from the context menu
+Selecting Restart Agent on a non-companion agent SHALL prompt for
+confirmation, then restart it per `agent-lifecycle`'s restart requirement if
+confirmed.
+
+#### Scenario: Confirm a restart
+- **WHEN** the user selects Restart Agent and confirms the prompt
+- **THEN** the agent restarts (id preserved, session cleared, state reset to
+  Idle)
+
+#### Scenario: Cancel a restart
+- **WHEN** the user selects Restart Agent and dismisses the prompt without
+  confirming
+- **THEN** the agent is left running unchanged
+
+### Requirement: Remove Agent from the context menu
+Selecting Remove Agent SHALL prompt for confirmation, then remove the agent
+(and, if it owns any, its companions) per `agent-lifecycle`'s removal
+requirement if confirmed.
+
+#### Scenario: Confirm a removal
+- **WHEN** the user selects Remove Agent and confirms the prompt
+- **THEN** the agent (and any companions it owns) is removed from its
+  workspace and the master agent list, and its terminal session is torn down
+
+#### Scenario: Cancel a removal
+- **WHEN** the user selects Remove Agent and dismisses the prompt without
+  confirming
+- **THEN** the agent is left in place unchanged
+
+### Requirement: Agent row context menu visibility rules
+Each item's presence SHALL be decided by the agent it was opened on:
+
+- New Companion…, New Shell Companion, Fork Agent, Duplicate Agent, Save
+  to Bench and Move to Workspace SHALL be shown only for an agent that is
+  not a companion. A companion cannot own companions, be forked, or be
+  moved independently of its owner.
+- Move to Workspace SHALL additionally require that the agent belongs to a
+  workspace and that at least one other attached workspace exists; its
+  submenu SHALL list every attached workspace except the agent's own.
+- Register Agent SHALL be shown only for an agent whose type is not
+  `shell`. A shell agent has no coding agent to register.
+- Restart Agent SHALL be shown only for an agent that is not a companion,
+  per this capability's existing restart requirement.
+- Markdown Files SHALL be shown only when the agent has at least one entry
+  in its markdown history.
+- Edit Agent…, Open In… and Remove Agent SHALL always be shown.
+
+#### Scenario: A shell agent hides Register Agent
+- **WHEN** the user right-clicks a standalone shell agent's row
+- **THEN** Register Agent is absent from the menu
+
+#### Scenario: Move to Workspace needs somewhere to move to
+- **WHEN** the user right-clicks an agent in the only attached workspace
+- **THEN** Move to Workspace is absent from the menu
+- **WHEN** a second workspace is attached and the user right-clicks the
+  same agent
+- **THEN** Move to Workspace is present, and its submenu lists that second
+  workspace and not the agent's own
+
+### Requirement: New Companion from the context menu
+Selecting New Companion… SHALL open the agent editor to create a
+companion of the selected agent, pre-populated with the owner's folder, a
+`shell` agent type, and placement immediately after the owner. It differs
+from New Shell Companion in that the user confirms or edits the new
+agent's details before it is created.
+
+#### Scenario: Configure a companion before creating it
+- **WHEN** the user selects New Companion… for a non-companion agent
+- **THEN** the agent editor opens pre-populated with that agent's folder,
+  agent type `shell`, and the agent as its owner
+- **AND** no agent exists until the editor is submitted
+
+### Requirement: Fork Agent from the context menu
+Selecting Fork Agent SHALL open the agent editor to create a new agent
+carrying the selected agent's folder, avatar, agent type and persona, its
+session id (so the fork resumes the same conversation), a name suffixed to
+mark it as a fork, and placement immediately after the source.
+
+#### Scenario: Fork carries the session forward
+- **WHEN** the user selects Fork Agent on an agent with session id `s1`
+- **THEN** the agent editor opens pre-populated from that agent, carrying
+  `s1`, and the created agent is placed immediately after the source
+
+#### Scenario: Cancelling a fork creates nothing
+- **WHEN** the user selects Fork Agent and dismisses the editor
+- **THEN** no agent is created
+
+### Requirement: Duplicate Agent from the context menu
+Selecting Duplicate Agent SHALL immediately create a copy of the selected
+agent - same folder, avatar, agent type and persona, a name marking it as
+a copy - placed immediately after the source. Unlike Fork Agent it SHALL
+NOT carry the source's session, and SHALL NOT open the editor first.
+
+#### Scenario: Duplicate creates a fresh agent at once
+- **WHEN** the user selects Duplicate Agent
+- **THEN** a new agent is created immediately, after the source, sharing
+  its folder, avatar, type and persona, with no session id of its own
+
+### Requirement: Move to Workspace from the context menu
+Selecting a workspace from the Move to Workspace submenu SHALL move the
+agent out of its current workspace and into the chosen one, leaving the
+source workspace with a valid selection.
+
+#### Scenario: Moving an agent between workspaces
+- **WHEN** the user moves agent `A` from workspace `W1` to `W2`
+- **THEN** `A` is no longer in `W1`'s agents and is in `W2`'s
+- **AND** if `A` was `W1`'s only selected agent, `W1` selects another of
+  its agents, or none if it now has none
+
+### Requirement: Save to Bench from the context menu
+Selecting Save to Bench SHALL store the agent on the bench for later
+redeployment, replacing any existing bench entry for the same folder so
+the bench never holds two entries for one folder.
+
+#### Scenario: Saving replaces an entry for the same folder
+- **WHEN** the user saves an agent whose folder already has a bench entry
+- **THEN** the bench holds exactly one entry for that folder, the new one
+
+### Requirement: Open In from the context menu
+The Open In… submenu SHALL list VS Code, Zed, Xcode, a divider, Finder and
+Terminal, and selecting one SHALL open the agent's folder in that
+application. A missing application SHALL fail quietly rather than
+reporting an error the user cannot act on.
+
+#### Scenario: Open the agent's folder in an editor
+- **WHEN** the user selects VS Code from Open In…
+- **THEN** the agent's folder is opened in VS Code
+
+#### Scenario: Open the agent's folder in Zed
+- **WHEN** the user selects Zed from Open In…
+- **THEN** the agent's folder is opened in Zed
+
+#### Scenario: The chosen application is not installed
+- **WHEN** the user selects an application that is not installed
+- **THEN** nothing opens and the app does not present an error dialog
+
+### Requirement: Markdown Files from the context menu
+The Markdown Files submenu SHALL list the agent's markdown history - the
+files shown through the `display-markdown` MCP tool - most recent first,
+labelled by file name rather than full path. Selecting one SHALL display
+that file for the agent.
+
+#### Scenario: Re-open a previously shown markdown file
+- **WHEN** an agent has shown `docs/plan.md` and `README.md` through the
+  MCP tool, and the user selects `plan.md` from Markdown Files
+- **THEN** that file is displayed for the agent
+
+### Requirement: Register Agent from the context menu
+Selecting Register Agent SHALL send the agent its MCP registration prompt
+over whichever channel that agent is driven by - its panel session for an
+ACP-launched agent, its terminal for one running in a terminal - so a
+coding agent that failed to register at launch can be registered by hand
+without restarting it.
+
+#### Scenario: Registering an ACP agent by hand
+- **WHEN** the user selects Register Agent on a connected ACP agent
+- **THEN** the registration prompt is sent as a prompt in that agent's
+  panel session, and appears in its conversation like any other prompt
+
+#### Scenario: Registering an agent that is not connected
+- **WHEN** the user selects Register Agent on an agent whose session is
+  not live
+- **THEN** nothing is sent, and the agent's pane goes on showing the
+  connection state that already explains why - the menu SHALL NOT stack a
+  second message on top of it
+
+#### Scenario: The agent refuses the registration prompt
+- **WHEN** a connected agent answers the registration prompt with an error
+- **THEN** that failure appears in the agent's conversation, per
+  `acp-panel-ui`'s handling of a refused prompt
+
+### Requirement: Every detail line on an agent row is labelled by an icon
+
+An agent row's detail lines - the ones under the agent's name - SHALL each
+carry a leading icon identifying what that line is: its agent type, its
+persona, its status, and its folder.
+
+Without one, a line is a bare string whose meaning has to be inferred from
+its content, which fails exactly when it matters: an agent whose status text
+happens to look like a path, or whose folder is named after a person, reads
+as the wrong thing entirely.
+
+The icons SHALL be drawn as icons rather than as characters inside the line's
+text, so they share the lines' muted colour, size with their line, and sit in
+one column down the row.
+
+#### Scenario: A status line is identifiable as a status
+
+- **WHEN** an agent row renders with a status
+- **THEN** that line carries a leading icon marking it as the status
+
+#### Scenario: A folder line is identifiable as a folder
+
+- **WHEN** an agent row renders its folder
+- **THEN** that line carries a leading icon marking it as a folder
+
+#### Scenario: The icons line up
+
+- **WHEN** an agent row renders with a type, a persona, a status and a folder
+- **THEN** all four leading icons share the row's muted colour and align in
+  one column
+
+#### Scenario: A line with nothing to show has no icon
+
+- **WHEN** an agent has no persona
+- **THEN** no persona line and no persona icon are drawn, rather than an icon
+  beside an empty line
+
+### Requirement: A detail line's icon is sized to its own line
+
+Each detail line's icon SHALL be sized to that line's text, not to a single
+fixed size across the row. The row's lines do not all render at the same text
+size, and an icon fixed to one of them reads as undersized or oversized
+beside the others.
+
+#### Scenario: Icons match their lines
+
+- **WHEN** a row renders detail lines at more than one text size
+- **THEN** each line's icon matches the text beside it
+
+#### Scenario: A line that wraps keeps its icon beside its first line
+
+- **WHEN** a detail line is long enough to wrap onto a second line - a
+  two-word persona name, say
+- **THEN** its icon sits beside the first line, not centred against the
+  block as a whole
+
+### Requirement: Deactivate from the context menu
+
+The agent row's context menu SHALL offer Deactivate for an agent that is
+currently running, in the group that holds Restart Agent and Remove Agent and
+immediately before Restart Agent. Selecting it SHALL deactivate that agent per
+`agent-lifecycle`'s deactivation requirement.
+
+Deactivate SHALL be absent for an agent that is not running - there is nothing
+to stop - rather than shown disabled, matching how this menu hides every other
+item that does not apply.
+
+Deactivate SHALL NOT ask for confirmation. Nothing is lost that the agent
+cannot get back by being selected again, which is the test this menu applies
+to Restart and Remove and which those two fail.
+
+#### Scenario: Deactivate a running agent from its row
+
+- **WHEN** the user right-clicks a running agent and selects Deactivate
+- **THEN** the agent is deactivated, with no confirmation prompt
+
+#### Scenario: A stopped agent has nothing to deactivate
+
+- **WHEN** the user right-clicks a `passive` agent that has never been
+  selected, or one that is already deactivated
+- **THEN** Deactivate is absent from the menu
+
+#### Scenario: Deactivate sits with the other session actions
+
+- **WHEN** the menu is opened on a running non-companion agent
+- **THEN** Deactivate appears immediately above Restart Agent, in the same
+  group as Restart Agent and Remove Agent
+
+### Requirement: A stopped agent is distinguishable in the sidebar
+
+An agent that is not running SHALL be visually distinguishable in the
+sidebar from one that is, so a workspace of mixed agents can be read at a
+glance without opening each row.
+
+The distinction SHALL apply to any agent that is not running, whether it is
+passive and never started or was deactivated - what the user needs to know
+is which agents are live, not why each one is not.
+
+It SHALL NOT rely on the agent's state dot, which reports what a *running*
+agent is doing (idle, working, awaiting input, error) and has no value that
+means "not running at all".
+
+#### Scenario: A passive agent that has never started
+
+- **WHEN** a workspace holds a running agent and a passive agent that has
+  not been selected
+- **THEN** the two rows are visually distinguishable, and the passive one
+  reads as not running
+
+#### Scenario: Activating a passive agent brings its row up to the others
+
+- **WHEN** the user selects that passive agent and it starts
+- **THEN** its row becomes indistinguishable from any other running agent's
+
+#### Scenario: A deactivated agent reads the same as one never started
+
+- **WHEN** a running agent is deactivated
+- **THEN** its row takes the same not-running appearance as a passive agent
+  that never started

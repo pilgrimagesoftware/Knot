@@ -1,0 +1,69 @@
+[package]
+name = "knot"
+version = "1.10.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+default-run = "knot"
+
+[dependencies]
+knot-acp = { path = "../knot-acp" }
+knot-agent-launch = { path = "../knot-agent-launch" }
+knot-core = { path = "../knot-core" }
+knot-agents = { path = "../knot-agents" }
+knot-git = { path = "../knot-git" }
+knot-activity = { path = "../knot-activity" }
+knot-discovery = { path = "../knot-discovery" }
+knot-messaging = { path = "../knot-messaging" }
+knot-mcp = { path = "../knot-mcp" }
+knot-mcp-tools = { path = "../knot-mcp-tools" }
+knot-terminal = { path = "../knot-terminal" }
+alacritty_terminal = "0.26.0"
+knot-history = { path = "../knot-history" }
+tokio.workspace = true
+uuid.workspace = true
+serde_json.workspace = true
+gpui-kit = "0.6"
+unicode-segmentation = "1.13"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = { version = "0.3", features = [
+    "NSFont",
+    "NSFontManager",
+    "NSFontPanel",
+    "NSApplication",
+    "objc2-core-foundation",
+] }
+
+[dev-dependencies]
+# `test-support` brings in GPUI's headless test platform and the
+# `#[gpui_kit::test]` macro, so window-level behaviour (menu dispatch,
+# dialogs) can be covered without a display. Dev-only: the shipped binary
+# still builds against the default features.
+gpui-kit = { version = "0.6", features = ["test-support"] }
+
+# Packaging config for cargo-packager, which assembles Knot.app and the DMG.
+# Paths are relative to this manifest. Mirrors the layout the other
+# pilgrimagesoftware Rust apps use (dtrpg-app.rs, crates/dtrpg-core/Cargo.toml).
+[package.metadata.packager]
+name = "knot"
+product-name = "Knot"
+identifier = "net.kochava-studios.knot"
+description = "AI coding agents, tied together"
+homepage = "https://github.com/pilgrimagesoftware/Knot"
+authors = ["Paul Schifferer <paul@schifferers.net>"]
+publisher = "Kochava Studios"
+license_file = "../../LICENSE.md"
+copyright = "Copyright (c) 2026 Kochava Studios"
+category = "DeveloperTool"
+before-packaging-command = "cargo build --release --package knot"
+icons = ["assets/icon/icon.png", "assets/icon/icon.icns"]
+
+[package.metadata.packager.macos]
+minimum-system-version = "14.0"
+
+[package.metadata.packager.dmg]
+window-size = { width = 660, height = 400 }
