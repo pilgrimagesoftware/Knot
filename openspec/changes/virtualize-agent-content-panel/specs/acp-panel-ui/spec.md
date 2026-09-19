@@ -85,6 +85,8 @@ The response action bar SHALL include a track toggle. While enabled for a
 given response, the panel's virtualized list SHALL keep following the streamed
 output for that response, auto-scrolling so the newest output stays visible.
 Manually scrolling the history away from the tail SHALL disable following.
+Disabling the toggle SHALL stop following even while the list is at the tail,
+so following is only ever resumed by enabling the toggle or jumping to latest.
 
 #### Scenario: Streaming update while the tail is being followed
 
@@ -95,6 +97,14 @@ Manually scrolling the history away from the tail SHALL disable following.
 
 #### Scenario: Manual scroll disables following
 
-- **WHEN** the user enables the track toggle on an in-progress response
-- **THEN** the list follows the streamed output, keeping the newest output
-  visible as it arrives
+- **WHEN** the user enables the track toggle on an in-progress response and
+  then scrolls the history away from the tail
+- **THEN** the list stops auto-scrolling, so the content the user scrolled to
+  stays put as further output streams
+
+#### Scenario: Turning the toggle off stops following even at the tail
+
+- **WHEN** the user disables the track toggle on an in-progress response
+- **THEN** the list stops auto-scrolling and stays where it is as further
+  output streams, even if it is at the tail, rather than snapping back to the
+  end

@@ -10,30 +10,31 @@ delta to the last message and marks the session dirty, so each token
 re-renders the whole transcript. A long session therefore costs memory and
 frame time proportional to the conversation's total length, not to what is
 on screen — the panel gets laggy and heavy exactly when it has been used
-most. GPUI ships a virtualized `List` element (and gpui-component's
-`MessageScroller` built on it) that materializes and measures only the rows
-near the viewport; the panel should use one.
+most. GPUI ships a virtualized `List` element that materializes and measures
+only the rows near the viewport; the panel should use it.
 
 ## What Changes
 
 - Replace the panel's eager `v_flex(...).children(messages.map(...))` scroll
-  content with a GPUI virtualized list, so only the visible rows (plus a
+  content with a GPUI virtualized `List`, so only the visible rows (plus a
   small overdraw margin) are laid out, measured and painted.
-- Adopt a virtual mouse-transcript scroller (`gpui_component::message_scroller`
-  `MessageScroller` over GPUI `List`) for the conversation. It provides
-  tail-following, splice/remeasure bookkeeping for streaming rows, a
-  scroll-to-latest jump button, and a virtual-history scrollbar.
-- Move the list's scroll state (`Entity<MessageScrollerState>`) into the
-  workspace window's per-session state — it is GPUI-main-thread state and
-  cannot live inside the `Arc<Mutex<PanelState>>` shared with the ACP reader
-  thread.
+- Adopt GPUI's `List`/`ListState` directly (via `gpui-kit`), rather than
+  `gpui_component`'s `MessageScroller`: its state exposes no way to keep
+  tail-following off while at the bottom, which the track toggle requires.
+  `ListState` provides `splice` for streaming rows, `scroll_to` for
+  scroll-to-message/top, `scroll_to_end` for the scroll-to-latest jump, and
+  `set_follow_mode`/`set_scroll_handler` for the follow/track behavior.
+- Move the list state into the workspace window's per-session state — it is
+  GPUI-main-thread state and cannot live inside the `Arc<Mutex<PanelState>>`
+  shared with the ACP reader thread.
 - Keep the conversation as one scroller: the pending permission prompt and
   the ended-session banner become trailing rows after the messages rather
   than siblings appended below them.
 - Re-point the existing controls at the list: "scroll to user input" and
-  "scroll to top" use the list's item scroll; the track toggle and the
-  scroll-to-latest button map to its follow-tail mode; scrolling away from
-  the bottom pauses following, replacing the manual `ScrollHandle` maths.
+  "scroll to top" use the list's item scroll; the track toggle maps to
+  `FollowMode::Tail`/`Normal`; the scroll-to-latest button uses
+  `scroll_to_end`; scrolling away from the bottom clears tracking via the
+  list's scroll handler, replacing the manual `ScrollHandle` maths.
 - Remove the per-frame `scroll_to_bottom()` hack that paced streaming by
   forcing a scroll on every repaint.
 - No visual or interaction behavior changes: message ordering, the
@@ -59,17 +60,18 @@ retention changes what history is visible and is a separate decision.
 
 ## Impact
 
-- `crates/knot/src/panel_view/mod.rs` — `render_panel` becomes a row renderer
-  for a virtualized list; `render_message`, the response action bar and the
-  track toggle take list scroll state instead of a `ScrollHandle`.
-- `crates/knot/src/workspace_window/mod.rs` — `render_panel_pane` hosts the
-  per-session list state (replacing `panel_scroll_handles`' `ScrollHandle`),
-  drops the hand-rolled overflow container, jump button and scroll maths, and
-  drives splice/remeasure from the existing dirty-poll loop.
+- `crates/knot/src/panel_view/mod.rs` — `render_panel` becomes the row
+  renderer for the virtualized list (plus `row_count`/`row_at`/
+  `sync_row_count`); `render_message`, the response action bar and the track
+  toggle take `ListState` instead of a `ScrollHandle`.
+- `crates/knot/src/workspace_window/mod.rs` — `render_panel_pane` hosts each
+  panel's `ListState` (`panel_lists`/`panel_list_row_counts`, replacing
+  `panel_scroll_handles`), drops the hand-rolled overflow container, jump
+  button and scroll maths, and reconciles the list's row count and follow mode
+  from the existing dirty-poll loop.
 - `crates/knot/src/panel_state/mod.rs` — no public API change; `messages`
-  stays the source of truth. Row-count/height notifications are derived from
-  it by the view.
-- Dependency: `gpui_component::message_scroller` / GPUI `List` via `gpui-kit`
-  (already a dependency; no new crate).
-- Tests: panel rendering tests that assert on a rendered element tree may need
-  to render through the list (or assert on the row renderer directly).
+  stays the source of truth. Row counts are derived from it by the view.
+- Dependency: GPUI `List`/`ListState` via `gpui-kit` (already a dependency; no
+  new crate).
+- Tests: the row model and splice reconciliation are unit-tested directly;
+  UI-tree tests render through the list.

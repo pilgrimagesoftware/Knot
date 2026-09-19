@@ -8,6 +8,8 @@
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -15,12 +17,16 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::{
-    ClickEvent, ClipboardItem, Hsla, InteractiveElement, IntoElement, ParentElement, ScrollHandle,
-    StatefulInteractiveElement, Styled, div, relative, rgb,
+    ClickEvent, ClipboardItem, Hsla, InteractiveElement, IntoElement, ListOffset, ListState,
+    ParentElement, StatefulInteractiveElement, Styled, div, px, relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
 
 use crate::panel_state::{PanelMessage, PanelState, ToolCallCard};
+
+/// How much extra space above and below the viewport the list lays out and
+/// measures, so scrolling does not pop rows in at the edges.
+pub(crate) const LIST_OVERDRAW: f32 = 400.;
 
 const CARD_BG: u32 = 0x1E1E1E;
 const CARD_BORDER: u32 = 0x333333;
@@ -63,6 +69,32 @@ impl PanelStyle {
             CardOutline::Info => self.info_color,
             CardOutline::Neutral => self.border_color,
         }
+    }
+}
+
+/// The panel's interaction callbacks, grouped rather than threaded through
+/// the row renderer and message renderer as four separate parameters. Wrapped
+/// in `Rc` so the list's row closure can hand cheap clones to each row it
+/// materializes; `PanelState` remains the only thing shared with the ACP
+/// reader thread, so this stays on the UI thread.
+#[derive(Clone)]
+pub(crate) struct PanelCallbacks {
+    pub(crate) on_permission_decision: Rc<dyn Fn(PermissionDecision)>,
+    pub(crate) on_toggle_track:        Rc<dyn Fn()>,
+    pub(crate) on_toggle_tool_call:    Rc<dyn Fn(String)>,
+    pub(crate) on_manual_scroll:       Rc<dyn Fn()>,
+}
+
+impl PanelCallbacks {
+    pub(crate) fn new(on_permission_decision: impl Fn(PermissionDecision) + 'static,
+                      on_toggle_track: impl Fn() + 'static,
+                      on_toggle_tool_call: impl Fn(String) + 'static,
+                      on_manual_scroll: impl Fn() + 'static)
+                      -> Self {
+        Self { on_permission_decision: Rc::new(on_permission_decision),
+               on_toggle_track:        Rc::new(on_toggle_track),
+               on_toggle_tool_call:    Rc::new(on_toggle_tool_call),
+               on_manual_scroll:       Rc::new(on_manual_scroll), }
     }
 }
 
@@ -121,54 +153,136 @@ pub(crate) fn risk_color(risk: RiskLevel) -> Option<u32> {
     }
 }
 
-/// Renders the full panel: message list, then a pending permission prompt
-/// or an ended-session banner if applicable. `on_permission_decision` is
-/// invoked with the resolved decision when the user picks an option.
-/// `scroll` backs the conversation's scroll container (the caller applies
-/// `.track_scroll(&scroll)` to it) so per-message action buttons can jump
-/// to a specific message. `on_toggle_track` flips auto-scroll for the
-/// in-flight response; `on_toggle_tool_call` records the user opening or
-/// closing one tool-call card, by its id.
-pub(crate) fn render_panel(state: &PanelState, scroll: &ScrollHandle, style: &PanelStyle,
-                           on_permission_decision: impl Fn(PermissionDecision) + Clone + 'static,
-                           on_toggle_track: impl Fn() + Clone + 'static,
-                           on_toggle_tool_call: impl Fn(String) + Clone + 'static)
+/// One virtualized row of the conversation: every message in order, then
+/// the pending permission prompt, then the ended-session banner. Modelling
+/// the trailing cards as rows of the same list (rather than siblings below
+/// a scroller) keeps them inside the virtualizer and lets tail-following
+/// track them like any other row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PanelRow {
+    /// `PanelState::messages[index]`.
+    Message(usize),
+    /// The pending permission prompt, when one is awaiting a decision.
+    Permission,
+    /// The ended-session banner, when the session has ended.
+    Ended,
+}
+
+/// The number of rows `state` needs the conversation list to lay out -
+/// every message, plus a permission row and/or an ended row when present.
+pub(crate) fn row_count(state: &PanelState) -> usize {
+    state.messages.len()
+    + usize::from(state.pending_permission.is_some())
+    + usize::from(state.ended.is_some())
+}
+
+/// Resolves a list index to the row it draws. `None` for an index past the
+/// end, which the list can briefly hold between a row landing in
+/// `PanelState` and the next `sync_row_count` splice.
+pub(crate) fn row_at(state: &PanelState, index: usize) -> Option<PanelRow> {
+    let messages = state.messages.len();
+    let has_permission = state.pending_permission.is_some();
+    if index < messages {
+        Some(PanelRow::Message(index))
+    }
+    else if index == messages && has_permission {
+        Some(PanelRow::Permission)
+    }
+    else if index == messages + usize::from(has_permission) && state.ended.is_some() {
+        Some(PanelRow::Ended)
+    }
+    else {
+        None
+    }
+}
+
+/// Brings the list's item count in step with `state`'s rows, splicing only
+/// the delta so off-screen rows keep the heights they were already
+/// measured at and the reader's scroll position is left alone. `known` is
+/// the count the list currently holds, and the returned count should be
+/// passed back as `known` next frame.
+pub(crate) fn sync_row_count(list: &ListState, known: usize, state: &PanelState) -> usize {
+    let count = row_count(state);
+    if count > known {
+        list.splice(known..known, count - known);
+    }
+    else if count < known {
+        list.splice(count..known, 0);
+    }
+    count
+}
+
+/// Renders the full panel as one virtualized list: every message, then a
+/// pending permission prompt or an ended-session banner if applicable.
+/// Only rows intersecting the viewport (and a modest overdraw) are laid
+/// out and measured, so per-frame cost tracks the pane's size rather than
+/// the length of the conversation.
+///
+/// `list` is the caller's `ListState` and must already hold `row_count`
+/// items (see `sync_row_count`); the returned element is the `list`
+/// scroller itself, which fills the pane. The callbacks in `callbacks` drive
+/// the panel's controls: the permission decision, the auto-scroll toggle for
+/// the in-flight response, opening or closing a tool-call card by its id, and
+/// a manual jump from a message's action bar - the last so the caller can
+/// drop auto-scroll without the reconciler pulling the view back to the tail.
+pub(crate) fn render_panel(state: Arc<Mutex<PanelState>>, list: ListState, style: &PanelStyle,
+                           callbacks: PanelCallbacks)
                            -> impl IntoElement {
-    let last_index = state.messages.len().checked_sub(1);
-    // `w_full`, never `size_full`: this is the *content* of the caller's
-    // `overflow_y_scroll` container, so a full height would pin it to the
-    // viewport and clip everything past one screenful instead of letting
-    // the container scroll. `min_w_0` for the same reason horizontally -
-    // without it a wide child (a markdown table, a long command line)
-    // stretches the pane and pushes the input row's Send button off
-    // screen, per `knot-ui-conventions.md`'s "Flex overflow" rule.
-    v_flex()
-        .w_full()
-        .min_w_0()
-        .gap_3()
-        .p_4()
-        // Set the body size once, here, and let it cascade: a size applied
-        // to the `TextView` itself reaches its paint but not the line
-        // wrapper's measuring pass, so runs got measured at one size and
-        // drawn at another and overlapped each other - worst around inline
-        // code, which is measured separately in the mono family.
-        .text_size(style.markdown_font_size)
-        .children(state.messages.iter().enumerate().map(|(index, message)| {
-            render_message(
-                Message { state,
-                          index,
-                          is_last: Some(index) == last_index,
-                          style,
-                          scroll },
-                message,
-                on_toggle_track.clone(),
-                on_toggle_tool_call.clone(),
-            )
-        }))
-        .children(state.pending_permission.as_ref().map(|request| {
-            render_permission_prompt(request, style.permission_risk, on_permission_decision)
-        }))
-        .children(state.ended.as_ref().map(render_ended_banner))
+    let row_state = Arc::clone(&state);
+    let row_list = list.clone();
+    let row_style = style.clone();
+    gpui_kit::list(list.clone(), move |index, _window, _cx| {
+        let state = row_state.lock().expect("panel state poisoned");
+        render_row(index, &state, &row_style, &row_list, &callbacks)
+    }).size_full()
+      // `min_w_0` so a wide child (a markdown table, a long command line)
+      // clips instead of stretching the pane and pushing the input row's
+      // Send button off screen, per `knot-ui-conventions.md`'s "Flex
+      // overflow" rule.
+      .min_w_0()
+      .p_4()
+      // Set the body size once, here, and let it cascade: a size applied to
+      // the `TextView` itself reaches its paint but not the line wrapper's
+      // measuring pass, so runs got measured at one size and drawn at
+      // another and overlapped each other - worst around inline code, which
+      // is measured separately in the mono family.
+      .text_size(style.markdown_font_size)
+}
+
+/// Renders a single list row by resolving it against the current panel
+/// state. An index past the end draws nothing rather than panicking, so a
+/// frame racing a `sync_row_count` splice cannot crash the window.
+fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListState,
+              callbacks: &PanelCallbacks)
+              -> gpui_kit::AnyElement {
+    match row_at(state, index) {
+        Some(PanelRow::Message(message_index)) => {
+            let last_index = state.messages.len().checked_sub(1);
+            let message = &state.messages[message_index];
+            render_message(Message { state,
+                                     index: message_index,
+                                     is_last: Some(message_index) == last_index,
+                                     style,
+                                     list },
+                           message,
+                           callbacks)
+        }
+        Some(PanelRow::Permission) => {
+            let request = state.pending_permission
+                               .as_ref()
+                               .expect("row_at yields Permission only while a request is pending");
+            render_permission_prompt(request,
+                                     style.permission_risk,
+                                     callbacks.on_permission_decision.clone()).into_any_element()
+        }
+        Some(PanelRow::Ended) => {
+            let cause = state.ended
+                             .as_ref()
+                             .expect("row_at yields Ended only once the session has ended");
+            render_ended_banner(cause).into_any_element()
+        }
+        None => div().into_any_element(),
+    }
 }
 
 /// One message's render inputs, grouped so `render_message` keeps a short
@@ -178,18 +292,16 @@ struct Message<'a> {
     index:   usize,
     is_last: bool,
     style:   &'a PanelStyle,
-    scroll:  &'a ScrollHandle,
+    list:    &'a ListState,
 }
 
-fn render_message(ctx: Message<'_>, message: &PanelMessage,
-                  on_toggle_track: impl Fn() + Clone + 'static,
-                  on_toggle_tool_call: impl Fn(String) + Clone + 'static)
+fn render_message(ctx: Message<'_>, message: &PanelMessage, callbacks: &PanelCallbacks)
                   -> gpui_kit::AnyElement {
     let Message { state,
                   index,
                   is_last,
                   style,
-                  scroll, } = ctx;
+                  list, } = ctx;
     match message {
         // Right-aligned, tinted background - visually distinct from the
         // assistant's plain left-aligned text, per acp-panel-ui's
@@ -226,18 +338,23 @@ fn render_message(ctx: Message<'_>, message: &PanelMessage,
                                                           text.clone())))
                     .children((is_last && state.turn_active).then(|| {
                                                                 render_track_toggle(state.tracking,
-                                                                                    on_toggle_track)
+                                                      callbacks.on_toggle_track.clone())
                                                             }))
                     .children((!(is_last && state.turn_active)).then(|| {
                                   let user_index = preceding_user_message(state, index);
-                                  render_response_actions(text.clone(), user_index, scroll)
+                                  render_response_actions(text.clone(),
+                                                          user_index,
+                                                          index,
+                                                          list,
+                                                          callbacks.on_manual_scroll.clone())
                               }))
                     .into_any_element()
         }
-        PanelMessage::ToolCall(card) => {
-            render_tool_call_card(card, style, state.is_collapsed(card),
-                                  on_toggle_tool_call).into_any_element()
-        }
+        PanelMessage::ToolCall(card) => render_tool_call_card(card,
+                                                              style,
+                                                              state.is_collapsed(card),
+                                                              callbacks.on_toggle_tool_call
+                                                                       .clone()).into_any_element(),
         // Left-aligned like the assistant's own text, since it stands
         // where that answer would have been, but in the error color and
         // outlined so it doesn't read as something the agent said.
@@ -265,7 +382,7 @@ fn preceding_user_message(state: &PanelState, index: usize) -> Option<usize> {
 /// The in-flight response's auto-scroll toggle, per the track toggle
 /// design's per-response scope - shown only on the currently streaming
 /// response, replaced by the response action bar once it finalizes.
-fn render_track_toggle(tracking: bool, on_toggle: impl Fn() + Clone + 'static) -> impl IntoElement {
+fn render_track_toggle(tracking: bool, on_toggle: Rc<dyn Fn()>) -> impl IntoElement {
     h_flex().child(Button::new("panel-track-toggle").icon(if tracking {
                                                               IconName::CircleDot
                                                           }
@@ -287,14 +404,24 @@ fn render_track_toggle(tracking: bool, on_toggle: impl Fn() + Clone + 'static) -
 
 /// A finalized response's action bar: copy, scroll to the user message that
 /// prompted it, and scroll to the top of the conversation.
-fn render_response_actions(text: String, user_index: Option<usize>, scroll: &ScrollHandle)
+///
+/// The two scroll buttons drive the `ListState` directly (rather than a
+/// `ScrollHandle`) so they also stop tail-following - `scroll_to` on an
+/// earlier item does that on its own - and then call `on_manual_scroll` so
+/// the caller clears its own tracking flag, keeping the reconciler from
+/// pulling the view straight back to the tail. Button ids carry `index` so
+/// each response's bar is a distinct hit target under virtualization.
+fn render_response_actions(text: String, user_index: Option<usize>, index: usize,
+                           list: &ListState, on_manual_scroll: Rc<dyn Fn()>)
                            -> impl IntoElement {
-    let scroll_to_user = scroll.clone();
-    let scroll_to_top = scroll.clone();
+    let scroll_to_user = list.clone();
+    let scroll_to_top = list.clone();
+    let manual_to_user = on_manual_scroll.clone();
+    let manual_to_top = on_manual_scroll;
     h_flex()
         .gap_1()
         .child(
-            Button::new("panel-copy-response")
+            Button::new(("panel-copy-response", index as u64))
                 .icon(IconName::Copy)
                 .tooltip("Copy response")
                 .ghost()
@@ -304,23 +431,31 @@ fn render_response_actions(text: String, user_index: Option<usize>, scroll: &Scr
                 }),
         )
         .children(user_index.map(|user_index| {
-            Button::new("panel-scroll-to-user")
+            Button::new(("panel-scroll-to-user", index as u64))
                 .icon(IconName::ArrowUp)
                 .tooltip("Scroll to your message")
                 .ghost()
                 .small()
                 .on_click(move |_: &ClickEvent, _, _| {
-                    scroll_to_user.scroll_to_top_of_item(user_index);
+                    scroll_to_user.scroll_to(ListOffset {
+                        item_ix: user_index,
+                        offset_in_item: px(0.),
+                    });
+                    manual_to_user();
                 })
         }))
         .child(
-            Button::new("panel-scroll-to-top")
+            Button::new(("panel-scroll-to-top", index as u64))
                 .icon(IconName::ChevronsUp)
                 .tooltip("Scroll to top")
                 .ghost()
                 .small()
                 .on_click(move |_: &ClickEvent, _, _| {
-                    scroll_to_top.scroll_to_top_of_item(0);
+                    scroll_to_top.scroll_to(ListOffset {
+                        item_ix: 0,
+                        offset_in_item: px(0.),
+                    });
+                    manual_to_top();
                 }),
         )
 }
@@ -339,7 +474,7 @@ fn render_response_actions(text: String, user_index: Option<usize>, scroll: &Scr
 /// carries no other action (design decision "The control is a disclosure
 /// chevron, and the whole header toggles").
 fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, collapsed: bool,
-                         on_toggle: impl Fn(String) + Clone + 'static)
+                         on_toggle: Rc<dyn Fn(String)>)
                          -> impl IntoElement {
     let label = if card.title.is_empty() {
         card.kind.clone()
@@ -542,7 +677,7 @@ fn render_output_text(text: &str, style: &PanelStyle) -> impl IntoElement {
 /// prompts is blocked by the caller while this is rendered (the caller
 /// checks `PanelState::pending_permission` before calling `prompt`).
 fn render_permission_prompt(request: &PermissionRequest, permission_risk: RiskLevel,
-                            on_decision: impl Fn(PermissionDecision) + Clone + 'static)
+                            on_decision: Rc<dyn Fn(PermissionDecision)>)
                             -> impl IntoElement {
     let allow = on_decision.clone();
     let deny = on_decision;
@@ -692,5 +827,109 @@ mod tests {
         assert_eq!(permission_risk_level("unknown", "PLAN"), RiskLevel::Safe);
         assert_eq!(permission_risk_level("default", "Normal"),
                    RiskLevel::Neutral);
+    }
+
+    fn permission_request() -> PermissionRequest {
+        PermissionRequest { rpc_id:       serde_json::json!(1),
+                            tool_call_id: "tc1".to_string(),
+                            options:      Vec::new(), }
+    }
+
+    /// The list's item count must cover the trailing permission and ended
+    /// cards, or tail-following would stop short of them.
+    #[test]
+    fn row_count_covers_messages_and_the_trailing_cards() {
+        let mut state = PanelState::new();
+        assert_eq!(row_count(&state), 0);
+
+        state.messages.push(PanelMessage::User("hi".to_string()));
+        assert_eq!(row_count(&state), 1);
+
+        state.pending_permission = Some(permission_request());
+        assert_eq!(row_count(&state), 2);
+
+        state.ended = Some(knot_acp::SessionEndCause::ProcessExited { code: Some(1) });
+        assert_eq!(row_count(&state), 3);
+    }
+
+    /// Indices walk the messages in order, then the permission prompt, then
+    /// the ended banner, and anything past the end resolves to nothing
+    /// rather than panicking.
+    #[test]
+    fn row_at_walks_messages_then_permission_then_ended() {
+        let mut state = PanelState::new();
+        state.messages.push(PanelMessage::User("a".to_string()));
+        state.messages
+             .push(PanelMessage::Assistant("b".to_string()));
+        state.pending_permission = Some(permission_request());
+        state.ended = Some(knot_acp::SessionEndCause::ProcessExited { code: None });
+
+        assert_eq!(row_at(&state, 0), Some(PanelRow::Message(0)));
+        assert_eq!(row_at(&state, 1), Some(PanelRow::Message(1)));
+        assert_eq!(row_at(&state, 2), Some(PanelRow::Permission));
+        assert_eq!(row_at(&state, 3), Some(PanelRow::Ended));
+        assert_eq!(row_at(&state, 4), None);
+    }
+
+    /// The ended row is the *last* row, not tied to a fixed index: with no
+    /// permission pending it follows the messages directly.
+    #[test]
+    fn an_ended_row_follows_the_messages_when_no_permission_is_pending() {
+        let mut state = PanelState::new();
+        state.messages.push(PanelMessage::User("a".to_string()));
+        state.ended = Some(knot_acp::SessionEndCause::ProcessExited { code: Some(0) });
+
+        assert_eq!(row_count(&state), 2);
+        assert_eq!(row_at(&state, 1), Some(PanelRow::Ended));
+        assert_eq!(row_at(&state, 2), None);
+    }
+
+    /// `sync_row_count` is what keeps a live list's item count in step with
+    /// the state, growing and shrinking by the delta so rows already on
+    /// screen are left alone.
+    #[test]
+    fn sync_row_count_tracks_messages_and_trailing_rows() {
+        let list = ListState::new(0, gpui_kit::ListAlignment::Top, px(LIST_OVERDRAW));
+        let mut state = PanelState::new();
+        let mut known = 0;
+
+        known = sync_row_count(&list, known, &state);
+        assert_eq!((list.item_count(), known), (0, 0));
+
+        state.messages.push(PanelMessage::User("a".to_string()));
+        state.messages
+             .push(PanelMessage::Assistant("b".to_string()));
+        known = sync_row_count(&list, known, &state);
+        assert_eq!((list.item_count(), known), (2, 2));
+
+        state.messages
+             .push(PanelMessage::Assistant("c".to_string()));
+        known = sync_row_count(&list, known, &state);
+        assert_eq!((list.item_count(), known), (3, 3));
+
+        state.ended = Some(knot_acp::SessionEndCause::ProcessExited { code: None });
+        known = sync_row_count(&list, known, &state);
+        assert_eq!((list.item_count(), known), (4, 4));
+
+        state.messages.truncate(1);
+        state.ended = None;
+        known = sync_row_count(&list, known, &state);
+        assert_eq!((list.item_count(), known), (1, 1));
+    }
+
+    /// The reconcile in `render_panel_pane` mirrors the track toggle onto
+    /// these two calls: `Tail` while following, `Normal` otherwise. `Normal`
+    /// is what keeps a toggled-off list put even at the tail, so it must not
+    /// report as following afterwards.
+    #[test]
+    fn follow_mode_reflects_the_toggle() {
+        let list = ListState::new(0, gpui_kit::ListAlignment::Top, px(LIST_OVERDRAW));
+        assert!(!list.is_following_tail());
+
+        list.set_follow_mode(gpui_kit::FollowMode::Tail);
+        assert!(list.is_following_tail());
+
+        list.set_follow_mode(gpui_kit::FollowMode::Normal);
+        assert!(!list.is_following_tail());
     }
 }

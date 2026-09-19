@@ -129,10 +129,6 @@ const PERMISSION_SELECTOR_ID: &str = "panel-permission-mode-selector";
 /// a fixed height: a fixed height fights the textarea's own layout, so a
 /// second line made it scroll and jump on every keystroke instead of
 /// simply getting taller.
-/// How many pixels away from the bottom still counts as "at the bottom",
-/// so the scroll-to-latest control doesn't flicker on sub-pixel offsets.
-const SCROLL_BOTTOM_EPSILON: f32 = 8.;
-
 const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
 const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
 
@@ -228,11 +224,16 @@ pub(crate) struct WorkspaceWindow {
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
     panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
-    /// One conversation scroll handle per Panel-mode agent that has been
-    /// viewed, created lazily - backs the response action bar's
-    /// scroll-to-user/scroll-to-top controls and the track toggle's
-    /// auto-scroll.
-    panel_scroll_handles:             BTreeMap<Uuid, gpui_kit::ScrollHandle>,
+    /// One virtualized conversation list per Panel-mode agent that has
+    /// been viewed, created lazily - the `ListState` backing
+    /// `render_panel`'s virtualization, and the target of the response
+    /// action bar's scroll-to-user/scroll-to-top controls and the track
+    /// toggle's auto-scroll.
+    panel_lists:                      BTreeMap<Uuid, ListState>,
+    /// The item count each `panel_lists` entry was last reconciled to, so
+    /// `render_panel_pane` can `splice` only the rows that actually
+    /// changed and leave off-screen rows' measured heights alone.
+    panel_list_row_counts:            BTreeMap<Uuid, usize>,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
@@ -337,7 +338,8 @@ impl WorkspaceWindow {
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
-                    panel_scroll_handles: BTreeMap::new(),
+                    panel_lists: BTreeMap::new(),
+                    panel_list_row_counts: BTreeMap::new(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
                     view_mode: WorkspaceViewMode::Terminal,
@@ -700,6 +702,12 @@ impl WorkspaceWindow {
             let _ = session.shutdown();
         }
         self.panel_phases.remove(&id);
+        // Drop the list with the session: its scroll handler captured the
+        // old slot, so a reconnect must build a fresh list bound to the new
+        // one (and its row count must start empty so the reconciler
+        // splices the conversation back in).
+        self.panel_lists.remove(&id);
+        self.panel_list_row_counts.remove(&id);
         if let Some(slot) = self.panel_sessions.remove(&id) {
             let handle = match std::mem::replace(&mut *slot.lock().unwrap(),
                                                  panel_session::PanelSessionSlot::connecting().0)
@@ -722,6 +730,10 @@ impl WorkspaceWindow {
     fn retry_panel_session(&mut self, id: Uuid) {
         self.panel_sessions.remove(&id);
         self.panel_phases.remove(&id);
+        // The new connection gets a new slot; the old list's scroll handler
+        // points at the dead one, so rebuild it.
+        self.panel_lists.remove(&id);
+        self.panel_list_row_counts.remove(&id);
         self.ensure_panel_session(id);
     }
 
@@ -757,7 +769,8 @@ impl WorkspaceWindow {
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
         self.panel_prompt_input_subscriptions.remove(&id);
-        self.panel_scroll_handles.remove(&id);
+        self.panel_lists.remove(&id);
+        self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
         self.panel_input_expanded.remove(&id);
     }
@@ -1174,8 +1187,16 @@ impl WorkspaceWindow {
                         handle.toggle_tool_call(&tool_call_id);
                     }
                 };
-                let scroll_away_slot = Arc::clone(slot);
+                let manual_slot = Arc::clone(slot);
+                let on_manual_scroll = move || {
+                    if let Ok(slot) = manual_slot.lock()
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    {
+                        handle.clear_tracking();
+                    }
+                };
                 let follow_slot = Arc::clone(slot);
+                let list_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
                 let turn_active = state.turn_active;
                 let config_options = state.config_options.clone();
@@ -1198,80 +1219,93 @@ impl WorkspaceWindow {
                                              border_color: theme.border };
                 drop(state);
                 drop(slot_guard);
-                let scroll = self.panel_scroll_handle(id);
+                // Reconcile the virtualized list with the folded state:
+                // splice only the rows that changed, then mirror the track
+                // toggle's follow state onto the list. `Tail` while the
+                // in-flight response is tracked; `Normal` otherwise, so a
+                // toggled-off response stays put *even at the tail* - the
+                // whole reason for hand-rolling on `ListState` rather than
+                // using a scroller whose follow mode re-engages itself.
+                let list = self.panel_list(id, list_slot);
+                let known = self.panel_list_row_counts.get(&id).copied().unwrap_or(0);
+                {
+                    let state = state_arc.lock().unwrap();
+                    let count = panel_view::sync_row_count(&list, known, &state);
+                    self.panel_list_row_counts.insert(id, count);
+                }
+                if should_follow {
+                    if !list.is_following_tail() {
+                        list.set_follow_mode(FollowMode::Tail);
+                    }
+                }
+                else {
+                    list.set_follow_mode(FollowMode::Normal);
+                }
                 let pending_context = self.panel_pending_context
                                           .get(&id)
                                           .cloned()
                                           .unwrap_or_default();
                 let expanded = self.panel_input_expanded.contains(&id);
-                // Per this same method's re-render-on-`take_dirty` poll
-                // loop: each new streamed delta marks the session dirty
-                // and triggers a repaint, so following the bottom here
-                // (rather than via a dedicated scroll subscription) keeps
-                // pace with streaming text.
-                if should_follow {
-                    scroll.scroll_to_bottom();
-                }
                 let input = self.panel_prompt_input(id, window, cx);
-                // Offsets go negative scrolling down, so "not at the
-                // bottom" is the remaining distance still being positive.
-                // A conversation shorter than its viewport has no max
-                // offset and so never shows the control.
-                let scrolled_up =
-                    scroll.max_offset().y + scroll.offset().y > px(SCROLL_BOTTOM_EPSILON);
-                let scroll_to_bottom = scroll.clone();
-                v_flex().size_full()
-                        .child(div().relative()
-                                    .flex_1()
-                                    .min_h_0()
-                                    .child(div().id("panel-conversation")
-                                    .size_full()
-                                    .overflow_y_scroll()
-                                    .track_scroll(&scroll)
-                                    .on_scroll_wheel(move |_: &gpui_kit::ScrollWheelEvent, _, _| {
-                                        if let Ok(slot) = scroll_away_slot.lock()
-                                           && let panel_session::PanelSessionSlot::Ready(handle) =
-                                               &*slot
-                                        {
-                                            handle.clear_tracking();
-                                        }
-                                    })
-                                    .child(panel_view::render_panel(&state_arc.lock().unwrap(),
-                                                                    &scroll,
-                                                                    &panel_style,
-                                                                    on_decision,
-                                                                    on_toggle_track,
-                                                                    on_toggle_tool_call)))
-                                    .children(scrolled_up.then(|| {
-                                        div().absolute()
-                                             .bottom_3()
-                                             .right_4()
-                                             .child(Button::new("panel-scroll-to-bottom")
-                                                 .icon(IconName::ChevronDown)
-                                                 .tooltip("Scroll to latest")
-                                                 .small()
-                                                 .on_click(move |_: &ClickEvent, _, _| {
-                                                     scroll_to_bottom.scroll_to_bottom();
-                                                     // Jumping to the end also
-                                                     // resumes following new
-                                                     // output, which is what the
-                                                     // control implies.
-                                                     if let Ok(slot) = follow_slot.lock()
-                                                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                                                     {
-                                                         handle.set_tracking(true);
-                                                     }
-                                                 }))
-                                    })))
-                        .child(self.render_panel_input_area(id,
-                                                            &input,
-                                                            &pending_context,
-                                                            expanded,
-                                                            blocked,
-                                                            turn_active,
-                                                            &config_options,
-                                                            cx))
-                        .into_any_element()
+                // A conversation shorter than its viewport is not
+                // scrollable, so `is_scrolled_to_end` is `None` and the
+                // control stays hidden.
+                let scrolled_up = matches!(list.is_scrolled_to_end(), Some(false));
+                let list_to_bottom = list.clone();
+                v_flex()
+                    .size_full()
+                    .child(
+                        div()
+                            .relative()
+                            .flex_1()
+                            .min_h_0()
+                            .child(div().id("panel-conversation").size_full().child(
+                                panel_view::render_panel(
+                                    Arc::clone(&state_arc),
+                                    list.clone(),
+                                    &panel_style,
+                                    panel_view::PanelCallbacks::new(
+                                        on_decision,
+                                        on_toggle_track,
+                                        on_toggle_tool_call,
+                                        on_manual_scroll,
+                                    ),
+                                ),
+                            ))
+                            .children(scrolled_up.then(|| {
+                                div().absolute().bottom_3().right_4().child(
+                                    Button::new("panel-scroll-to-bottom")
+                                        .icon(IconName::ChevronDown)
+                                        .tooltip("Scroll to latest")
+                                        .small()
+                                        .on_click(move |_: &ClickEvent, _, _| {
+                                            list_to_bottom.scroll_to_end();
+                                            // Jumping to the end also
+                                            // resumes following new
+                                            // output, which is what the
+                                            // control implies.
+                                            if let Ok(slot) = follow_slot.lock()
+                                                && let panel_session::PanelSessionSlot::Ready(
+                                                    handle,
+                                                ) = &*slot
+                                            {
+                                                handle.set_tracking(true);
+                                            }
+                                        }),
+                                )
+                            })),
+                    )
+                    .child(self.render_panel_input_area(
+                        id,
+                        &input,
+                        &pending_context,
+                        expanded,
+                        blocked,
+                        turn_active,
+                        &config_options,
+                        cx,
+                    ))
+                    .into_any_element()
             }
         }
     }
@@ -1595,9 +1629,31 @@ impl WorkspaceWindow {
                       })
     }
 
-    /// Gets or creates the conversation scroll handle for `id`'s panel.
-    fn panel_scroll_handle(&mut self, id: Uuid) -> gpui_kit::ScrollHandle {
-        self.panel_scroll_handles.entry(id).or_default().clone()
+    /// Gets or creates the conversation's virtualized list for `id`'s panel.
+    ///
+    /// `slot` is the panel session slot the list's scroll handler clears
+    /// tracking through: a user scroll (wheel or scrollbar drag) away from
+    /// the tail fires the handler, which drops the in-flight response's
+    /// auto-scroll - per the track toggle's "detect user-initiated scroll
+    /// away from bottom" scenario - without a window/cx in the closure.
+    /// The list is created empty; the caller reconciles its item count
+    /// each frame (see `panel_view::sync_row_count`).
+    fn panel_list(&mut self, id: Uuid, slot: Arc<Mutex<panel_session::PanelSessionSlot>>)
+                  -> ListState {
+        if let Some(list) = self.panel_lists.get(&id) {
+            return list.clone();
+        }
+        let list = ListState::new(0, ListAlignment::Top, px(panel_view::LIST_OVERDRAW));
+        list.set_scroll_handler(move |_event, _window, _cx| {
+                if let Ok(slot) = slot.lock()
+                   && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                {
+                    handle.clear_tracking();
+                }
+            });
+        self.panel_lists.insert(id, list.clone());
+        self.panel_list_row_counts.insert(id, 0);
+        list
     }
 
     /// Opens the native file/image picker and attaches the chosen paths to

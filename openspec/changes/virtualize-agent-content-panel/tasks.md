@@ -1,61 +1,65 @@
 # Tasks
 
-## Task Group: Virtualized accent content panel
+## 1. Virtualized transcript list in the workspace window
 
-### Task: Adopt a virtual message transcript scroller in the workspace window
+- [x] 1.1 Replace the panel's eager `render_panel` scroll content
+      (`v_flex().children(messages.map(...))` in `crates/knot/src/panel_view/mod.rs`)
+      with a virtualized list so only rows near the viewport are laid out and
+      measured. Built on GPUI `List`/`ListState` (via `gpui-kit`) rather than
+      `gpui_component::message_scroller::MessageScroller`, whose state exposes
+      no way to keep following off at the tail (see design.md). Verify
+      `make rust-build`.
+- [x] 1.2 Host each panel's `ListState` in the window, not inside the
+      `Arc<Mutex<PanelState>>` shared with the ACP reader thread: new
+      `panel_lists`/`panel_list_row_counts` maps keyed by agent id replace
+      `panel_scroll_handles`. Verify the ACP reader thread still touches only
+      `PanelState`. Verify `make rust-build`.
+- [x] 1.3 Connect streamed row changes through `ListState::splice` bookkeeping
+      (`panel_view::sync_row_count`) so streaming and collapse/expand update
+      rows in place without a full conversation rebuild. Keep `PanelState` as
+      the single source of truth; the list is a render-side virtualizer only.
+      Verify `make rust-build`.
 
-Replace the panel's eager `render_panel` scroll content (`v_flex()...
-.children(messages.map(...))` in `crates/knot/src/panel_view/mod.rs`) with a
-GPUI virtualized message scroller (`gpui_component::MessageScroller` over
-GPUI `List`, re-exported via `gpui-kit`'s `component` module), so the panel
-materializes and measures only the rows near the viewport.
+## 2. Virtualization behavior
 
-- Host the scroller's entity state (`MessageScrollerReaction`) in the window's
-  per-session slot (`workspace_window::PanelSessionSlot::Ready`) alongside the
-  existing `panel_scroll_handles` map — NOT inside the `Arc<Mutex<PanelState>>`
-  shared with the ACP reader thread.
-- Connect streamed row changes through the scroller's splice/remeasure
-  bookkeeping so streaming and collapse/expand update rows in place without a
-  full conversation rebuild.
-- Keep `PanelState` as the single source of truth for message content/state;
-  the scroller is a render-side virtualizer only.
+- [x] 2.1 Streaming splice: reconcile the list's item count to the folded state
+      each frame and apply `FollowMode::Tail` while the in-flight response is
+      tracked, so the viewport stays at the latest message as it streams;
+      `ListState::set_scroll_handler` clears tracking when the user scrolls
+      away.
+- [x] 2.2 Row content survives virtualization: rows are materialized on demand
+      from `PanelState::messages` (the same source the eager build used), and
+      `row_at` renders an empty row for an index past the end rather than
+      panicking.
 
-#### Subtask: Message row spliced into the scroller as it streams
+## 3. Re-point panel scroll controls onto the virtualized list
 
-Given a visible streaming tail, splice the newly streamed/rematerialized rows
-into the message scroller, then confirm the viewport stays at the latest
-message while it streams (tracking on) and that scroll-away disables
-following (tracking off).
+- [x] 3.1 Replace the hand-rolled `ScrollHandle`-based action-bar commands and
+      the `overflow_y_scroll` container with `ListState` operations:
+      scroll-to-user/top via `scroll_to(ListOffset { item_ix, .. })`,
+      scroll-to-latest via `scroll_to_end`, and explicit follow mode via
+      `set_follow_mode(FollowMode::{Tail,Normal})`.
+- [x] 3.2 Delete the per-frame `scroll_to_bottom()`/tracking hack (and
+      `SCROLL_BOTTOM_EPSILON`) in the window's dirty-poll render loop; the
+      list's follow state replaces it.
+- [x] 3.3 Preserve the existing action-bar controls ("scroll to user message",
+      "scroll to top", "jump to latest", track toggle) with identical labels,
+      icons and placement; give the response action buttons index-qualified ids
+      so they stay unique under virtualization.
 
-#### Subtask: Row content survives virtualization
+## 4. Permission prompts and ended banner inside the virtualized list
 
-Scroll a message far out of the viewport, then scroll back to it, and confirm
-the materialized content and state match an eagerly-built conversation.
+- [x] 4.1 Move the permission prompt card and the ended-session banner from
+      standalone siblings after the message list into virtualized rows of the
+      same list, indexed after the messages, so they participate in
+      virtualization and tail following.
 
-### Task: Re-point panel scroll controls onto the virtualized list
+## 5. Verify and test virtualization
 
-Replace the hand-rolled `ScrollHandle`-based action-bar commands and the
-`overflow_y_scroll` container in `crates/knot/src/panel_view/mod.rs` with the
-virtualized scroller's scroll controls: scroll-to-latest (jump + tail follow),
-scroll-to-user-input, scroll-to-top, and the built-in follow-mode toggle.
-
-- Delete the per-frame `scroll_to_bottom()`/tracking hack in the window's
-  dirty-poll render loop; the scroller's follow/tail state replaces it.
-- Preserve the existing action-bar buttons ("scroll to user message",
-  "scroll to top", "jump to latest", track toggle) with identical labels,
-  icons and placement.
-
-### Task: Keep permission prompts and ended banner inside the virtualized list
-
-Move the permission prompt card and the ended-session banner from standalone
-siblings after the message list into virtualized rows of the same scroller,
-indexed after the messages, so they participate in virtualization and tail
-following.
-
-### Task: Verify and test virtualization
-
-Add a regression test that builds a conversation longer than the viewport,
-drives enough scroll/re-ematerialization to reach a far-offset message, and
-asserts the row's content and streaming behaviour match the eager baseline.
-
-- Run `make rust-test` / `make rust-fmt` / `make rust-lint` in the crate.
+- [x] 5.1 Add regression tests for the row model and reconciliation:
+      `row_count`/`row_at` cover messages plus the trailing permission and
+      ended rows (and an out-of-range index), and `sync_row_count` grows and
+      shrinks a real `ListState`'s item count by the delta. Plus a test pinning
+      the `FollowMode::Tail`/`Normal` primitive the reconcile relies on.
+- [x] 5.2 Run `make rust-test` / `make rust-fmt` / `make rust-lint` in the
+      crate.
