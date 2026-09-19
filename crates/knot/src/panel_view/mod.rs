@@ -240,7 +240,13 @@ pub(crate) fn render_panel(state: Arc<Mutex<PanelState>>, list: ListState, style
       // Send button off screen, per `knot-ui-conventions.md`'s "Flex
       // overflow" rule.
       .min_w_0()
-      .p_4()
+      // Only vertical padding survives on the list itself: the virtualizer
+      // lays each row out at the full viewport width and paints it at x=0,
+      // so `px_*` here would be ignored and the sides would collapse. The
+      // side inset and the gap between rows live on each row instead (see
+      // `render_row`); top and bottom padding is honoured here.
+      .pt_2()
+      .pb_2()
       // Set the body size once, here, and let it cascade: a size applied to
       // the `TextView` itself reaches its paint but not the line wrapper's
       // measuring pass, so runs got measured at one size and drawn at
@@ -252,10 +258,15 @@ pub(crate) fn render_panel(state: Arc<Mutex<PanelState>>, list: ListState, style
 /// Renders a single list row by resolving it against the current panel
 /// state. An index past the end draws nothing rather than panicking, so a
 /// frame racing a `sync_row_count` splice cannot crash the window.
+///
+/// Each row carries its own side inset and vertical margin: the virtualizer
+/// ignores the list's horizontal padding and has no gap concept, so this is
+/// where the content gets its breathing room from the pane edges and from
+/// neighbouring rows.
 fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListState,
               callbacks: &PanelCallbacks)
               -> gpui_kit::AnyElement {
-    match row_at(state, index) {
+    let row = match row_at(state, index) {
         Some(PanelRow::Message(message_index)) => {
             let last_index = state.messages.len().checked_sub(1);
             let message = &state.messages[message_index];
@@ -281,8 +292,14 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
                              .expect("row_at yields Ended only once the session has ended");
             render_ended_banner(cause).into_any_element()
         }
-        None => div().into_any_element(),
-    }
+        None => return div().into_any_element(),
+    };
+    div().w_full()
+         .min_w_0()
+         .px_4()
+         .py_2()
+         .child(row)
+         .into_any_element()
 }
 
 /// One message's render inputs, grouped so `render_message` keeps a short
