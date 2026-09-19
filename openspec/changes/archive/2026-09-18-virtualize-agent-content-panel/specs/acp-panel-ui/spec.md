@@ -88,14 +88,14 @@ Manually scrolling the history away from the tail SHALL disable following.
 Disabling the toggle SHALL stop following even while the list is at the tail,
 so following is only ever resumed by enabling the toggle or jumping to latest.
 
-#### Scenario: Streaming update while the tail is being followed
+#### Scenario: Tracking follows streamed output
 
 - **WHEN** the user enables the track toggle on an in-progress response and
   the panel is following the tail
 - **THEN** the list stays at the end and the newest streamed output is
   visible as it arrives
 
-#### Scenario: Manual scroll disables following
+#### Scenario: Manual scroll disables tracking
 
 - **WHEN** the user enables the track toggle on an in-progress response and
   then scrolls the history away from the tail
