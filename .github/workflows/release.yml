@@ -2,6 +2,9 @@ name: Release
 
 permissions:
   contents: write
+  # rust-release.yaml uses OIDC for crates.io publishing, so the reusable
+  # workflow call requires the id-token permission on this caller too.
+  id-token: write
 
 on:
   push:
