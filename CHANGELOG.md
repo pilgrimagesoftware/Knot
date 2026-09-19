@@ -1,26 +1,3 @@
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-## [Unreleased]
-
-### Added
-- Repo scaffolding: dependabot, community docs (CONTRIBUTING, SECURITY, CODE_OF_CONDUCT), `docs/adr/` template and index
-- Branch protection on `main` requiring the Rust workspace CI matrix
-- `docs/adr/0001-git-flow.md` recording the git-flow adoption
-- `prepare-release.yml` / `tag-release.yml` / `release.yml` workflows automating the git-flow release cycle
-- `cargo-packager` config for `crates/knot` and `make rust-package`, building `Knot.app` and a DMG
-- `package.yml` workflow packaging `Knot.app` on every merge to `develop` and attaching the DMG to each GitHub Release
-
-### Changed
-- `AGENTS.md` rewritten around the Rust port; `CLAUDE.md` is now a symlink to it
-
-### Fixed
-- `workspace (ubuntu-latest)` CI: install the Linux system packages `gpui-component` needs to build (fontconfig, wayland, webkit2gtk, xkbcommon, x11-xcb, ssl, zstd, vulkan) - the job failed on every run without them
-- `knot-discovery`: switching the source folder could race a not-yet-torn-down watcher into publishing a stale rescan from the previous folder
-- `knot-discovery`: on Linux, a rescan's own directory read could re-trigger its own debounce indefinitely (inotify watches directory opens; the watch never went quiet)
-
-
 ## [1.9.0] - 2026-04-03
 
 ### Added
