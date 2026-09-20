@@ -45,18 +45,18 @@ pub struct InitializeResult {
     // masks a rename mistake the same way it masks a genuinely absent
     // field.
     #[serde(default, rename = "agentCapabilities")]
-    pub capabilities: AgentCapabilities,
+    pub capabilities:     AgentCapabilities,
     /// Session Config Options some agents declare on `initialize` rather
     /// than (or in addition to) `session/new` - both locations are parsed
     /// the same way, since the stabilized spec allows either.
     #[serde(default, rename = "configOptions")]
-    pub config_options: Vec<ConfigOption>,
+    pub config_options:   Vec<ConfigOption>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AgentCapabilities {
     #[serde(default, rename = "loadSession")]
-    pub supports_resume: bool,
+    pub supports_resume:  bool,
     #[serde(default, rename = "permissionModes")]
     pub permission_modes: Vec<String>,
     #[serde(default, rename = "mcpCapabilities")]
@@ -72,7 +72,7 @@ pub struct McpCapabilities {
     #[serde(default)]
     pub http: bool,
     #[serde(default)]
-    pub sse: bool,
+    pub sse:  bool,
 }
 
 /// One agent-declared session setting (mode, model, reasoning effort, ...)
@@ -81,22 +81,22 @@ pub struct McpCapabilities {
 /// parsed but left unrendered until a control needs them.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct ConfigOption {
-    pub id: String,
-    pub name: String,
+    pub id:            String,
+    pub name:          String,
     #[serde(default)]
-    pub category: Option<String>,
+    pub category:      Option<String>,
     #[serde(default, rename = "type")]
-    pub kind: String,
+    pub kind:          String,
     #[serde(default, rename = "currentValue")]
     pub current_value: Value,
     #[serde(default)]
-    pub options: Vec<ConfigOptionValue>,
+    pub options:       Vec<ConfigOptionValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ConfigOptionValue {
-    pub value: String,
-    pub name: String,
+    pub value:       String,
+    pub name:        String,
     #[serde(default)]
     pub description: Option<String>,
 }
@@ -116,7 +116,7 @@ pub enum ToolCallContent {
     /// A `{"type": "diff", ...}` block: a file modification. `old_text` is
     /// absent for a newly created file.
     Diff {
-        path: String,
+        path:     String,
         old_text: Option<String>,
         new_text: String,
     },
@@ -133,31 +133,24 @@ impl ToolCallContent {
     /// empty vector, which callers MUST treat as "no change" rather than
     /// "cleared".
     fn parse_list(value: Option<&Value>) -> Vec<Self> {
-        value
-            .and_then(Value::as_array)
-            .map(|entries| entries.iter().filter_map(Self::parse_one).collect())
-            .unwrap_or_default()
+        value.and_then(Value::as_array)
+             .map(|entries| entries.iter().filter_map(Self::parse_one).collect())
+             .unwrap_or_default()
     }
 
     fn parse_one(entry: &Value) -> Option<Self> {
         match entry.get("type").and_then(Value::as_str) {
-            Some("content") => Some(Self::Text(
-                entry
-                    .get("content")
-                    .map(text_content_block)
-                    .unwrap_or_default(),
-            )),
-            Some("diff") => Some(Self::Diff {
-                path: field_str(entry, "path"),
-                old_text: entry
-                    .get("oldText")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-                new_text: field_str(entry, "newText"),
-            }),
-            Some("terminal") => Some(Self::Terminal {
-                terminal_id: field_str(entry, "terminalId"),
-            }),
+            Some("content") => Some(Self::Text(entry.get("content")
+                                                    .map(text_content_block)
+                                                    .unwrap_or_default())),
+            Some("diff") => Some(Self::Diff { path:     field_str(entry, "path"),
+                                              old_text: entry.get("oldText")
+                                                             .and_then(Value::as_str)
+                                                             .map(str::to_owned),
+                                              new_text: field_str(entry, "newText"), }),
+            Some("terminal") => {
+                Some(Self::Terminal { terminal_id: field_str(entry, "terminalId"), })
+            }
             _ => None,
         }
     }
@@ -173,14 +166,14 @@ pub enum SessionUpdate {
     },
     ToolCallStart {
         tool_call_id: String,
-        kind: String,
+        kind:         String,
         /// The agent's human-readable label for the call ("Reading
         /// configuration file"), which is what the spec intends a client
         /// to show - `kind` is only an icon/category hint.
-        title: String,
+        title:        String,
         /// Defaults to `pending` per the spec when the agent omits it.
-        status: String,
-        content: Vec<ToolCallContent>,
+        status:       String,
+        content:      Vec<ToolCallContent>,
     },
     /// Every field but `tool_call_id` is optional in an update, per the
     /// spec's "only the fields being changed need to be included" - hence
@@ -188,13 +181,13 @@ pub enum SessionUpdate {
     /// out a status the client already knows.
     ToolCallUpdate {
         tool_call_id: String,
-        status: Option<String>,
-        title: Option<String>,
-        content: Vec<ToolCallContent>,
+        status:       Option<String>,
+        title:        Option<String>,
+        content:      Vec<ToolCallContent>,
     },
     ToolCallResult {
         tool_call_id: String,
-        output: Value,
+        output:       Value,
     },
     Diff {
         path: String,
@@ -221,10 +214,9 @@ impl SessionUpdate {
         // ...}}`), confirmed against a live `gemini --acp` handshake -
         // `params` itself is accepted too, for callers that already
         // unwrapped it (and for existing tests).
-        let update = params
-            .get("update")
-            .cloned()
-            .unwrap_or_else(|| params.clone());
+        let update = params.get("update")
+                           .cloned()
+                           .unwrap_or_else(|| params.clone());
         let kind = update.get("sessionUpdate").and_then(Value::as_str);
         match kind {
             Some("agent_message_chunk") | Some("text_delta") => SessionUpdate::TextDelta {
@@ -272,24 +264,22 @@ impl SessionUpdate {
 /// (`{"content": {"type": "text", "text": "..."}}`), falling back to a
 /// flat `text` field for other/older producers.
 fn text_content(update: &Value) -> String {
-    update
-        .get("content")
-        .and_then(|content| content.get("text"))
-        .or_else(|| update.get("text"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+    update.get("content")
+          .and_then(|content| content.get("text"))
+          .or_else(|| update.get("text"))
+          .and_then(Value::as_str)
+          .unwrap_or_default()
+          .to_owned()
 }
 
 /// A bare content block's text (`{"type": "text", "text": "..."}`), as
 /// opposed to [`text_content`], which digs the block out of an update
 /// envelope first.
 fn text_content_block(block: &Value) -> String {
-    block
-        .get("text")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+    block.get("text")
+         .and_then(Value::as_str)
+         .unwrap_or_default()
+         .to_owned()
 }
 
 fn field_str(value: &Value, key: &str) -> String {
@@ -306,17 +296,17 @@ fn optional_str(value: &Value, key: &str) -> Option<String> {
 /// allow/deny decision from the caller.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PermissionRequest {
-    pub rpc_id: Value,
-    pub tool_call_id: String,
+    pub rpc_id:          Value,
+    pub tool_call_id:    String,
     pub tool_call_title: Option<String>,
-    pub options: Vec<PermissionOption>,
+    pub options:         Vec<PermissionOption>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PermissionOption {
     #[serde(rename = "optionId")]
     pub option_id: String,
-    pub name: String,
+    pub name:      String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -363,13 +353,11 @@ mod tests {
             }
         });
 
-        let SessionUpdate::ToolCallStart {
-            tool_call_id,
-            kind,
-            title,
-            status,
-            content,
-        } = SessionUpdate::from_params(params)
+        let SessionUpdate::ToolCallStart { tool_call_id,
+                                           kind,
+                                           title,
+                                           status,
+                                           content, } = SessionUpdate::from_params(params)
         else {
             panic!("expected a tool-call start");
         };
@@ -416,23 +404,17 @@ mod tests {
             }
         });
 
-        let SessionUpdate::ToolCallUpdate {
-            tool_call_id,
-            status,
-            content,
-            ..
-        } = SessionUpdate::from_params(params)
+        let SessionUpdate::ToolCallUpdate { tool_call_id,
+                                            status,
+                                            content,
+                                            .. } = SessionUpdate::from_params(params)
         else {
             panic!("expected a tool-call update");
         };
         assert_eq!(tool_call_id, "call_001");
         assert_eq!(status.as_deref(), Some("completed"));
-        assert_eq!(
-            content,
-            vec![ToolCallContent::Text(
-                "Found 3 configuration files...".to_string()
-            )]
-        );
+        assert_eq!(content,
+                   vec![ToolCallContent::Text("Found 3 configuration files...".to_string())]);
     }
 
     /// An update that changes only `content` must report `status: None`
@@ -476,19 +458,13 @@ mod tests {
         else {
             panic!("expected a tool-call update");
         };
-        assert_eq!(
-            content,
-            vec![
-                ToolCallContent::Diff {
-                    path: "/home/user/project/src/config.json".to_string(),
-                    old_text: Some("{\n  \"debug\": false\n}".to_string()),
-                    new_text: "{\n  \"debug\": true\n}".to_string(),
-                },
-                ToolCallContent::Terminal {
-                    terminal_id: "term_xyz789".to_string(),
-                }
-            ]
-        );
+        assert_eq!(content,
+                   vec![ToolCallContent::Diff { path:
+                                                    "/home/user/project/src/config.json".to_string(),
+                                                old_text:
+                                                    Some("{\n  \"debug\": false\n}".to_string()),
+                                                new_text: "{\n  \"debug\": true\n}".to_string(), },
+                        ToolCallContent::Terminal { terminal_id: "term_xyz789".to_string(), }]);
     }
 
     /// A brand-new file has no `oldText`, which must stay distinguishable
@@ -507,14 +483,10 @@ mod tests {
         else {
             panic!("expected a tool-call update");
         };
-        assert_eq!(
-            content,
-            vec![ToolCallContent::Diff {
-                path: "new.rs".to_string(),
-                old_text: None,
-                new_text: "fn main() {}".to_string(),
-            }]
-        );
+        assert_eq!(content,
+                   vec![ToolCallContent::Diff { path:     "new.rs".to_string(),
+                                                old_text: None,
+                                                new_text: "fn main() {}".to_string(), }]);
     }
 
     #[test]

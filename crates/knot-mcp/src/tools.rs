@@ -5,8 +5,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolDefinition {
-    pub name: String,
-    pub description: String,
+    pub name:         String,
+    pub description:  String,
     /// MCP names this field `inputSchema`; a client that validates
     /// `tools/list` against the schema drops every tool sent under the
     /// snake_case spelling, which is how Knot's whole tool set went
@@ -20,17 +20,15 @@ pub struct ToolDefinition {
 pub struct ToolInputSchema {
     #[serde(rename = "type")]
     pub schema_type: &'static str,
-    pub properties: BTreeMap<String, PropertySchema>,
-    pub required: Vec<String>,
+    pub properties:  BTreeMap<String, PropertySchema>,
+    pub required:    Vec<String>,
 }
 
 impl Default for ToolInputSchema {
     fn default() -> Self {
-        Self {
-            schema_type: "object",
-            properties: BTreeMap::new(),
-            required: Vec::new(),
-        }
+        Self { schema_type: "object",
+               properties:  BTreeMap::new(),
+               required:    Vec::new(), }
     }
 }
 
@@ -45,38 +43,32 @@ pub struct PropertySchema {
 pub struct ToolContent {
     #[serde(rename = "type")]
     pub content_type: &'static str,
-    pub text: String,
+    pub text:         String,
 }
 
 impl ToolContent {
     pub fn text(text: impl Into<String>) -> Self {
-        Self {
-            content_type: "text",
-            text: text.into(),
-        }
+        Self { content_type: "text",
+               text:         text.into(), }
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolCallResult {
-    pub content: Vec<ToolContent>,
+    pub content:  Vec<ToolContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
 }
 
 impl ToolCallResult {
     pub fn ok(text: impl Into<String>) -> Self {
-        Self {
-            content: vec![ToolContent::text(text)],
-            is_error: None,
-        }
+        Self { content:  vec![ToolContent::text(text)],
+               is_error: None, }
     }
 
     pub fn error(text: impl Into<String>) -> Self {
-        Self {
-            content: vec![ToolContent::text(text)],
-            is_error: Some(true),
-        }
+        Self { content:  vec![ToolContent::text(text)],
+               is_error: Some(true), }
     }
 }
 
@@ -109,9 +101,8 @@ mod tests {
 
     #[tokio::test]
     async fn empty_catalog_reports_unknown_tool() {
-        let result = EmptyCatalog
-            .call("does-not-exist", serde_json::json!({}))
-            .await;
+        let result = EmptyCatalog.call("does-not-exist", serde_json::json!({}))
+                                 .await;
         assert_eq!(result.is_error, Some(true));
         assert_eq!(result.content.len(), 1);
         assert!(result.content[0].text.contains("does-not-exist"));

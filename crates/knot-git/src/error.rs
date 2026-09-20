@@ -10,8 +10,8 @@ pub enum GitError {
     #[error("git {command} failed (exit {code}): {output}")]
     Command {
         command: String,
-        output: String,
-        code: i32,
+        output:  String,
+        code:    i32,
     },
 
     #[error("running git failed: {0}")]
@@ -27,20 +27,16 @@ mod tests {
 
     #[test]
     fn timeout_display_names_command() {
-        let err = GitError::Timeout {
-            command: "status --porcelain=v2 --branch".to_owned(),
-        };
+        let err = GitError::Timeout { command: "status --porcelain=v2 --branch".to_owned(), };
 
         assert!(err.to_string().contains("status --porcelain=v2 --branch"));
     }
 
     #[test]
     fn command_display_carries_command_code_and_output() {
-        let err = GitError::Command {
-            command: "commit -m msg".to_owned(),
-            output: "nothing to commit".to_owned(),
-            code: 1,
-        };
+        let err = GitError::Command { command: "commit -m msg".to_owned(),
+                                      output:  "nothing to commit".to_owned(),
+                                      code:    1, };
 
         let text = err.to_string();
 

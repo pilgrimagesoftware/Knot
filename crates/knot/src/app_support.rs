@@ -146,15 +146,14 @@ pub(crate) fn shorten_path(path: &str) -> String {
 /// app doesn't rely on the platform's generic UI font and neutral-gray
 /// default theme.
 pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
-    if let Err(error) =
-        cx.text_system()
-          .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
-                          std::borrow::Cow::Borrowed(MANROPE_REGULAR),
-                          std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
-                          std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
-                          std::borrow::Cow::Borrowed(MANROPE_BOLD),
-                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
-                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),])
+    if let Err(error) = cx.text_system()
+                          .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
+                                          std::borrow::Cow::Borrowed(MANROPE_REGULAR),
+                                          std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
+                                          std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
+                                          std::borrow::Cow::Borrowed(MANROPE_BOLD),
+                                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
+                                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),])
     {
         eprintln!("failed to register embedded fonts: {error}");
     }

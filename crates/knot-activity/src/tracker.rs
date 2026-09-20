@@ -26,7 +26,7 @@ enum Command {
 
 /// Actor handle to a single agent's activity tracker.
 pub struct Tracker {
-    tx: UnboundedSender<Command>,
+    tx:     UnboundedSender<Command>,
     handle: tokio::task::JoinHandle<()>,
 }
 
@@ -150,37 +150,33 @@ mod tests {
         let mut sink = EventSink::default();
         let status_log = Arc::clone(log);
         sink.on_status = Some(Box::new(move |event| {
-            status_log.lock().unwrap().push(format!("status:{event:?}"));
-        }));
+                                  status_log.lock().unwrap().push(format!("status:{event:?}"));
+                              }));
         let check_log = Arc::clone(log);
         sink.on_check_messages = Some(Box::new(move || {
-            check_log.lock().unwrap().push("check-messages".into());
-        }));
+                                          check_log.lock().unwrap().push("check-messages".into());
+                                      }));
         let inject_log = Arc::clone(log);
-        sink.on_inject_registration = Some(Box::new(move |prompt| {
-            inject_log.lock().unwrap().push(format!("inject:{prompt}"));
-        }));
+        sink.on_inject_registration =
+            Some(Box::new(move |prompt| {
+                     inject_log.lock().unwrap().push(format!("inject:{prompt}"));
+                 }));
         let input_log = Arc::clone(log);
         sink.on_awaiting_input = Some(Box::new(move |message| {
-            input_log
-                .lock()
-                .unwrap()
-                .push(format!("awaiting:{message:?}"));
-        }));
+                                          input_log.lock()
+                                                   .unwrap()
+                                                   .push(format!("awaiting:{message:?}"));
+                                      }));
         sink
     }
 
     async fn tracker(is_hook_based: bool) -> (Tracker, Arc<Mutex<Vec<String>>>) {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let cfg = TrackerConfig {
-            is_hook_based,
-            ..TrackerConfig::for_agent_type("claude")
-        };
-        let tracker = Tracker::spawn(
-            cfg,
-            tracking_for("claude", knot_core::ViewMode::Terminal),
-            log_sink(&log),
-        );
+        let cfg = TrackerConfig { is_hook_based,
+                                  ..TrackerConfig::for_agent_type("claude") };
+        let tracker = Tracker::spawn(cfg,
+                                     tracking_for("claude", knot_core::ViewMode::Terminal),
+                                     log_sink(&log));
         tokio::task::yield_now().await;
         (tracker, log)
     }
@@ -201,17 +197,12 @@ mod tests {
         let (tracker, log) = tracker(false).await;
         tracker.on_terminal_activity();
         settle(Duration::from_millis(50)).await;
-        assert!(
-            snap(&log).iter().any(|e| e.contains("status:")),
-            "working status recorded"
-        );
+        assert!(snap(&log).iter().any(|e| e.contains("status:")),
+                "working status recorded");
         settle(Duration::from_secs(4)).await;
         let entries = snap(&log);
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Idle"))
-        );
+        assert!(entries.iter()
+                       .any(|e| e.contains("status:") && e.contains("Idle")));
         assert!(entries.contains(&"check-messages".into()));
     }
 
@@ -222,16 +213,10 @@ mod tests {
         settle(Duration::from_millis(50)).await;
         settle(Duration::from_secs(11)).await;
         let entries = snap(&log);
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Running"))
-        );
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Idle"))
-        );
+        assert!(entries.iter()
+                       .any(|e| e.contains("status:") && e.contains("Running")));
+        assert!(entries.iter()
+                       .any(|e| e.contains("status:") && e.contains("Idle")));
     }
 
     #[tokio::test(start_paused = true)]
@@ -239,30 +224,21 @@ mod tests {
         let (tracker, log) = tracker(false).await;
         tracker.on_user_input(KeyEvent::Other);
         settle(Duration::from_millis(50)).await;
-        assert!(
-            snap(&log)
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Running")),
-            "local detection sees Working"
-        );
+        assert!(snap(&log).iter()
+                          .any(|e| e.contains("status:") && e.contains("Running")),
+                "local detection sees Working");
         tracker.apply_hook_status(AgentState::Idle, None);
         settle(Duration::from_millis(50)).await;
         // Guard cancelled: no message check at the 10s mark.
         settle(Duration::from_secs(11)).await;
         let entries = snap(&log);
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Idle"))
-        );
-        assert_eq!(
-            entries
-                .iter()
-                .filter(|e| e.as_str() == "check-messages")
-                .count(),
-            1,
-            "guard-expiry check was suppressed by the hook"
-        );
+        assert!(entries.iter()
+                       .any(|e| e.contains("status:") && e.contains("Idle")));
+        assert_eq!(entries.iter()
+                          .filter(|e| e.as_str() == "check-messages")
+                          .count(),
+                   1,
+                   "guard-expiry check was suppressed by the hook");
     }
 
     #[tokio::test(start_paused = true)]
@@ -271,25 +247,16 @@ mod tests {
         tracker.apply_hook_status(AgentState::Input, Some("grant access?".into()));
         settle(Duration::from_millis(50)).await;
         let entries = snap(&log);
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Input"))
-        );
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.starts_with("awaiting:Some(\"grant access?\")"))
-        );
+        assert!(entries.iter()
+                       .any(|e| e.contains("status:") && e.contains("Input")));
+        assert!(entries.iter()
+                       .any(|e| e.starts_with("awaiting:Some(\"grant access?\")")));
 
         tracker.on_user_input(KeyEvent::Return);
         settle(Duration::from_millis(50)).await;
         let entries = snap(&log);
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.contains("status:") && e.contains("Running"))
-        );
+        assert!(entries.iter()
+                       .any(|e| e.contains("status:") && e.contains("Running")));
     }
 
     #[tokio::test(start_paused = true)]
@@ -302,22 +269,18 @@ mod tests {
         settle(Duration::from_millis(50)).await;
         settle(Duration::from_secs(2)).await;
         let entries = snap(&log);
-        assert_eq!(
-            entries.iter().filter(|e| e.starts_with("inject:")).count(),
-            1,
-            "registration injected exactly once"
-        );
+        assert_eq!(entries.iter().filter(|e| e.starts_with("inject:")).count(),
+                   1,
+                   "registration injected exactly once");
         // Lodge another idle; no second injection.
         tracker.apply_hook_status(AgentState::Running, None);
         settle(Duration::from_millis(50)).await;
         tracker.apply_hook_status(AgentState::Idle, None);
         settle(Duration::from_secs(3)).await;
         let entries = snap(&log);
-        assert_eq!(
-            entries.iter().filter(|e| e.starts_with("inject:")).count(),
-            1,
-            "no second injection after later idles"
-        );
+        assert_eq!(entries.iter().filter(|e| e.starts_with("inject:")).count(),
+                   1,
+                   "no second injection after later idles");
     }
 
     #[tokio::test(start_paused = true)]

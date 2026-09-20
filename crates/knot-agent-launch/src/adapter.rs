@@ -14,7 +14,7 @@ use crate::consts::ADAPTER_PATH_FALLBACK_DIRS;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InstallMethod {
     pub command: &'static str,
-    pub args: &'static [&'static str],
+    pub args:    &'static [&'static str],
 }
 
 /// How to launch `agent_type`'s ACP adapter subprocess, and what it
@@ -23,15 +23,15 @@ pub struct InstallMethod {
 pub struct AdapterConfig {
     /// The adapter binary/command to spawn (e.g. a `*-acp` wrapper, or the
     /// agent's own CLI if it speaks ACP natively).
-    pub command: &'static str,
+    pub command:                   &'static str,
     /// Extra fixed arguments the adapter command needs before Knot's own
     /// per-session args (cwd, MCP config).
-    pub args: &'static [&'static str],
-    pub supports_resume: bool,
+    pub args:                      &'static [&'static str],
+    pub supports_resume:           bool,
     pub supports_permission_modes: bool,
     /// How to install `command` if it isn't found, or `None` if this
     /// adapter type has no declared package-manager install path.
-    pub install: Option<InstallMethod>,
+    pub install:                   Option<InstallMethod>,
 }
 
 /// Looks up `agent_type`'s ACP adapter, if any is confirmed working.
@@ -50,59 +50,49 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
         // Adapter package `@agentclientprotocol/claude-agent-acp` (npm),
         // exposing the `claude-agent-acp` binary once installed - and
         // auto-installed on first use if it isn't (design.md decision 6).
-        "claude" => Some(AdapterConfig {
-            command: "claude-agent-acp",
-            args: &[],
-            supports_resume: true,
-            supports_permission_modes: true,
-            install: Some(InstallMethod {
-                command: "npm",
-                args: &["install", "-g", "@agentclientprotocol/claude-agent-acp"],
-            }),
-        }),
+        "claude" => Some(AdapterConfig { command:                   "claude-agent-acp",
+                                         args:                      &[],
+                                         supports_resume:           true,
+                                         supports_permission_modes: true,
+                                         install:                   Some(InstallMethod { command: "npm",
+                                                                                         args:    &["install",
+                                                                                                    "-g",
+                                                                                                    "@agentclientprotocol/claude-agent-acp"], }), }),
         // The npm adapter includes a compatible Codex CLI dependency and
         // installs the `codex-acp` executable alongside Claude's adapter.
         // Resume support is undocumented, so this remains disabled.
-        "codex" => Some(AdapterConfig {
-            command: "codex-acp",
-            args: &[],
-            supports_resume: false,
-            supports_permission_modes: true,
-            install: Some(InstallMethod {
-                command: "npm",
-                args: &["install", "-g", "@agentclientprotocol/codex-acp"],
-            }),
-        }),
+        "codex" => Some(AdapterConfig { command:                   "codex-acp",
+                                        args:                      &[],
+                                        supports_resume:           false,
+                                        supports_permission_modes: true,
+                                        install:                   Some(InstallMethod { command: "npm",
+                                                                                        args:    &["install",
+                                                                                                   "-g",
+                                                                                                   "@agentclientprotocol/codex-acp"], }), }),
         // Native ACP subcommand - no install step (the opencode CLI
         // itself is the agent).
-        "opencode" => Some(AdapterConfig {
-            command: "opencode",
-            args: &["acp"],
-            supports_resume: true,
-            supports_permission_modes: true,
-            install: None,
-        }),
+        "opencode" => Some(AdapterConfig { command:                   "opencode",
+                                           args:                      &["acp"],
+                                           supports_resume:           true,
+                                           supports_permission_modes: true,
+                                           install:                   None, }),
         // Native ACP flag - no install step.
         // `--skip-trust` is required for headless/automated invocation -
         // confirmed live (task 1.2): without it gemini blocks on an
         // interactive "trust this workspace?" prompt that never resolves
         // when driven over stdio instead of a real terminal.
-        "gemini" => Some(AdapterConfig {
-            command: "gemini",
-            args: &["--acp", "--skip-trust"],
-            supports_resume: true,
-            supports_permission_modes: true,
-            install: None,
-        }),
+        "gemini" => Some(AdapterConfig { command:                   "gemini",
+                                         args:                      &["--acp", "--skip-trust"],
+                                         supports_resume:           true,
+                                         supports_permission_modes: true,
+                                         install:                   None, }),
         // Native ACP flag (stdio transport, the ACP default) - no install
         // step.
-        "copilot" => Some(AdapterConfig {
-            command: "copilot",
-            args: &["--acp"],
-            supports_resume: true,
-            supports_permission_modes: true,
-            install: None,
-        }),
+        "copilot" => Some(AdapterConfig { command:                   "copilot",
+                                          args:                      &["--acp"],
+                                          supports_resume:           true,
+                                          supports_permission_modes: true,
+                                          install:                   None, }),
         _ => None,
     }
 }
@@ -116,10 +106,8 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
 /// installed in one of them launches instead of failing with "No such file
 /// or directory".
 pub fn adapter_path() -> String {
-    adapter_path_for(
-        &std::env::var("PATH").unwrap_or_default(),
-        &std::env::var("HOME").unwrap_or_default(),
-    )
+    adapter_path_for(&std::env::var("PATH").unwrap_or_default(),
+                     &std::env::var("HOME").unwrap_or_default())
 }
 
 /// Pure form of [`adapter_path`] for tests and callers already holding the
@@ -128,18 +116,17 @@ pub fn adapter_path() -> String {
 /// how the child would see an unset `HOME`); an entry already named is not
 /// duplicated.
 pub fn adapter_path_for(process_path: &str, home: &str) -> String {
-    let fallbacks: Vec<String> = ADAPTER_PATH_FALLBACK_DIRS
-        .iter()
-        .map(|dir| match dir.strip_prefix('~') {
-            Some(suffix) if !home.is_empty() => format!("{home}{suffix}"),
-            _ => (*dir).to_string(),
-        })
-        .collect();
+    let fallbacks: Vec<String> =
+        ADAPTER_PATH_FALLBACK_DIRS.iter()
+                                  .map(|dir| match dir.strip_prefix('~') {
+                                      Some(suffix) if !home.is_empty() => format!("{home}{suffix}"),
+                                      _ => (*dir).to_string(),
+                                  })
+                                  .collect();
 
     let mut merged: Vec<&str> = Vec::new();
-    for entry in process_path
-        .split(':')
-        .chain(fallbacks.iter().map(String::as_str))
+    for entry in process_path.split(':')
+                             .chain(fallbacks.iter().map(String::as_str))
     {
         if entry.is_empty() {
             continue;
@@ -157,37 +144,31 @@ mod tests {
 
     #[test]
     fn confirmed_agent_types_have_registered_adapters() {
-        for (agent_type, command) in [
-            ("claude", "claude-agent-acp"),
-            ("codex", "codex-acp"),
-            ("opencode", "opencode"),
-            ("gemini", "gemini"),
-            ("copilot", "copilot"),
-        ] {
+        for (agent_type, command) in [("claude", "claude-agent-acp"),
+                                      ("codex", "codex-acp"),
+                                      ("opencode", "opencode"),
+                                      ("gemini", "gemini"),
+                                      ("copilot", "copilot")]
+        {
             let adapter = acp_adapter(agent_type);
-            assert_eq!(
-                adapter.map(|a| a.command),
-                Some(command),
-                "{agent_type} should have a registered adapter"
-            );
+            assert_eq!(adapter.map(|a| a.command),
+                       Some(command),
+                       "{agent_type} should have a registered adapter");
         }
     }
 
     #[test]
     fn unsupported_or_unknown_agent_types_have_no_adapter() {
-        for agent_type in [
-            "shell",
-            "custom1",
-            "custom2",
-            "unknown-type",
-            "cursor",
-            "qwencode",
-        ] {
-            assert_eq!(
-                acp_adapter(agent_type),
-                None,
-                "{agent_type} should have no registered adapter"
-            );
+        for agent_type in ["shell",
+                           "custom1",
+                           "custom2",
+                           "unknown-type",
+                           "cursor",
+                           "qwencode"]
+        {
+            assert_eq!(acp_adapter(agent_type),
+                       None,
+                       "{agent_type} should have no registered adapter");
         }
     }
 
@@ -201,14 +182,11 @@ mod tests {
     #[test]
     fn claude_and_codex_adapters_can_be_installed() {
         for agent_type in ["claude", "codex"] {
-            assert_eq!(
-                acp_adapter(agent_type)
-                    .unwrap()
-                    .install
-                    .map(|install| install.command),
-                Some("npm"),
-                "{agent_type} should declare its npm installer"
-            );
+            assert_eq!(acp_adapter(agent_type).unwrap()
+                                              .install
+                                              .map(|install| install.command),
+                       Some("npm"),
+                       "{agent_type} should declare its npm installer");
         }
     }
 
@@ -216,11 +194,9 @@ mod tests {
     fn adapter_path_process_entries_come_first() {
         let path = adapter_path_for("/usr/local/bin:/usr/bin", "/Users/tester");
         let entries: Vec<&str> = path.split(':').collect();
-        assert_eq!(
-            &entries[..2],
-            &["/usr/local/bin", "/usr/bin"],
-            "the process's own PATH entries must keep their order and come first"
-        );
+        assert_eq!(&entries[..2],
+                   &["/usr/local/bin", "/usr/bin"],
+                   "the process's own PATH entries must keep their order and come first");
         assert!(entries.contains(&"/opt/homebrew/bin"));
         assert!(entries.contains(&"/Users/tester/.cargo/bin"));
     }
@@ -229,44 +205,34 @@ mod tests {
     fn adapter_path_dedups_a_fallback_already_on_the_process_path() {
         let path = adapter_path_for("/opt/homebrew/bin:/usr/bin:/bin", "/Users/tester");
         let entries: Vec<&str> = path.split(':').collect();
-        assert_eq!(
-            entries
-                .iter()
-                .filter(|e| **e == "/opt/homebrew/bin")
-                .count(),
-            1,
-            "a fallback already named by the process PATH must not be appended again"
-        );
-        assert_eq!(
-            entries[0], "/opt/homebrew/bin",
-            "and it keeps the process PATH's ordering (first, in this case)"
-        );
+        assert_eq!(entries.iter()
+                          .filter(|e| **e == "/opt/homebrew/bin")
+                          .count(),
+                   1,
+                   "a fallback already named by the process PATH must not be appended again");
+        assert_eq!(entries[0], "/opt/homebrew/bin",
+                   "and it keeps the process PATH's ordering (first, in this case)");
     }
 
     #[test]
     fn adapter_path_expands_tilde_fallbacks_against_home() {
         let path = adapter_path_for("", "/Users/tester");
         let entries: Vec<&str> = path.split(':').collect();
-        for expected in [
-            "/Users/tester/.cargo/bin",
-            "/Users/tester/.local/bin",
-            "/Users/tester/.npm-global/bin",
-        ] {
+        for expected in ["/Users/tester/.cargo/bin",
+                         "/Users/tester/.local/bin",
+                         "/Users/tester/.npm-global/bin"]
+        {
             assert!(entries.contains(&expected), "missing {expected} in {path}");
         }
-        assert!(
-            !entries.iter().any(|e| e.starts_with('~')),
-            "no literal `~` entry may survive into the merged PATH"
-        );
+        assert!(!entries.iter().any(|e| e.starts_with('~')),
+                "no literal `~` entry may survive into the merged PATH");
     }
 
     #[test]
     fn adapter_path_keeps_literal_tilde_when_home_is_empty() {
         let path = adapter_path_for("", "");
-        assert!(
-            path.split(':').any(|e| e == "~/.cargo/bin"),
-            "an empty HOME keeps the fallback literal rather than mangling it"
-        );
+        assert!(path.split(':').any(|e| e == "~/.cargo/bin"),
+                "an empty HOME keeps the fallback literal rather than mangling it");
     }
 
     #[test]
@@ -274,22 +240,17 @@ mod tests {
         // The PATH a Finder-launched macOS app actually sees - the bug
         // scenario this change exists for.
         let path = adapter_path_for("/usr/bin:/bin:/usr/sbin:/sbin", "/Users/tester");
-        for expected in [
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/Users/tester/.cargo/bin",
-            "/Users/tester/.local/bin",
-            "/Users/tester/.npm-global/bin",
-        ] {
-            assert!(
-                path.split(':').any(|e| e == expected),
-                "missing {expected} in {path}"
-            );
+        for expected in ["/opt/homebrew/bin",
+                         "/usr/local/bin",
+                         "/Users/tester/.cargo/bin",
+                         "/Users/tester/.local/bin",
+                         "/Users/tester/.npm-global/bin"]
+        {
+            assert!(path.split(':').any(|e| e == expected),
+                    "missing {expected} in {path}");
         }
-        assert_eq!(
-            path.split(':').next(),
-            Some("/usr/bin"),
-            "the launchd entries must still come first when present"
-        );
+        assert_eq!(path.split(':').next(),
+                   Some("/usr/bin"),
+                   "the launchd entries must still come first when present");
     }
 }

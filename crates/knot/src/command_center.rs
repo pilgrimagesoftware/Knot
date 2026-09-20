@@ -58,13 +58,12 @@ impl Render for CommandCenterWindow {
             store.workspaces()
                  .iter()
                  .map(|workspace| {
-                     let dash_agents =
-                         workspace.agent_ids
-                                  .iter()
-                                  .filter_map(|id| store.agent(*id))
-                                  .filter(|agent| !agent.is_companion)
-                                  .map(|agent| {
-                                      let folder_name =
+                     let dash_agents = workspace.agent_ids
+                                                .iter()
+                                                .filter_map(|id| store.agent(*id))
+                                                .filter(|agent| !agent.is_companion)
+                                                .map(|agent| {
+                                                    let folder_name =
                                           PathBuf::from(&agent.folder).file_name()
                                                                       .map(|name| {
                                                                           name.to_string_lossy()
@@ -73,9 +72,9 @@ impl Render for CommandCenterWindow {
                                                                       .unwrap_or_else(|| {
                                                                           agent.folder.clone()
                                                                       });
-                                      let git_stats =
+                                                    let git_stats =
                                           Repository::open(&agent.folder).diff_stats().ok();
-                                      dashboard::DashboardAgent { id: agent.id,
+                                                    dashboard::DashboardAgent { id: agent.id,
                                                                   avatar: agent.avatar
                                                                                .graphemes(true)
                                                                                .next()
@@ -89,8 +88,8 @@ impl Render for CommandCenterWindow {
                                                                       agent.header_title()
                                                                            .to_string(),
                                                                   git_stats }
-                                  })
-                                  .collect::<Vec<_>>();
+                                                })
+                                                .collect::<Vec<_>>();
                      dashboard::DashboardWorkspace { id:        workspace.id,
                                                      name:      workspace.name.clone(),
                                                      color_hex: workspace.color_hex.clone(),

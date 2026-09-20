@@ -15,8 +15,8 @@ use crate::panel_state::PanelState;
 
 pub struct PanelSessionHandle {
     session: AcpSession,
-    state: Arc<Mutex<PanelState>>,
-    dirty: Arc<AtomicBool>,
+    state:   Arc<Mutex<PanelState>>,
+    dirty:   Arc<AtomicBool>,
 }
 
 impl PanelSessionHandle {
@@ -24,10 +24,9 @@ impl PanelSessionHandle {
     /// current tokio runtime) draining its event stream into `state` until
     /// the session ends. `mcp_url` is Knot's own MCP HTTP server URL, wired
     /// into the session when MCP is enabled.
-    pub async fn start(
-        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress,
-    ) -> AcpResult<Self> {
+    pub async fn start(config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>,
+                       mcp_url: Option<&str>, progress: &ConnectProgress)
+                       -> AcpResult<Self> {
         let (session, config_options, mut events) =
             AcpSession::start(config, cwd, prior_session_id, mcp_url, progress).await?;
         let mut initial_state = PanelState::new();
@@ -50,11 +49,9 @@ impl PanelSessionHandle {
             }
         });
 
-        Ok(Self {
-            session,
-            state,
-            dirty,
-        })
+        Ok(Self { session,
+                  state,
+                  dirty })
     }
 
     pub fn state(&self) -> Arc<Mutex<PanelState>> {
@@ -97,10 +94,8 @@ impl PanelSessionHandle {
     /// refuses (an exhausted quota, a transport failure) has nowhere to
     /// report but stderr.
     pub fn recorder(&self) -> PanelRecorder {
-        PanelRecorder {
-            state: Arc::clone(&self.state),
-            dirty: Arc::clone(&self.dirty),
-        }
+        PanelRecorder { state: Arc::clone(&self.state),
+                        dirty: Arc::clone(&self.dirty), }
     }
 
     pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
@@ -153,9 +148,8 @@ impl PanelSessionHandle {
     /// handler, not a `Context<Self>` listener) can spawn it without
     /// holding this handle - or the session lock it came from - across
     /// the await point.
-    pub fn set_config_option(
-        &self, config_id: String, value: String,
-    ) -> impl std::future::Future<Output = ()> + Send + 'static {
+    pub fn set_config_option(&self, config_id: String, value: String)
+                             -> impl std::future::Future<Output = ()> + Send + 'static {
         let session = self.session.clone();
         let state = Arc::clone(&self.state);
         let dirty = Arc::clone(&self.dirty);
@@ -210,9 +204,8 @@ impl PanelSessionSlot {
     /// writes to - the two halves of the same handle, so the caller can't
     /// accidentally hand the task a cell the slot isn't watching.
     pub fn connecting() -> (Self, ConnectProgress) {
-        let progress: ConnectProgress = Arc::new(Mutex::new(ConnectStep::Starting {
-            program: "the agent",
-        }));
+        let progress: ConnectProgress =
+            Arc::new(Mutex::new(ConnectStep::Starting { program: "the agent", }));
         (Self::Connecting(Arc::clone(&progress)), progress)
     }
 
@@ -252,10 +245,10 @@ pub enum PanelPhase {
 /// into: the adapter to spawn, where to run it, and the first prompt to
 /// send once it is live.
 pub struct ConnectRequest<'a> {
-    pub config: &'a AdapterConfig,
-    pub cwd: &'a str,
-    pub prior_session_id: Option<&'a str>,
-    pub mcp_url: Option<&'a str>,
+    pub config:              &'a AdapterConfig,
+    pub cwd:                 &'a str,
+    pub prior_session_id:    Option<&'a str>,
+    pub mcp_url:             Option<&'a str>,
     /// The registration prompt for a fresh session, or `None` when
     /// resuming (a resumed agent is already registered).
     pub registration_prompt: Option<String>,
@@ -264,18 +257,13 @@ pub struct ConnectRequest<'a> {
 /// Connects `request`'s adapter and drives `slot` through the connection
 /// lifecycle, calling `on_session_id` with the opened session id so the
 /// caller can persist it for a later resume.
-pub async fn connect_into(
-    slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectRequest<'_>, progress: &ConnectProgress,
-    on_session_id: impl FnOnce(&str),
-) {
-    let handle = match PanelSessionHandle::start(
-        request.config,
-        request.cwd,
-        request.prior_session_id,
-        request.mcp_url,
-        progress,
-    )
-    .await
+pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectRequest<'_>,
+                          progress: &ConnectProgress, on_session_id: impl FnOnce(&str)) {
+    let handle = match PanelSessionHandle::start(request.config,
+                                                 request.cwd,
+                                                 request.prior_session_id,
+                                                 request.mcp_url,
+                                                 progress).await
     {
         Ok(handle) => handle,
         Err(error) => {
@@ -301,7 +289,7 @@ pub async fn connect_into(
     *slot.lock().unwrap() = PanelSessionSlot::Ready(handle);
 
     if let Some(prompt) = request.registration_prompt
-        && let Err(error) = session.prompt(&prompt).await
+       && let Err(error) = session.prompt(&prompt).await
     {
         // Into the conversation, not just the console: the registration
         // turn is the first thing the panel shows, and an agent that
@@ -326,11 +314,10 @@ mod tests {
     /// `session/request_permission` for the first Knot MCP tool call,
     /// which only a `Ready` slot can show and answer).
     fn stalling_prompt_adapter() -> AdapterConfig {
-        AdapterConfig {
-            command: "sh",
-            args: &[
-                "-c",
-                r#"while IFS= read -r line; do
+        AdapterConfig { command:                   "sh",
+                        args:                      &[
+                                                     "-c",
+                                                     r#"while IFS= read -r line; do
                           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
                           method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
                           case "$method" in
@@ -338,11 +325,10 @@ mod tests {
                             session/new) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-1\"}}" ;;
                           esac
                         done"#,
-            ],
-            supports_resume: false,
-            supports_permission_modes: false,
-            install: None,
-        }
+        ],
+                        supports_resume:           false,
+                        supports_permission_modes: false,
+                        install:                   None, }
     }
 
     /// The registration turn must not gate the slot: an agent that asks
@@ -353,13 +339,11 @@ mod tests {
     async fn the_slot_goes_ready_before_the_registration_turn_finishes() {
         let (connecting, progress) = PanelSessionSlot::connecting();
         let slot = Arc::new(Mutex::new(connecting));
-        let request = ConnectRequest {
-            config: &stalling_prompt_adapter(),
-            cwd: "/tmp/project",
-            prior_session_id: None,
-            mcp_url: None,
-            registration_prompt: Some("register".to_string()),
-        };
+        let request = ConnectRequest { config:              &stalling_prompt_adapter(),
+                                       cwd:                 "/tmp/project",
+                                       prior_session_id:    None,
+                                       mcp_url:             None,
+                                       registration_prompt: Some("register".to_string()), };
 
         let watched = Arc::clone(&slot);
         let became_ready = async move {
