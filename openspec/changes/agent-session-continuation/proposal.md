@@ -6,8 +6,8 @@ An agent can receive the automatic "check your inbox" prompt while its prior wor
 
 ## What Changes
 
-- Preserve the active agent session's pending work when a "check your inbox" nudge is delivered.
-- Resume the interrupted task after inbox handling rather than replacing it with the nudge.
+- Queue the "check your inbox" prompt behind the active agent session instead of interrupting it.
+- Update the prompt to tell the agent to continue its previous work if the inbox has nothing to do.
 - Keep ordinary user prompts and unrelated agent messages on their existing queue behavior.
 
 ## Capabilities

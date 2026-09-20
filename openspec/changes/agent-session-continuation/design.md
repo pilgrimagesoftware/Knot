@@ -28,7 +28,9 @@ prompts so delivery cannot overwrite the active turn state.
   and could misclassify a user's message.
 - Route auxiliary reminders through the session's existing deferred-message
   mechanism, preserving the active turn and returning to it after the
-  reminder is acknowledged. Replacing the active prompt would lose context.
+  reminder is acknowledged. The reminder text should say: "Check your inbox.
+  If there's nothing to do, continue your previous work." Replacing the
+  active prompt would lose context.
 - Keep normal messages on the existing queue path. Continuation is limited to
   the system-generated nudge so user intent and scheduling remain unchanged.
 - Treat a reminder that arrives while no task is active as an ordinary inbox
