@@ -26,7 +26,10 @@ fn render_json(output: &Value) -> String {
 /// content" requirement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PanelMessage {
-    User { text: String, queued: bool },
+    User {
+        text:   String,
+        queued: bool,
+    },
     Assistant(String),
     ToolCall(ToolCallCard),
     /// Something the session could not do: a refused prompt, a send that
@@ -141,13 +144,16 @@ impl PanelState {
     /// new turn: the next response tracks by default until the user
     /// scrolls away or the turn ends.
     pub fn push_user_message(&mut self, text: String) {
-        self.messages.push(PanelMessage::User { text, queued: false });
+        self.messages.push(PanelMessage::User { text,
+                                                queued: false });
         self.turn_active = true;
         self.tracking = true;
     }
 
     pub fn enqueue_prompt(&mut self, text: String) {
-        self.messages.push(PanelMessage::User { text: text.clone(), queued: true });
+        self.messages
+            .push(PanelMessage::User { text:   text.clone(),
+                                       queued: true, });
         self.queued_prompts.push_back(text);
     }
 
@@ -164,14 +170,20 @@ impl PanelState {
     }
 
     fn promote_queued_prompt(&mut self) {
-        if self.pending_permission.is_some() || self.turn_active || self.pending_delivery.is_some() {
+        if self.pending_permission.is_some() || self.turn_active || self.pending_delivery.is_some()
+        {
             return;
         }
         let Some(text) = self.dequeue_for_delivery()
         else {
             return;
         };
-        if let Some(PanelMessage::User { queued, .. }) = self.messages.iter_mut().rev().find(|message| matches!(message, PanelMessage::User { queued: true, .. })) {
+        if let Some(PanelMessage::User { queued, .. }) =
+            self.messages
+                .iter_mut()
+                .rev()
+                .find(|message| matches!(message, PanelMessage::User { queued: true, .. }))
+        {
             *queued = false;
         }
         self.turn_active = true;
@@ -369,7 +381,8 @@ mod tests {
         state.apply(text("hi there"));
 
         assert_eq!(state.messages,
-                   vec![PanelMessage::User { text: "hello".to_string(), queued: false },
+                   vec![PanelMessage::User { text:   "hello".to_string(),
+                                             queued: false, },
                         PanelMessage::Assistant("hi there".to_string())]);
     }
 
@@ -594,7 +607,9 @@ mod tests {
     fn pending_permission_defers_queue_until_resolution() {
         let mut state = PanelState::new();
         state.enqueue_prompt("next".to_string());
-        state.apply(SessionEvent::PermissionRequest(PermissionRequest { rpc_id: json!(1), tool_call_id: "tc".to_string(), options: Vec::new() }));
+        state.apply(SessionEvent::PermissionRequest(PermissionRequest { rpc_id:       json!(1),
+                                                                   tool_call_id: "tc".to_string(),
+                                                                   options:      Vec::new(), }));
         state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason: "done".to_string() }));
         assert_eq!(state.take_pending_delivery(), None);
 

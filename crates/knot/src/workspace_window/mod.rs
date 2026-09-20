@@ -1907,16 +1907,16 @@ impl WorkspaceWindow {
         let _runtime_guard = self.runtime.enter();
         if let Some((session, recorder)) = session {
             self.runtime.spawn(async move {
-                        if let Err(error) = session.prompt(&text).await {
-                            // Shown under the prompt it belongs to, and
-                            // it ends the turn - an error response is all
-                            // the answer this prompt gets, so the
-                            // composer must not stay blocked waiting for
-                            // a `TurnEnd` that will never arrive.
-                            recorder.error(format!("The agent could not answer: {error}"));
-                            eprintln!("failed to send panel prompt: {error}");
-                        }
-                    });
+                            if let Err(error) = session.prompt(&text).await {
+                                // Shown under the prompt it belongs to, and
+                                // it ends the turn - an error response is all
+                                // the answer this prompt gets, so the
+                                // composer must not stay blocked waiting for
+                                // a `TurnEnd` that will never arrive.
+                                recorder.error(format!("The agent could not answer: {error}"));
+                                eprintln!("failed to send panel prompt: {error}");
+                            }
+                        });
         }
         cx.notify();
     }

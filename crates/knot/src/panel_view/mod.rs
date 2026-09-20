@@ -861,7 +861,9 @@ mod tests {
         let mut state = PanelState::new();
         assert_eq!(row_count(&state), 0);
 
-        state.messages.push(PanelMessage::User { text: "hi".to_string(), queued: false });
+        state.messages
+             .push(PanelMessage::User { text:   "hi".to_string(),
+                                        queued: false, });
         assert_eq!(row_count(&state), 1);
 
         state.pending_permission = Some(permission_request());
@@ -877,7 +879,9 @@ mod tests {
     #[test]
     fn row_at_walks_messages_then_permission_then_ended() {
         let mut state = PanelState::new();
-        state.messages.push(PanelMessage::User { text: "a".to_string(), queued: false });
+        state.messages
+             .push(PanelMessage::User { text:   "a".to_string(),
+                                        queued: false, });
         state.messages
              .push(PanelMessage::Assistant("b".to_string()));
         state.pending_permission = Some(permission_request());
@@ -895,7 +899,9 @@ mod tests {
     #[test]
     fn an_ended_row_follows_the_messages_when_no_permission_is_pending() {
         let mut state = PanelState::new();
-        state.messages.push(PanelMessage::User { text: "a".to_string(), queued: false });
+        state.messages
+             .push(PanelMessage::User { text:   "a".to_string(),
+                                        queued: false, });
         state.ended = Some(knot_acp::SessionEndCause::ProcessExited { code: Some(0) });
 
         assert_eq!(row_count(&state), 2);
@@ -915,7 +921,9 @@ mod tests {
         known = sync_row_count(&list, known, &state);
         assert_eq!((list.item_count(), known), (0, 0));
 
-        state.messages.push(PanelMessage::User { text: "a".to_string(), queued: false });
+        state.messages
+             .push(PanelMessage::User { text:   "a".to_string(),
+                                        queued: false, });
         state.messages
              .push(PanelMessage::Assistant("b".to_string()));
         known = sync_row_count(&list, known, &state);

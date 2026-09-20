@@ -183,7 +183,9 @@ impl PanelSessionHandle {
 async fn deliver_pending(session: &AcpSession, state: &Arc<Mutex<PanelState>>,
                          dirty: &Arc<AtomicBool>) {
     loop {
-        let prompt = state.lock().ok().and_then(|mut state| state.take_pending_delivery());
+        let prompt = state.lock()
+                          .ok()
+                          .and_then(|mut state| state.take_pending_delivery());
         let Some(prompt) = prompt
         else {
             return;
