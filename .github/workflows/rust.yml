@@ -29,8 +29,8 @@ jobs:
             libssl-dev libzstd-dev \
             vulkan-validationlayers libvulkan1
 
-      - name: Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v2
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
           cache-key: ${{ matrix.os }}
