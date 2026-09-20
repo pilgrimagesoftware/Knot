@@ -81,34 +81,31 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
         "New Agent"
     };
     let options = agent_window_options(title, cx);
-    let _ = cx.open_window(options, move |window, cx| {
-                  let name_input = cx.new(|cx| {
-                                         InputState::new(window, cx)
-                .placeholder("Name")
-                .default_value(
-                    editing
-                        .as_ref()
-                        .map(|a| a.name.clone())
-                        .or_else(|| prefill.name.clone())
-                        .unwrap_or_default(),
-                )
-                                     });
-                  let shell_command_input =
-                      cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("Shell command (optional)")
-                        });
-                  let avatar_input = cx.new(|cx| {
-                                           InputState::new(window, cx).default_value(
+    let _ =
+        cx.open_window(options, move |window, cx| {
+              let name_input =
+                  cx.new(|cx| {
+                        InputState::new(window, cx).placeholder("Name")
+                                                   .default_value(editing.as_ref()
+                                                                         .map(|a| a.name.clone())
+                                                                         .or_else(|| {
+                                                                             prefill.name.clone()
+                                                                         })
+                                                                         .unwrap_or_default())
+                    });
+              let shell_command_input =
+                  cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
+              let avatar_input = cx.new(|cx| {
+                                       InputState::new(window, cx).default_value(
                 editing
                     .as_ref()
                     .map(|a| a.avatar.clone())
                     .or_else(|| prefill.avatar.clone())
                     .unwrap_or_else(|| "🤖".to_string()),
             )
-                                       });
-                  let view =
-                      cx.new(|cx| {
-                            let avatar_subscription = cx.subscribe_in(
+                                   });
+              let view = cx.new(|cx| {
+                               let avatar_subscription = cx.subscribe_in(
                 &avatar_input,
                 window,
                 |this: &mut AgentEditor, avatar_input, event, window, cx| {
@@ -117,16 +114,17 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                     }
                 },
             );
-                            let name_subscription =
-                                cx.subscribe(&name_input, |_: &mut AgentEditor, _, event, cx| {
-                                      if matches!(event, InputEvent::Change) {
-                                          cx.notify();
-                                      }
-                                  });
-                            let persona_id = editing.as_ref()
-                                                    .map(|a| a.persona_id)
-                                                    .unwrap_or(prefill.persona_id);
-                            AgentEditor { store,
+                               let name_subscription =
+                                   cx.subscribe(&name_input,
+                                                |_: &mut AgentEditor, _, event, cx| {
+                                                    if matches!(event, InputEvent::Change) {
+                                                        cx.notify();
+                                                    }
+                                                });
+                               let persona_id = editing.as_ref()
+                                                       .map(|a| a.persona_id)
+                                                       .unwrap_or(prefill.persona_id);
+                               AgentEditor { store,
                                           settings,
                                           workspace_id,
                                           name_input,
@@ -154,9 +152,9 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                           edit_target,
                                           on_created: Box::new(on_created),
                                           error: None }
-                        });
-                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-              });
+                           });
+              cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+          });
 }
 
 pub(crate) struct AgentEditor {
