@@ -1556,7 +1556,8 @@ impl WorkspaceWindow {
                         Button::new("panel-stop-prompt")
                             .icon(gpui_kit::assets::IconName::SquareStop)
                             .tooltip("Stop")
-                            .ghost()
+                            .bg(rgb(0xEF4444))
+                            .text_color(rgb(0xFFFFFF))
                             .flex_shrink_0()
                             .disabled(self.panel_stopping.contains(&id))
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
