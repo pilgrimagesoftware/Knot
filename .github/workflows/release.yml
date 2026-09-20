@@ -2,9 +2,8 @@ name: Release
 
 permissions:
   contents: write
-  # rust-release.yaml requests id-token: write for crates.io trusted
-  # publishing; a caller must grant every permission its reusable workflow
-  # declares or GitHub rejects the file at startup.
+  # rust-release.yaml uses OIDC for crates.io publishing, so the reusable
+  # workflow call requires the id-token permission on this caller too.
   id-token: write
 
 on:
