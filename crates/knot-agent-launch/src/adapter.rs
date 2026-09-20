@@ -10,8 +10,7 @@ use crate::consts::ADAPTER_PATH_FALLBACK_DIRS;
 /// The command to run once, on the user's behalf, to make an adapter's
 /// binary available when it isn't found on `PATH` - see design.md
 /// decision 6. Only declared for adapters with a package-manager install
-/// path; an adapter that needs a source build (e.g. `codex-acp`) has none
-/// and fails closed with a visible error instead, per the same decision.
+/// path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InstallMethod {
     pub command: &'static str,
@@ -59,16 +58,17 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
                                                                                          args:    &["install",
                                                                                                     "-g",
                                                                                                     "@agentclientprotocol/claude-agent-acp"], }), }),
-        // Adapter `cola-io/codex-acp`, built from source (no packaged
-        // binary release confirmed, so no declared install method - a
-        // missing binary here fails closed rather than attempting a
-        // source build). Resume support is undocumented, so this fails
-        // closed (false) rather than guessing.
+        // The npm adapter includes a compatible Codex CLI dependency and
+        // installs the `codex-acp` executable alongside Claude's adapter.
+        // Resume support is undocumented, so this remains disabled.
         "codex" => Some(AdapterConfig { command:                   "codex-acp",
                                         args:                      &[],
                                         supports_resume:           false,
                                         supports_permission_modes: true,
-                                        install:                   None, }),
+                                        install:                   Some(InstallMethod { command: "npm",
+                                                                                        args:    &["install",
+                                                                                                   "-g",
+                                                                                                   "@agentclientprotocol/codex-acp"], }), }),
         // Native ACP subcommand - no install step (the opencode CLI
         // itself is the agent).
         "opencode" => Some(AdapterConfig { command:                   "opencode",
@@ -177,6 +177,17 @@ mod tests {
         // Per the findings note: resume support for the codex-acp adapter
         // is undocumented, so this fails closed rather than guessing.
         assert!(!acp_adapter("codex").unwrap().supports_resume);
+    }
+
+    #[test]
+    fn claude_and_codex_adapters_can_be_installed() {
+        for agent_type in ["claude", "codex"] {
+            assert_eq!(acp_adapter(agent_type).unwrap()
+                                              .install
+                                              .map(|install| install.command),
+                       Some("npm"),
+                       "{agent_type} should declare its npm installer");
+        }
     }
 
     #[test]
