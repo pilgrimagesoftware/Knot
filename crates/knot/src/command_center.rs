@@ -82,7 +82,7 @@ impl Render for CommandCenterWindow {
                                                                                .to_string(),
                                                                   name: agent.name.clone(),
                                                                   folder_name,
-                                                                  state: agent.state,
+                                state: agent.state,
                                                                   is_shell: agent.is_shell(),
                                                                   header_title:
                                                                       agent.header_title()

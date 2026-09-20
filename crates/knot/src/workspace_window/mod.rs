@@ -1259,8 +1259,11 @@ impl WorkspaceWindow {
                             .relative()
                             .flex_1()
                             .min_h_0()
-                            .child(div().id("panel-conversation").size_full().child(
-                                panel_view::render_panel(
+                            .child(v_flex()
+                                .id("panel-conversation")
+                                .flex_1()
+                                .min_h_0()
+                                .child(panel_view::render_panel(
                                     Arc::clone(&state_arc),
                                     list.clone(),
                                     &panel_style,
@@ -1270,8 +1273,15 @@ impl WorkspaceWindow {
                                         on_toggle_tool_call,
                                         on_manual_scroll,
                                     ),
-                                ),
-                            ))
+                                ))
+                                .child(working_indicator::render(
+                                    if turn_active {
+                                        knot_agents::AgentState::Running
+                                    } else {
+                                        knot_agents::AgentState::Idle
+                                    },
+                                    true,
+                                )))
                             .children(scrolled_up.then(|| {
                                 div().absolute().bottom_3().right_4().child(
                                     Button::new("panel-scroll-to-bottom")
