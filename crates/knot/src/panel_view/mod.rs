@@ -519,12 +519,20 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, collapsed: boo
                                                                        .text_color(rgb(MUTED)))
                            .child(Icon::new(tool_call_icon(&card.kind)).xsmall()
                                                                        .text_color(rgb(MUTED)))
-                           .child(div().flex_1()
-                                       .min_w_0()
-                                       .font_family(style.mono_font_family.clone())
-                                       .text_xs()
-                                       .text_color(rgb(MUTED))
-                                       .child(label))
+                           .child({
+                               let title = div().flex_1()
+                                                .min_w_0()
+                                                .font_family(style.mono_font_family.clone())
+                                                .text_xs()
+                                                .text_color(rgb(MUTED));
+                               if collapsed {
+                                   title.overflow_hidden().whitespace_nowrap().text_ellipsis()
+                                        .child(label)
+                               }
+                               else {
+                                   title.child(label)
+                               }
+                           })
                            .children(status_icon(&card.status).map(|icon| {
                                                                   Button::new(("tool-call-status",
                                                                                element_id(&card.id)))
@@ -537,8 +545,8 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, collapsed: boo
                            .children(status_icon(&card.status).is_none().then(|| {
                                div().flex_shrink_0()
                                     .font_family(style.ui_font_family.clone())
-                                    .text_xs()
-                                    .child(status_label(&card.status))
+                                   .text_xs()
+                                   .child(status_label(&card.status))
                            })))
             .children((!collapsed).then(|| render_tool_call_body(card, style)))
 }

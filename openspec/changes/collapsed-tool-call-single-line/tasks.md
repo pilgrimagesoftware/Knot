@@ -16,7 +16,7 @@
 
 - [ ] 2.1 Confirm the header's hit target and disclosure behavior are
       unchanged; verify the whole header still toggles the card.
-- [ ] 2.2 `make rust` passes clean (fmt, clippy, tests, build).
+- [x] 2.2 `make rust` passes clean (fmt, clippy, tests, build).
 - [ ] 2.3 Exercise in the app with a long command title at a narrow window:
       collapsed shows one line with an ellipsis, the status indicator stays
       in place, and no conversation-layout shift occurs on collapse.
