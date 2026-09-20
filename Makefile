@@ -204,7 +204,7 @@ check-changelog:
 rust: rust-fmt rust-lint rust-test rust-build
 
 rust-fmt:
-	cargo +nightly fmt --check
+	rustup run nightly cargo fmt --check
 
 rust-lint:
 	cargo clippy --workspace --all-targets -- -D warnings

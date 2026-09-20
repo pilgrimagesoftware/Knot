@@ -11,7 +11,7 @@ use knot_acp::{
     AcpClient, AcpError, ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult,
     SessionEvent,
 };
-use knot_agent_launch::{AdapterConfig, InstallMethod};
+use knot_agent_launch::{AdapterConfig, InstallMethod, adapter_path};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
@@ -101,10 +101,12 @@ impl AcpSession {
         config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
         progress: &ConnectProgress, timeout: Duration)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        tokio::time::timeout(timeout,
-                             Self::start_inner(config, cwd, prior_session_id, mcp_url, progress))
-            .await
-            .unwrap_or(Err(AcpError::Timeout))
+        tokio::time::timeout(
+            timeout,
+            Self::start_inner(config, cwd, prior_session_id, mcp_url, progress),
+        )
+        .await
+        .unwrap_or(Err(AcpError::Timeout))
     }
 
     async fn start_inner(
@@ -114,6 +116,12 @@ impl AcpSession {
         let build_command = || {
             let mut command = Command::new(config.command);
             command.args(config.args);
+            // A Finder-launched macOS app has launchd's minimal PATH, not
+            // the user's shell PATH - resolve adapters against the merged
+            // path so registered binaries in the standard install
+            // locations are found (per `agent-launch-command`'s "ACP
+            // launch path" requirement).
+            command.env("PATH", adapter_path());
             command
         };
 
@@ -209,6 +217,9 @@ impl AcpSession {
 /// user-supplied code.
 async fn run_install(install: InstallMethod) -> AcpResult<()> {
     let output = Command::new(install.command).args(install.args)
+                                              // The package manager (e.g. `npm`) can itself live in a standard
+                                              // directory the GUI PATH misses - see the adapter spawn above.
+                                              .env("PATH", adapter_path())
                                               .output()
                                               .await
                                               .map_err(|error| {
@@ -234,7 +245,7 @@ async fn run_install(install: InstallMethod) -> AcpResult<()> {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use knot_agent_launch::{AdapterConfig, InstallMethod};
+    use knot_agent_launch::{AdapterConfig, InstallMethod, adapter_path};
 
     use super::*;
     use crate::{TerminalError, TerminalTransport};
@@ -285,6 +296,60 @@ mod tests {
                         supports_resume:           false,
                         supports_permission_modes: false,
                         install:                   None, }
+    }
+
+    /// A fake adapter that streams the child process's `$PATH` back as the
+    /// `session/new` text delta - so a test can assert what `PATH` the
+    /// adapter subprocess actually launched with, without the JSON-RPC
+    /// framing getting in the way.
+    fn path_reporting_adapter_launch() -> AdapterConfig {
+        AdapterConfig { command:                   "sh",
+                        args:                      &[
+                                                     "-c",
+                                                     r#"while IFS= read -r line; do
+  id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+  method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+  case "$method" in
+    initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}" ;;
+    session/new)
+      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-path\"}}"
+      echo "{\"jsonrpc\":\"2.0\",\"method\":\"session/update\",\"params\":{\"sessionUpdate\":\"text_delta\",\"text\":\"$PATH\"}}"
+      ;;
+  esac
+done"#,
+        ],
+                        supports_resume:           false,
+                        supports_permission_modes: false,
+                        install:                   None, }
+    }
+
+    #[tokio::test]
+    async fn the_adapter_subprocess_is_spawned_with_the_merged_adapter_path() {
+        let (session, _config_options, mut events) =
+            AcpSession::start(&path_reporting_adapter_launch(),
+                              "/tmp/project",
+                              None,
+                              None,
+                              &no_progress()).await
+                                             .expect("connect");
+        assert_eq!(session.session_id(), "sess-path");
+
+        let update = events.recv().await.expect("session update");
+        match update {
+            SessionEvent::Update(knot_acp::SessionUpdate::TextDelta { text }) => {
+                // The merged path's fallback dirs are appended after any
+                // process `PATH` entries, so last-five covers exactly them.
+                let merged = adapter_path();
+                assert!(!merged.is_empty(), "adapter_path built an empty PATH");
+                for dir in merged.split(':').rev().take(5) {
+                    assert!(!dir.is_empty() && text.contains(dir),
+                            "adapter subprocess saw PATH `{text}`; expected it to contain `{dir}`");
+                }
+            }
+            other => panic!("expected a text delta, got {other:?}"),
+        }
+
+        session.stop().await;
     }
 
     #[tokio::test]
@@ -381,8 +446,9 @@ mod tests {
                                                                    args:    install_args, }) };
 
         let (session, _config_options, _events) =
-            AcpSession::start(&launch, "/tmp/project", None, None, &no_progress()).await
-                                                                                  .expect("connect after auto-install");
+            AcpSession::start(&launch, "/tmp/project", None, None, &no_progress())
+                .await
+                .expect("connect after auto-install");
 
         assert_eq!(session.session_id(), "sess-installed");
         assert!(bin_path.exists(),
