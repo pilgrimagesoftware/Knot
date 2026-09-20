@@ -234,6 +234,7 @@ pub(crate) struct WorkspaceWindow {
     /// `render_panel_pane` can `splice` only the rows that actually
     /// changed and leave off-screen rows' measured heights alone.
     panel_list_row_counts:            BTreeMap<Uuid, usize>,
+    working_indicator_last_repaint:   std::time::Instant,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
@@ -340,6 +341,7 @@ impl WorkspaceWindow {
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
+                    working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
                     view_mode: WorkspaceViewMode::Terminal,
@@ -671,6 +673,31 @@ impl WorkspaceWindow {
     fn panel_needs_repaint(&mut self) -> bool {
         let stats_changed = self.diff_stats_dirty
                                 .swap(false, std::sync::atomic::Ordering::SeqCst);
+        let panel_states = self.panel_sessions
+                               .iter()
+                               .filter_map(|(id, slot)| {
+                                   let slot = slot.lock().ok()?;
+                                   let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                                   else {
+                                       return None;
+                                   };
+                                   let state_arc = handle.state();
+                                   let state = state_arc.lock().ok()?;
+                                   let agent_state = if state.pending_permission.is_some() {
+                                       knot_agents::AgentState::Input
+                                   } else if state.turn_active {
+                                       knot_agents::AgentState::Running
+                                   } else {
+                                       knot_agents::AgentState::Idle
+                                   };
+                                   Some((*id, agent_state))
+                               })
+                               .collect::<Vec<_>>();
+        if let Ok(mut store) = self.store.lock() {
+            for (id, state) in panel_states {
+                store.set_state(id, state);
+            }
+        }
         let Some(id) = self.selected_agent
         else {
             return stats_changed;
@@ -679,15 +706,28 @@ impl WorkspaceWindow {
         else {
             return false;
         };
-        let (phase, events_arrived) = {
+        let (phase, events_arrived, turn_active) = {
             let slot = slot.lock().unwrap();
             let events_arrived = matches!(&*slot,
                                           panel_session::PanelSessionSlot::Ready(handle)
                                           if handle.take_dirty());
-            (slot.phase(), events_arrived)
+            let turn_active = match &*slot {
+                panel_session::PanelSessionSlot::Ready(handle) => handle.state()
+                    .lock()
+                    .map(|state| state.turn_active)
+                    .unwrap_or(false),
+                _ => false,
+            };
+            (slot.phase(), events_arrived, turn_active)
         };
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
-        phase_changed || events_arrived || stats_changed
+        let indicator_due = turn_active
+            && self.working_indicator_last_repaint.elapsed()
+                >= std::time::Duration::from_millis(120);
+        if indicator_due {
+            self.working_indicator_last_repaint = std::time::Instant::now();
+        }
+        phase_changed || events_arrived || indicator_due || stats_changed
     }
 
     /// Tears down a session (e.g. its agent was removed or restarted).
@@ -1259,29 +1299,17 @@ impl WorkspaceWindow {
                             .relative()
                             .flex_1()
                             .min_h_0()
-                            .child(v_flex()
-                                .id("panel-conversation")
-                                .flex_1()
-                                .min_h_0()
-                                .child(panel_view::render_panel(
-                                    Arc::clone(&state_arc),
-                                    list.clone(),
-                                    &panel_style,
-                                    panel_view::PanelCallbacks::new(
-                                        on_decision,
-                                        on_toggle_track,
-                                        on_toggle_tool_call,
-                                        on_manual_scroll,
-                                    ),
-                                ))
-                                .child(working_indicator::render(
-                                    if turn_active {
-                                        knot_agents::AgentState::Running
-                                    } else {
-                                        knot_agents::AgentState::Idle
-                                    },
-                                    true,
-                                )))
+                            .child(panel_view::render_panel(
+                                Arc::clone(&state_arc),
+                                list.clone(),
+                                &panel_style,
+                                panel_view::PanelCallbacks::new(
+                                    on_decision,
+                                    on_toggle_track,
+                                    on_toggle_tool_call,
+                                    on_manual_scroll,
+                                ),
+                            ))
                             .children(scrolled_up.then(|| {
                                 div().absolute().bottom_3().right_4().child(
                                     Button::new("panel-scroll-to-bottom")

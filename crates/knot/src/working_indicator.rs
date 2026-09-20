@@ -28,7 +28,7 @@ pub(crate) fn render(agent_state: knot_agents::AgentState, is_running: bool) -> 
     let (mark, color) = match state {
         WorkingIndicatorState::Off => ("", hsla(0., 0., 0., 0.)),
         WorkingIndicatorState::Working => {
-            let marks = ["▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
+            let marks = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let millis = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()

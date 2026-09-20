@@ -23,6 +23,7 @@ use gpui_kit::{
 use knot_acp::{PermissionDecision, PermissionRequest};
 
 use crate::panel_state::{PanelMessage, PanelState, ToolCallCard};
+use crate::working_indicator;
 
 /// How much extra space above and below the viewport the list lays out and
 /// measures, so scrolling does not pop rows in at the edges.
@@ -166,6 +167,8 @@ pub(crate) enum PanelRow {
     Permission,
     /// The ended-session banner, when the session has ended.
     Ended,
+    /// The working indicator while the turn is active.
+    Working,
 }
 
 /// The number of rows `state` needs the conversation list to lay out -
@@ -174,6 +177,7 @@ pub(crate) fn row_count(state: &PanelState) -> usize {
     state.messages.len()
     + usize::from(state.pending_permission.is_some())
     + usize::from(state.ended.is_some())
+    + usize::from(state.turn_active)
 }
 
 /// Resolves a list index to the row it draws. `None` for an index past the
@@ -190,6 +194,11 @@ pub(crate) fn row_at(state: &PanelState, index: usize) -> Option<PanelRow> {
     }
     else if index == messages + usize::from(has_permission) && state.ended.is_some() {
         Some(PanelRow::Ended)
+    }
+    else if index == messages + usize::from(has_permission) + usize::from(state.ended.is_some())
+            && state.turn_active
+    {
+        Some(PanelRow::Working)
     }
     else {
         None
@@ -292,6 +301,11 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
                              .expect("row_at yields Ended only once the session has ended");
             render_ended_banner(cause).into_any_element()
         }
+        Some(PanelRow::Working) => working_indicator::render(
+            knot_agents::AgentState::Running,
+            true,
+        )
+        .into_any_element(),
         None => return div().into_any_element(),
     };
     div().w_full()
