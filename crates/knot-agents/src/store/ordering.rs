@@ -4,9 +4,10 @@ use super::AgentStore;
 
 impl AgentStore {
     pub fn reorder(&mut self, workspace_id: Uuid, from: usize, to: usize) {
-        let Some(workspace) = self.workspaces
-                                  .iter_mut()
-                                  .find(|workspace| workspace.id == workspace_id)
+        let Some(workspace) = self
+            .workspaces
+            .iter_mut()
+            .find(|workspace| workspace.id == workspace_id)
         else {
             return;
         };

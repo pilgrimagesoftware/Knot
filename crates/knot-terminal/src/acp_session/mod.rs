@@ -63,7 +63,7 @@ fn report(progress: &ConnectProgress, step: ConnectStep) {
 /// comment.
 #[derive(Clone)]
 pub struct AcpSession {
-    client:     AcpClient,
+    client: AcpClient,
     session_id: String,
 }
 
@@ -86,21 +86,32 @@ impl AcpSession {
     /// hanging if the adapter never responds.
     pub async fn start(
         config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress)
-        -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        Self::start_with_timeout(config,
-                                 cwd,
-                                 prior_session_id,
-                                 mcp_url,
-                                 progress,
-                                 CONNECT_TIMEOUT).await
+        progress: &ConnectProgress,
+    ) -> AcpResult<(
+        Self,
+        Vec<ConfigOption>,
+        mpsc::UnboundedReceiver<SessionEvent>,
+    )> {
+        Self::start_with_timeout(
+            config,
+            cwd,
+            prior_session_id,
+            mcp_url,
+            progress,
+            CONNECT_TIMEOUT,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
     async fn start_with_timeout(
         config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress, timeout: Duration)
-        -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
+        progress: &ConnectProgress, timeout: Duration,
+    ) -> AcpResult<(
+        Self,
+        Vec<ConfigOption>,
+        mpsc::UnboundedReceiver<SessionEvent>,
+    )> {
         tokio::time::timeout(
             timeout,
             Self::start_inner(config, cwd, prior_session_id, mcp_url, progress),
@@ -111,8 +122,12 @@ impl AcpSession {
 
     async fn start_inner(
         config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress)
-        -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
+        progress: &ConnectProgress,
+    ) -> AcpResult<(
+        Self,
+        Vec<ConfigOption>,
+        mpsc::UnboundedReceiver<SessionEvent>,
+    )> {
         let build_command = || {
             let mut command = Command::new(config.command);
             command.args(config.args);
@@ -125,11 +140,16 @@ impl AcpSession {
             command
         };
 
-        report(progress, ConnectStep::Starting { program: config.command, });
+        report(
+            progress,
+            ConnectStep::Starting {
+                program: config.command,
+            },
+        );
         let (client, events) = match AcpClient::connect(build_command()).await {
             Err(AcpError::Spawn(error))
                 if error.kind() == std::io::ErrorKind::NotFound
-                   && let Some(install) = config.install =>
+                    && let Some(install) = config.install =>
             {
                 // Auto-install, silently, on first use - per design.md
                 // decision 6, the adapter is Knot-published configuration
@@ -137,10 +157,19 @@ impl AcpSession {
                 // for confirmation. Adapters with no declared install
                 // method (`install: None`) fall through to the original
                 // spawn error unchanged.
-                report(progress,
-                       ConnectStep::Installing { program: install.command, });
+                report(
+                    progress,
+                    ConnectStep::Installing {
+                        program: install.command,
+                    },
+                );
                 run_install(install).await?;
-                report(progress, ConnectStep::Starting { program: config.command, });
+                report(
+                    progress,
+                    ConnectStep::Starting {
+                        program: config.command,
+                    },
+                );
                 AcpClient::connect(build_command()).await?
             }
             other => other?,
@@ -163,10 +192,14 @@ impl AcpSession {
             }
         };
 
-        Ok((Self { client,
-                   session_id: session.session_id },
+        Ok((
+            Self {
+                client,
+                session_id: session.session_id,
+            },
             session.config_options,
-            events))
+            events,
+        ))
     }
 
     pub fn session_id(&self) -> &str {
@@ -186,8 +219,9 @@ impl AcpSession {
 
     /// Applies one Session Config Option selection (mode, model, reasoning
     /// effort, ...) and returns the agent's updated full list.
-    pub async fn set_config_option(&self, config_id: &str, value: &str)
-                                   -> AcpResult<Vec<ConfigOption>> {
+    pub async fn set_config_option(
+        &self, config_id: &str, value: &str,
+    ) -> AcpResult<Vec<ConfigOption>> {
         self.client
             .session_set_config_option(&self.session_id, config_id, value)
             .await
@@ -216,19 +250,20 @@ impl AcpSession {
 /// prompt) - the adapter is Knot-published configuration, not arbitrary
 /// user-supplied code.
 async fn run_install(install: InstallMethod) -> AcpResult<()> {
-    let output = Command::new(install.command).args(install.args)
-                                              // The package manager (e.g. `npm`) can itself live in a standard
-                                              // directory the GUI PATH misses - see the adapter spawn above.
-                                              .env("PATH", adapter_path())
-                                              .output()
-                                              .await
-                                              .map_err(|error| {
-                                                  AcpError::InstallFailed(format!(
-            "failed to run `{} {}`: {error}",
-            install.command,
-            install.args.join(" ")
-        ))
-                                              })?;
+    let output = Command::new(install.command)
+        .args(install.args)
+        // The package manager (e.g. `npm`) can itself live in a standard
+        // directory the GUI PATH misses - see the adapter spawn above.
+        .env("PATH", adapter_path())
+        .output()
+        .await
+        .map_err(|error| {
+            AcpError::InstallFailed(format!(
+                "failed to run `{} {}`: {error}",
+                install.command,
+                install.args.join(" ")
+            ))
+        })?;
     if !output.status.success() {
         return Err(AcpError::InstallFailed(format!(
             "`{} {}` exited with {}: {}",
@@ -278,10 +313,11 @@ mod tests {
     /// A fake adapter: answers `initialize`/`session/new`, then streams one
     /// `session/update` text delta.
     fn fake_adapter_launch() -> AdapterConfig {
-        AdapterConfig { command:                   "sh",
-                        args:                      &[
-                                                     "-c",
-                                                     r#"while IFS= read -r line; do
+        AdapterConfig {
+            command: "sh",
+            args: &[
+                "-c",
+                r#"while IFS= read -r line; do
                           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
                           method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
                           case "$method" in
@@ -292,10 +328,11 @@ mod tests {
                               ;;
                           esac
                         done"#,
-        ],
-                        supports_resume:           false,
-                        supports_permission_modes: false,
-                        install:                   None, }
+            ],
+            supports_resume: false,
+            supports_permission_modes: false,
+            install: None,
+        }
     }
 
     /// A fake adapter that streams the child process's `$PATH` back as the
@@ -303,10 +340,11 @@ mod tests {
     /// adapter subprocess actually launched with, without the JSON-RPC
     /// framing getting in the way.
     fn path_reporting_adapter_launch() -> AdapterConfig {
-        AdapterConfig { command:                   "sh",
-                        args:                      &[
-                                                     "-c",
-                                                     r#"while IFS= read -r line; do
+        AdapterConfig {
+            command: "sh",
+            args: &[
+                "-c",
+                r#"while IFS= read -r line; do
   id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
   method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
   case "$method" in
@@ -317,21 +355,24 @@ mod tests {
       ;;
   esac
 done"#,
-        ],
-                        supports_resume:           false,
-                        supports_permission_modes: false,
-                        install:                   None, }
+            ],
+            supports_resume: false,
+            supports_permission_modes: false,
+            install: None,
+        }
     }
 
     #[tokio::test]
     async fn the_adapter_subprocess_is_spawned_with_the_merged_adapter_path() {
-        let (session, _config_options, mut events) =
-            AcpSession::start(&path_reporting_adapter_launch(),
-                              "/tmp/project",
-                              None,
-                              None,
-                              &no_progress()).await
-                                             .expect("connect");
+        let (session, _config_options, mut events) = AcpSession::start(
+            &path_reporting_adapter_launch(),
+            "/tmp/project",
+            None,
+            None,
+            &no_progress(),
+        )
+        .await
+        .expect("connect");
         assert_eq!(session.session_id(), "sess-path");
 
         let update = events.recv().await.expect("session update");
@@ -342,8 +383,10 @@ done"#,
                 let merged = adapter_path();
                 assert!(!merged.is_empty(), "adapter_path built an empty PATH");
                 for dir in merged.split(':').rev().take(5) {
-                    assert!(!dir.is_empty() && text.contains(dir),
-                            "adapter subprocess saw PATH `{text}`; expected it to contain `{dir}`");
+                    assert!(
+                        !dir.is_empty() && text.contains(dir),
+                        "adapter subprocess saw PATH `{text}`; expected it to contain `{dir}`"
+                    );
                 }
             }
             other => panic!("expected a text delta, got {other:?}"),
@@ -363,23 +406,31 @@ done"#,
         let agent_id = store.create("/tmp/project", CreateOptions::default());
         let agent: Agent = store.agent(agent_id).unwrap().clone();
         let settings = Settings::default();
-        let config = SessionConfig { settings:    &settings,
-                                     agent:       &agent,
-                                     persona:     None,
-                                     plugin_root: None, };
+        let config = SessionConfig {
+            settings: &settings,
+            agent: &agent,
+            persona: None,
+            plugin_root: None,
+        };
         let sent = Arc::new(Mutex::new(Vec::new()));
-        let mut terminal_session = TerminalSession::new(&config,
-                                                        FakeTransport { sent: Arc::clone(&sent), },
-                                                        knot_activity::EventSink::default());
+        let mut terminal_session = TerminalSession::new(
+            &config,
+            FakeTransport {
+                sent: Arc::clone(&sent),
+            },
+            knot_activity::EventSink::default(),
+        );
         terminal_session.send_text("terminal is alive").unwrap();
 
-        let (session, _config_options, mut events) =
-            AcpSession::start(&fake_adapter_launch(),
-                              "/tmp/project",
-                              None,
-                              None,
-                              &no_progress()).await
-                                             .expect("connect");
+        let (session, _config_options, mut events) = AcpSession::start(
+            &fake_adapter_launch(),
+            "/tmp/project",
+            None,
+            None,
+            &no_progress(),
+        )
+        .await
+        .expect("connect");
         assert_eq!(session.session_id(), "sess-1");
 
         // The ACP update the fake adapter streamed right after session/new
@@ -388,36 +439,43 @@ done"#,
         // dropped by the switch.
         let update = events.recv().await.expect("session update");
         assert!(matches!(
-                    update,
-                    SessionEvent::Update(knot_acp::SessionUpdate::TextDelta { text }) if text == "hi"
-                ));
+            update,
+            SessionEvent::Update(knot_acp::SessionUpdate::TextDelta { text }) if text == "hi"
+        ));
 
         session.stop().await;
 
-        assert_eq!(*sent.lock().unwrap(),
-                   vec!["terminal is alive".to_string()],
-                   "the terminal transport must be untouched by the ACP session's lifecycle");
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec!["terminal is alive".to_string()],
+            "the terminal transport must be untouched by the ACP session's lifecycle"
+        );
     }
 
     /// A fake adapter that never answers anything - simulates a hung
     /// process (e.g. blocked on an interactive prompt it can't show over
     /// stdio, as `gemini --acp` does without `--skip-trust`).
     fn hanging_adapter_launch() -> AdapterConfig {
-        AdapterConfig { command:                   "sh",
-                        args:                      &["-c", "while true; do sleep 1; done"],
-                        supports_resume:           false,
-                        supports_permission_modes: false,
-                        install:                   None, }
+        AdapterConfig {
+            command: "sh",
+            args: &["-c", "while true; do sleep 1; done"],
+            supports_resume: false,
+            supports_permission_modes: false,
+            install: None,
+        }
     }
 
     #[tokio::test]
     async fn start_fails_closed_with_a_visible_error_instead_of_hanging() {
-        let result = AcpSession::start_with_timeout(&hanging_adapter_launch(),
-                                                    "/tmp/project",
-                                                    None,
-                                                    None,
-                                                    &no_progress(),
-                                                    std::time::Duration::from_millis(50)).await;
+        let result = AcpSession::start_with_timeout(
+            &hanging_adapter_launch(),
+            "/tmp/project",
+            None,
+            None,
+            &no_progress(),
+            std::time::Duration::from_millis(50),
+        )
+        .await;
 
         assert!(matches!(result, Err(AcpError::Timeout)));
     }
@@ -431,19 +489,28 @@ done"#,
 
         // The "install" step writes a responder script to `bin_path` and
         // makes it executable, standing in for a real `npm install -g`.
-        let install_script = format!("cat > '{bin_path_string}' <<'SCRIPT'\n#!/bin/sh\nwhile IFS= read -r line; do\n  id=$(echo \"$line\" | sed -E 's/.*\"id\":([0-9]+).*/\\1/')\n  method=$(echo \"$line\" | sed -nE 's/.*\"method\":\"([^\"]+)\".*/\\1/p')\n  case \"$method\" in\n    initialize) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"protocolVersion\\\":1,\\\"capabilities\\\":{{}}}}}}\" ;;\n    session/new) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"sessionId\\\":\\\"sess-installed\\\"}}}}\" ;;\n  esac\ndone\nSCRIPT\nchmod +x '{bin_path_string}'");
+        let install_script = format!(
+            "cat > '{bin_path_string}' <<'SCRIPT'\n#!/bin/sh\nwhile IFS= read -r line; do\n  id=$(echo \"$line\" | sed -E 's/.*\"id\":([0-9]+).*/\\1/')\n  method=$(echo \"$line\" | sed -nE 's/.*\"method\":\"([^\"]+)\".*/\\1/p')\n  case \"$method\" in\n    initialize) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"protocolVersion\\\":1,\\\"capabilities\\\":{{}}}}}}\" ;;\n    session/new) echo \"{{\\\"jsonrpc\\\":\\\"2.0\\\",\\\"id\\\":$id,\\\"result\\\":{{\\\"sessionId\\\":\\\"sess-installed\\\"}}}}\" ;;\n  esac\ndone\nSCRIPT\nchmod +x '{bin_path_string}'"
+        );
 
         let command: &'static str = Box::leak(bin_path_string.clone().into_boxed_str());
-        let install_args: &'static [&'static str] = Box::leak(vec![
-            "-c",
-            Box::leak(install_script.into_boxed_str()) as &'static str,
-        ].into_boxed_slice());
-        let launch = AdapterConfig { command,
-                                     args: &[],
-                                     supports_resume: false,
-                                     supports_permission_modes: false,
-                                     install: Some(InstallMethod { command: "sh",
-                                                                   args:    install_args, }) };
+        let install_args: &'static [&'static str] = Box::leak(
+            vec![
+                "-c",
+                Box::leak(install_script.into_boxed_str()) as &'static str,
+            ]
+            .into_boxed_slice(),
+        );
+        let launch = AdapterConfig {
+            command,
+            args: &[],
+            supports_resume: false,
+            supports_permission_modes: false,
+            install: Some(InstallMethod {
+                command: "sh",
+                args: install_args,
+            }),
+        };
 
         let (session, _config_options, _events) =
             AcpSession::start(&launch, "/tmp/project", None, None, &no_progress())
@@ -451,7 +518,9 @@ done"#,
                 .expect("connect after auto-install");
 
         assert_eq!(session.session_id(), "sess-installed");
-        assert!(bin_path.exists(),
-                "install step should have created the adapter binary");
+        assert!(
+            bin_path.exists(),
+            "install step should have created the adapter binary"
+        );
     }
 }

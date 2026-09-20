@@ -30,14 +30,14 @@ impl Render for Blank {
 #[gpui_kit::test]
 fn the_about_dialog_opens_when_the_menu_dispatches_into_the_active_window(cx: &mut TestAppContext) {
     let window = cx.update(|cx| {
-                       gpui_kit::init(cx);
-                       cx.on_action(about_knot);
-                       cx.open_window(WindowOptions::default(), |window, cx| {
-                             let view = cx.new(|_| Blank);
-                             cx.new(|cx| Root::new(view, window, cx))
-                         })
-                         .expect("failed to open the test window")
-                   });
+        gpui_kit::init(cx);
+        cx.on_action(about_knot);
+        cx.open_window(WindowOptions::default(), |window, cx| {
+            let view = cx.new(|_| Blank);
+            cx.new(|cx| Root::new(view, window, cx))
+        })
+        .expect("failed to open the test window")
+    });
 
     let handle: AnyWindowHandle = window.into();
     cx.dispatch_action(handle, AboutKnot);
@@ -45,8 +45,11 @@ fn the_about_dialog_opens_when_the_menu_dispatches_into_the_active_window(cx: &m
 
     // Through the untyped handle: the typed `WindowHandle<Root>::update`
     // leases the `Root` entity, and `has_active_dialog` reads it.
-    let opened = handle.update(cx, |_, window, cx| window.has_active_dialog(cx))
-                       .expect("the test window went away");
-    assert!(opened,
-            "About Knot dispatched from the menu opened no dialog");
+    let opened = handle
+        .update(cx, |_, window, cx| window.has_active_dialog(cx))
+        .expect("the test window went away");
+    assert!(
+        opened,
+        "About Knot dispatched from the menu opened no dialog"
+    );
 }

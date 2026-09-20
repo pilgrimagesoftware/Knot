@@ -31,8 +31,8 @@ pub enum KeyEvent {
 /// A recorded status change, with the change time for dashboard sorting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusEvent {
-    pub status:     AgentState,
-    pub source:     ActivitySource,
+    pub status: AgentState,
+    pub source: ActivitySource,
     pub changed_at: Instant,
 }
 
@@ -53,9 +53,9 @@ pub enum Effect {
 /// Callbacks the tracker owner wires up to consume effects. Each is optional.
 #[derive(Default)]
 pub struct EventSink {
-    pub on_status:              Option<Box<dyn FnMut(StatusEvent) + Send>>,
-    pub on_awaiting_input:      Option<Box<dyn FnMut(Option<String>) + Send>>,
-    pub on_check_messages:      Option<Box<dyn FnMut() + Send>>,
+    pub on_status: Option<Box<dyn FnMut(StatusEvent) + Send>>,
+    pub on_awaiting_input: Option<Box<dyn FnMut(Option<String>) + Send>>,
+    pub on_check_messages: Option<Box<dyn FnMut() + Send>>,
     pub on_inject_registration: Option<Box<dyn FnMut(String) + Send>>,
 }
 

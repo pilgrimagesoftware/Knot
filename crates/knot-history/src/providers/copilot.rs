@@ -16,8 +16,8 @@ use crate::title::{extract_title, is_valid_title};
 pub struct CopilotProvider;
 
 struct WorkspaceInfo {
-    cwd:        String,
-    summary:    String,
+    cwd: String,
+    summary: String,
     updated_at: OffsetDateTime,
 }
 
@@ -33,8 +33,7 @@ fn parse_workspace_yaml(content: &str) -> Option<WorkspaceInfo> {
     let mut updated_at = OffsetDateTime::UNIX_EPOCH;
 
     for line in content.lines() {
-        let Some((key, value)) = line.split_once(':')
-        else {
+        let Some((key, value)) = line.split_once(':') else {
             continue;
         };
         let key = key.trim();
@@ -51,9 +50,11 @@ fn parse_workspace_yaml(content: &str) -> Option<WorkspaceInfo> {
         }
     }
 
-    Some(WorkspaceInfo { cwd: cwd?,
-                         summary,
-                         updated_at })
+    Some(WorkspaceInfo {
+        cwd: cwd?,
+        summary,
+        updated_at,
+    })
 }
 
 /// Parse `events.jsonl` for the first `user.message` event's content.
@@ -65,16 +66,16 @@ fn title_from_events(path: &std::path::Path) -> Option<String> {
         if trimmed.is_empty() {
             continue;
         }
-        let Ok(json) = serde_json::from_str::<Value>(trimmed)
-        else {
+        let Ok(json) = serde_json::from_str::<Value>(trimmed) else {
             continue;
         };
         if json.get("type").and_then(Value::as_str) != Some("user.message") {
             continue;
         }
-        let Some(message) = json.get("data")
-                                .and_then(|d| d.get("content"))
-                                .and_then(Value::as_str)
+        let Some(message) = json
+            .get("data")
+            .and_then(|d| d.get("content"))
+            .and_then(Value::as_str)
         else {
             continue;
         };
@@ -95,32 +96,31 @@ fn resolve_title(summary: &str, session_dir: &std::path::Path) -> String {
 
 impl HistoryProvider for CopilotProvider {
     fn load_sessions(&self, folder: &str) -> Vec<SessionSummary> {
-        let Some(base) = base_dir()
-        else {
+        let Some(base) = base_dir() else {
             return Vec::new();
         };
-        let Ok(entries) = fs::read_dir(&base)
-        else {
+        let Ok(entries) = fs::read_dir(&base) else {
             return Vec::new();
         };
 
-        let mut summaries: Vec<SessionSummary> =
-            entries.filter_map(Result::ok)
-                   .filter_map(|entry| {
-                       let session_dir = entry.path();
-                       let id = entry.file_name().to_str()?.to_owned();
-                       let yaml_content =
-                           fs::read_to_string(session_dir.join("workspace.yaml")).ok()?;
-                       let info = parse_workspace_yaml(&yaml_content)?;
-                       if info.cwd != folder {
-                           return None;
-                       }
-                       Some(SessionSummary { title: resolve_title(&info.summary, &session_dir),
-                                             id,
-                                             timestamp: info.updated_at,
-                                             message_count: 0 })
-                   })
-                   .collect();
+        let mut summaries: Vec<SessionSummary> = entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| {
+                let session_dir = entry.path();
+                let id = entry.file_name().to_str()?.to_owned();
+                let yaml_content = fs::read_to_string(session_dir.join("workspace.yaml")).ok()?;
+                let info = parse_workspace_yaml(&yaml_content)?;
+                if info.cwd != folder {
+                    return None;
+                }
+                Some(SessionSummary {
+                    title: resolve_title(&info.summary, &session_dir),
+                    id,
+                    timestamp: info.updated_at,
+                    message_count: 0,
+                })
+            })
+            .collect();
 
         summaries.sort_by_key(|s| std::cmp::Reverse(s.timestamp));
         summaries.truncate(MAX_SESSIONS);
@@ -128,8 +128,7 @@ impl HistoryProvider for CopilotProvider {
     }
 
     fn delete_session(&self, id: &str, _folder: &str) {
-        let Some(base) = base_dir()
-        else {
+        let Some(base) = base_dir() else {
             return;
         };
         let _ = fs::remove_dir_all(base.join(id));
@@ -154,8 +153,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let session_dir = tmp.path().join("s1");
         fs::create_dir_all(&session_dir).unwrap();
-        fs::write(session_dir.join("workspace.yaml"),
-                  "cwd: /other\nsummary: unrelated\nupdated_at: 2024-01-01T00:00:00Z\n").unwrap();
+        fs::write(
+            session_dir.join("workspace.yaml"),
+            "cwd: /other\nsummary: unrelated\nupdated_at: 2024-01-01T00:00:00Z\n",
+        )
+        .unwrap();
 
         let yaml = fs::read_to_string(session_dir.join("workspace.yaml")).unwrap();
         let info = parse_workspace_yaml(&yaml).unwrap();
@@ -167,12 +169,15 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let events_path = tmp.path().join("events.jsonl");
         fs::write(
-                  &events_path,
-                  r#"{"type":"other.event"}
+            &events_path,
+            r#"{"type":"other.event"}
 {"type":"user.message","data":{"content":"the real title"}}"#,
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_eq!(title_from_events(&events_path).as_deref(),
-                   Some("the real title"));
+        assert_eq!(
+            title_from_events(&events_path).as_deref(),
+            Some("the real title")
+        );
     }
 }

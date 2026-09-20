@@ -22,8 +22,9 @@ fn current_branch_reports_name_then_none_when_detached() {
 
     assert_eq!(repo.current_branch().unwrap().as_deref(), Some("main"));
 
-    Runner::new(path).run(&["checkout", "--detach", "-q"])
-                     .unwrap();
+    Runner::new(path)
+        .run(&["checkout", "--detach", "-q"])
+        .unwrap();
     assert_eq!(repo.current_branch().unwrap(), None);
 }
 

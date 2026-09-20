@@ -12,11 +12,11 @@ use crate::providers::{
 pub struct SessionSummary {
     /// Stable session identifier (provider-specific: a file stem, a DB row
     /// id, a directory name).
-    pub id:            String,
+    pub id: String,
     /// First meaningful user message; empty when none could be derived.
-    pub title:         String,
+    pub title: String,
     /// Best available recency signal for this session.
-    pub timestamp:     OffsetDateTime,
+    pub timestamp: OffsetDateTime,
     /// User + assistant message count; zero when not derivable.
     pub message_count: usize,
 }
@@ -57,8 +57,10 @@ mod tests {
     #[test]
     fn known_agent_types_supported() {
         for agent_type in ["claude", "codex", "gemini", "copilot"] {
-            assert!(supports_history(agent_type),
-                    "{agent_type} should be supported");
+            assert!(
+                supports_history(agent_type),
+                "{agent_type} should be supported"
+            );
         }
     }
 
