@@ -17,6 +17,7 @@ mod tests;
 mod window_options;
 mod workspace_manager;
 mod workspace_window;
+mod working_indicator;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
