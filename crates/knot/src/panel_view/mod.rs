@@ -295,6 +295,7 @@ fn render_row(
                 .as_ref()
                 .expect("row_at yields Permission only while a request is pending");
             render_permission_prompt(
+                state,
                 request,
                 style.permission_risk,
                 callbacks.on_permission_decision.clone(),
@@ -786,7 +787,7 @@ fn render_output_text(text: &str, style: &PanelStyle) -> impl IntoElement {
 /// prompts is blocked by the caller while this is rendered (the caller
 /// checks `PanelState::pending_permission` before calling `prompt`).
 fn render_permission_prompt(
-    request: &PermissionRequest, permission_risk: RiskLevel,
+    panel_state: &PanelState, request: &PermissionRequest, permission_risk: RiskLevel,
     on_decision: Rc<dyn Fn(PermissionDecision)>,
 ) -> impl IntoElement {
     let allow = on_decision.clone();
@@ -798,8 +799,8 @@ fn render_permission_prompt(
         .border_1()
         .border_color(rgb(risk_color(permission_risk).unwrap_or(0x3B82F6)))
         .child(div().text_sm().child(format!(
-            "Permission requested for tool call {}",
-            request.tool_call_id
+            "Permission requested for {}",
+            panel_state.display_name(request)
         )))
         .child(
             h_flex()
@@ -976,6 +977,7 @@ mod tests {
         PermissionRequest {
             rpc_id: serde_json::json!(1),
             tool_call_id: "tc1".to_string(),
+            tool_call_title: None,
             options: Vec::new(),
         }
     }

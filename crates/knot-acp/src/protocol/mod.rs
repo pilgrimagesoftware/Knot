@@ -308,6 +308,7 @@ fn optional_str(value: &Value, key: &str) -> Option<String> {
 pub struct PermissionRequest {
     pub rpc_id: Value,
     pub tool_call_id: String,
+    pub tool_call_title: Option<String>,
     pub options: Vec<PermissionOption>,
 }
 
