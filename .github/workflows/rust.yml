@@ -38,7 +38,7 @@ jobs:
       - name: Nightly toolchain (rustfmt)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-09-18
           components: rustfmt
 
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
