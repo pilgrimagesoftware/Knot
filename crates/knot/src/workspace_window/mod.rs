@@ -231,6 +231,7 @@ pub(crate) struct WorkspaceWindow {
     /// cancels it).
     panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    panel_prompt_results:             Arc<Mutex<Vec<(Uuid, String, Result<(), String>)>>>,
     /// One virtualized conversation list per Panel-mode agent that has
     /// been viewed, created lazily - the `ListState` backing
     /// `render_panel`'s virtualization, and the target of the response
@@ -347,6 +348,7 @@ impl WorkspaceWindow {
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_prompt_queues: BTreeMap::new(),
+                    panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
                     working_indicator_last_repaint: std::time::Instant::now(),
@@ -679,6 +681,23 @@ impl WorkspaceWindow {
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
     fn panel_needs_repaint(&mut self) -> bool {
+        let prompt_results = self.panel_prompt_results
+                                         .lock()
+                                         .map(|mut results| std::mem::take(&mut *results))
+                                         .unwrap_or_default();
+        let prompt_results_changed = !prompt_results.is_empty();
+        for (id, text, result) in prompt_results {
+            if let Some(queue) = self.panel_prompt_queues.get_mut(&id)
+                && let Some(index) = queue.iter().position(|prompt| prompt.text == text)
+            {
+                if result.is_ok() {
+                    queue.remove(index);
+                }
+                else if let Some(prompt) = queue.get_mut(index) {
+                    prompt.failed = true;
+                }
+            }
+        }
         let stats_changed = self.diff_stats_dirty
                                 .swap(false, std::sync::atomic::Ordering::SeqCst);
         let panel_states = self.panel_sessions
@@ -742,7 +761,7 @@ impl WorkspaceWindow {
         if !turn_active {
             self.drain_panel_prompt(id);
         }
-        phase_changed || events_arrived || indicator_due || stats_changed
+        phase_changed || events_arrived || indicator_due || stats_changed || prompt_results_changed
     }
 
     /// Tears down a session (e.g. its agent was removed or restarted).
@@ -2050,9 +2069,14 @@ impl WorkspaceWindow {
         else {
             return;
         };
+        let results = Arc::clone(&self.panel_prompt_results);
         self.runtime.spawn(async move {
-                        if let Err(error) = session.prompt(&text).await {
+                        let result = session.prompt(&text).await.map_err(|error| error.to_string());
+                        if let Err(error) = &result {
                             recorder.error(format!("The agent could not answer: {error}"));
+                        }
+                        if let Ok(mut results) = results.lock() {
+                            results.push((id, text, result));
                         }
                     });
     }
