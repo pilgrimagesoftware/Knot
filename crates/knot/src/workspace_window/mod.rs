@@ -37,6 +37,8 @@ struct QueuedPanelPrompt {
     failed: bool,
 }
 
+type PanelPromptResult = (Uuid, String, Result<(), String>);
+
 /// One labelled detail line on an agent row: a leading icon saying what the
 /// line is, then the text.
 ///
@@ -239,7 +241,7 @@ pub(crate) struct WorkspaceWindow {
     /// cancels it).
     panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     panel_prompt_queues: BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
-    panel_prompt_results: Arc<Mutex<Vec<(Uuid, String, Result<(), String>)>>>,
+    panel_prompt_results: Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has
     /// been viewed, created lazily - the `ListState` backing
     /// `render_panel`'s virtualization, and the target of the response
