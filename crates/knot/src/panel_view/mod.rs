@@ -15,7 +15,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::text::TextView;
-use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::component::notification::Notification;
+use gpui_kit::component::{Icon, Sizable, WindowExt};
 use gpui_kit::{
     ClickEvent, ClipboardItem, Hsla, InteractiveElement, IntoElement, ListOffset, ListState,
     ParentElement, StatefulInteractiveElement, Styled, div, px, relative, rgb,
@@ -348,23 +349,41 @@ fn render_message(
         // assistant's plain left-aligned text, per acp-panel-ui's
         // "visually distinguish user messages, assistant messages, and
         // system/tool content" requirement.
-        PanelMessage::User(text) => h_flex()
-            .w_full()
-            .min_w_0()
-            .justify_end()
-            .child(
-                div()
-                    .max_w(relative(0.85))
-                    .min_w_0()
-                    .text_sm()
-                    .text_color(rgb(0xFFFFFF))
-                    .px_3()
-                    .py_1p5()
-                    .rounded_md()
-                    .bg(rgb(0x2563EB))
-                    .child(text.clone()),
-            )
-            .into_any_element(),
+        PanelMessage::User(text) => {
+            let copy_text = text.clone();
+            h_flex()
+                .w_full()
+                .min_w_0()
+                .justify_end()
+                .gap_1()
+                .child(
+                    Button::new(("panel-copy-prompt", index as u64))
+                        .icon(IconName::Copy)
+                        .tooltip(knot_core::l10n::t("panel.copy_prompt"))
+                        .ghost()
+                        .small()
+                        .on_click(move |_: &ClickEvent, window, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+                            window.push_notification(
+                                Notification::info(knot_core::l10n::t("panel.copied_prompt")),
+                                cx,
+                            );
+                        }),
+                )
+                .child(
+                    div()
+                        .max_w(relative(0.85))
+                        .min_w_0()
+                        .text_sm()
+                        .text_color(rgb(0xFFFFFF))
+                        .px_3()
+                        .py_1p5()
+                        .rounded_md()
+                        .bg(rgb(0x2563EB))
+                        .child(text.clone()),
+                )
+                .into_any_element()
+        }
         PanelMessage::Assistant(text) => {
             v_flex()
                 .w_full()
@@ -473,11 +492,15 @@ fn render_response_actions(
         .child(
             Button::new(("panel-copy-response", index as u64))
                 .icon(IconName::Copy)
-                .tooltip("Copy response")
+                .tooltip(knot_core::l10n::t("panel.copy_response"))
                 .ghost()
                 .small()
-                .on_click(move |_: &ClickEvent, _, cx| {
+                .on_click(move |_: &ClickEvent, window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                    window.push_notification(
+                        Notification::info(knot_core::l10n::t("panel.copied_response")),
+                        cx,
+                    );
                 }),
         )
         .children(user_index.map(|user_index| {

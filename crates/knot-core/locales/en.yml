@@ -23,3 +23,9 @@ workspace:
 
 agent:
   companion: "Shell companion"
+
+panel:
+  copy_prompt: "Copy prompt"
+  copy_response: "Copy response"
+  copied_prompt: "Copied prompt to clipboard"
+  copied_response: "Copied response to clipboard"
