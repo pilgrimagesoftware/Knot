@@ -324,18 +324,20 @@ fn render_message(ctx: Message<'_>, message: &PanelMessage, callbacks: &PanelCal
         // assistant's plain left-aligned text, per acp-panel-ui's
         // "visually distinguish user messages, assistant messages, and
         // system/tool content" requirement.
-        PanelMessage::User(text) => h_flex().w_full()
+        PanelMessage::User { text, queued } => h_flex().w_full()
                                             .min_w_0()
                                             .justify_end()
                                             .child(div().max_w(relative(0.85))
                                                         .min_w_0()
                                                         .text_sm()
-                                                        .text_color(rgb(0xFFFFFF))
+                                                        .text_color(rgb(if *queued { 0x9CA3AF } else { 0xFFFFFF }))
                                                         .px_3()
                                                         .py_1p5()
                                                         .rounded_md()
-                                                        .bg(rgb(0x2563EB))
-                                                        .child(text.clone()))
+                                                        .bg(rgb(if *queued { 0x374151 } else { 0x2563EB }))
+                                                        .child(v_flex().gap_1()
+                                                                    .children((*queued).then(|| div().text_xs().text_color(rgb(0xD1D5DB)).child(knot_core::l10n::t("panel.queued"))))
+                                                                    .child(text.clone())))
                                             .into_any_element(),
         PanelMessage::Assistant(text) => {
             v_flex().w_full()
@@ -393,7 +395,7 @@ fn render_message(ctx: Message<'_>, message: &PanelMessage, callbacks: &PanelCal
 /// response action bar's "scroll to user input" control.
 fn preceding_user_message(state: &PanelState, index: usize) -> Option<usize> {
     state.messages[..index].iter()
-                           .rposition(|message| matches!(message, PanelMessage::User(_)))
+                           .rposition(|message| matches!(message, PanelMessage::User { .. }))
 }
 
 /// The in-flight response's auto-scroll toggle, per the track toggle
@@ -859,7 +861,7 @@ mod tests {
         let mut state = PanelState::new();
         assert_eq!(row_count(&state), 0);
 
-        state.messages.push(PanelMessage::User("hi".to_string()));
+        state.messages.push(PanelMessage::User { text: "hi".to_string(), queued: false });
         assert_eq!(row_count(&state), 1);
 
         state.pending_permission = Some(permission_request());
@@ -875,7 +877,7 @@ mod tests {
     #[test]
     fn row_at_walks_messages_then_permission_then_ended() {
         let mut state = PanelState::new();
-        state.messages.push(PanelMessage::User("a".to_string()));
+        state.messages.push(PanelMessage::User { text: "a".to_string(), queued: false });
         state.messages
              .push(PanelMessage::Assistant("b".to_string()));
         state.pending_permission = Some(permission_request());
@@ -893,7 +895,7 @@ mod tests {
     #[test]
     fn an_ended_row_follows_the_messages_when_no_permission_is_pending() {
         let mut state = PanelState::new();
-        state.messages.push(PanelMessage::User("a".to_string()));
+        state.messages.push(PanelMessage::User { text: "a".to_string(), queued: false });
         state.ended = Some(knot_acp::SessionEndCause::ProcessExited { code: Some(0) });
 
         assert_eq!(row_count(&state), 2);
@@ -913,7 +915,7 @@ mod tests {
         known = sync_row_count(&list, known, &state);
         assert_eq!((list.item_count(), known), (0, 0));
 
-        state.messages.push(PanelMessage::User("a".to_string()));
+        state.messages.push(PanelMessage::User { text: "a".to_string(), queued: false });
         state.messages
              .push(PanelMessage::Assistant("b".to_string()));
         known = sync_row_count(&list, known, &state);

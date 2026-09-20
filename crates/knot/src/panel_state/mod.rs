@@ -6,7 +6,7 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use knot_acp::{
     ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate, ToolCallContent,
@@ -26,7 +26,7 @@ fn render_json(output: &Value) -> String {
 /// content" requirement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PanelMessage {
-    User(String),
+    User { text: String, queued: bool },
     Assistant(String),
     ToolCall(ToolCallCard),
     /// Something the session could not do: a refused prompt, a send that
@@ -90,6 +90,8 @@ pub struct PanelState {
     /// decision - the last message's action bar (copy needs stable text)
     /// and its track toggle are mutually exclusive on this flag.
     pub turn_active:        bool,
+    pub queued_prompts:     VecDeque<String>,
+    pending_delivery:       Option<String>,
     /// Whether the in-flight response should auto-scroll to follow new
     /// content, per the track toggle's per-response scope (design decision
     /// "Track toggle scope"). Reset to `true` at the start of each turn.
@@ -131,6 +133,7 @@ impl PanelState {
     /// resolved state, not left pending.
     pub fn resolve_permission(&mut self) {
         self.pending_permission = None;
+        self.promote_queued_prompt();
     }
 
     /// Records a prompt the user just sent, so it shows in the
@@ -138,9 +141,47 @@ impl PanelState {
     /// new turn: the next response tracks by default until the user
     /// scrolls away or the turn ends.
     pub fn push_user_message(&mut self, text: String) {
-        self.messages.push(PanelMessage::User(text));
+        self.messages.push(PanelMessage::User { text, queued: false });
         self.turn_active = true;
         self.tracking = true;
+    }
+
+    pub fn enqueue_prompt(&mut self, text: String) {
+        self.messages.push(PanelMessage::User { text: text.clone(), queued: true });
+        self.queued_prompts.push_back(text);
+    }
+
+    pub fn queued_count(&self) -> usize {
+        self.queued_prompts.len()
+    }
+
+    pub fn dequeue_for_delivery(&mut self) -> Option<String> {
+        self.queued_prompts.pop_front()
+    }
+
+    pub fn take_pending_delivery(&mut self) -> Option<String> {
+        self.pending_delivery.take()
+    }
+
+    fn promote_queued_prompt(&mut self) {
+        if self.pending_permission.is_some() || self.turn_active || self.pending_delivery.is_some() {
+            return;
+        }
+        let Some(text) = self.dequeue_for_delivery()
+        else {
+            return;
+        };
+        if let Some(PanelMessage::User { queued, .. }) = self.messages.iter_mut().rev().find(|message| matches!(message, PanelMessage::User { queued: true, .. })) {
+            *queued = false;
+        }
+        self.turn_active = true;
+        self.tracking = true;
+        self.pending_delivery = Some(text);
+    }
+
+    pub fn promote_after_delivery_failure(&mut self) {
+        self.turn_active = false;
+        self.promote_queued_prompt();
     }
 
     /// Records a failure the agent reported instead of a turn - a prompt
@@ -253,7 +294,10 @@ impl PanelState {
             // list already reflects the turn's last known state and needs
             // no change beyond ending the turn (which flips the last
             // response from "track toggle" to "response action bar").
-            SessionUpdate::TurnEnd { .. } => self.turn_active = false,
+            SessionUpdate::TurnEnd { .. } => {
+                self.turn_active = false;
+                self.promote_queued_prompt();
+            }
             SessionUpdate::ConfigOptionUpdate { config_options } => {
                 self.config_options = config_options;
             }
@@ -325,7 +369,7 @@ mod tests {
         state.apply(text("hi there"));
 
         assert_eq!(state.messages,
-                   vec![PanelMessage::User("hello".to_string()),
+                   vec![PanelMessage::User { text: "hello".to_string(), queued: false },
                         PanelMessage::Assistant("hi there".to_string())]);
     }
 
@@ -340,7 +384,7 @@ mod tests {
         state.push_error("The agent could not answer: quota exhausted".to_string());
 
         assert_eq!(state.messages,
-                   vec![PanelMessage::User("hello".to_string()),
+                   vec![PanelMessage::User { text: "hello".to_string(), queued: false },
                         PanelMessage::Error("The agent could not answer: quota exhausted"
                                                                        .to_string())]);
         assert!(!state.turn_active,
@@ -518,6 +562,44 @@ mod tests {
         state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason:
                                                                       "end_turn".to_string(), }));
         assert!(!state.turn_active);
+    }
+
+    #[test]
+    fn queued_prompts_are_fifo_and_marked_until_delivery() {
+        let mut state = PanelState::new();
+        state.enqueue_prompt("first".to_string());
+        state.enqueue_prompt("second".to_string());
+
+        assert_eq!(state.queued_count(), 2);
+        assert_eq!(state.dequeue_for_delivery(), Some("first".to_string()));
+        assert_eq!(state.dequeue_for_delivery(), Some("second".to_string()));
+        assert_eq!(state.dequeue_for_delivery(), None);
+        assert!(matches!(state.messages[0], PanelMessage::User { queued: true, .. }));
+    }
+
+    #[test]
+    fn turn_end_promotes_a_queued_prompt_once() {
+        let mut state = PanelState::new();
+        state.push_user_message("active".to_string());
+        state.enqueue_prompt("next".to_string());
+        state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason: "done".to_string() }));
+
+        assert!(state.turn_active);
+        assert_eq!(state.take_pending_delivery(), Some("next".to_string()));
+        assert_eq!(state.take_pending_delivery(), None);
+        assert!(matches!(state.messages[1], PanelMessage::User { queued: false, .. }));
+    }
+
+    #[test]
+    fn pending_permission_defers_queue_until_resolution() {
+        let mut state = PanelState::new();
+        state.enqueue_prompt("next".to_string());
+        state.apply(SessionEvent::PermissionRequest(PermissionRequest { rpc_id: json!(1), tool_call_id: "tc".to_string(), options: Vec::new() }));
+        state.apply(SessionEvent::Update(SessionUpdate::TurnEnd { stop_reason: "done".to_string() }));
+        assert_eq!(state.take_pending_delivery(), None);
+
+        state.resolve_permission();
+        assert_eq!(state.take_pending_delivery(), Some("next".to_string()));
     }
 
     #[test]
