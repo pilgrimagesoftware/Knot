@@ -1,28 +1,28 @@
 use super::*;
 pub(crate) struct CommandCenterWindow {
-    store: Arc<Mutex<knot_agents::AgentStore>>,
-    messages: Arc<Mutex<knot_messaging::MessageStore>>,
-    settings: knot_core::Settings,
+    store:          Arc<Mutex<knot_agents::AgentStore>>,
+    messages:       Arc<Mutex<knot_messaging::MessageStore>>,
+    settings:       knot_core::Settings,
     dashboard_sort: dashboard::DashboardSort,
 }
 
 impl CommandCenterWindow {
-    pub(crate) fn open(
-        store: Arc<Mutex<knot_agents::AgentStore>>,
-        messages: Arc<Mutex<knot_messaging::MessageStore>>, settings: knot_core::Settings,
-        cx: &mut App,
-    ) {
+    pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                       settings: knot_core::Settings, cx: &mut App) {
         let options = command_center_window_options(cx);
-        if let Err(error) = cx.open_window(options, move |window, cx| {
-            window.set_window_title(&knot_core::l10n::t("dashboard.command_center"));
-            let view = cx.new(|_| CommandCenterWindow {
-                store,
-                messages,
-                settings,
-                dashboard_sort: dashboard::DashboardSort::default(),
-            });
-            cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-        }) {
+        if let Err(error) =
+            cx.open_window(options, move |window, cx| {
+                  window.set_window_title(&knot_core::l10n::t("dashboard.command_center"));
+                  let view =
+                      cx.new(|_| CommandCenterWindow { store,
+                                                       messages,
+                                                       settings,
+                                                       dashboard_sort:
+                                                           dashboard::DashboardSort::default() });
+                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+              })
+        {
             eprintln!("failed to open command center window: {error}");
         }
     }
@@ -34,19 +34,17 @@ impl CommandCenterWindow {
             .lock()
             .ok()
             .and_then(|store| {
-                store
-                    .workspaces()
-                    .iter()
-                    .find(|workspace| workspace.id == workspace_id)
-                    .map(|workspace| {
-                        let folder = workspace
-                            .agent_ids
-                            .iter()
-                            .filter_map(|id| store.agent(*id))
-                            .next()
-                            .map(|agent| agent.folder.clone());
-                        (folder, workspace.agent_ids.last().copied())
-                    })
+                store.workspaces()
+                     .iter()
+                     .find(|workspace| workspace.id == workspace_id)
+                     .map(|workspace| {
+                         let folder = workspace.agent_ids
+                                               .iter()
+                                               .filter_map(|id| store.agent(*id))
+                                               .next()
+                                               .map(|agent| agent.folder.clone());
+                         (folder, workspace.agent_ids.last().copied())
+                     })
             })
             .unwrap_or((None, None))
     }
@@ -57,46 +55,49 @@ impl Render for CommandCenterWindow {
         let muted = cx.theme().muted_foreground;
         let dashboard_workspaces = {
             let store = self.store.lock().unwrap();
-            store
-                .workspaces()
-                .iter()
-                .map(|workspace| {
-                    let dash_agents = workspace
-                        .agent_ids
-                        .iter()
-                        .filter_map(|id| store.agent(*id))
-                        .filter(|agent| !agent.is_companion)
-                        .map(|agent| {
-                            let folder_name = PathBuf::from(&agent.folder)
-                                .file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| agent.folder.clone());
-                            let git_stats = Repository::open(&agent.folder).diff_stats().ok();
-                            dashboard::DashboardAgent {
-                                id: agent.id,
-                                avatar: agent
-                                    .avatar
-                                    .graphemes(true)
-                                    .next()
-                                    .unwrap_or("🤖")
-                                    .to_string(),
-                                name: agent.name.clone(),
-                                folder_name,
-                                state: agent.state,
-                                is_shell: agent.is_shell(),
-                                header_title: agent.header_title().to_string(),
-                                git_stats,
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    dashboard::DashboardWorkspace {
-                        id: workspace.id,
-                        name: workspace.name.clone(),
-                        color_hex: workspace.color_hex.clone(),
-                        agents: self.dashboard_sort.sorted(dash_agents),
-                    }
-                })
-                .collect::<Vec<_>>()
+            store.workspaces()
+                 .iter()
+                 .map(|workspace| {
+                     let dash_agents =
+                         workspace.agent_ids
+                                  .iter()
+                                  .filter_map(|id| store.agent(*id))
+                                  .filter(|agent| !agent.is_companion)
+                                  .map(|agent| {
+                                      let folder_name =
+                                          PathBuf::from(&agent.folder).file_name()
+                                                                      .map(|name| {
+                                                                          name.to_string_lossy()
+                                                                              .into_owned()
+                                                                      })
+                                                                      .unwrap_or_else(|| {
+                                                                          agent.folder.clone()
+                                                                      });
+                                      let git_stats =
+                                          Repository::open(&agent.folder).diff_stats().ok();
+                                      dashboard::DashboardAgent { id: agent.id,
+                                                                  avatar: agent.avatar
+                                                                               .graphemes(true)
+                                                                               .next()
+                                                                               .unwrap_or("🤖")
+                                                                               .to_string(),
+                                                                  name: agent.name.clone(),
+                                                                  folder_name,
+                                                                  state: agent.state,
+                                                                  is_shell: agent.is_shell(),
+                                                                  header_title:
+                                                                      agent.header_title()
+                                                                           .to_string(),
+                                                                  git_stats }
+                                  })
+                                  .collect::<Vec<_>>();
+                     dashboard::DashboardWorkspace { id:        workspace.id,
+                                                     name:      workspace.name.clone(),
+                                                     color_hex: workspace.color_hex.clone(),
+                                                     agents:    self.dashboard_sort
+                                                                    .sorted(dash_agents), }
+                 })
+                 .collect::<Vec<_>>()
         };
 
         let weak = cx.entity().downgrade();
