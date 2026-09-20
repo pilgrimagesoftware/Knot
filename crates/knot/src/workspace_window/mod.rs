@@ -1317,10 +1317,10 @@ impl WorkspaceWindow {
     #[allow(clippy::too_many_arguments)]
     fn render_panel_input_area(&mut self, id: Uuid, input: &Entity<TextareaState>,
                                pending_context: &[PathBuf], expanded: bool, blocked: bool,
-                               turn_active: bool, config_options: &[knot_acp::ConfigOption],
+                               _turn_active: bool, config_options: &[knot_acp::ConfigOption],
                                cx: &mut Context<Self>)
                                -> impl IntoElement {
-        let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        let can_send = !blocked && !input.read(cx).value().trim().is_empty();
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
         let send_tooltip = if shift_to_send {
             "Send (Shift+Enter)"
@@ -1876,17 +1876,27 @@ impl WorkspaceWindow {
                 panel_session::PanelSessionSlot::Ready(handle) => {
                     let state = handle.state();
                     let state = state.lock().unwrap();
-                    let ready = state.pending_permission.is_none() && !state.turn_active;
+                    let ready = state.pending_permission.is_none();
                     drop(state);
                     ready.then(|| {
-                             handle.record_user_message(text.clone());
-                             (handle.session(), handle.recorder())
+                             let state_arc = handle.state();
+                             let mut state = state_arc.lock().unwrap();
+                             if state.turn_active {
+                                 state.enqueue_prompt(text.clone());
+                                 handle.mark_dirty();
+                                 None
+                             }
+                             else {
+                                 state.push_user_message(text.clone());
+                                 handle.mark_dirty();
+                                 Some((handle.session(), handle.recorder()))
+                             }
                          })
                 }
                 _ => None,
             }
         };
-        let Some((session, recorder)) = session
+        let Some(session) = session
         else {
             self.panel_pending_context.insert(id, context);
             return;
@@ -1895,17 +1905,19 @@ impl WorkspaceWindow {
               state.set_value("", window, cx);
           });
         let _runtime_guard = self.runtime.enter();
-        self.runtime.spawn(async move {
-                        if let Err(error) = session.prompt(&text).await {
-                            // Shown under the prompt it belongs to, and
-                            // it ends the turn - an error response is all
-                            // the answer this prompt gets, so the
-                            // composer must not stay blocked waiting for
-                            // a `TurnEnd` that will never arrive.
-                            recorder.error(format!("The agent could not answer: {error}"));
-                            eprintln!("failed to send panel prompt: {error}");
-                        }
-                    });
+        if let Some((session, recorder)) = session {
+            self.runtime.spawn(async move {
+                            if let Err(error) = session.prompt(&text).await {
+                                // Shown under the prompt it belongs to, and
+                                // it ends the turn - an error response is all
+                                // the answer this prompt gets, so the
+                                // composer must not stay blocked waiting for
+                                // a `TurnEnd` that will never arrive.
+                                recorder.error(format!("The agent could not answer: {error}"));
+                                eprintln!("failed to send panel prompt: {error}");
+                            }
+                        });
+        }
         cx.notify();
     }
 

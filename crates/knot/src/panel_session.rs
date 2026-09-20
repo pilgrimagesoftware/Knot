@@ -36,6 +36,7 @@ impl PanelSessionHandle {
 
         let drain_state = Arc::clone(&state);
         let drain_dirty = Arc::clone(&dirty);
+        let drain_session = session.clone();
         tokio::spawn(async move {
             while let Some(event) = events.recv().await {
                 let ended = matches!(event, SessionEvent::Ended(_));
@@ -43,6 +44,7 @@ impl PanelSessionHandle {
                     state.apply(event);
                 }
                 drain_dirty.store(true, Ordering::SeqCst);
+                deliver_pending(&drain_session, &drain_state, &drain_dirty).await;
                 if ended {
                     break;
                 }
@@ -65,6 +67,10 @@ impl PanelSessionHandle {
     /// Whether new events arrived since the last call; clears the flag.
     pub fn take_dirty(&self) -> bool {
         self.dirty.swap(false, Ordering::SeqCst)
+    }
+
+    pub fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::SeqCst);
     }
 
     pub async fn prompt(&self, text: &str) -> AcpResult<()> {
@@ -104,6 +110,12 @@ impl PanelSessionHandle {
             state.resolve_permission();
         }
         self.dirty.store(true, Ordering::SeqCst);
+        let session = self.session.clone();
+        let state = Arc::clone(&self.state);
+        let dirty = Arc::clone(&self.dirty);
+        tokio::spawn(async move {
+            deliver_pending(&session, &state, &dirty).await;
+        });
     }
 
     /// Turns off auto-scroll for the in-flight response, per the track
@@ -165,6 +177,27 @@ impl PanelSessionHandle {
 
     pub async fn stop(&self) {
         self.session.stop().await;
+    }
+}
+
+async fn deliver_pending(session: &AcpSession, state: &Arc<Mutex<PanelState>>,
+                         dirty: &Arc<AtomicBool>) {
+    loop {
+        let prompt = state.lock()
+                          .ok()
+                          .and_then(|mut state| state.take_pending_delivery());
+        let Some(prompt) = prompt
+        else {
+            return;
+        };
+        if let Err(error) = session.prompt(&prompt).await {
+            if let Ok(mut state) = state.lock() {
+                state.push_error(format!("The agent could not answer: {error}"));
+                state.promote_after_delivery_failure();
+            }
+            dirty.store(true, Ordering::SeqCst);
+            eprintln!("failed to send queued panel prompt: {error}");
+        }
     }
 }
 
