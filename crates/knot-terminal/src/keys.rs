@@ -8,12 +8,12 @@
 /// canonical list this mirrors.
 #[derive(Debug, Clone, Copy)]
 pub struct KeyInput<'a> {
-    pub key:      &'a str,
+    pub key: &'a str,
     /// The character this key would insert with no modifiers held, if any
     /// (`None` for pure control keys like a bare Cmd chord).
     pub key_char: Option<&'a str>,
-    pub control:  bool,
-    pub alt:      bool,
+    pub control: bool,
+    pub alt: bool,
 }
 
 /// Returns the bytes to write to a PTY for this key press, or `None` if
@@ -44,8 +44,7 @@ pub fn key_to_bytes(input: KeyInput<'_>) -> Option<Vec<u8>> {
     }
     if text.is_empty() {
         None
-    }
-    else {
+    } else {
         Some(text.into_bytes())
     }
 }
@@ -97,8 +96,7 @@ fn control_byte(key: &str) -> Option<u8> {
     let upper = ch.to_ascii_uppercase();
     if upper.is_ascii() && (0x3F..=0x5F).contains(&(upper as u8)) {
         Some(upper as u8 & 0x1F)
-    }
-    else {
+    } else {
         None
     }
 }
@@ -108,48 +106,60 @@ mod tests {
     use super::*;
 
     fn key(key: &str) -> KeyInput<'_> {
-        KeyInput { key,
-                   key_char: None,
-                   control: false,
-                   alt: false }
+        KeyInput {
+            key,
+            key_char: None,
+            control: false,
+            alt: false,
+        }
     }
 
     #[test]
     fn printable_letter_sends_its_key_char() {
-        let input = KeyInput { key:      "a",
-                               key_char: Some("a"),
-                               control:  false,
-                               alt:      false, };
+        let input = KeyInput {
+            key: "a",
+            key_char: Some("a"),
+            control: false,
+            alt: false,
+        };
         assert_eq!(key_to_bytes(input), Some(b"a".to_vec()));
     }
 
     #[test]
     fn shifted_letter_sends_the_shifted_key_char() {
-        let input = KeyInput { key:      "a",
-                               key_char: Some("A"),
-                               control:  false,
-                               alt:      false, };
+        let input = KeyInput {
+            key: "a",
+            key_char: Some("A"),
+            control: false,
+            alt: false,
+        };
         assert_eq!(key_to_bytes(input), Some(b"A".to_vec()));
     }
 
     #[test]
     fn ctrl_c_sends_end_of_text() {
-        let input = KeyInput { control: true,
-                               ..key("c") };
+        let input = KeyInput {
+            control: true,
+            ..key("c")
+        };
         assert_eq!(key_to_bytes(input), Some(vec![0x03]));
     }
 
     #[test]
     fn ctrl_d_sends_end_of_transmission() {
-        let input = KeyInput { control: true,
-                               ..key("d") };
+        let input = KeyInput {
+            control: true,
+            ..key("d")
+        };
         assert_eq!(key_to_bytes(input), Some(vec![0x04]));
     }
 
     #[test]
     fn enter_sends_carriage_return_not_key_char() {
-        let input = KeyInput { key_char: Some("\n"),
-                               ..key("enter") };
+        let input = KeyInput {
+            key_char: Some("\n"),
+            ..key("enter")
+        };
         assert_eq!(key_to_bytes(input), Some(b"\r".to_vec()));
     }
 
@@ -169,16 +179,20 @@ mod tests {
 
     #[test]
     fn alt_prefixes_with_escape() {
-        let input = KeyInput { key_char: Some("b"),
-                               alt: true,
-                               ..key("b") };
+        let input = KeyInput {
+            key_char: Some("b"),
+            alt: true,
+            ..key("b")
+        };
         assert_eq!(key_to_bytes(input), Some(b"\x1bb".to_vec()));
     }
 
     #[test]
     fn bare_modifier_key_produces_nothing() {
-        let input = KeyInput { key_char: None,
-                               ..key("control") };
+        let input = KeyInput {
+            key_char: None,
+            ..key("control")
+        };
         assert_eq!(key_to_bytes(input), None);
     }
 }

@@ -1,15 +1,15 @@
 use super::*;
 pub(crate) struct WorkspaceManager {
-    pub(crate) store:                 Arc<Mutex<knot_agents::AgentStore>>,
-    pub(crate) messages:              Arc<Mutex<knot_messaging::MessageStore>>,
-    pub(crate) settings:              knot_core::Settings,
-    pub(crate) name_input:            Entity<InputState>,
-    pub(crate) editing_id:            Option<Uuid>,
-    pub(crate) workspace_dialog_id:   Option<Uuid>,
+    pub(crate) store: Arc<Mutex<knot_agents::AgentStore>>,
+    pub(crate) messages: Arc<Mutex<knot_messaging::MessageStore>>,
+    pub(crate) settings: knot_core::Settings,
+    pub(crate) name_input: Entity<InputState>,
+    pub(crate) editing_id: Option<Uuid>,
+    pub(crate) workspace_dialog_id: Option<Uuid>,
     pub(crate) show_workspace_dialog: bool,
-    pub(crate) delete_workspace_id:   Option<Uuid>,
-    pub(crate) error:                 Option<String>,
-    pub(crate) _mcp_stop:             Option<tokio::sync::oneshot::Sender<()>>,
+    pub(crate) delete_workspace_id: Option<Uuid>,
+    pub(crate) error: Option<String>,
+    pub(crate) _mcp_stop: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 #[derive(Clone)]
@@ -25,8 +25,7 @@ impl Render for WorkspaceDragPreview {
 
 impl WorkspaceManager {
     fn persist(&mut self) {
-        let Ok(store) = self.store.lock()
-        else {
+        let Ok(store) = self.store.lock() else {
             self.error = Some("Agent store is unavailable.".to_string());
             return;
         };
@@ -38,8 +37,10 @@ impl WorkspaceManager {
         }
     }
 
-    fn save_name(&mut self, name: String, editing_id: Option<Uuid>, window: &mut Window,
-                 cx: &mut Context<Self>) {
+    fn save_name(
+        &mut self, name: String, editing_id: Option<Uuid>, window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if name.is_empty() {
             self.error = Some("Workspace name cannot be empty.".to_string());
             cx.notify();
@@ -52,21 +53,22 @@ impl WorkspaceManager {
                 cx.notify();
                 return;
             }
-        }
-        else {
+        } else {
             let id = Uuid::new_v4();
-            store.add_workspace(knot_core::Workspace { id,
-                                                       name,
-                                                       color_hex: "#1B4FB2".to_string(),
-                                                       agent_ids: Vec::new(),
-                                                       layout_mode: "single".to_string(),
-                                                       active_agent_ids: Vec::new(),
-                                                       focused_pane_index: 0,
-                                                       split_ratio: 0.5,
-                                                       split_ratio_secondary: None,
-                                                       show_dashboard: None,
-                                                       is_detached: None,
-                                                       window_bounds: None });
+            store.add_workspace(knot_core::Workspace {
+                id,
+                name,
+                color_hex: "#1B4FB2".to_string(),
+                agent_ids: Vec::new(),
+                layout_mode: "single".to_string(),
+                active_agent_ids: Vec::new(),
+                focused_pane_index: 0,
+                split_ratio: 0.5,
+                split_ratio_secondary: None,
+                show_dashboard: None,
+                is_detached: None,
+                window_bounds: None,
+            });
             store.set_current_workspace(id);
         }
         drop(store);
@@ -74,30 +76,32 @@ impl WorkspaceManager {
         self.editing_id = None;
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
-              input.clean(window, input_cx);
-          });
+            input.clean(window, input_cx);
+        });
         cx.notify();
     }
 
-    fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>, window: &mut Window,
-                             cx: &mut Context<Self>) {
-        let name =
-            editing_id.and_then(|id| {
-                          self.store.lock().ok().and_then(|store| {
-                                                    store.workspaces()
-                                                         .iter()
-                                                         .find(|workspace| workspace.id == id)
-                                                         .map(|workspace| workspace.name.clone())
-                                                })
-                      })
-                      .unwrap_or_default();
+    fn open_workspace_dialog(
+        &mut self, editing_id: Option<Uuid>, window: &mut Window, cx: &mut Context<Self>,
+    ) {
+        let name = editing_id
+            .and_then(|id| {
+                self.store.lock().ok().and_then(|store| {
+                    store
+                        .workspaces()
+                        .iter()
+                        .find(|workspace| workspace.id == id)
+                        .map(|workspace| workspace.name.clone())
+                })
+            })
+            .unwrap_or_default();
         self.workspace_dialog_id = editing_id;
         self.show_workspace_dialog = true;
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
-              input.set_value(name, window, input_cx);
-              input.focus(window, input_cx);
-          });
+            input.set_value(name, window, input_cx);
+            input.focus(window, input_cx);
+        });
         cx.notify();
     }
 
@@ -106,8 +110,8 @@ impl WorkspaceManager {
         self.show_workspace_dialog = false;
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
-              input.clean(window, input_cx);
-          });
+            input.clean(window, input_cx);
+        });
         cx.notify();
     }
 
@@ -125,8 +129,7 @@ impl WorkspaceManager {
     fn delete(&mut self, id: Uuid, cx: &mut Context<Self>) {
         if !self.store.lock().unwrap().remove_workspace(id) {
             self.error = Some("At least one workspace must remain.".to_string());
-        }
-        else {
+        } else {
             self.persist();
             self.error = None;
         }
@@ -145,18 +148,18 @@ impl WorkspaceManager {
     }
 
     fn confirm_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.delete_workspace_id.take()
-        else {
+        let Some(id) = self.delete_workspace_id.take() else {
             return;
         };
         self.delete(id, cx);
     }
 
     fn move_before(&mut self, id: Uuid, target_id: Uuid, cx: &mut Context<Self>) {
-        if self.store
-               .lock()
-               .unwrap()
-               .move_workspace_before(id, target_id)
+        if self
+            .store
+            .lock()
+            .unwrap()
+            .move_workspace_before(id, target_id)
         {
             self.persist();
             cx.notify();
@@ -170,30 +173,30 @@ impl WorkspaceManager {
 
     fn open(&mut self, id: Uuid, cx: &mut Context<Self>) {
         self.select(id, cx);
-        WorkspaceWindow::open(Arc::clone(&self.store),
-                              Arc::clone(&self.messages),
-                              self.settings.clone(),
-                              id,
-                              cx);
+        WorkspaceWindow::open(
+            Arc::clone(&self.store),
+            Arc::clone(&self.messages),
+            self.settings.clone(),
+            id,
+            cx,
+        );
     }
 }
 
 impl Render for WorkspaceManager {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let workspaces = self.store.lock().unwrap().workspaces().to_vec();
-        let delete_name =
-            self.delete_workspace_id.and_then(|id| {
-                                        workspaces.iter()
-                                                  .find(|workspace| workspace.id == id)
-                                                  .map(|workspace| workspace.name.clone())
-                                    });
+        let delete_name = self.delete_workspace_id.and_then(|id| {
+            workspaces
+                .iter()
+                .find(|workspace| workspace.id == id)
+                .map(|workspace| workspace.name.clone())
+        });
         let rows = workspaces.into_iter().map(|workspace| {
-                                             let id = workspace.id;
-                                             let agent_count = workspace.agent_ids.len();
-                                             let selected =
-                                                 self.store.lock().unwrap().current_workspace_id()
-                                                 == Some(id);
-                                             h_flex()
+            let id = workspace.id;
+            let agent_count = workspace.agent_ids.len();
+            let selected = self.store.lock().unwrap().current_workspace_id() == Some(id);
+            h_flex()
                 .id(format!("workspace-row-{id}"))
                 .on_drop(
                     cx.listener(move |manager, drag: &WorkspaceDrag, _window, cx| {
@@ -204,14 +207,15 @@ impl Render for WorkspaceManager {
                 // workspace" button; a single click only selects, so a
                 // click on the way to a rename or delete doesn't open a
                 // window.
-                .on_click(cx.listener(move |manager, event: &ClickEvent, _window, cx| {
-                    if event.click_count() >= 2 {
-                        manager.open(id, cx);
-                    }
-                    else {
-                        manager.select(id, cx);
-                    }
-                }))
+                .on_click(
+                    cx.listener(move |manager, event: &ClickEvent, _window, cx| {
+                        if event.click_count() >= 2 {
+                            manager.open(id, cx);
+                        } else {
+                            manager.select(id, cx);
+                        }
+                    }),
+                )
                 .cursor_pointer()
                 .w_full()
                 .items_center()
@@ -276,7 +280,7 @@ impl Render for WorkspaceManager {
                             cx.new(|_| WorkspaceDragPreview)
                         }),
                 )
-                                         });
+        });
 
         v_flex()
             .size_full()

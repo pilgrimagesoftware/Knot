@@ -13,13 +13,16 @@ fn version_returns_trimmed_stdout() {
 #[test]
 fn non_zero_exit_carries_output_and_code() {
     let dir = tempfile::tempdir().unwrap();
-    let err = Runner::new(dir.path()).run(&["rev-parse", "--bogus"])
-                                     .unwrap_err();
+    let err = Runner::new(dir.path())
+        .run(&["rev-parse", "--bogus"])
+        .unwrap_err();
 
     match err {
-        GitError::Command { command,
-                            output,
-                            code, } => {
+        GitError::Command {
+            command,
+            output,
+            code,
+        } => {
             assert_eq!(command, "rev-parse --bogus");
             assert_ne!(code, 0);
             assert!(!output.is_empty());

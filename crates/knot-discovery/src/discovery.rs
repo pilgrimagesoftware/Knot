@@ -14,7 +14,7 @@ use crate::scan::{RepoInfo, scan};
 /// scan, a non-recursive watch on the folder, and a debounced rescan that
 /// coalesces bursts. Results are published on a [`watch`] channel.
 pub struct Discovery {
-    tx:     watch::Sender<Vec<RepoInfo>>,
+    tx: watch::Sender<Vec<RepoInfo>>,
     active: Mutex<Option<ActiveWatch>>,
 }
 
@@ -26,7 +26,7 @@ pub struct Discovery {
 /// write - a real, not just CI-timing, "stale event after switch" race.
 struct ActiveWatch {
     watcher: RecommendedWatcher,
-    task:    JoinHandle<()>,
+    task: JoinHandle<()>,
 }
 
 impl Discovery {
@@ -34,8 +34,10 @@ impl Discovery {
     /// published on. The receiver starts holding an empty list.
     pub fn new() -> (Self, watch::Receiver<Vec<RepoInfo>>) {
         let (tx, rx) = watch::channel(Vec::new());
-        let discovery = Self { tx,
-                               active: Mutex::new(None) };
+        let discovery = Self {
+            tx,
+            active: Mutex::new(None),
+        };
         (discovery, rx)
     }
 
@@ -81,8 +83,10 @@ impl Discovery {
 /// `base` - which `is_relevant` would otherwise treat as always-relevant,
 /// restarting the debounce forever. macOS's FSEvents backend doesn't report
 /// plain opens this way, so this feedback loop is Linux-only.
-async fn watch_loop(mut events: mpsc::UnboundedReceiver<notify::Event>, base: PathBuf,
-                    tx: watch::Sender<Vec<RepoInfo>>) {
+async fn watch_loop(
+    mut events: mpsc::UnboundedReceiver<notify::Event>, base: PathBuf,
+    tx: watch::Sender<Vec<RepoInfo>>,
+) {
     let mut deadline: Option<Instant> = None;
 
     loop {
@@ -117,21 +121,19 @@ async fn watch_loop(mut events: mpsc::UnboundedReceiver<notify::Event>, base: Pa
 /// (a repo folder appearing or disappearing), or a child's `.git` entry.
 /// Deeper working-tree churn is ignored.
 fn is_relevant(path: &Path, base: &Path) -> bool {
-    let Ok(rel) = path.strip_prefix(base)
-    else {
+    let Ok(rel) = path.strip_prefix(base) else {
         return false;
     };
     let mut components = rel.components();
-    let Some(first) = components.next()
-    else {
+    let Some(first) = components.next() else {
         return true;
     };
     match components.next() {
         None => true,
         Some(second) => {
             components.next().is_none()
-            && second.as_os_str() == GIT_DIR
-            && first.as_os_str() != GIT_DIR
+                && second.as_os_str() == GIT_DIR
+                && first.as_os_str() != GIT_DIR
         }
     }
 }

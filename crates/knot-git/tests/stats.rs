@@ -18,8 +18,9 @@ fn untracked_file_contributes_its_lines_and_one_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
     init_repo(path);
-    Runner::new(path).run(&["commit", "-qm", "empty", "--allow-empty"])
-                     .unwrap();
+    Runner::new(path)
+        .run(&["commit", "-qm", "empty", "--allow-empty"])
+        .unwrap();
 
     let body: String = (0..12).map(|n| format!("line {n}\n")).collect();
     fs::write(path.join("notes.txt"), body).unwrap();

@@ -7,23 +7,25 @@ use uuid::Uuid;
 /// an app restart.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
-    pub id:        Uuid,
-    pub from:      Uuid,
-    pub to:        Uuid,
-    pub content:   String,
+    pub id: Uuid,
+    pub from: Uuid,
+    pub to: Uuid,
+    pub content: String,
     pub timestamp: SystemTime,
-    pub is_read:   bool,
+    pub is_read: bool,
 }
 
 impl Message {
     /// Mints a fresh unread message.
     pub fn new(from: Uuid, to: Uuid, content: impl Into<String>) -> Self {
-        Self { id: Uuid::new_v4(),
-               from,
-               to,
-               content: content.into(),
-               timestamp: SystemTime::now(),
-               is_read: false }
+        Self {
+            id: Uuid::new_v4(),
+            from,
+            to,
+            content: content.into(),
+            timestamp: SystemTime::now(),
+            is_read: false,
+        }
     }
 }
 

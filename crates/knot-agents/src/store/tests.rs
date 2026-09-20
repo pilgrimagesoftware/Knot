@@ -23,14 +23,21 @@ fn insert_after_a_sibling() {
     let mut store = store();
     let first = store.create("/tmp/a", CreateOptions::default());
     let last = store.create("/tmp/c", CreateOptions::default());
-    let middle = store.create("/tmp/b",
-                              CreateOptions { insert_after: Some(first),
-                                              ..Default::default() });
-    assert_eq!(store.agents()
-                    .iter()
-                    .map(|agent| agent.id)
-                    .collect::<Vec<_>>(),
-               vec![first, middle, last]);
+    let middle = store.create(
+        "/tmp/b",
+        CreateOptions {
+            insert_after: Some(first),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        store
+            .agents()
+            .iter()
+            .map(|agent| agent.id)
+            .collect::<Vec<_>>(),
+        vec![first, middle, last]
+    );
     assert_eq!(store.workspaces()[0].agent_ids, vec![first, middle, last]);
 }
 
@@ -61,8 +68,10 @@ fn panels_and_bench_behave_as_expected() {
     store.set_markdown_panel(id, a.clone(), false).unwrap();
     store.set_markdown_panel(id, b.clone(), false).unwrap();
     store.set_markdown_panel(id, a.clone(), true).unwrap();
-    assert_eq!(store.agent(id).unwrap().markdown_history,
-               vec![a.clone(), b]);
+    assert_eq!(
+        store.agent(id).unwrap().markdown_history,
+        vec![a.clone(), b]
+    );
     assert!(store.agent(id).unwrap().markdown_maximized);
     let bench = knot_core::BenchAgent::new(Uuid::new_v4(), "Ghost", None, "/missing");
     assert!(store.deploy_bench(&bench, |_| false).is_none());

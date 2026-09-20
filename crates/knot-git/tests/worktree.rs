@@ -23,8 +23,9 @@ fn create_worktree_makes_a_linked_working_tree() {
     init_repo(&repo_path);
 
     let dest = dir.path().join("repo-feature");
-    Repository::open(&repo_path).create_worktree("feature", &dest)
-                                .unwrap();
+    Repository::open(&repo_path)
+        .create_worktree("feature", &dest)
+        .unwrap();
 
     assert!(is_working_tree(&dest));
     // A linked worktree's `.git` is a file, not a directory.

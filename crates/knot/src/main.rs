@@ -15,9 +15,9 @@ mod terminal_view;
 #[cfg(test)]
 mod tests;
 mod window_options;
+mod working_indicator;
 mod workspace_manager;
 mod workspace_window;
-mod working_indicator;
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
