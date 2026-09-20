@@ -31,6 +31,12 @@ pub(crate) enum DetailLineSize {
     Body,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QueuedPanelPrompt {
+    text:   String,
+    failed: bool,
+}
+
 /// One labelled detail line on an agent row: a leading icon saying what the
 /// line is, then the text.
 ///
@@ -42,33 +48,30 @@ pub(crate) enum DetailLineSize {
 /// `whitespace_nowrap`, so a name like "DevOps Troubleshooter" wraps onto a
 /// second line, and a centred icon floats into the gap between the two. On a
 /// single-line row the two are indistinguishable.
-pub(crate) fn detail_line(
-    icon: gpui_kit::assets::IconName, text: String, size: DetailLineSize, font_family: String,
-    font_size: gpui_kit::Pixels, cx: &App,
-) -> gpui_kit::AnyElement {
+pub(crate) fn detail_line(icon: gpui_kit::assets::IconName, text: String, size: DetailLineSize,
+                          font_family: String, font_size: gpui_kit::Pixels, cx: &App)
+                          -> gpui_kit::AnyElement {
     let muted = cx.theme().muted_foreground;
     let icon = match size {
         DetailLineSize::Small => Icon::new(icon).xsmall(),
         DetailLineSize::Body => Icon::new(icon).small(),
     };
-    let line = div()
-        .font_family(font_family)
-        .text_size(font_size)
-        .text_color(muted);
+    let line = div().font_family(font_family)
+                    .text_size(font_size)
+                    .text_color(muted);
     let line = match size {
         DetailLineSize::Small => line.text_xs(),
         // The status and folder lines truncate rather than wrap, which is
         // what keeps a long path from growing the row.
         DetailLineSize::Body => line.overflow_hidden().whitespace_nowrap().text_ellipsis(),
     };
-    h_flex()
-        .w_full()
-        .min_w_0()
-        .gap_1()
-        .items_start()
-        .child(icon.text_color(muted).flex_shrink_0())
-        .child(line.min_w_0().child(text))
-        .into_any_element()
+    h_flex().w_full()
+            .min_w_0()
+            .gap_1()
+            .items_start()
+            .child(icon.text_color(muted).flex_shrink_0())
+            .child(line.min_w_0().child(text))
+            .into_any_element()
 }
 
 /// Whether an agent of this type runs a terminal process of its own.
@@ -89,18 +92,17 @@ pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
 /// otherwise-unresolvable persisted value (an old default, a font that was
 /// uninstalled, a font-panel value AppKit accepts but GPUI's lookup
 /// doesn't) silently falling back further to the proportional UI font.
-pub(crate) fn terminal_font_family(
-    settings: &knot_core::Settings, cx: &App,
-) -> gpui_kit::SharedString {
+pub(crate) fn terminal_font_family(settings: &knot_core::Settings, cx: &App)
+                                   -> gpui_kit::SharedString {
     let requested = &settings.terminal_font_name;
-    if cx
-        .text_system()
-        .all_font_names()
-        .iter()
-        .any(|name| name == requested)
+    if cx.text_system()
+         .all_font_names()
+         .iter()
+         .any(|name| name == requested)
     {
         requested.clone().into()
-    } else {
+    }
+    else {
         "JetBrains Mono".into()
     }
 }
@@ -111,20 +113,16 @@ pub(crate) fn terminal_font_family(
 /// the pane, so content the running program draws near what it thinks is
 /// the bottom (an input box, a status line) ends up laid out below the
 /// visible container and never appears.
-pub(crate) fn terminal_cell_size(
-    cx: &App, font_family: gpui_kit::SharedString, font_size: gpui_kit::Pixels,
-) -> (f32, f32) {
+pub(crate) fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString,
+                                 font_size: gpui_kit::Pixels)
+                                 -> (f32, f32) {
     let font_id = cx.text_system().resolve_font(&gpui_kit::font(font_family));
-    let width = cx
-        .text_system()
-        .em_advance(font_id, font_size)
-        .unwrap_or(px(8.));
+    let width = cx.text_system()
+                  .em_advance(font_id, font_size)
+                  .unwrap_or(px(8.));
     let ascent = cx.text_system().ascent(font_id, font_size);
     let descent = cx.text_system().descent(font_id, font_size);
-    (
-        f32::from(width).max(1.),
-        f32::from(ascent + descent).max(1.),
-    )
+    (f32::from(width).max(1.), f32::from(ascent + descent).max(1.))
 }
 
 /// The permission-mode selector's element id - the one selector with
@@ -145,116 +143,117 @@ const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
 /// rather than the tuple this used to be, per the repo convention against
 /// wide positional parameter lists.
 struct AgentRow {
-    id: Uuid,
-    avatar: String,
-    name: String,
-    folder: String,
-    state: knot_agents::AgentState,
-    is_shell: bool,
+    id:           Uuid,
+    avatar:       String,
+    name:         String,
+    folder:       String,
+    state:        knot_agents::AgentState,
+    is_shell:     bool,
     is_companion: bool,
     header_title: String,
     persona_name: Option<String>,
     /// The agent's coding-agent type (`claude`, `opencode`, ...), shown
     /// on the row so a one-letter avatar isn't the only clue to which
     /// agent is running there.
-    agent_type: String,
+    agent_type:   String,
     /// Whether the agent has a session. Keyed on liveness, not on
     /// activation mode: a `passive` agent that never started and a
     /// deactivated `active` one are in the same position - nothing is
     /// there - and the user needs to know which agents are live, not why
     /// each one is not.
-    is_running: bool,
+    is_running:   bool,
 }
 
 pub(crate) struct WorkspaceWindow {
     /// Last known diff stat per agent, refreshed off the render path - see
     /// `refresh_diff_stats`.
-    diff_stats: Arc<Mutex<BTreeMap<Uuid, Option<knot_git::DiffStats>>>>,
+    diff_stats:                       Arc<Mutex<BTreeMap<Uuid, Option<knot_git::DiffStats>>>>,
     /// When each agent's diff stat was last *requested*, so the refresh
     /// runs on a cadence rather than once per render. Main-thread only.
-    diff_stats_requested: BTreeMap<Uuid, std::time::Instant>,
+    diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off
     /// `clipboard_writes` uses.
-    exited_sessions: Arc<Mutex<Vec<Uuid>>>,
+    exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
     /// Keeps the window-bounds observer alive for this window's lifetime.
-    window_bounds_subscription: Option<gpui_kit::Subscription>,
+    window_bounds_subscription:       Option<gpui_kit::Subscription>,
     /// Set by a finished refresh so the repaint poll redraws the header.
-    diff_stats_dirty: Arc<std::sync::atomic::AtomicBool>,
+    diff_stats_dirty:                 Arc<std::sync::atomic::AtomicBool>,
     /// Which config selector's popover is open, by element id, or `None`
     /// when none is. One shared flag used to back all three: because every
     /// selector's `on_open_change` wrote it and the permission selector
     /// read it, clicking Model or Effort opened the *permission* menu.
-    open_config_selector: Option<&'static str>,
-    store: Arc<Mutex<knot_agents::AgentStore>>,
+    open_config_selector:             Option<&'static str>,
+    store:                            Arc<Mutex<knot_agents::AgentStore>>,
     /// Agent-to-agent messages, for the unread badge and the idle-time
     /// delivery nudge (`mcp-messaging`). Shared with the MCP server, which
     /// is what writes to it.
-    messages: Arc<Mutex<knot_messaging::MessageStore>>,
+    messages:                         Arc<Mutex<knot_messaging::MessageStore>>,
     /// The last message each agent has been nudged about, so an unread
     /// inbox produces one prompt rather than one per idle poll.
-    nudged_messages: BTreeMap<Uuid, Uuid>,
-    settings: knot_core::Settings,
-    workspace_id: Uuid,
-    selected_agent: Option<Uuid>,
-    sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
-    panel_states: BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
+    nudged_messages:                  BTreeMap<Uuid, Uuid>,
+    settings:                         knot_core::Settings,
+    workspace_id:                     Uuid,
+    selected_agent:                   Option<Uuid>,
+    sessions:                         BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
+    panel_states:                     BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
     /// `TerminalSession::spawn_pty` runs `tokio::spawn` for the activity
     /// tracker; the UI thread has no tokio runtime of its own, so enter
     /// this one around each spawn (see `ensure_session`).
-    runtime: tokio::runtime::Runtime,
+    runtime:                          tokio::runtime::Runtime,
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
-    terminal_focus: gpui_kit::FocusHandle,
+    terminal_focus:                   gpui_kit::FocusHandle,
     /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
     /// `on_grid_event` (which runs on the PTY reader thread) and drained
     /// by a polling loop onto the OS pasteboard via GPUI's main-thread
     /// clipboard API - the same background-thread-to-main-thread hand-off
     /// pattern `SettingsWindow` already uses for the native font panel.
-    clipboard_writes: Arc<Mutex<Vec<String>>>,
+    clipboard_writes:                 Arc<Mutex<Vec<String>>>,
     /// Live ACP connections for Panel-mode agents, keyed by agent id -
     /// independent of `sessions` (the terminal PTYs), per the
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
     /// here persists across a view-mode toggle, only stopped on restart.
-    panel_sessions: BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
+    panel_sessions:                   BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
     /// The lifecycle phase each panel session was in the last time the
     /// repaint poll looked, so a slot moving between phases repaints - see
     /// `panel_needs_repaint`.
-    panel_phases: BTreeMap<Uuid, panel_session::PanelPhase>,
+    panel_phases:                     BTreeMap<Uuid, panel_session::PanelPhase>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
-    panel_prompt_inputs: BTreeMap<Uuid, Entity<TextareaState>>,
+    panel_prompt_inputs:              BTreeMap<Uuid, Entity<TextareaState>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
     panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
+    panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
     /// One virtualized conversation list per Panel-mode agent that has
     /// been viewed, created lazily - the `ListState` backing
     /// `render_panel`'s virtualization, and the target of the response
     /// action bar's scroll-to-user/scroll-to-top controls and the track
     /// toggle's auto-scroll.
-    panel_lists: BTreeMap<Uuid, ListState>,
+    panel_lists:                      BTreeMap<Uuid, ListState>,
     /// The item count each `panel_lists` entry was last reconciled to, so
     /// `render_panel_pane` can `splice` only the rows that actually
     /// changed and leave off-screen rows' measured heights alone.
-    panel_list_row_counts: BTreeMap<Uuid, usize>,
-    working_indicator_last_repaint: std::time::Instant,
+    panel_list_row_counts:            BTreeMap<Uuid, usize>,
+    working_indicator_last_repaint:   std::time::Instant,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
-    panel_pending_context: BTreeMap<Uuid, Vec<PathBuf>>,
+    panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
-    panel_input_expanded: BTreeSet<Uuid>,
-    view_mode: WorkspaceViewMode,
-    dashboard_sort: dashboard::DashboardSort,
-    new_agent_name_input: Entity<InputState>,
-    new_agent_folder_input: Entity<InputState>,
-    show_new_agent: bool,
-    error: Option<String>,
+    panel_input_expanded:             BTreeSet<Uuid>,
+    view_mode:                        WorkspaceViewMode,
+    dashboard_sort:                   dashboard::DashboardSort,
+    new_agent_name_input:             Entity<InputState>,
+    new_agent_folder_input:           Entity<InputState>,
+    show_new_agent:                   bool,
+    error:                            Option<String>,
 }
 
 impl Drop for WorkspaceWindow {
@@ -268,11 +267,9 @@ impl Drop for WorkspaceWindow {
 }
 
 impl WorkspaceWindow {
-    pub(crate) fn open(
-        store: Arc<Mutex<knot_agents::AgentStore>>,
-        messages: Arc<Mutex<knot_messaging::MessageStore>>, settings: knot_core::Settings,
-        workspace_id: Uuid, cx: &mut App,
-    ) {
+    pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                       settings: knot_core::Settings, workspace_id: Uuid, cx: &mut App) {
         Self::open_with_selection(store, messages, settings, workspace_id, None, cx);
     }
 
@@ -280,55 +277,53 @@ impl WorkspaceWindow {
     /// by `agent_selection_for_workspace` - used when a caller (e.g. a
     /// Command Center card) already knows which agent the user wants to
     /// land on.
-    pub(crate) fn open_with_selection(
-        store: Arc<Mutex<knot_agents::AgentStore>>,
-        messages: Arc<Mutex<knot_messaging::MessageStore>>, settings: knot_core::Settings,
-        workspace_id: Uuid, select_agent: Option<Uuid>, cx: &mut App,
-    ) {
-        let workspace_name = store
-            .lock()
-            .ok()
-            .and_then(|store| {
-                store
-                    .workspaces()
-                    .iter()
-                    .find(|workspace| workspace.id == workspace_id)
-                    .map(|workspace| workspace.name.clone())
-            })
-            .unwrap_or_else(|| "Workspace".to_string());
+    pub(crate) fn open_with_selection(store: Arc<Mutex<knot_agents::AgentStore>>,
+                                      messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                                      settings: knot_core::Settings, workspace_id: Uuid,
+                                      select_agent: Option<Uuid>, cx: &mut App) {
+        let workspace_name = store.lock()
+                                  .ok()
+                                  .and_then(|store| {
+                                      store.workspaces()
+                                           .iter()
+                                           .find(|workspace| workspace.id == workspace_id)
+                                           .map(|workspace| workspace.name.clone())
+                                  })
+                                  .unwrap_or_else(|| "Workspace".to_string());
         let saved_bounds = store.lock().ok().and_then(|store| {
-            store
-                .workspaces()
-                .iter()
-                .find(|workspace| workspace.id == workspace_id)
-                .and_then(|workspace| workspace.window_bounds)
-        });
+                                                store.workspaces()
+                                                     .iter()
+                                                     .find(|workspace| workspace.id == workspace_id)
+                                                     .and_then(|workspace| workspace.window_bounds)
+                                            });
         let options = workspace_window_options(saved_bounds, cx);
-        if let Err(error) = cx.open_window(options, move |window, cx| {
-            // The OS window title (Mission Control, Cmd+`, Window menu)
-            // is separate from the TitleBar row we draw
-            // ourselves - without this it falls back to
-            // the app's bundle name for every workspace
-            // window.
-            window.set_window_title(&workspace_name);
-            // Order the new window front rather than letting it open
-            // behind whatever has focus - matching what the settings
-            // window already does when it reuses an open one.
-            window.activate_window();
-            let new_agent_name_input =
-                cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
-            let new_agent_folder_input =
-                cx.new(|cx| InputState::new(window, cx).placeholder("Agent folder path"));
-            let selected_agent = select_agent.or_else(|| {
-                store
+        if let Err(error) =
+            cx.open_window(options, move |window, cx| {
+                  // The OS window title (Mission Control, Cmd+`, Window menu)
+                  // is separate from the TitleBar row we draw
+                  // ourselves - without this it falls back to
+                  // the app's bundle name for every workspace
+                  // window.
+                  window.set_window_title(&workspace_name);
+                  // Order the new window front rather than letting it open
+                  // behind whatever has focus - matching what the settings
+                  // window already does when it reuses an open one.
+                  window.activate_window();
+                  let new_agent_name_input =
+                      cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
+                  let new_agent_folder_input =
+                      cx.new(|cx| InputState::new(window, cx).placeholder("Agent folder path"));
+                  let selected_agent = select_agent.or_else(|| {
+                                                       store
                     .lock()
                     .ok()
                     .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
-            });
-            let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
-            let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
-            let view = cx.new(|cx| {
-                let mut window = WorkspaceWindow {
+                                                   });
+                  let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
+                  let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
+                  let view =
+                      cx.new(|cx| {
+                            let mut window = WorkspaceWindow {
                     exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
                     diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
@@ -351,6 +346,7 @@ impl WorkspaceWindow {
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
+                    panel_prompt_queues: BTreeMap::new(),
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
                     working_indicator_last_repaint: std::time::Instant::now(),
@@ -363,128 +359,142 @@ impl WorkspaceWindow {
                     show_new_agent: false,
                     error: None,
                 };
-                // Matches the Swift reference: every agent in the
-                // workspace starts its session when the workspace
-                // window opens, not
-                // just the one initially selected.
-                let agent_ids: Vec<Uuid> = window
-                    .store
-                    .lock()
-                    .ok()
-                    .and_then(|store| {
-                        store
-                            .workspaces()
-                            .iter()
-                            .find(|workspace| workspace.id == workspace_id)
-                            .map(|workspace| workspace.agent_ids.clone())
+                            // Matches the Swift reference: every agent in the
+                            // workspace starts its session when the workspace
+                            // window opens, not
+                            // just the one initially selected.
+                            let agent_ids: Vec<Uuid> =
+                                window.store
+                                      .lock()
+                                      .ok()
+                                      .and_then(|store| {
+                                          store.workspaces()
+                                               .iter()
+                                               .find(|workspace| workspace.id == workspace_id)
+                                               .map(|workspace| workspace.agent_ids.clone())
+                                      })
+                                      .unwrap_or_default();
+                            if let Ok(mut store) = window.store.lock() {
+                                // The workspace's `active` agents start
+                                // here, and only they: `activated` is
+                                // runtime-only and loads false, so the
+                                // durable mode is consulted on every open.
+                                store.activate_on_workspace_open(&agent_ids);
+                                // An explicitly requested agent (a Command
+                                // Center card) is a selection, and starts
+                                // whatever its mode. The workspace's own
+                                // restored selection is not, so a `passive`
+                                // agent stays stopped across a relaunch.
+                                if let Some(requested) = select_agent {
+                                    store.set_activated(requested, true);
+                                }
+                            }
+                            for id in agent_ids {
+                                window.ensure_session(id);
+                                window.ensure_panel_session(id);
+                            }
+                            window
+                        });
+                  // Drains OSC 52 clipboard-store requests queued from the PTY
+                  // reader thread onto the OS pasteboard (see
+                  // `clipboard_writes`'s doc comment), and
+                  // repaints the terminal grid - the PTY reader
+                  // thread has no way to call `cx.notify()` itself, so without
+                  // this the grid only visibly updates on an unrelated UI event
+                  // (a keystroke, mouse move), making output look stalled after
+                  // e.g. pressing Enter.
+                  let notify_view = view.clone();
+                  let exited_drain = Arc::clone(&exited_sessions);
+                  cx.spawn(async move |cx| {
+                        loop {
+                            cx.background_executor()
+                              .timer(std::time::Duration::from_millis(33))
+                              .await;
+                            let texts =
+                                clipboard_writes.lock()
+                                                .map(|mut queue| std::mem::take(&mut *queue))
+                                                .unwrap_or_default();
+                            let exited = exited_drain.lock()
+                                                     .map(|mut queue| std::mem::take(&mut *queue))
+                                                     .unwrap_or_default();
+                            for text in texts {
+                                cx.update(|app| {
+                                      app.write_to_clipboard(ClipboardItem::new_string(text));
+                                  });
+                            }
+                            cx.update(|app| {
+                                  notify_view.update(app, |view, cx| {
+                                                 // A shell companion whose
+                                                 // process exited has nothing
+                                                 // left to show, so close it
+                                                 // rather than leaving a dead
+                                                 // pane that looks hung.
+                                                 for id in &exited {
+                                                     view.remove_agent(*id);
+                                                     cx.notify();
+                                                 }
+                                                 // Messages arrive from
+                                                 // the MCP server on another
+                                                 // thread; this poll is
+                                                 // where an agent going idle
+                                                 // is noticed.
+                                                 view.deliver_inbox_nudges();
+                                                 let grid_dirty =
+                                                     view.selected_agent
+                                                         .and_then(|id| view.sessions.get(&id))
+                                                         .and_then(|session| {
+                                                             session.lock().ok()?.grid()
+                                                         })
+                                                         .is_some_and(|grid| {
+                                                             grid.lock().unwrap().take_dirty()
+                                                         });
+                                                 let panel_dirty = view.panel_needs_repaint();
+                                                 if grid_dirty || panel_dirty {
+                                                     cx.notify();
+                                                 }
+                                             });
+                              });
+                        }
                     })
-                    .unwrap_or_default();
-                if let Ok(mut store) = window.store.lock() {
-                    // The workspace's `active` agents start
-                    // here, and only they: `activated` is
-                    // runtime-only and loads false, so the
-                    // durable mode is consulted on every open.
-                    store.activate_on_workspace_open(&agent_ids);
-                    // An explicitly requested agent (a Command
-                    // Center card) is a selection, and starts
-                    // whatever its mode. The workspace's own
-                    // restored selection is not, so a `passive`
-                    // agent stays stopped across a relaunch.
-                    if let Some(requested) = select_agent {
-                        store.set_activated(requested, true);
-                    }
-                }
-                for id in agent_ids {
-                    window.ensure_session(id);
-                    window.ensure_panel_session(id);
-                }
-                window
-            });
-            // Drains OSC 52 clipboard-store requests queued from the PTY
-            // reader thread onto the OS pasteboard (see
-            // `clipboard_writes`'s doc comment), and
-            // repaints the terminal grid - the PTY reader
-            // thread has no way to call `cx.notify()` itself, so without
-            // this the grid only visibly updates on an unrelated UI event
-            // (a keystroke, mouse move), making output look stalled after
-            // e.g. pressing Enter.
-            let notify_view = view.clone();
-            let exited_drain = Arc::clone(&exited_sessions);
-            cx.spawn(async move |cx| {
-                loop {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(33))
-                        .await;
-                    let texts = clipboard_writes
-                        .lock()
-                        .map(|mut queue| std::mem::take(&mut *queue))
-                        .unwrap_or_default();
-                    let exited = exited_drain
-                        .lock()
-                        .map(|mut queue| std::mem::take(&mut *queue))
-                        .unwrap_or_default();
-                    for text in texts {
-                        cx.update(|app| {
-                            app.write_to_clipboard(ClipboardItem::new_string(text));
-                        });
-                    }
-                    cx.update(|app| {
-                        notify_view.update(app, |view, cx| {
-                            // A shell companion whose
-                            // process exited has nothing
-                            // left to show, so close it
-                            // rather than leaving a dead
-                            // pane that looks hung.
-                            for id in &exited {
-                                view.remove_agent(*id);
-                                cx.notify();
-                            }
-                            // Messages arrive from
-                            // the MCP server on another
-                            // thread; this poll is
-                            // where an agent going idle
-                            // is noticed.
-                            view.deliver_inbox_nudges();
-                            let grid_dirty = view
-                                .selected_agent
-                                .and_then(|id| view.sessions.get(&id))
-                                .and_then(|session| session.lock().ok()?.grid())
-                                .is_some_and(|grid| grid.lock().unwrap().take_dirty());
-                            let panel_dirty = view.panel_needs_repaint();
-                            if grid_dirty || panel_dirty {
-                                cx.notify();
-                            }
-                        });
-                    });
-                }
-            })
-            .detach();
-            // Remember where the user puts this workspace's window.
-            // The observer fires continuously through a drag, so the
-            // store's setter reports whether the frame actually
-            // changed and only then is anything written to disk.
-            view.update(cx, |view, cx| {
-                let subscription = cx.observe_window_bounds(window, move |view, window, _cx| {
-                    let bounds = window.window_bounds().get_bounds();
-                    let saved = knot_core::SavedWindowBounds {
-                        x: bounds.origin.x.into(),
-                        y: bounds.origin.y.into(),
-                        width: bounds.size.width.into(),
-                        height: bounds.size.height.into(),
-                    };
-                    let changed = view
-                        .store
-                        .lock()
-                        .map(|mut store| store.set_workspace_window_bounds(workspace_id, saved))
-                        .unwrap_or(false);
-                    if changed {
-                        view.persist_agents();
-                    }
-                });
-                view.window_bounds_subscription = Some(subscription);
-            });
-            cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-        }) {
+                    .detach();
+                  // Remember where the user puts this workspace's window.
+                  // The observer fires continuously through a drag, so the
+                  // store's setter reports whether the frame actually
+                  // changed and only then is anything written to disk.
+                  view.update(cx, |view, cx| {
+                          let subscription =
+                              cx.observe_window_bounds(window, move |view, window, _cx| {
+                                    let bounds = window.window_bounds().get_bounds();
+                                    let saved =
+                                        knot_core::SavedWindowBounds { x:      bounds.origin
+                                                                                     .x
+                                                                                     .into(),
+                                                                       y:      bounds.origin
+                                                                                     .y
+                                                                                     .into(),
+                                                                       width:  bounds.size
+                                                                                     .width
+                                                                                     .into(),
+                                                                       height: bounds.size
+                                                                                     .height
+                                                                                     .into(), };
+                                    let changed =
+                                        view.store
+                                            .lock()
+                                            .map(|mut store| {
+                                                store.set_workspace_window_bounds(workspace_id,
+                                                                                  saved)
+                                            })
+                                            .unwrap_or(false);
+                                    if changed {
+                                        view.persist_agents();
+                                    }
+                                });
+                          view.window_bounds_subscription = Some(subscription);
+                      });
+                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+              })
+        {
             eprintln!("failed to open workspace window: {error}");
         }
     }
@@ -515,7 +525,8 @@ impl WorkspaceWindow {
             let store = self.store.lock().unwrap();
             store.agent(id).cloned()
         };
-        let Some(agent) = agent else {
+        let Some(agent) = agent
+        else {
             return;
         };
         if !runs_a_terminal_process(&agent.agent_type) {
@@ -528,19 +539,16 @@ impl WorkspaceWindow {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
         let persona = self.settings.persona(id);
-        let config = SessionConfig {
-            settings: &self.settings,
-            agent: &agent,
-            persona,
-            plugin_root: None,
-        };
+        let config = SessionConfig { settings: &self.settings,
+                                     agent: &agent,
+                                     persona,
+                                     plugin_root: None };
         let status_store = Arc::clone(&self.store);
-        let status_sink = EventSink {
-            on_status: Some(Box::new(move |event| {
-                apply_terminal_status(&status_store, id, event.status);
-            })),
-            ..Default::default()
-        };
+        let status_sink =
+            EventSink { on_status: Some(Box::new(move |event| {
+                                            apply_terminal_status(&status_store, id, event.status);
+                                        })),
+                        ..Default::default() };
         let title_store = Arc::clone(&self.store);
         let clipboard_writes = Arc::clone(&self.clipboard_writes);
 
@@ -603,16 +611,18 @@ impl WorkspaceWindow {
                     let start = std::time::Instant::now();
                     loop {
                         let quiet = last_output.lock().is_ok_and(|last_output| {
-                            last_output
-                                .is_some_and(|last_output| last_output.elapsed() >= QUIET_PERIOD)
-                        });
+                                                          last_output.is_some_and(|last_output| {
+                                                                         last_output.elapsed()
+                                                                         >= QUIET_PERIOD
+                                                                     })
+                                                      });
                         if quiet || start.elapsed() >= MAX_WAIT {
                             break;
                         }
                         std::thread::sleep(POLL_INTERVAL);
                     }
                     if let Ok(mut session) = session.lock()
-                        && let Err(error) = session.start(&plan)
+                       && let Err(error) = session.start(&plan)
                     {
                         eprintln!("failed to start terminal session: {error}");
                     }
@@ -635,10 +645,9 @@ impl WorkspaceWindow {
     /// `git`. `knot-git` is runtime-agnostic by contract, hence
     /// `spawn_blocking` rather than an async call.
     fn refresh_diff_stats(&mut self, id: Uuid, folder: &str) {
-        let fresh = self
-            .diff_stats_requested
-            .get(&id)
-            .is_some_and(|at| at.elapsed() < Self::DIFF_STATS_MAX_AGE);
+        let fresh = self.diff_stats_requested
+                        .get(&id)
+                        .is_some_and(|at| at.elapsed() < Self::DIFF_STATS_MAX_AGE);
         if fresh {
             return;
         }
@@ -649,13 +658,13 @@ impl WorkspaceWindow {
         let dirty = Arc::clone(&self.diff_stats_dirty);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn_blocking(move || {
-            let stats = Repository::open(&folder).diff_stats().ok();
-            if let Ok(mut cache) = cache.lock()
-                && cache.insert(id, stats) != Some(stats)
-            {
-                dirty.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
-        });
+                        let stats = Repository::open(&folder).diff_stats().ok();
+                        if let Ok(mut cache) = cache.lock()
+                           && cache.insert(id, stats) != Some(stats)
+                        {
+                            dirty.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    });
     }
 
     /// Whether the selected agent's panel needs a repaint: either its live
@@ -670,38 +679,41 @@ impl WorkspaceWindow {
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
     fn panel_needs_repaint(&mut self) -> bool {
-        let stats_changed = self
-            .diff_stats_dirty
-            .swap(false, std::sync::atomic::Ordering::SeqCst);
-        let panel_states = self
-            .panel_sessions
-            .iter()
-            .filter_map(|(id, slot)| {
-                let slot = slot.lock().ok()?;
-                let panel_session::PanelSessionSlot::Ready(handle) = &*slot else {
-                    return None;
-                };
-                let state_arc = handle.state();
-                let state = state_arc.lock().ok()?;
-                let agent_state = if state.pending_permission.is_some() {
-                    knot_agents::AgentState::Input
-                } else if state.turn_active {
-                    knot_agents::AgentState::Running
-                } else {
-                    knot_agents::AgentState::Idle
-                };
-                Some((*id, agent_state))
-            })
-            .collect::<Vec<_>>();
+        let stats_changed = self.diff_stats_dirty
+                                .swap(false, std::sync::atomic::Ordering::SeqCst);
+        let panel_states = self.panel_sessions
+                               .iter()
+                               .filter_map(|(id, slot)| {
+                                   let slot = slot.lock().ok()?;
+                                   let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                                   else {
+                                       return None;
+                                   };
+                                   let state_arc = handle.state();
+                                   let state = state_arc.lock().ok()?;
+                                   let agent_state = if state.pending_permission.is_some() {
+                                       knot_agents::AgentState::Input
+                                   }
+                                   else if state.turn_active {
+                                       knot_agents::AgentState::Running
+                                   }
+                                   else {
+                                       knot_agents::AgentState::Idle
+                                   };
+                                   Some((*id, agent_state))
+                               })
+                               .collect::<Vec<_>>();
         if let Ok(mut store) = self.store.lock() {
             for (id, state) in panel_states {
                 store.set_state(id, state);
             }
         }
-        let Some(id) = self.selected_agent else {
+        let Some(id) = self.selected_agent
+        else {
             return stats_changed;
         };
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return false;
         };
         let (phase, events_arrived, turn_active) = {
@@ -710,21 +722,25 @@ impl WorkspaceWindow {
                                           panel_session::PanelSessionSlot::Ready(handle)
                                           if handle.take_dirty());
             let turn_active = match &*slot {
-                panel_session::PanelSessionSlot::Ready(handle) => handle
-                    .state()
-                    .lock()
-                    .map(|state| state.turn_active)
-                    .unwrap_or(false),
+                panel_session::PanelSessionSlot::Ready(handle) => {
+                    handle.state()
+                          .lock()
+                          .map(|state| state.turn_active)
+                          .unwrap_or(false)
+                }
                 _ => false,
             };
             (slot.phase(), events_arrived, turn_active)
         };
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
         let indicator_due = turn_active
-            && self.working_indicator_last_repaint.elapsed()
-                >= std::time::Duration::from_millis(120);
+                            && self.working_indicator_last_repaint.elapsed()
+                               >= std::time::Duration::from_millis(120);
         if indicator_due {
             self.working_indicator_last_repaint = std::time::Instant::now();
+        }
+        if !turn_active {
+            self.drain_panel_prompt(id);
         }
         phase_changed || events_arrived || indicator_due || stats_changed
     }
@@ -736,7 +752,7 @@ impl WorkspaceWindow {
     /// removing it left its adapter subprocess running.
     fn remove_session(&mut self, id: Uuid) {
         if let Some(session) = self.sessions.remove(&id)
-            && let Ok(mut session) = session.lock()
+           && let Ok(mut session) = session.lock()
         {
             let _ = session.shutdown();
         }
@@ -748,10 +764,9 @@ impl WorkspaceWindow {
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         if let Some(slot) = self.panel_sessions.remove(&id) {
-            let handle = match std::mem::replace(
-                &mut *slot.lock().unwrap(),
-                panel_session::PanelSessionSlot::connecting().0,
-            ) {
+            let handle = match std::mem::replace(&mut *slot.lock().unwrap(),
+                                                 panel_session::PanelSessionSlot::connecting().0)
+            {
                 panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
                 _ => None,
             };
@@ -809,6 +824,7 @@ impl WorkspaceWindow {
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
         self.panel_prompt_input_subscriptions.remove(&id);
+        self.panel_prompt_queues.remove(&id);
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
@@ -873,16 +889,15 @@ impl WorkspaceWindow {
             let store = self.store.lock().unwrap();
             store.agent(id).cloned()
         };
-        let Some(agent) = agent else {
+        let Some(agent) = agent
+        else {
             return;
         };
         if !agent.activated {
             return;
         }
-        let request = knot_agent_launch::LaunchRequest {
-            agent_type: &agent.agent_type,
-            ..Default::default()
-        };
+        let request = knot_agent_launch::LaunchRequest { agent_type: &agent.agent_type,
+                                                         ..Default::default() };
         let knot_agent_launch::LaunchPlan::Adapter(adapter_config) =
             knot_agent_launch::plan_launch(&request)
         else {
@@ -891,38 +906,35 @@ impl WorkspaceWindow {
             // to fall through to the Terminal path.
             return;
         };
-        let mcp_url = self
-            .settings
-            .mcp_server_enabled
-            .then(|| knot_agent_launch::mcp_url(&self.settings));
+        let mcp_url = self.settings
+                          .mcp_server_enabled
+                          .then(|| knot_agent_launch::mcp_url(&self.settings));
 
         let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
         let slot = Arc::new(Mutex::new(connecting));
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
         let prior_session_id = agent.acp_session_id.clone();
-        let registration_prompt = knot_agent_launch::acp_registration_prompt(
-            agent.id,
-            prior_session_id.is_some(),
-            self.settings.persona(id),
-        );
+        let registration_prompt =
+            knot_agent_launch::acp_registration_prompt(agent.id,
+                                                       prior_session_id.is_some(),
+                                                       self.settings.persona(id));
         let store = Arc::clone(&self.store);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-            let request = panel_session::ConnectRequest {
-                config: &adapter_config,
-                cwd: &cwd,
-                prior_session_id: prior_session_id.as_deref(),
-                mcp_url: mcp_url.as_deref(),
-                registration_prompt,
-            };
-            panel_session::connect_into(&slot, request, &progress, |session_id| {
-                if let Ok(mut store) = store.lock() {
-                    store.set_acp_session_id(id, session_id.to_string());
-                }
-            })
-            .await;
-        });
+                        let request =
+                            panel_session::ConnectRequest { config: &adapter_config,
+                                                            cwd: &cwd,
+                                                            prior_session_id:
+                                                                prior_session_id.as_deref(),
+                                                            mcp_url: mcp_url.as_deref(),
+                                                            registration_prompt };
+                        panel_session::connect_into(&slot, request, &progress, |session_id| {
+                            if let Ok(mut store) = store.lock() {
+                                store.set_acp_session_id(id, session_id.to_string());
+                            }
+                        }).await;
+                    });
     }
 
     /// Delivers the "check your inbox" prompt to any agent in this
@@ -937,18 +949,19 @@ impl WorkspaceWindow {
         if !self.settings.mcp_server_enabled {
             return;
         }
-        let candidates = {
-            let (Ok(store), Ok(messages)) = (self.store.lock(), self.messages.lock()) else {
-                return;
-            };
-            let Some(workspace) = store
-                .workspaces()
-                .iter()
-                .find(|workspace| workspace.id == self.workspace_id)
-            else {
-                return;
-            };
-            workspace
+        let candidates =
+            {
+                let (Ok(store), Ok(messages)) = (self.store.lock(), self.messages.lock())
+                else {
+                    return;
+                };
+                let Some(workspace) = store.workspaces()
+                                           .iter()
+                                           .find(|workspace| workspace.id == self.workspace_id)
+                else {
+                    return;
+                };
+                workspace
                 .agent_ids
                 .iter()
                 .filter_map(|id| store.agent(*id))
@@ -966,7 +979,7 @@ impl WorkspaceWindow {
                         .then(|| (agent.id, latest.expect("checked by the predicate")))
                 })
                 .collect::<Vec<_>>()
-        };
+            };
         for (id, message_id) in candidates {
             self.send_inbox_nudge(id);
             self.nudged_messages.insert(id, message_id);
@@ -977,18 +990,21 @@ impl WorkspaceWindow {
     /// no permission outstanding, no turn in flight. The same gate the
     /// composer uses - a nudge must not be what discovers a session is busy.
     fn panel_can_take_a_prompt(&self, id: Uuid) -> bool {
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return false;
         };
-        let Ok(guard) = slot.lock() else {
+        let Ok(guard) = slot.lock()
+        else {
             return false;
         };
         match &*guard {
-            panel_session::PanelSessionSlot::Ready(handle) => handle
-                .state()
-                .lock()
-                .map(|state| state.pending_permission.is_none() && !state.turn_active)
-                .unwrap_or(false),
+            panel_session::PanelSessionSlot::Ready(handle) => {
+                handle.state()
+                      .lock()
+                      .map(|state| state.pending_permission.is_none() && !state.turn_active)
+                      .unwrap_or(false)
+            }
             _ => false,
         }
     }
@@ -996,7 +1012,8 @@ impl WorkspaceWindow {
     /// Sends the inbox prompt into `id`'s panel session, recording it in the
     /// conversation the way any other prompt is.
     fn send_inbox_nudge(&mut self, id: Uuid) {
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return;
         };
         let session = {
@@ -1009,19 +1026,18 @@ impl WorkspaceWindow {
                 _ => None,
             }
         };
-        let Some((session, recorder)) = session else {
+        let Some((session, recorder)) = session
+        else {
             return;
         };
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-            if let Err(error) = session.prompt(app_support::CHECK_INBOX_PROMPT).await {
-                recorder.error(format!(
-                    "The inbox nudge could not be delivered: \
-                                                    {error}"
-                ));
-                eprintln!("failed to deliver the inbox nudge: {error}");
-            }
-        });
+                        if let Err(error) = session.prompt(app_support::CHECK_INBOX_PROMPT).await {
+                            recorder.error(format!("The inbox nudge could not be delivered: \
+                                                    {error}"));
+                            eprintln!("failed to deliver the inbox nudge: {error}");
+                        }
+                    });
     }
 
     /// Sends `id` its MCP registration prompt by hand, for an agent that
@@ -1033,7 +1049,8 @@ impl WorkspaceWindow {
     /// send it; the pane is already showing that connection state, so this
     /// says nothing rather than stacking a second message on top of it.
     fn send_registration_prompt(&mut self, id: Uuid) {
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return;
         };
         let prompt = knot_agent_launch::registration_prompt(id);
@@ -1047,16 +1064,17 @@ impl WorkspaceWindow {
                 _ => None,
             }
         };
-        let Some((session, recorder)) = session else {
+        let Some((session, recorder)) = session
+        else {
             return;
         };
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-            if let Err(error) = session.prompt(&prompt).await {
-                recorder.error(format!("The agent could not be registered: {error}"));
-                eprintln!("failed to send the registration prompt: {error}");
-            }
-        });
+                        if let Err(error) = session.prompt(&prompt).await {
+                            recorder.error(format!("The agent could not be registered: {error}"));
+                            eprintln!("failed to send the registration prompt: {error}");
+                        }
+                    });
     }
 
     /// Renders the markdown pane for `id`, which takes over the content
@@ -1067,20 +1085,18 @@ impl WorkspaceWindow {
     /// no UI ever read, so an agent calling the tool appeared to be
     /// ignored. Closing the pane clears the file but keeps the history, so
     /// the menu can bring it back.
-    fn render_markdown_pane(
-        &self, id: Uuid, file: &Path, cx: &mut Context<Self>,
-    ) -> gpui_kit::AnyElement {
-        let title = file
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| file.to_string_lossy().into_owned());
+    fn render_markdown_pane(&self, id: Uuid, file: &Path, cx: &mut Context<Self>)
+                            -> gpui_kit::AnyElement {
+        let title = file.file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| file.to_string_lossy().into_owned());
         // Read at render time rather than cached: the file is written by
         // an agent that may still be editing it, and re-reading is what
         // makes a second `display-markdown` of the same path show the new
         // content.
         let body = std::fs::read_to_string(file).unwrap_or_else(|error| {
-            format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
-        });
+                       format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
+                   });
         v_flex()
             .size_full()
             .child(
@@ -1144,52 +1160,41 @@ impl WorkspaceWindow {
     /// is the same guard the editor's activation hint gives from the other
     /// side.
     fn render_stopped_pane(&self, name: String, cx: &Context<Self>) -> gpui_kit::AnyElement {
-        v_flex()
-            .size_full()
-            .items_center()
-            .justify_center()
-            .gap_1()
-            .child(
-                div()
-                    .text_color(cx.theme().foreground)
-                    .child(format!("{name} is not running")),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Select this agent in the sidebar to start it."),
-            )
-            .into_any_element()
+        v_flex().size_full()
+                .items_center()
+                .justify_center()
+                .gap_1()
+                .child(div().text_color(cx.theme().foreground)
+                            .child(format!("{name} is not running")))
+                .child(div().text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Select this agent in the sidebar to start it."))
+                .into_any_element()
     }
 
     /// Renders the Panel-mode content pane for `id`: a connecting/failed
     /// placeholder, or the folded conversation plus a prompt input once
     /// the ACP session is ready. Starts the session if it isn't already
     /// running.
-    fn render_panel_pane(
-        &mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>,
-    ) -> gpui_kit::AnyElement {
+    fn render_panel_pane(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>)
+                         -> gpui_kit::AnyElement {
         self.ensure_panel_session(id);
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return div().into_any_element();
         };
         let slot_guard = slot.lock().unwrap();
         match &*slot_guard {
             panel_session::PanelSessionSlot::Connecting(progress) => {
                 let step = progress.lock().map(|step| step.label()).unwrap_or_default();
-                v_flex()
-                    .size_full()
-                    .items_center()
-                    .justify_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_color(rgb(0x9CA3AF))
-                            .child("Connecting to agent…"),
-                    )
-                    .child(div().text_xs().text_color(rgb(0x6B7280)).child(step))
-                    .into_any_element()
+                v_flex().size_full()
+                        .items_center()
+                        .justify_center()
+                        .gap_1()
+                        .child(div().text_color(rgb(0x9CA3AF))
+                                    .child("Connecting to agent…"))
+                        .child(div().text_xs().text_color(rgb(0x6B7280)).child(step))
+                        .into_any_element()
             }
             panel_session::PanelSessionSlot::Failed(message) => {
                 let message = message.clone();
@@ -1229,11 +1234,12 @@ impl WorkspaceWindow {
                 let session_arc = Arc::clone(slot);
                 let pending = state.pending_permission.clone();
                 let on_decision = move |decision: knot_acp::PermissionDecision| {
-                    let Some(request) = &pending else {
+                    let Some(request) = &pending
+                    else {
                         return;
                     };
                     if let Ok(slot) = session_arc.lock()
-                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                     {
                         handle.answer_permission(request, decision);
                     }
@@ -1241,7 +1247,7 @@ impl WorkspaceWindow {
                 let track_slot = Arc::clone(slot);
                 let on_toggle_track = move || {
                     if let Ok(slot) = track_slot.lock()
-                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                     {
                         handle.toggle_tracking();
                     }
@@ -1249,7 +1255,7 @@ impl WorkspaceWindow {
                 let tool_call_slot = Arc::clone(slot);
                 let on_toggle_tool_call = move |tool_call_id: String| {
                     if let Ok(slot) = tool_call_slot.lock()
-                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                     {
                         handle.toggle_tool_call(&tool_call_id);
                     }
@@ -1257,7 +1263,7 @@ impl WorkspaceWindow {
                 let manual_slot = Arc::clone(slot);
                 let on_manual_scroll = move || {
                     if let Ok(slot) = manual_slot.lock()
-                        && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                     {
                         handle.clear_tracking();
                     }
@@ -1275,15 +1281,15 @@ impl WorkspaceWindow {
                 .map(|value| panel_view::permission_risk_level(value, "Permission"))
                 .unwrap_or(panel_view::RiskLevel::Neutral);
                 let theme = cx.theme();
-                let panel_style = panel_view::PanelStyle {
-                    permission_risk,
-                    markdown_font_size: px(self.settings.markdown_font_size as f32),
-                    mono_font_family: theme.mono_font_family.clone(),
-                    ui_font_family: theme.font_family.clone(),
-                    danger_color: theme.danger,
-                    info_color: theme.info,
-                    border_color: theme.border,
-                };
+                let panel_style =
+                    panel_view::PanelStyle { permission_risk,
+                                             markdown_font_size: px(self.settings.markdown_font_size
+                                                                    as f32),
+                                             mono_font_family: theme.mono_font_family.clone(),
+                                             ui_font_family: theme.font_family.clone(),
+                                             danger_color: theme.danger,
+                                             info_color: theme.info,
+                                             border_color: theme.border };
                 drop(state);
                 drop(slot_guard);
                 // Reconcile the virtualized list with the folded state:
@@ -1304,14 +1310,18 @@ impl WorkspaceWindow {
                     if !list.is_following_tail() {
                         list.set_follow_mode(FollowMode::Tail);
                     }
-                } else {
+                }
+                else {
                     list.set_follow_mode(FollowMode::Normal);
                 }
-                let pending_context = self
-                    .panel_pending_context
-                    .get(&id)
-                    .cloned()
-                    .unwrap_or_default();
+                let pending_context = self.panel_pending_context
+                                          .get(&id)
+                                          .cloned()
+                                          .unwrap_or_default();
+                let queued_prompts = self.panel_prompt_queues
+                                         .get(&id)
+                                         .cloned()
+                                         .unwrap_or_default();
                 let expanded = self.panel_input_expanded.contains(&id);
                 let input = self.panel_prompt_input(id, window, cx);
                 // A conversation shorter than its viewport is not
@@ -1364,6 +1374,7 @@ impl WorkspaceWindow {
                         id,
                         &input,
                         &pending_context,
+                        &queued_prompts,
                         expanded,
                         blocked,
                         turn_active,
@@ -1380,16 +1391,18 @@ impl WorkspaceWindow {
     /// expand/collapse, send) - a sibling of the message list under
     /// `render_panel_pane`, per design decision "Control bar placement".
     #[allow(clippy::too_many_arguments)]
-    fn render_panel_input_area(
-        &mut self, id: Uuid, input: &Entity<TextareaState>, pending_context: &[PathBuf],
-        expanded: bool, blocked: bool, turn_active: bool,
-        config_options: &[knot_acp::ConfigOption], cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_panel_input_area(&mut self, id: Uuid, input: &Entity<TextareaState>,
+                               pending_context: &[PathBuf],
+                               queued_prompts: &[QueuedPanelPrompt], expanded: bool,
+                               blocked: bool, turn_active: bool,
+                               config_options: &[knot_acp::ConfigOption], cx: &mut Context<Self>)
+                               -> impl IntoElement {
         let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
         let send_tooltip = if shift_to_send {
             "Send (Shift+Enter)"
-        } else {
+        }
+        else {
             "Send (Enter)"
         };
         v_flex()
@@ -1398,6 +1411,39 @@ impl WorkspaceWindow {
             .p_2()
             .border_t_1()
             .border_color(cx.theme().border)
+            .children((!queued_prompts.is_empty()).then(|| {
+                v_flex().gap_1().children(queued_prompts.iter().enumerate().map(
+                    |(index, prompt)| {
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(div().flex_1().text_xs().child(prompt.text.clone()))
+                            .child(div().text_xs().child(if prompt.failed {
+                                "failed"
+                            } else {
+                                "queued"
+                            }))
+                            .child(
+                                Button::new(("panel-queued-prompt-action", index as u64))
+                                    .label(if prompt.failed { "Retry" } else { "Remove" })
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                        if let Some(queue) = view.panel_prompt_queues.get_mut(&id)
+                                            && index < queue.len()
+                                        {
+                                            if queue[index].failed {
+                                                queue[index].failed = false;
+                                            } else {
+                                                queue.remove(index);
+                                            }
+                                            cx.notify();
+                                        }
+                                    })),
+                            )
+                    },
+                ))
+            }))
             // Files and images dragged from Finder attach the same way the
             // paperclip and a pasted screenshot do, per `acp-panel-ui`'s
             // attached-context requirement.
@@ -1572,63 +1618,61 @@ impl WorkspaceWindow {
     /// selection via `session/set_config_option`. Disabled with an
     /// explanatory tooltip when the agent hasn't declared a matching
     /// option (adapters vary in which axes they expose).
-    fn render_panel_config_selector(
-        &self, id: Uuid, element_id: &'static str, placeholder: &'static str,
-        disabled_tooltip: &'static str, option: Option<&knot_acp::ConfigOption>,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::AnyElement {
-        let Some(option) = option else {
-            return Button::new(element_id)
-                .label(placeholder)
-                .tooltip(disabled_tooltip)
-                .ghost()
-                .small()
-                .disabled(true)
-                .into_any_element();
+    fn render_panel_config_selector(&self, id: Uuid, element_id: &'static str,
+                                    placeholder: &'static str, disabled_tooltip: &'static str,
+                                    option: Option<&knot_acp::ConfigOption>,
+                                    cx: &mut Context<Self>)
+                                    -> gpui_kit::AnyElement {
+        let Some(option) = option
+        else {
+            return Button::new(element_id).label(placeholder)
+                                          .tooltip(disabled_tooltip)
+                                          .ghost()
+                                          .small()
+                                          .disabled(true)
+                                          .into_any_element();
         };
         let current_value = option.current_value.as_str().unwrap_or_default();
-        let current_label = option
-            .options
-            .iter()
-            .find(|value| value.value == current_value)
-            .map(|value| value.name.clone())
-            .unwrap_or_else(|| option.name.clone());
+        let current_label = option.options
+                                  .iter()
+                                  .find(|value| value.value == current_value)
+                                  .map(|value| value.name.clone())
+                                  .unwrap_or_else(|| option.name.clone());
         let config_id = option.id.clone();
         let values = option.options.clone();
         let entity = cx.entity();
         let session_arc = self.panel_sessions.get(&id).cloned();
         let is_permission_selector = element_id == PERMISSION_SELECTOR_ID;
-        let selector_color = is_permission_selector
-            .then(|| {
-                panel_view::risk_color(panel_view::permission_risk_level(
+        let selector_color = is_permission_selector.then(|| {
+                                 panel_view::risk_color(panel_view::permission_risk_level(
                     current_value,
                     &option.name,
                 ))
-            })
-            .flatten();
-        let trigger = Button::new(element_id)
-            .label(current_label)
-            .ghost()
-            .small()
-            .dropdown_caret(true)
-            .when_some(selector_color, |button, color| {
-                button.text_color(rgb(color))
-            });
-        Popover::new(format!("{element_id}-{id}"))
-            .anchor(gpui_kit::Anchor::BottomLeft)
-            .trigger(trigger)
-            .open(self.open_config_selector == Some(element_id))
-            .on_open_change({
-                let entity = entity.clone();
-                move |open, _, app| {
-                    entity.update(app, |view, cx| {
-                        view.open_config_selector = open.then_some(element_id);
-                        cx.notify();
-                    });
-                }
-            })
-            .content(move |_, _window, _app| {
-                v_flex()
+                             })
+                             .flatten();
+        let trigger = Button::new(element_id).label(current_label)
+                                             .ghost()
+                                             .small()
+                                             .dropdown_caret(true)
+                                             .when_some(selector_color, |button, color| {
+                                                 button.text_color(rgb(color))
+                                             });
+        Popover::new(format!("{element_id}-{id}")).anchor(gpui_kit::Anchor::BottomLeft)
+                                                  .trigger(trigger)
+                                                  .open(self.open_config_selector
+                                                        == Some(element_id))
+                                                  .on_open_change({
+                                                      let entity = entity.clone();
+                                                      move |open, _, app| {
+                                                          entity.update(app, |view, cx| {
+                                                                    view.open_config_selector =
+                                                                        open.then_some(element_id);
+                                                                    cx.notify();
+                                                                });
+                                                      }
+                                                  })
+                                                  .content(move |_, _window, _app| {
+                                                      v_flex()
                     .gap_1()
                     .p_1()
                     .children(values.iter().enumerate().map(|(index, value)| {
@@ -1670,24 +1714,24 @@ impl WorkspaceWindow {
                                 });
                             })
                     }))
-            })
-            .into_any_element()
+                                                  })
+                                                  .into_any_element()
     }
 
     /// Finds the declared config option matching one of `categories`
     /// (case-insensitive), for bucketing the agent's arbitrary option list
     /// into the input area's three fixed selector slots.
-    pub(crate) fn find_config_option<'a>(
-        options: &'a [knot_acp::ConfigOption], categories: &[&str],
-    ) -> Option<&'a knot_acp::ConfigOption> {
+    pub(crate) fn find_config_option<'a>(options: &'a [knot_acp::ConfigOption],
+                                         categories: &[&str])
+                                         -> Option<&'a knot_acp::ConfigOption> {
         options.iter().find(|option| {
-            option.kind == "select"
-                && option.category.as_deref().is_some_and(|category| {
-                    categories
+                          option.kind == "select"
+                          && option.category.as_deref().is_some_and(|category| {
+                                                           categories
                         .iter()
                         .any(|candidate| candidate.eq_ignore_ascii_case(category))
-                })
-        })
+                                                       })
+                      })
     }
 
     /// Gets or creates the conversation's virtualized list for `id`'s panel.
@@ -1699,20 +1743,19 @@ impl WorkspaceWindow {
     /// away from bottom" scenario - without a window/cx in the closure.
     /// The list is created empty; the caller reconciles its item count
     /// each frame (see `panel_view::sync_row_count`).
-    fn panel_list(
-        &mut self, id: Uuid, slot: Arc<Mutex<panel_session::PanelSessionSlot>>,
-    ) -> ListState {
+    fn panel_list(&mut self, id: Uuid, slot: Arc<Mutex<panel_session::PanelSessionSlot>>)
+                  -> ListState {
         if let Some(list) = self.panel_lists.get(&id) {
             return list.clone();
         }
         let list = ListState::new(0, ListAlignment::Top, px(panel_view::LIST_OVERDRAW));
         list.set_scroll_handler(move |_event, _window, _cx| {
-            if let Ok(slot) = slot.lock()
-                && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-            {
-                handle.clear_tracking();
-            }
-        });
+                if let Ok(slot) = slot.lock()
+                   && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                {
+                    handle.clear_tracking();
+                }
+            });
         self.panel_lists.insert(id, list.clone());
         self.panel_list_row_counts.insert(id, 0);
         list
@@ -1722,28 +1765,27 @@ impl WorkspaceWindow {
     /// `id`'s pending message, per `knot-ui-conventions`' native-picker
     /// rule (`cx.prompt_for_paths` over an in-app file browser).
     fn add_panel_context(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        let receiver = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: true,
-            prompt: Some("Attach".into()),
-        });
+        let receiver = cx.prompt_for_paths(PathPromptOptions { files:       true,
+                                                             directories: false,
+                                                             multiple:    true,
+                                                             prompt:      Some("Attach".into()), });
         let this = cx.entity();
         cx.spawn(async move |_this, cx| {
-            let Ok(Ok(Some(paths))) = receiver.await else {
-                return;
-            };
-            cx.update(|app| {
-                this.update(app, |view, cx| {
-                    view.panel_pending_context
-                        .entry(id)
-                        .or_default()
-                        .extend(paths);
-                    cx.notify();
+              let Ok(Ok(Some(paths))) = receiver.await
+              else {
+                  return;
+              };
+              cx.update(|app| {
+                    this.update(app, |view, cx| {
+                            view.panel_pending_context
+                                .entry(id)
+                                .or_default()
+                                .extend(paths);
+                            cx.notify();
+                        });
                 });
-            });
-        })
-        .detach();
+          })
+          .detach();
     }
 
     /// Reads an image off the system clipboard (e.g. a pasted screenshot)
@@ -1754,12 +1796,14 @@ impl WorkspaceWindow {
     /// Returns `false` (leaving the paste to the textarea's own text-paste
     /// handling) when the clipboard holds no image.
     fn paste_clipboard_image_context(&mut self, id: Uuid, cx: &mut App) -> bool {
-        let Some(item) = cx.read_from_clipboard() else {
+        let Some(item) = cx.read_from_clipboard()
+        else {
             return false;
         };
         let mut attached = false;
         for entry in item.entries {
-            let ClipboardEntry::Image(image) = entry else {
+            let ClipboardEntry::Image(image) = entry
+            else {
                 continue;
             };
             let extension = match image.format {
@@ -1783,7 +1827,7 @@ impl WorkspaceWindow {
     /// Removes one attached path from `id`'s pending context by index.
     fn remove_panel_context(&mut self, id: Uuid, index: usize) {
         if let Some(paths) = self.panel_pending_context.get_mut(&id)
-            && index < paths.len()
+           && index < paths.len()
         {
             paths.remove(index);
         }
@@ -1794,7 +1838,8 @@ impl WorkspaceWindow {
     fn toggle_panel_input_expanded(&mut self, id: Uuid, cx: &mut Context<Self>) {
         let expanded = if self.panel_input_expanded.remove(&id) {
             false
-        } else {
+        }
+        else {
             self.panel_input_expanded.insert(id);
             true
         };
@@ -1802,7 +1847,8 @@ impl WorkspaceWindow {
         // has to update the live entity rather than just the render height.
         let max_rows = if expanded {
             PANEL_INPUT_ROWS_EXPANDED
-        } else {
+        }
+        else {
             PANEL_INPUT_ROWS_COLLAPSED
         };
         if let Some(input) = self.panel_prompt_inputs.get(&id).cloned() {
@@ -1814,32 +1860,34 @@ impl WorkspaceWindow {
     /// and if it's a Panel-mode agent) and answers it with `decision` -
     /// backs the allow/deny keybindings.
     fn answer_selected_permission(&self, decision: knot_acp::PermissionDecision) {
-        let Some(id) = self.selected_agent else {
+        let Some(id) = self.selected_agent
+        else {
             return;
         };
-        if self
-            .store
-            .lock()
-            .ok()
-            .and_then(|store| store.agent(id).map(|agent| agent.view_mode))
-            != Some(knot_core::ViewMode::Panel)
+        if self.store
+               .lock()
+               .ok()
+               .and_then(|store| store.agent(id).map(|agent| agent.view_mode))
+           != Some(knot_core::ViewMode::Panel)
         {
             return;
         }
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return;
         };
-        let Ok(slot) = slot.lock() else {
+        let Ok(slot) = slot.lock()
+        else {
             return;
         };
-        let panel_session::PanelSessionSlot::Ready(handle) = &*slot else {
+        let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+        else {
             return;
         };
-        let request = handle
-            .state()
-            .lock()
-            .ok()
-            .and_then(|state| state.pending_permission.clone());
+        let request = handle.state()
+                            .lock()
+                            .ok()
+                            .and_then(|state| state.pending_permission.clone());
         if let Some(request) = request {
             handle.answer_permission(&request, decision);
         }
@@ -1850,9 +1898,8 @@ impl WorkspaceWindow {
     /// (the other chord always inserts a newline) - see
     /// `render_panel_input_area`'s Send button tooltip for the matching
     /// user-facing hint.
-    fn panel_prompt_input(
-        &mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>,
-    ) -> Entity<TextareaState> {
+    fn panel_prompt_input(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>)
+                          -> Entity<TextareaState> {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
@@ -1860,26 +1907,24 @@ impl WorkspaceWindow {
         let placeholder = Self::panel_prompt_placeholder();
         let max_rows = if self.panel_input_expanded.contains(&id) {
             PANEL_INPUT_ROWS_EXPANDED
-        } else {
+        }
+        else {
             PANEL_INPUT_ROWS_COLLAPSED
         };
         let input = cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .placeholder(placeholder)
-                .submit_on_enter(!shift_to_send)
-                .auto_grow(1, max_rows)
-        });
-        let subscription = cx.subscribe_in(
-            &input,
-            window,
-            move |view: &mut Self, _, event, window, cx| {
-                if let InputEvent::PressEnter { shift, .. } = event
-                    && *shift == shift_to_send
-                {
-                    view.send_panel_prompt(id, window, cx);
-                }
-            },
-        );
+                          TextareaState::new(window, cx).placeholder(placeholder)
+                                                        .submit_on_enter(!shift_to_send)
+                                                        .auto_grow(1, max_rows)
+                      });
+        let subscription = cx.subscribe_in(&input,
+                                           window,
+                                           move |view: &mut Self, _, event, window, cx| {
+                                               if let InputEvent::PressEnter { shift, .. } = event
+                                                  && *shift == shift_to_send
+                                               {
+                                                   view.send_panel_prompt(id, window, cx);
+                                               }
+                                           });
         self.panel_prompt_inputs.insert(id, input.clone());
         self.panel_prompt_input_subscriptions
             .insert(id, subscription);
@@ -1898,7 +1943,8 @@ impl WorkspaceWindow {
     fn panel_prompt_send_hint(shift_to_send: bool) -> &'static str {
         if shift_to_send {
             "Shift+Enter to send, Enter for a newline"
-        } else {
+        }
+        else {
             "Enter to send, Shift+Enter for a newline"
         }
     }
@@ -1908,7 +1954,8 @@ impl WorkspaceWindow {
     /// per `acp-panel-ui`'s "blocking further prompt submission until
     /// answered" requirement.
     fn send_panel_prompt(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(input) = self.panel_prompt_inputs.get(&id).cloned() else {
+        let Some(input) = self.panel_prompt_inputs.get(&id).cloned()
+        else {
             return;
         };
         let mut text = input.read(cx).value().trim().to_string();
@@ -1924,7 +1971,8 @@ impl WorkspaceWindow {
             text.push_str("\n\nAttached: ");
             text.push_str(&path.to_string_lossy());
         }
-        let Some(slot) = self.panel_sessions.get(&id) else {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
             return;
         };
         let session = {
@@ -1936,61 +1984,102 @@ impl WorkspaceWindow {
                     let ready = state.pending_permission.is_none() && !state.turn_active;
                     drop(state);
                     ready.then(|| {
-                        handle.record_user_message(text.clone());
-                        (handle.session(), handle.recorder())
-                    })
+                             handle.record_user_message(text.clone());
+                             (handle.session(), handle.recorder())
+                         })
                 }
                 _ => None,
             }
         };
-        let Some((session, recorder)) = session else {
-            self.panel_pending_context.insert(id, context);
+        let Some((session, recorder)) = session
+        else {
+            self.panel_prompt_queues
+                .entry(id)
+                .or_default()
+                .push(QueuedPanelPrompt { text,
+                                          failed: false });
+            cx.update_entity(&input, |state, cx| {
+                  state.set_value("", window, cx);
+              });
+            cx.notify();
             return;
         };
         cx.update_entity(&input, |state, cx| {
-            state.set_value("", window, cx);
-        });
+              state.set_value("", window, cx);
+          });
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-            if let Err(error) = session.prompt(&text).await {
-                // Shown under the prompt it belongs to, and
-                // it ends the turn - an error response is all
-                // the answer this prompt gets, so the
-                // composer must not stay blocked waiting for
-                // a `TurnEnd` that will never arrive.
-                recorder.error(format!("The agent could not answer: {error}"));
-                eprintln!("failed to send panel prompt: {error}");
-            }
-        });
+                        if let Err(error) = session.prompt(&text).await {
+                            // Shown under the prompt it belongs to, and
+                            // it ends the turn - an error response is all
+                            // the answer this prompt gets, so the
+                            // composer must not stay blocked waiting for
+                            // a `TurnEnd` that will never arrive.
+                            recorder.error(format!("The agent could not answer: {error}"));
+                            eprintln!("failed to send panel prompt: {error}");
+                        }
+                    });
         cx.notify();
+    }
+
+    fn drain_panel_prompt(&mut self, id: Uuid) {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return;
+        };
+        let mut candidate = || -> Option<_> {
+            let guard = slot.lock().ok()?;
+            let panel_session::PanelSessionSlot::Ready(handle) = &*guard
+            else {
+                return None;
+            };
+            let state = handle.state();
+            let state = state.lock().ok()?;
+            if state.pending_permission.is_some() || state.turn_active {
+                return None;
+            }
+            let queue = self.panel_prompt_queues.get_mut(&id)?;
+            let prompt = queue.first_mut()?;
+            if prompt.failed {
+                return None;
+            }
+            prompt.failed = true;
+            Some((handle.session(), handle.recorder(), prompt.text.clone()))
+        };
+        let Some((session, recorder, text)) = candidate()
+        else {
+            return;
+        };
+        self.runtime.spawn(async move {
+                        if let Err(error) = session.prompt(&text).await {
+                            recorder.error(format!("The agent could not answer: {error}"));
+                        }
+                    });
     }
 
     /// Resizes `id`'s session grid/PTY to match the content pane's current
     /// size, if it changed.
     fn resize_session_to_pane(&mut self, id: Uuid, window: &Window, cx: &App) {
-        let Some(session) = self.sessions.get(&id) else {
+        let Some(session) = self.sessions.get(&id)
+        else {
             return;
         };
-        let (cell_width, cell_height) = terminal_cell_size(
-            cx,
-            terminal_font_family(&self.settings, cx),
-            px(self.settings.terminal_font_size as f32),
-        );
+        let (cell_width, cell_height) =
+            terminal_cell_size(cx,
+                               terminal_font_family(&self.settings, cx),
+                               px(self.settings.terminal_font_size as f32));
         let viewport = window.viewport_size();
         let pane_width = (f32::from(viewport.width) - TERMINAL_SIDEBAR_WIDTH).max(cell_width);
         let pane_height = (f32::from(viewport.height) - TERMINAL_HEADER_HEIGHT).max(cell_height);
-        let size = knot_terminal::GridSize {
-            columns: (pane_width / cell_width) as usize,
-            rows: (pane_height / cell_height) as usize,
-        };
+        let size = knot_terminal::GridSize { columns: (pane_width / cell_width) as usize,
+                                             rows:    (pane_height / cell_height) as usize, };
 
-        let current = session
-            .lock()
-            .ok()
-            .and_then(|session| session.grid())
-            .map(|grid| grid.lock().unwrap().size());
+        let current = session.lock()
+                             .ok()
+                             .and_then(|session| session.grid())
+                             .map(|grid| grid.lock().unwrap().size());
         if current != Some(size)
-            && let Ok(mut session) = session.lock()
+           && let Ok(mut session) = session.lock()
         {
             let _ = session.resize(size);
         }
@@ -2007,19 +2096,20 @@ impl WorkspaceWindow {
         if keystroke.modifiers.platform {
             return;
         }
-        let Some(session) = self.sessions.get(&id) else {
+        let Some(session) = self.sessions.get(&id)
+        else {
             return;
         };
-        let input = knot_terminal::KeyInput {
-            key: &keystroke.key,
-            key_char: keystroke.key_char.as_deref(),
-            control: keystroke.modifiers.control,
-            alt: keystroke.modifiers.alt,
-        };
-        let Some(bytes) = knot_terminal::key_to_bytes(input) else {
+        let input = knot_terminal::KeyInput { key:      &keystroke.key,
+                                              key_char: keystroke.key_char.as_deref(),
+                                              control:  keystroke.modifiers.control,
+                                              alt:      keystroke.modifiers.alt, };
+        let Some(bytes) = knot_terminal::key_to_bytes(input)
+        else {
             return;
         };
-        let Ok(text) = String::from_utf8(bytes) else {
+        let Ok(text) = String::from_utf8(bytes)
+        else {
             return;
         };
         if let Ok(mut session) = session.lock() {
@@ -2029,14 +2119,12 @@ impl WorkspaceWindow {
 
     /// Converts a window-relative pixel position to a 0-indexed grid
     /// column/row, using the same pane geometry as `resize_session_to_pane`.
-    fn grid_position(
-        &self, position: gpui_kit::Point<gpui_kit::Pixels>, cx: &App,
-    ) -> (usize, usize) {
-        let (cell_width, cell_height) = terminal_cell_size(
-            cx,
-            terminal_font_family(&self.settings, cx),
-            px(self.settings.terminal_font_size as f32),
-        );
+    fn grid_position(&self, position: gpui_kit::Point<gpui_kit::Pixels>, cx: &App)
+                     -> (usize, usize) {
+        let (cell_width, cell_height) =
+            terminal_cell_size(cx,
+                               terminal_font_family(&self.settings, cx),
+                               px(self.settings.terminal_font_size as f32));
         let x = (f32::from(position.x) - TERMINAL_SIDEBAR_WIDTH).max(0.);
         let y = (f32::from(position.y) - TERMINAL_HEADER_HEIGHT).max(0.);
         ((x / cell_width) as usize, (y / cell_height) as usize)
@@ -2046,14 +2134,14 @@ impl WorkspaceWindow {
     /// session, if the running program has enabled SGR mouse reporting -
     /// otherwise a no-op (falls back to no interaction rather than a
     /// scrollback/selection view, which isn't implemented yet).
-    fn dispatch_mouse_button(
-        &mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>,
-        button: knot_terminal::MouseButton, pressed: bool, cx: &App,
-    ) {
-        let Some(session) = self.sessions.get(&id) else {
+    fn dispatch_mouse_button(&mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>,
+                             button: knot_terminal::MouseButton, pressed: bool, cx: &App) {
+        let Some(session) = self.sessions.get(&id)
+        else {
             return;
         };
-        let Some(grid) = session.lock().ok().and_then(|session| session.grid()) else {
+        let Some(grid) = session.lock().ok().and_then(|session| session.grid())
+        else {
             return;
         };
         let (column, row) = self.grid_position(position, cx);
@@ -2067,15 +2155,12 @@ impl WorkspaceWindow {
             }
             return;
         }
-        let Some(bytes) = knot_terminal::mouse_to_bytes(
-            knot_terminal::MouseInput {
-                row,
-                column,
-                button,
-                pressed,
-            },
-            sgr,
-        ) else {
+        let Some(bytes) = knot_terminal::mouse_to_bytes(knot_terminal::MouseInput { row,
+                                                                                    column,
+                                                                                    button,
+                                                                                    pressed },
+                                                        sgr)
+        else {
             return;
         };
         if let (Ok(text), Ok(mut session)) = (String::from_utf8(bytes), session.lock()) {
@@ -2086,13 +2171,14 @@ impl WorkspaceWindow {
     /// Extends an in-progress text selection while the mouse is dragged
     /// with the left button held, when no mouse-aware program has claimed
     /// mouse reporting.
-    fn dispatch_mouse_drag(
-        &mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>, cx: &App,
-    ) {
-        let Some(session) = self.sessions.get(&id) else {
+    fn dispatch_mouse_drag(&mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>,
+                           cx: &App) {
+        let Some(session) = self.sessions.get(&id)
+        else {
             return;
         };
-        let Some(grid) = session.lock().ok().and_then(|session| session.grid()) else {
+        let Some(grid) = session.lock().ok().and_then(|session| session.grid())
+        else {
             return;
         };
         let mut grid = grid.lock().unwrap();
@@ -2107,69 +2193,62 @@ impl WorkspaceWindow {
     /// pasteboard, applying the terminal-actions spec's default transform
     /// (trim trailing whitespace per line).
     fn copy_selection(&mut self, id: Uuid, cx: &mut App) {
-        let Some(session) = self.sessions.get(&id) else {
-            return;
-        };
-        let Some(text) = session
-            .lock()
-            .ok()
-            .and_then(|session| session.grid())
-            .and_then(|grid| grid.lock().unwrap().selection_text())
+        let Some(session) = self.sessions.get(&id)
         else {
             return;
         };
-        let text: String = text
-            .lines()
-            .map(str::trim_end)
-            .collect::<Vec<_>>()
-            .join("\n");
+        let Some(text) = session.lock()
+                                .ok()
+                                .and_then(|session| session.grid())
+                                .and_then(|grid| grid.lock().unwrap().selection_text())
+        else {
+            return;
+        };
+        let text: String = text.lines()
+                               .map(str::trim_end)
+                               .collect::<Vec<_>>()
+                               .join("\n");
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
     /// Sends a scroll-wheel event to the focused terminal pane's session
     /// when the running program has enabled SGR mouse reporting.
-    fn dispatch_scroll(
-        &mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>, lines: f32, cx: &App,
-    ) {
+    fn dispatch_scroll(&mut self, id: Uuid, position: gpui_kit::Point<gpui_kit::Pixels>,
+                       lines: f32, cx: &App) {
         if lines == 0. {
             return;
         }
         let button = if lines > 0. {
             knot_terminal::MouseButton::WheelUp
-        } else {
+        }
+        else {
             knot_terminal::MouseButton::WheelDown
         };
         self.dispatch_mouse_button(id, position, button, true, cx);
     }
 
     fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let folder = self
-            .new_agent_folder_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
+        let folder = self.new_agent_folder_input
+                         .read(cx)
+                         .value()
+                         .trim()
+                         .to_string();
         if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
             self.error = Some("Choose an existing agent folder.".to_string());
             cx.notify();
             return false;
         }
-        let name = self
-            .new_agent_name_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
+        let name = self.new_agent_name_input
+                       .read(cx)
+                       .value()
+                       .trim()
+                       .to_string();
         let id = {
             let mut store = self.store.lock().unwrap();
             store.set_current_workspace(self.workspace_id);
-            store.create(
-                folder,
-                knot_agents::CreateOptions {
-                    name: (!name.is_empty()).then_some(name),
-                    ..Default::default()
-                },
-            )
+            store.create(folder,
+                         knot_agents::CreateOptions { name: (!name.is_empty()).then_some(name),
+                                                      ..Default::default() })
         };
         if let Ok(store) = self.store.lock() {
             self.settings.saved_agents =
@@ -2181,47 +2260,42 @@ impl WorkspaceWindow {
         self.show_new_agent = false;
         self.error = None;
         cx.update_entity(&self.new_agent_name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
+              input.clean(window, input_cx);
+          });
         cx.update_entity(&self.new_agent_folder_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
+              input.clean(window, input_cx);
+          });
         cx.notify();
         true
     }
 
     fn open_new_agent_dialog(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        open_agent_editor(
-            Arc::clone(&self.store),
-            self.settings.clone(),
-            AgentEditorRequest {
-                workspace_id: self.workspace_id,
-                prefill: AgentPrefill::default(),
-                insert_after: None,
-                edit_target: None,
-            },
-            Self::select_and_focus_created_agent(cx),
-            cx,
-        );
+        open_agent_editor(Arc::clone(&self.store),
+                          self.settings.clone(),
+                          AgentEditorRequest { workspace_id: self.workspace_id,
+                                               prefill:      AgentPrefill::default(),
+                                               insert_after: None,
+                                               edit_target:  None, },
+                          Self::select_and_focus_created_agent(cx),
+                          cx);
     }
 
     /// An `on_created` callback for [`open_agent_editor`] that selects the
     /// new agent (and switches out of the dashboard, if it was open) so it
     /// becomes the visible agent in the sidebar and content pane, matching
     /// how tapping an existing agent already behaves.
-    fn select_and_focus_created_agent(
-        cx: &mut Context<Self>,
-    ) -> impl Fn(Uuid, &mut Window, &mut App) + 'static {
+    fn select_and_focus_created_agent(cx: &mut Context<Self>)
+                                      -> impl Fn(Uuid, &mut Window, &mut App) + 'static {
         let weak = cx.entity().downgrade();
         move |id, _window, app| {
             if let Some(entity) = weak.upgrade() {
                 entity.update(app, |view, cx| {
-                    view.select_agent(id);
-                    view.view_mode = WorkspaceViewMode::Terminal;
-                    view.ensure_session(id);
-                    view.ensure_panel_session(id);
-                    cx.notify();
-                });
+                          view.select_agent(id);
+                          view.view_mode = WorkspaceViewMode::Terminal;
+                          view.ensure_session(id);
+                          view.ensure_panel_session(id);
+                          cx.notify();
+                      });
             }
         }
     }
@@ -2230,17 +2304,17 @@ impl WorkspaceWindow {
 /// Parameters for [`open_agent_editor`], grouped to keep the function's
 /// argument count in check.
 pub(crate) struct SelectedAgentHeader {
-    avatar: String,
-    name: String,
-    folder: String,
+    avatar:       String,
+    name:         String,
+    folder:       String,
     header_title: String,
-    agent_type: String,
+    agent_type:   String,
     /// The agent's state and its diff stat *lookup*: the outer `Option`
     /// is whether the first refresh has finished, the inner one whether
     /// it found a repository. Only a missing lookup means "still
     /// working" - a folder that is not a git checkout must not sit on
     /// "Getting stats…" for the life of the window.
-    state: Option<(knot_agents::AgentState, Option<Option<knot_git::DiffStats>>)>,
+    state:        Option<(knot_agents::AgentState, Option<Option<knot_git::DiffStats>>)>,
 }
 
 impl WorkspaceWindow {
@@ -2249,34 +2323,29 @@ impl WorkspaceWindow {
     /// the words around them left muted. The count's noun goes through
     /// `l10n::plural_noun` rather than a local `if count == 1`, so the
     /// word (and its form) comes from the locale catalog.
-    fn render_diff_stats(
-        stats: &knot_git::DiffStats, font_family: String, font_size: gpui_kit::Pixels,
-        cx: &Context<Self>,
-    ) -> gpui_kit::AnyElement {
-        app_state::diff_stats_row(stats, cx.theme().muted_foreground)
-            .font_family(font_family)
-            .text_size(font_size)
-            .into_any_element()
+    fn render_diff_stats(stats: &knot_git::DiffStats, font_family: String,
+                         font_size: gpui_kit::Pixels, cx: &Context<Self>)
+                         -> gpui_kit::AnyElement {
+        app_state::diff_stats_row(stats, cx.theme().muted_foreground).font_family(font_family)
+                                                                     .text_size(font_size)
+                                                                     .into_any_element()
     }
 
     fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
         let id = self.selected_agent?;
         let store = self.store.lock().ok()?;
         let agent = store.agent(id)?;
-        let stats = self
-            .diff_stats
-            .lock()
-            .ok()
-            .and_then(|stats| stats.get(&id).copied());
+        let stats = self.diff_stats
+                        .lock()
+                        .ok()
+                        .and_then(|stats| stats.get(&id).copied());
         let state = (!agent.is_shell()).then_some((agent.state, stats));
-        Some(SelectedAgentHeader {
-            avatar: agent.avatar.clone(),
-            name: agent.name.clone(),
-            folder: shorten_path(&agent.folder),
-            header_title: agent.header_title().to_string(),
-            agent_type: agent.agent_type.clone(),
-            state,
-        })
+        Some(SelectedAgentHeader { avatar: agent.avatar.clone(),
+                                   name: agent.name.clone(),
+                                   folder: shorten_path(&agent.folder),
+                                   header_title: agent.header_title().to_string(),
+                                   agent_type: agent.agent_type.clone(),
+                                   state })
     }
 }
 
@@ -2289,43 +2358,40 @@ impl Render for WorkspaceWindow {
         let ui_font_size = px(self.settings.ui_font_size as f32);
         let (_workspace_name, agents) = {
             let store = self.store.lock().unwrap();
-            let Some(workspace) = store
-                .workspaces()
-                .iter()
-                .find(|workspace| workspace.id == self.workspace_id)
+            let Some(workspace) = store.workspaces()
+                                       .iter()
+                                       .find(|workspace| workspace.id == self.workspace_id)
             else {
-                return v_flex()
-                    .size_full()
-                    .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
-                    .child("Workspace no longer exists.");
+                return v_flex().size_full()
+                               .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
+                               .child("Workspace no longer exists.");
             };
-            let agents = workspace
-                .agent_ids
-                .iter()
-                .filter_map(|id| store.agent(*id))
-                .map(|agent| {
-                    let persona_name = agent.persona_id.and_then(|id| {
-                        self.settings
-                            .personas
-                            .iter()
-                            .find(|persona| persona.id == id)
-                            .map(|persona| persona.name.clone())
-                    });
-                    AgentRow {
-                        id: agent.id,
-                        avatar: agent.avatar.clone(),
-                        name: agent.name.clone(),
-                        folder: agent.folder.clone(),
-                        state: agent.state,
-                        is_shell: agent.is_shell(),
-                        is_companion: agent.is_companion,
-                        header_title: agent.header_title().to_string(),
-                        persona_name,
-                        agent_type: agent.agent_type.clone(),
-                        is_running: agent.activated,
-                    }
-                })
-                .collect::<Vec<_>>();
+            let agents =
+                workspace.agent_ids
+                         .iter()
+                         .filter_map(|id| store.agent(*id))
+                         .map(|agent| {
+                             let persona_name =
+                                 agent.persona_id.and_then(|id| {
+                                                     self.settings
+                                                         .personas
+                                                         .iter()
+                                                         .find(|persona| persona.id == id)
+                                                         .map(|persona| persona.name.clone())
+                                                 });
+                             AgentRow { id: agent.id,
+                                        avatar: agent.avatar.clone(),
+                                        name: agent.name.clone(),
+                                        folder: agent.folder.clone(),
+                                        state: agent.state,
+                                        is_shell: agent.is_shell(),
+                                        is_companion: agent.is_companion,
+                                        header_title: agent.header_title().to_string(),
+                                        persona_name,
+                                        agent_type: agent.agent_type.clone(),
+                                        is_running: agent.activated }
+                         })
+                         .collect::<Vec<_>>();
             (workspace.name.clone(), agents)
         };
 
@@ -2337,11 +2403,10 @@ impl Render for WorkspaceWindow {
         // A map lookup and an `Instant` compare per render; the `git`
         // subprocess behind it runs at most every `DIFF_STATS_MAX_AGE`.
         if let Some(id) = self.selected_agent {
-            let folder = self
-                .store
-                .lock()
-                .ok()
-                .and_then(|store| store.agent(id).map(|agent| agent.folder.clone()));
+            let folder = self.store
+                             .lock()
+                             .ok()
+                             .and_then(|store| store.agent(id).map(|agent| agent.folder.clone()));
             if let Some(folder) = folder {
                 self.refresh_diff_stats(id, &folder);
             }
@@ -2352,42 +2417,47 @@ impl Render for WorkspaceWindow {
         let workspace_id = self.workspace_id;
         let window_entity = cx.entity();
 
-        let agent_rows = agents.into_iter().map(
-            |AgentRow {
-                 id,
-                 avatar,
-                 name,
-                 folder,
-                 state,
-                 is_shell,
-                 is_companion,
-                 header_title,
-                 persona_name,
-                 agent_type,
-                 is_running,
-             }| {
-                let menu_name = name.clone();
-                let menu_folder = folder.clone();
-                let folder_name = PathBuf::from(&folder)
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or(folder);
-                // Legacy/imported data may carry more
-                // than one character;
-                // clamp to a single grapheme so it can't
-                // overflow the tile.
-                let avatar = avatar.graphemes(true).next().unwrap_or("🤖").to_string();
-                let selected = self.selected_agent == Some(id);
-                // A plain clickable div, not `Button` -
-                // `Button`'s default
-                // sizing forces a fixed height
-                // regardless of content,
-                // clipping this row's up to 4 lines
-                // (name/persona/status/
-                // folder). Same fix as the dashboard
-                // cards in
-                // `dashboard.rs`.
-                div()
+        let agent_rows =
+            agents.into_iter().map(
+                                   |AgentRow { id,
+                                               avatar,
+                                               name,
+                                               folder,
+                                               state,
+                                               is_shell,
+                                               is_companion,
+                                               header_title,
+                                               persona_name,
+                                               agent_type,
+                                               is_running, }| {
+                                       let menu_name = name.clone();
+                                       let menu_folder = folder.clone();
+                                       let folder_name =
+                                           PathBuf::from(&folder).file_name()
+                                                                 .map(|name| {
+                                                                     name.to_string_lossy()
+                                                                         .into_owned()
+                                                                 })
+                                                                 .unwrap_or(folder);
+                                       // Legacy/imported data may carry more
+                                       // than one character;
+                                       // clamp to a single grapheme so it can't
+                                       // overflow the tile.
+                                       let avatar = avatar.graphemes(true)
+                                                          .next()
+                                                          .unwrap_or("🤖")
+                                                          .to_string();
+                                       let selected = self.selected_agent == Some(id);
+                                       // A plain clickable div, not `Button` -
+                                       // `Button`'s default
+                                       // sizing forces a fixed height
+                                       // regardless of content,
+                                       // clipping this row's up to 4 lines
+                                       // (name/persona/status/
+                                       // folder). Same fix as the dashboard
+                                       // cards in
+                                       // `dashboard.rs`.
+                                       div()
                     .id(gpui_kit::ElementId::from(format!("workspace-agent-{id}")))
                     .cursor_pointer()
                     .rounded(cx.theme().radius)
@@ -2539,8 +2609,8 @@ impl Render for WorkspaceWindow {
                         };
                         move |menu, window, cx| agent_row_context_menu(&targets, menu, window, cx)
                     })
-            },
-        );
+                                   },
+            );
 
         // The dashboard sits at the top of the agent list, the way the
         // Swift reference's `overviewRow` does (`SidebarView.swift`), and
@@ -2591,15 +2661,16 @@ impl Render for WorkspaceWindow {
 
         let selected_header = self.selected_agent_header();
 
-        let dashboard_workspace = is_dashboard.then(|| {
-            let store = self.store.lock().unwrap();
-            let workspace = store
-                .workspaces()
-                .iter()
-                .find(|workspace| workspace.id == self.workspace_id);
-            let (name, color_hex, dash_agents) = match workspace {
-                Some(workspace) => {
-                    let dash_agents = workspace
+        let dashboard_workspace =
+            is_dashboard.then(|| {
+                            let store = self.store.lock().unwrap();
+                            let workspace =
+                                store.workspaces()
+                                     .iter()
+                                     .find(|workspace| workspace.id == self.workspace_id);
+                            let (name, color_hex, dash_agents) = match workspace {
+                                Some(workspace) => {
+                                    let dash_agents = workspace
                         .agent_ids
                         .iter()
                         .filter_map(|id| store.agent(*id))
@@ -2627,67 +2698,66 @@ impl Render for WorkspaceWindow {
                             }
                         })
                         .collect::<Vec<_>>();
-                    (
-                        workspace.name.clone(),
-                        workspace.color_hex.clone(),
-                        dash_agents,
-                    )
-                }
-                None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
-            };
-            dashboard::DashboardWorkspace {
-                id: self.workspace_id,
-                name,
-                color_hex,
-                agents: self.dashboard_sort.sorted(dash_agents),
-            }
-        });
+                                    (workspace.name.clone(),
+                                     workspace.color_hex.clone(),
+                                     dash_agents)
+                                }
+                                None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
+                            };
+                            dashboard::DashboardWorkspace { id: self.workspace_id,
+                                                            name,
+                                                            color_hex,
+                                                            agents: self.dashboard_sort
+                                                                        .sorted(dash_agents) }
+                        });
 
         let weak = cx.entity().downgrade();
 
-        let dashboard_content = dashboard_workspace.map(|dashboard_workspace| {
-            let on_agent_tap = {
-                let weak = weak.clone();
-                move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
-                    if let Some(entity) = weak.upgrade() {
-                        entity.update(app, |view, cx| {
-                            view.select_agent(id);
-                            view.view_mode = WorkspaceViewMode::Terminal;
-                            view.ensure_session(id);
-                            view.ensure_panel_session(id);
-                            cx.notify();
-                        });
+        let dashboard_content =
+            dashboard_workspace.map(|dashboard_workspace| {
+                let on_agent_tap = {
+                    let weak = weak.clone();
+                    move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                        if let Some(entity) = weak.upgrade() {
+                            entity.update(app, |view, cx| {
+                                      view.select_agent(id);
+                                      view.view_mode = WorkspaceViewMode::Terminal;
+                                      view.ensure_session(id);
+                                      view.ensure_panel_session(id);
+                                      cx.notify();
+                                  });
+                        }
                     }
-                }
-            };
-            let on_workspace_nav = |_id: Uuid, _window: &mut Window, _app: &mut gpui_kit::App| {};
-            let on_add_agent = {
-                let weak = weak.clone();
-                let store = Arc::clone(&self.store);
-                move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
-                    let (folder, insert_after) = store
-                        .lock()
-                        .ok()
-                        .and_then(|store| {
-                            store
-                                .workspaces()
-                                .iter()
-                                .find(|workspace| workspace.id == workspace_id)
-                                .map(|workspace| {
-                                    let folder = workspace
-                                        .agent_ids
-                                        .iter()
-                                        .filter_map(|id| store.agent(*id))
-                                        .next()
-                                        .map(|agent| agent.folder.clone());
-                                    (folder, workspace.agent_ids.last().copied())
-                                })
-                        })
-                        .unwrap_or((None, None));
-                    if let Some(entity) = weak.upgrade() {
-                        entity.update(app, |view, cx| {
-                            let on_created = WorkspaceWindow::select_and_focus_created_agent(cx);
-                            open_agent_editor(
+                };
+                let on_workspace_nav =
+                    |_id: Uuid, _window: &mut Window, _app: &mut gpui_kit::App| {};
+                let on_add_agent = {
+                    let weak = weak.clone();
+                    let store = Arc::clone(&self.store);
+                    move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+                        let (folder, insert_after) =
+                            store.lock()
+                                 .ok()
+                                 .and_then(|store| {
+                                     store.workspaces()
+                                          .iter()
+                                          .find(|workspace| workspace.id == workspace_id)
+                                          .map(|workspace| {
+                                              let folder =
+                                                  workspace.agent_ids
+                                                           .iter()
+                                                           .filter_map(|id| store.agent(*id))
+                                                           .next()
+                                                           .map(|agent| agent.folder.clone());
+                                              (folder, workspace.agent_ids.last().copied())
+                                          })
+                                 })
+                                 .unwrap_or((None, None));
+                        if let Some(entity) = weak.upgrade() {
+                            entity.update(app, |view, cx| {
+                                      let on_created =
+                                          WorkspaceWindow::select_and_focus_created_agent(cx);
+                                      open_agent_editor(
                                 Arc::clone(&view.store),
                                 view.settings.clone(),
                                 AgentEditorRequest {
@@ -2702,25 +2772,24 @@ impl Render for WorkspaceWindow {
                                 on_created,
                                 cx,
                             );
-                        });
+                                  });
+                        }
                     }
-                }
-            };
+                };
 
-            v_flex()
-                .size_full()
-                .child(div().size_full().p_6().overflow_hidden().child(
-                    dashboard::workspace_section(
-                        dashboard_workspace,
-                        false,
-                        cx.theme().muted_foreground,
-                        on_agent_tap,
-                        on_workspace_nav,
-                        on_add_agent,
-                    ),
-                ))
-                .into_any_element()
-        });
+                v_flex().size_full()
+                        .child(div().size_full()
+                                    .p_6()
+                                    .overflow_hidden()
+                                    .child(dashboard::workspace_section(dashboard_workspace,
+                                                                        false,
+                                                                        cx.theme()
+                                                                          .muted_foreground,
+                                                                        on_agent_tap,
+                                                                        on_workspace_nav,
+                                                                        on_add_agent)))
+                        .into_any_element()
+            });
 
         // Matches the Swift reference's title bar: it shows the selected
         // agent's identity directly (not a separate workspace-name strip
@@ -2728,76 +2797,59 @@ impl Render for WorkspaceWindow {
         // lights with no redundant band, and a right-hand state/git-stats
         // indicator (`AgentFullHeader`) when a non-shell agent is selected.
         let title_bar_left = if is_dashboard {
-            div()
-                .text_lg()
-                .child(knot_core::l10n::t("dashboard.title"))
-                .into_any_element()
-        } else {
+            div().text_lg()
+                 .child(knot_core::l10n::t("dashboard.title"))
+                 .into_any_element()
+        }
+        else {
             match &selected_header {
                 Some(header) => {
                     // The avatar and name always stay whole; the folder and
                     // the agent's status line give up space and ellipsize,
                     // the status line first since it is the longest and the
                     // least identifying.
-                    h_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .items_center()
-                        .gap_3()
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_2xl()
-                                .child(header.avatar.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_lg()
-                                .font_semibold()
-                                .child(header.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_shrink(1.)
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .font_family(ui_font_name.clone())
-                                .text_size(ui_font_size)
-                                .text_color(cx.theme().muted_foreground)
-                                .child(header.folder.clone()),
-                        )
-                        .when(!header.header_title.is_empty(), |row| {
-                            row.child(
-                                div()
-                                    .flex_shrink_0()
-                                    .font_family(ui_font_name.clone())
-                                    .text_size(ui_font_size)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("●"),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .whitespace_nowrap()
-                                    .text_ellipsis()
-                                    .font_family(ui_font_name.clone())
-                                    .text_size(ui_font_size)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(header.header_title.clone()),
-                            )
-                        })
-                        .into_any_element()
+                    h_flex().flex_1()
+                            .min_w_0()
+                            .items_center()
+                            .gap_3()
+                            .child(div().flex_shrink_0()
+                                        .text_2xl()
+                                        .child(header.avatar.clone()))
+                            .child(div().flex_shrink_0()
+                                        .text_lg()
+                                        .font_semibold()
+                                        .child(header.name.clone()))
+                            .child(div().flex_shrink(1.)
+                                        .min_w_0()
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .font_family(ui_font_name.clone())
+                                        .text_size(ui_font_size)
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(header.folder.clone()))
+                            .when(!header.header_title.is_empty(), |row| {
+                                row.child(div().flex_shrink_0()
+                                               .font_family(ui_font_name.clone())
+                                               .text_size(ui_font_size)
+                                               .text_color(cx.theme().muted_foreground)
+                                               .child("●"))
+                                   .child(div().flex_1()
+                                               .min_w_0()
+                                               .overflow_hidden()
+                                               .whitespace_nowrap()
+                                               .text_ellipsis()
+                                               .font_family(ui_font_name.clone())
+                                               .text_size(ui_font_size)
+                                               .text_color(cx.theme().muted_foreground)
+                                               .child(header.header_title.clone()))
+                            })
+                            .into_any_element()
                 }
-                None => div()
-                    .text_lg()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Choose an agent from the sidebar")
-                    .into_any_element(),
+                None => div().text_lg()
+                             .text_color(cx.theme().muted_foreground)
+                             .child("Choose an agent from the sidebar")
+                             .into_any_element(),
             }
         };
         let title_bar_right = if is_dashboard {
@@ -2806,61 +2858,49 @@ impl Render for WorkspaceWindow {
                 move |sort, _window, app| {
                     if let Some(entity) = weak.upgrade() {
                         entity.update(app, |view, cx| {
-                            view.dashboard_sort = sort;
-                            cx.notify();
-                        });
+                                  view.dashboard_sort = sort;
+                                  cx.notify();
+                              });
                     }
                 }
-            })
-            .into_any_element()
-        } else {
-            match selected_header
-                .as_ref()
-                .and_then(|header| header.state.as_ref())
+            }).into_any_element()
+        }
+        else {
+            match selected_header.as_ref()
+                                 .and_then(|header| header.state.as_ref())
             {
                 Some((state, git_stats)) => {
-                    v_flex()
-                        .items_end()
-                        .gap_0p5()
-                        .child(
-                            h_flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .w(px(10.))
-                                        .h(px(10.))
-                                        .rounded_full()
-                                        .bg(state_color(*state)),
-                                )
-                                .child(
-                                    div()
-                                        .font_family(ui_font_name.clone())
-                                        .text_size(ui_font_size)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(state_label(*state)),
-                                ),
-                        )
-                        .child(match git_stats {
-                            Some(Some(stats)) => Self::render_diff_stats(
-                                stats,
-                                ui_font_name.clone(),
-                                ui_font_size,
-                                cx,
-                            ),
-                            // The refresh ran and found no
-                            // repository: the agent's folder
-                            // isn't a git checkout, so there
-                            // are no stats to wait for.
-                            Some(None) => div().into_any_element(),
-                            None => div()
-                                .font_family(ui_font_name.clone())
-                                .text_size(ui_font_size)
-                                .text_color(cx.theme().muted_foreground)
-                                .child(knot_core::l10n::t("git.stats_pending"))
-                                .into_any_element(),
-                        })
-                        .into_any_element()
+                    v_flex().items_end()
+                            .gap_0p5()
+                            .child(h_flex().items_center()
+                                           .gap_2()
+                                           .child(div().w(px(10.))
+                                                       .h(px(10.))
+                                                       .rounded_full()
+                                                       .bg(state_color(*state)))
+                                           .child(div().font_family(ui_font_name.clone())
+                                                       .text_size(ui_font_size)
+                                                       .text_color(cx.theme().muted_foreground)
+                                                       .child(state_label(*state))))
+                            .child(match git_stats {
+                                       Some(Some(stats)) => {
+                                           Self::render_diff_stats(stats,
+                                                                   ui_font_name.clone(),
+                                                                   ui_font_size,
+                                                                   cx)
+                                       }
+                                       // The refresh ran and found no
+                                       // repository: the agent's folder
+                                       // isn't a git checkout, so there
+                                       // are no stats to wait for.
+                                       Some(None) => div().into_any_element(),
+                                       None => div().font_family(ui_font_name.clone())
+                                                    .text_size(ui_font_size)
+                                                    .text_color(cx.theme().muted_foreground)
+                                                    .child(knot_core::l10n::t("git.stats_pending"))
+                                                    .into_any_element(),
+                                   })
+                            .into_any_element()
                 }
                 None => div().into_any_element(),
             }
@@ -3178,13 +3218,13 @@ impl Render for WorkspaceWindow {
 /// clone it once per row rather than capturing each piece separately.
 #[derive(Clone)]
 pub(crate) struct AgentMenuTargets {
-    store: Arc<Mutex<knot_agents::AgentStore>>,
-    settings: knot_core::Settings,
+    store:         Arc<Mutex<knot_agents::AgentStore>>,
+    settings:      knot_core::Settings,
     window_entity: Entity<WorkspaceWindow>,
-    workspace_id: Uuid,
-    id: Uuid,
-    name: String,
-    folder: String,
+    workspace_id:  Uuid,
+    id:            Uuid,
+    name:          String,
+    folder:        String,
 }
 
 /// Reads an agent's menu facts, the workspaces it could move to, and its
@@ -3195,58 +3235,49 @@ pub(crate) struct AgentMenuTargets {
 /// either - are testable without a window. Called when the menu opens
 /// rather than when the row renders, so a menu never offers a workspace
 /// that was closed since the last repaint.
-pub(crate) fn agent_menu_facts(
-    store: &knot_agents::AgentStore, id: Uuid,
-) -> (AgentMenuFacts, Vec<(Uuid, String)>, Vec<PathBuf>) {
-    let Some(agent) = store.agent(id) else {
+pub(crate) fn agent_menu_facts(store: &knot_agents::AgentStore, id: Uuid)
+                               -> (AgentMenuFacts, Vec<(Uuid, String)>, Vec<PathBuf>) {
+    let Some(agent) = store.agent(id)
+    else {
         return (AgentMenuFacts::default(), Vec::new(), Vec::new());
     };
-    let own_workspace = store
-        .workspaces()
-        .iter()
-        .find(|workspace| workspace.agent_ids.contains(&id))
-        .map(|workspace| workspace.id);
+    let own_workspace = store.workspaces()
+                             .iter()
+                             .find(|workspace| workspace.agent_ids.contains(&id))
+                             .map(|workspace| workspace.id);
     // Detached workspaces live in their own windows and are not move
     // targets, matching the reference's `attachedWorkspaces`.
-    let move_targets = store
-        .workspaces()
-        .iter()
-        .filter(|workspace| workspace.is_detached != Some(true))
-        .filter(|workspace| Some(workspace.id) != own_workspace)
-        .map(|workspace| (workspace.id, workspace.name.clone()))
-        .collect::<Vec<_>>();
+    let move_targets = store.workspaces()
+                            .iter()
+                            .filter(|workspace| workspace.is_detached != Some(true))
+                            .filter(|workspace| Some(workspace.id) != own_workspace)
+                            .map(|workspace| (workspace.id, workspace.name.clone()))
+                            .collect::<Vec<_>>();
     let history = agent.markdown_history.clone();
-    let facts = AgentMenuFacts {
-        is_companion: agent.is_companion,
-        is_shell: agent.is_shell(),
-        has_move_targets: own_workspace.is_some() && !move_targets.is_empty(),
-        has_markdown_history: !history.is_empty(),
-        is_running: agent.activated,
-    };
+    let facts = AgentMenuFacts { is_companion:         agent.is_companion,
+                                 is_shell:             agent.is_shell(),
+                                 has_move_targets:     own_workspace.is_some()
+                                                       && !move_targets.is_empty(),
+                                 has_markdown_history: !history.is_empty(),
+                                 is_running:           agent.activated, };
     (facts, move_targets, history)
 }
 
 /// Opens the agent editor from a menu handler, notifying the workspace
 /// window once the dialog is submitted.
-fn open_editor_from_menu(
-    targets: &AgentMenuTargets, prefill: AgentPrefill, insert_after: Option<Uuid>,
-    edit_target: Option<Uuid>, app: &mut App,
-) {
+fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
+                         insert_after: Option<Uuid>, edit_target: Option<Uuid>, app: &mut App) {
     let window_entity = targets.window_entity.clone();
-    open_agent_editor(
-        Arc::clone(&targets.store),
-        targets.settings.clone(),
-        AgentEditorRequest {
-            workspace_id: targets.workspace_id,
-            prefill,
-            insert_after,
-            edit_target,
-        },
-        move |_id, _window, app| {
-            window_entity.update(app, |_, cx| cx.notify());
-        },
-        app,
-    );
+    open_agent_editor(Arc::clone(&targets.store),
+                      targets.settings.clone(),
+                      AgentEditorRequest { workspace_id: targets.workspace_id,
+                                           prefill,
+                                           insert_after,
+                                           edit_target },
+                      move |_id, _window, app| {
+                          window_entity.update(app, |_, cx| cx.notify());
+                      },
+                      app);
 }
 
 /// Builds the agent row's context menu: the entries
@@ -3256,9 +3287,9 @@ fn open_editor_from_menu(
 /// itself immediately after running a handler, and a dialog opened inline
 /// goes down with it; opening on the next turn of the loop lets the menu
 /// finish closing first.
-pub(crate) fn agent_row_context_menu(
-    targets: &AgentMenuTargets, menu: PopupMenu, window: &mut Window, cx: &mut Context<PopupMenu>,
-) -> PopupMenu {
+pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu,
+                                     window: &mut Window, cx: &mut Context<PopupMenu>)
+                                     -> PopupMenu {
     let (facts, move_targets, markdown_history) = match targets.store.lock() {
         Ok(store) => agent_menu_facts(&store, targets.id),
         Err(_) => (AgentMenuFacts::default(), Vec::new(), Vec::new()),
@@ -3271,10 +3302,10 @@ pub(crate) fn agent_row_context_menu(
                 let targets = targets.clone();
                 let move_targets = move_targets.clone();
                 menu.submenu("Move to Workspace", window, cx, move |mut submenu, _, _| {
-                    for (workspace_id, workspace_name) in &move_targets {
-                        let targets = targets.clone();
-                        let workspace_id = *workspace_id;
-                        submenu =
+                        for (workspace_id, workspace_name) in &move_targets {
+                            let targets = targets.clone();
+                            let workspace_id = *workspace_id;
+                            submenu =
                             submenu.item(PopupMenuItem::new(workspace_name.clone()).on_click(
                                 move |_, _window, app| {
                                     if let Ok(mut store) = targets.store.lock() {
@@ -3293,64 +3324,68 @@ pub(crate) fn agent_row_context_menu(
                                     });
                                 },
                             ));
-                    }
-                    submenu
-                })
+                        }
+                        submenu
+                    })
             }
             AgentMenuEntry::OpenIn => {
                 let folder = targets.folder.clone();
                 menu.submenu("Open In…", window, cx, move |mut submenu, _, _| {
-                    for item in open_in::open_in_entries() {
-                        submenu = match item {
-                            open_in::OpenInEntry::Separator => submenu.separator(),
-                            open_in::OpenInEntry::App(app_entry) => {
-                                let folder = folder.clone();
-                                submenu.item(PopupMenuItem::new(app_entry.label).on_click(
+                        for item in open_in::open_in_entries() {
+                            submenu = match item {
+                                open_in::OpenInEntry::Separator => submenu.separator(),
+                                open_in::OpenInEntry::App(app_entry) => {
+                                    let folder = folder.clone();
+                                    submenu.item(PopupMenuItem::new(app_entry.label).on_click(
                                     move |_, _window, _app| {
                                         open_in::open_folder(app_entry.id, &folder);
                                     },
                                 ))
-                            }
-                        };
-                    }
-                    submenu
-                })
+                                }
+                            };
+                        }
+                        submenu
+                    })
             }
             AgentMenuEntry::MarkdownFiles => {
                 let targets = targets.clone();
                 let history = markdown_history.clone();
                 menu.submenu("Markdown Files", window, cx, move |mut submenu, _, _| {
-                    for file in &history {
-                        let targets = targets.clone();
-                        let file = file.clone();
-                        // File name, not the full path: the reference
-                        // labels these by `lastPathComponent`, and a
-                        // full path makes the submenu unreadable.
-                        let label = file
-                            .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| file.to_string_lossy().into_owned());
-                        submenu = submenu.item(PopupMenuItem::new(label).on_click({
-                            move |_, _window, app| {
-                                if let Ok(mut store) = targets.store.lock() {
-                                    let _ =
+                        for file in &history {
+                            let targets = targets.clone();
+                            let file = file.clone();
+                            // File name, not the full path: the reference
+                            // labels these by `lastPathComponent`, and a
+                            // full path makes the submenu unreadable.
+                            let label = file.file_name()
+                                            .map(|name| name.to_string_lossy().into_owned())
+                                            .unwrap_or_else(|| file.to_string_lossy().into_owned());
+                            submenu = submenu.item(PopupMenuItem::new(label).on_click({
+                                                       move |_, _window, app| {
+                                                           if let Ok(mut store) =
+                                                               targets.store.lock()
+                                                           {
+                                                               let _ =
                                         store.set_markdown_panel(targets.id, file.clone(), false);
-                                }
-                                targets.window_entity.update(app, |_, cx| cx.notify());
-                            }
-                        }));
-                    }
-                    submenu
-                })
+                                                           }
+                                                           targets.window_entity
+                                                                  .update(app, |_, cx| cx.notify());
+                                                       }
+                                                   }));
+                        }
+                        submenu
+                    })
             }
             entry => {
-                let Some(label) = entry.label() else {
+                let Some(label) = entry.label()
+                else {
                     continue;
                 };
                 let targets = targets.clone();
                 menu.item(PopupMenuItem::new(label).on_click(move |_, window, app| {
-                    run_agent_menu_action(entry, &targets, window, app);
-                }))
+                                                       run_agent_menu_action(entry, &targets,
+                                                                             window, app);
+                                                   }))
             }
         };
     }
@@ -3358,123 +3393,114 @@ pub(crate) fn agent_row_context_menu(
 }
 
 /// Runs one plain (non-submenu) menu entry.
-fn run_agent_menu_action(
-    entry: AgentMenuEntry, targets: &AgentMenuTargets, window: &mut Window, app: &mut App,
-) {
+fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTargets, window: &mut Window,
+                         app: &mut App) {
     match entry {
         AgentMenuEntry::EditAgent => {
-            open_editor_from_menu(
-                targets,
-                AgentPrefill::default(),
-                None,
-                Some(targets.id),
-                app,
-            );
+            open_editor_from_menu(targets,
+                                  AgentPrefill::default(),
+                                  None,
+                                  Some(targets.id),
+                                  app);
         }
         // The configurable companion: same shape as "New Shell Companion"
         // but routed through the editor, so the user names it and picks
         // its folder before it exists.
         AgentMenuEntry::NewCompanion => {
-            let prefill = AgentPrefill {
-                folder: Some(targets.folder.clone()),
-                agent_type: Some("shell".to_string()),
-                created_by: Some(targets.id),
-                is_companion: true,
-                ..Default::default()
-            };
+            let prefill = AgentPrefill { folder: Some(targets.folder.clone()),
+                                         agent_type: Some("shell".to_string()),
+                                         created_by: Some(targets.id),
+                                         is_companion: true,
+                                         ..Default::default() };
             open_editor_from_menu(targets, prefill, Some(targets.id), None, app);
         }
         AgentMenuEntry::Deactivate => {
             // No confirmation: nothing is lost that selecting the row will
             // not bring back, which is the test Restart and Remove fail.
             targets.window_entity.update(app, |view, cx| {
-                view.deactivate_agent(targets.id);
-                cx.notify();
-            });
+                                     view.deactivate_agent(targets.id);
+                                     cx.notify();
+                                 });
         }
         AgentMenuEntry::NewShellCompanion => {
-            let created = targets
-                .store
-                .lock()
-                .map(|mut store| store.create_shell_companion(targets.id).is_ok())
-                .unwrap_or(false);
+            let created = targets.store
+                                 .lock()
+                                 .map(|mut store| store.create_shell_companion(targets.id).is_ok())
+                                 .unwrap_or(false);
             if created {
                 targets.window_entity.update(app, |view, cx| {
-                    view.persist_agents();
-                    cx.notify();
-                });
+                                         view.persist_agents();
+                                         cx.notify();
+                                     });
             }
         }
         // A fork carries the source's session so it picks the conversation
         // up; a duplicate deliberately does not.
         AgentMenuEntry::ForkAgent => {
-            let source = targets
-                .store
-                .lock()
-                .ok()
-                .and_then(|store| store.agent(targets.id).cloned());
-            let Some(source) = source else {
+            let source = targets.store
+                                .lock()
+                                .ok()
+                                .and_then(|store| store.agent(targets.id).cloned());
+            let Some(source) = source
+            else {
                 return;
             };
-            let prefill = AgentPrefill {
-                name: Some(format!("{} (fork)", source.name)),
-                avatar: Some(source.avatar.clone()),
-                folder: Some(source.folder.clone()),
-                agent_type: Some(source.agent_type.clone()),
-                persona_id: source.persona_id,
-                created_by: None,
-                is_companion: false,
-                session_id: source.session_id.clone(),
-            };
+            let prefill = AgentPrefill { name:         Some(format!("{} (fork)", source.name)),
+                                         avatar:       Some(source.avatar.clone()),
+                                         folder:       Some(source.folder.clone()),
+                                         agent_type:   Some(source.agent_type.clone()),
+                                         persona_id:   source.persona_id,
+                                         created_by:   None,
+                                         is_companion: false,
+                                         session_id:   source.session_id.clone(), };
             open_editor_from_menu(targets, prefill, Some(targets.id), None, app);
         }
         AgentMenuEntry::DuplicateAgent => {
             let created = {
-                let Ok(mut store) = targets.store.lock() else {
+                let Ok(mut store) = targets.store.lock()
+                else {
                     return;
                 };
-                let Some(source) = store.agent(targets.id).cloned() else {
+                let Some(source) = store.agent(targets.id).cloned()
+                else {
                     return;
                 };
-                store.create(
-                    source.folder.clone(),
-                    knot_agents::CreateOptions {
-                        name: Some(format!("{} (copy)", source.name)),
-                        avatar: Some(source.avatar.clone()),
-                        agent_type: Some(source.agent_type.clone()),
-                        shell_command: source.shell_command.clone(),
-                        persona_id: source.persona_id,
-                        insert_after: Some(targets.id),
-                        ..Default::default()
-                    },
-                )
+                store.create(source.folder.clone(),
+                             knot_agents::CreateOptions { name: Some(format!("{} (copy)",
+                                                                             source.name)),
+                                                          avatar: Some(source.avatar.clone()),
+                                                          agent_type: Some(source.agent_type
+                                                                                 .clone()),
+                                                          shell_command: source.shell_command
+                                                                               .clone(),
+                                                          persona_id: source.persona_id,
+                                                          insert_after: Some(targets.id),
+                                                          ..Default::default() })
             };
             targets.window_entity.update(app, |view, cx| {
-                view.persist_agents();
-                view.select_agent(created);
-                cx.notify();
-            });
+                                     view.persist_agents();
+                                     view.select_agent(created);
+                                     cx.notify();
+                                 });
         }
         // Freshly loaded settings, not this window's snapshot: the bench
         // is edited from the settings window too, and persisting a stale
         // copy would drop whatever was added there since.
         AgentMenuEntry::SaveToBench => {
-            let source = targets
-                .store
-                .lock()
-                .ok()
-                .and_then(|store| store.agent(targets.id).cloned());
-            let Some(source) = source else {
+            let source = targets.store
+                                .lock()
+                                .ok()
+                                .and_then(|store| store.agent(targets.id).cloned());
+            let Some(source) = source
+            else {
                 return;
             };
             let mut settings =
                 knot_core::Settings::load().unwrap_or_else(|_| targets.settings.clone());
-            let mut entry = knot_core::BenchAgent::new(
-                Uuid::new_v4(),
-                source.name.clone(),
-                Some(source.avatar.clone()),
-                source.folder.clone(),
-            );
+            let mut entry = knot_core::BenchAgent::new(Uuid::new_v4(),
+                                                       source.name.clone(),
+                                                       Some(source.avatar.clone()),
+                                                       source.folder.clone());
             entry.agent_type = source.agent_type.clone();
             entry.shell_command = source.shell_command.clone();
             entry.persona_id = source.persona_id;
@@ -3484,68 +3510,63 @@ fn run_agent_menu_action(
         }
         AgentMenuEntry::RegisterAgent => {
             targets.window_entity.update(app, |view, cx| {
-                view.send_registration_prompt(targets.id);
-                cx.notify();
-            });
+                                     view.send_registration_prompt(targets.id);
+                                     cx.notify();
+                                 });
         }
         AgentMenuEntry::RestartAgent => {
             let targets = targets.clone();
             window.defer(app, move |window, app| {
-                window.open_alert_dialog(app, move |alert, _, _| {
-                    let targets = targets.clone();
-                    alert
-                        .title("Restart Agent")
-                        .description(format!(
-                            "Restart \"{}\"? Its session will be \
+                      window.open_alert_dialog(app, move |alert, _, _| {
+                                let targets = targets.clone();
+                                alert.title("Restart Agent")
+                                     .description(format!("Restart \"{}\"? Its session will be \
                                                            cleared.",
-                            targets.name
-                        ))
-                        .confirm()
-                        .on_ok(move |_, _, app| {
-                            if let Ok(mut store) = targets.store.lock() {
-                                let _ = store.restart(targets.id);
-                            }
-                            targets.window_entity.update(app, |view, cx| {
-                                view.remove_session(targets.id);
-                                view.panel_states.remove(&targets.id);
-                                // `restart` clears the
-                                // persisted session ids;
-                                // write them
-                                // out so a
-                                // relaunch doesn't resume
-                                // the session
-                                // just dropped.
-                                //
-                                view.persist_agents();
-                                cx.notify();
+                                                          targets.name))
+                                     .confirm()
+                                     .on_ok(move |_, _, app| {
+                                         if let Ok(mut store) = targets.store.lock() {
+                                             let _ = store.restart(targets.id);
+                                         }
+                                         targets.window_entity.update(app, |view, cx| {
+                                                                  view.remove_session(targets.id);
+                                                                  view.panel_states
+                                                                      .remove(&targets.id);
+                                                                  // `restart` clears the
+                                                                  // persisted session ids;
+                                                                  // write them
+                                                                  // out so a
+                                                                  // relaunch doesn't resume
+                                                                  // the session
+                                                                  // just dropped.
+                                                                  //
+                                                                  view.persist_agents();
+                                                                  cx.notify();
+                                                              });
+                                         true
+                                     })
                             });
-                            true
-                        })
-                });
-            });
+                  });
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
             window.defer(app, move |window, app| {
-                window.open_alert_dialog(app, move |alert, _, _| {
-                    let targets = targets.clone();
-                    alert
-                        .title("Remove Agent")
-                        .description(format!(
-                            "Remove \"{}\"? This closes its session \
+                      window.open_alert_dialog(app, move |alert, _, _| {
+                                let targets = targets.clone();
+                                alert.title("Remove Agent")
+                                     .description(format!("Remove \"{}\"? This closes its session \
                                                            and cannot be undone.",
-                            targets.name
-                        ))
-                        .confirm()
-                        .on_ok(move |_, _, app| {
-                            targets.window_entity.update(app, |view, cx| {
-                                view.remove_agent(targets.id);
-                                cx.notify();
+                                                          targets.name))
+                                     .confirm()
+                                     .on_ok(move |_, _, app| {
+                                         targets.window_entity.update(app, |view, cx| {
+                                                                  view.remove_agent(targets.id);
+                                                                  cx.notify();
+                                                              });
+                                         true
+                                     })
                             });
-                            true
-                        })
-                });
-            });
+                  });
         }
         // Handled by the builder, which needs `Window`/`Context` to make
         // a submenu, or carries no action at all.
