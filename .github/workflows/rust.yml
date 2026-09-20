@@ -32,14 +32,8 @@ jobs:
       - name: Toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          components: clippy
+          components: rustfmt, clippy
           cache-key: ${{ matrix.os }}
-
-      - name: Nightly toolchain (rustfmt)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: nightly-2026-09-18
-          components: rustfmt
 
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |
@@ -51,7 +45,7 @@ jobs:
           fi
 
       - name: Format check
-        run: rustup run nightly cargo fmt --all --check
+        run: cargo fmt --all --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
