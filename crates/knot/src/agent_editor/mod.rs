@@ -83,8 +83,9 @@ pub(crate) fn open_agent_editor(
     };
     let options = agent_window_options(title, cx);
     let _ = cx.open_window(options, move |window, cx| {
-        let name_input = cx.new(|cx| {
-            InputState::new(window, cx)
+        let name_input =
+            cx.new(|cx| {
+                InputState::new(window, cx)
                 .placeholder("Name")
                 .default_value(
                     editing
@@ -93,7 +94,7 @@ pub(crate) fn open_agent_editor(
                         .or_else(|| prefill.name.clone())
                         .unwrap_or_default(),
                 )
-        });
+            });
         let shell_command_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
         let avatar_input = cx.new(|cx| {
