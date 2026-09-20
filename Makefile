@@ -207,7 +207,7 @@ rust-fmt:
 	rustup run nightly cargo fmt
 
 rust-fmt-check:
-	rustup run nightly cargo fmt --check
+	rustup run nightly cargo fmt --all --check
 
 rust-lint:
 	cargo clippy --workspace --all-targets -- -D warnings
