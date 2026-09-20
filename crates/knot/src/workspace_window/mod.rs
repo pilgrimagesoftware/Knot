@@ -1554,7 +1554,7 @@ impl WorkspaceWindow {
                     )
                     .child(if turn_active {
                         Button::new("panel-stop-prompt")
-                            .label("Stop")
+                            .icon(gpui_kit::assets::IconName::SquareStop)
                             .tooltip("Stop")
                             .ghost()
                             .flex_shrink_0()
@@ -1565,7 +1565,7 @@ impl WorkspaceWindow {
                             .into_any_element()
                     } else {
                         Button::new("panel-send-prompt")
-                            .label("Send")
+                            .icon(gpui_kit::assets::IconName::Send)
                             .tooltip(send_tooltip)
                             .primary()
                             .flex_shrink_0()
