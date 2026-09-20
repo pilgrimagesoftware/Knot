@@ -105,6 +105,11 @@ impl AcpClient {
                             .and_then(Value::as_str)
                             .unwrap_or_default()
                             .to_owned();
+                        let tool_call_title = params
+                            .get("toolCall")
+                            .and_then(|call| call.get("title"))
+                            .and_then(Value::as_str)
+                            .map(str::to_owned);
                         let options: Vec<PermissionOption> = serde_json::from_value(
                             params
                                 .get("options")
@@ -122,6 +127,7 @@ impl AcpClient {
                             events_tx.send(SessionEvent::PermissionRequest(PermissionRequest {
                                 rpc_id: id.clone(),
                                 tool_call_id,
+                                tool_call_title,
                                 options: options.clone(),
                             }));
                         let transport = Arc::clone(&transport_for_loop);

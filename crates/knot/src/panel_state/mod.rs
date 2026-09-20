@@ -133,6 +133,26 @@ impl PanelState {
         self.pending_permission = None;
     }
 
+    /// Resolves the most useful human-readable name for a permission request.
+    pub fn display_name(&self, request: &PermissionRequest) -> String {
+        request
+            .tool_call_title
+            .as_deref()
+            .filter(|title| !title.is_empty())
+            .or_else(|| {
+                self.tool_call(&request.tool_call_id)
+                    .map(|card| card.title.as_str())
+                    .filter(|title| !title.is_empty())
+            })
+            .or_else(|| {
+                self.tool_call(&request.tool_call_id)
+                    .map(|card| card.kind.as_str())
+                    .filter(|kind| !kind.is_empty())
+            })
+            .unwrap_or(&request.tool_call_id)
+            .to_owned()
+    }
+
     /// Records a prompt the user just sent, so it shows in the
     /// conversation - the ACP stream itself never echoes it back. Starts a
     /// new turn: the next response tracks by default until the user
@@ -532,6 +552,7 @@ mod tests {
         let request = PermissionRequest {
             rpc_id: json!(1),
             tool_call_id: "tc1".to_string(),
+            tool_call_title: None,
             options: Vec::new(),
         };
 
@@ -745,5 +766,45 @@ mod tests {
         }));
 
         assert_eq!(state.config_options, vec![option]);
+    }
+
+    fn permission(tool_call_id: &str, title: Option<&str>) -> PermissionRequest {
+        PermissionRequest {
+            rpc_id: json!(1),
+            tool_call_id: tool_call_id.to_string(),
+            tool_call_title: title.map(str::to_string),
+            options: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn display_name_prefers_request_title_then_card_title_kind_then_id() {
+        let mut state = PanelState::new();
+        state.messages.push(PanelMessage::ToolCall(ToolCallCard {
+            id: "tc1".to_string(),
+            kind: "read".to_string(),
+            title: "Reading configuration file".to_string(),
+            status: "pending".to_string(),
+            content: Vec::new(),
+        }));
+
+        assert_eq!(
+            state.display_name(&permission("tc1", Some("Wire title"))),
+            "Wire title"
+        );
+        assert_eq!(
+            state.display_name(&permission("tc1", None)),
+            "Reading configuration file"
+        );
+
+        state.messages.push(PanelMessage::ToolCall(ToolCallCard {
+            id: "tc2".to_string(),
+            kind: "execute".to_string(),
+            title: String::new(),
+            status: "pending".to_string(),
+            content: Vec::new(),
+        }));
+        assert_eq!(state.display_name(&permission("tc2", None)), "execute");
+        assert_eq!(state.display_name(&permission("missing", None)), "missing");
     }
 }
