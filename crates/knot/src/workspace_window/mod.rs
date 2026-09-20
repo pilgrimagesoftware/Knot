@@ -1645,7 +1645,8 @@ impl WorkspaceWindow {
                             })
                             .flatten();
                         Button::new((element_id, index))
-                            .label(value.name.clone())
+                            .accessibility_label(value.name.clone())
+                            .child(div().w_full().child(value.name.clone()))
                             .ghost()
                             .small()
                             .w_full()
