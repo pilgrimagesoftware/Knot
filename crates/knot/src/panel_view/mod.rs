@@ -525,16 +525,21 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, collapsed: boo
                                        .text_xs()
                                        .text_color(rgb(MUTED))
                                        .child(label))
-                           .child(div().flex_shrink_0()
-                                       .font_family(style.ui_font_family.clone())
-                                       .text_xs()
-                                       .text_color(rgb(if card.failed() {
-                                                       ERROR_COLOR
-                                                   }
-                                                   else {
-                                                       MUTED
-                                                   }))
-                                       .child(status_label(&card.status))))
+                           .children(status_icon(&card.status).map(|icon| {
+                                                                  Button::new(("tool-call-status",
+                                                                               element_id(&card.id)))
+                                                                      .icon(icon)
+                                                                      .ghost()
+                                                                      .tooltip(status_label(&card.status))
+                                                                      .text_color(status_icon_color(&card.status,
+                                                                                                    style))
+                                                              }))
+                           .children(status_icon(&card.status).is_none().then(|| {
+                               div().flex_shrink_0()
+                                    .font_family(style.ui_font_family.clone())
+                                    .text_xs()
+                                    .child(status_label(&card.status))
+                           })))
             .children((!collapsed).then(|| render_tool_call_body(card, style)))
 }
 
@@ -602,6 +607,22 @@ fn status_label(status: &str) -> String {
         "completed" => "Done".to_string(),
         "failed" => "Failed".to_string(),
         other => other.to_string(),
+    }
+}
+
+fn status_icon(status: &str) -> Option<IconName> {
+    match status {
+        "pending" | "in_progress" => Some(IconName::Loader),
+        "completed" => Some(IconName::CircleCheck),
+        "failed" => Some(IconName::CircleX),
+        _ => None,
+    }
+}
+
+fn status_icon_color(status: &str, style: &PanelStyle) -> Hsla {
+    match card_outline(status) {
+        CardOutline::Neutral => rgb(MUTED).into(),
+        outline => style.outline_color(outline),
     }
 }
 
@@ -768,6 +789,22 @@ mod tests {
     #[test]
     fn an_unrecognized_status_passes_through_rather_than_vanishing() {
         assert_eq!(status_label("some_future_status"), "some_future_status");
+    }
+
+    #[test]
+    fn known_statuses_map_to_icons_and_unknown_statuses_stay_text() {
+        assert_eq!(status_icon("pending"), Some(IconName::Loader));
+        assert_eq!(status_icon("in_progress"), Some(IconName::Loader));
+        assert_eq!(status_icon("completed"), Some(IconName::CircleCheck));
+        assert_eq!(status_icon("failed"), Some(IconName::CircleX));
+        assert_eq!(status_icon("some_future_status"), None);
+    }
+
+    #[test]
+    fn status_icon_color_tracks_card_outline() {
+        assert_eq!(card_outline("failed"), CardOutline::Danger);
+        assert_eq!(card_outline("pending"), CardOutline::Info);
+        assert_eq!(card_outline("completed"), CardOutline::Neutral);
     }
 
     #[test]
