@@ -1549,6 +1549,7 @@ impl WorkspaceWindow {
                                                  button.text_color(rgb(color))
                                              });
         Popover::new(format!("{element_id}-{id}"))
+            .anchor(gpui_kit::Anchor::BottomLeft)
             .trigger(trigger)
             .open(self.open_config_selector == Some(element_id))
             .on_open_change({
