@@ -1554,7 +1554,7 @@ impl WorkspaceWindow {
                     )
                     .child(if turn_active {
                         Button::new("panel-stop-prompt")
-                            .icon(gpui_kit::assets::IconName::SquareStop)
+                            .child(div().size(px(10.)).rounded(px(1.)).bg(rgb(0xFFFFFF)))
                             .tooltip("Stop")
                             .bg(rgb(0xEF4444))
                             .text_color(rgb(0xFFFFFF))
