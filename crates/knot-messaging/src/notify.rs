@@ -13,7 +13,7 @@ pub trait DeliveryNotifier {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeliveryEvent {
-    pub agent_id:   Uuid,
+    pub agent_id: Uuid,
     pub message_id: Uuid,
 }
 
@@ -34,8 +34,10 @@ impl QueuedNotifier {
 
 impl DeliveryNotifier for QueuedNotifier {
     fn notify(&self, agent_id: Uuid, message_id: Uuid) {
-        self.events.lock().unwrap().push(DeliveryEvent { agent_id,
-                                                         message_id });
+        self.events.lock().unwrap().push(DeliveryEvent {
+            agent_id,
+            message_id,
+        });
     }
 }
 
@@ -92,9 +94,13 @@ mod tests {
 
         notifier.notify(agent, message);
 
-        assert_eq!(notifier.drain(),
-                   vec![DeliveryEvent { agent_id:   agent,
-                                        message_id: message, }]);
+        assert_eq!(
+            notifier.drain(),
+            vec![DeliveryEvent {
+                agent_id: agent,
+                message_id: message,
+            }]
+        );
         assert!(notifier.drain().is_empty());
     }
 }

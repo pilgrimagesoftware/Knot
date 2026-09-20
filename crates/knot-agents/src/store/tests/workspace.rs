@@ -1,18 +1,20 @@
 use super::super::*;
 
 fn workspace(name: &str) -> knot_core::Workspace {
-    knot_core::Workspace { id:                    Uuid::new_v4(),
-                           name:                  name.to_string(),
-                           color_hex:             "#000000".to_string(),
-                           agent_ids:             Vec::new(),
-                           active_agent_ids:      Vec::new(),
-                           layout_mode:           "single".to_string(),
-                           focused_pane_index:    0,
-                           split_ratio:           0.5,
-                           split_ratio_secondary: None,
-                           show_dashboard:        None,
-                           is_detached:           None,
-                           window_bounds:         None, }
+    knot_core::Workspace {
+        id: Uuid::new_v4(),
+        name: name.to_string(),
+        color_hex: "#000000".to_string(),
+        agent_ids: Vec::new(),
+        active_agent_ids: Vec::new(),
+        layout_mode: "single".to_string(),
+        focused_pane_index: 0,
+        split_ratio: 0.5,
+        split_ratio_secondary: None,
+        show_dashboard: None,
+        is_detached: None,
+        window_bounds: None,
+    }
 }
 
 #[test]
@@ -25,11 +27,14 @@ fn workspace_reordering_moves_before_target() {
     store.add_workspace(second.clone());
     store.add_workspace(third.clone());
     assert!(store.move_workspace_before(third.id, first.id));
-    assert_eq!(store.workspaces()
-                    .iter()
-                    .map(|workspace| workspace.id)
-                    .collect::<Vec<_>>(),
-               vec![third.id, first.id, second.id]);
+    assert_eq!(
+        store
+            .workspaces()
+            .iter()
+            .map(|workspace| workspace.id)
+            .collect::<Vec<_>>(),
+        vec![third.id, first.id, second.id]
+    );
 }
 
 #[test]
@@ -58,10 +63,13 @@ fn reorder_and_move_to_workspace_update_membership() {
     store.add_workspace(target);
     store.move_to_workspace(first, target_id);
     assert!(!store.workspaces()[0].agent_ids.contains(&first));
-    assert_eq!(store.workspaces()
-                    .iter()
-                    .find(|workspace| workspace.id == target_id)
-                    .unwrap()
-                    .agent_ids,
-               vec![first]);
+    assert_eq!(
+        store
+            .workspaces()
+            .iter()
+            .find(|workspace| workspace.id == target_id)
+            .unwrap()
+            .agent_ids,
+        vec![first]
+    );
 }

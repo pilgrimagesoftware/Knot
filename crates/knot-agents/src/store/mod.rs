@@ -25,14 +25,14 @@ const DEFAULT_WORKSPACE_COLOR: &str = "#1B4FB2";
 /// `AgentStore::create` since it is the one field every creation supplies.
 #[derive(Debug, Clone, Default)]
 pub struct CreateOptions {
-    pub name:            Option<String>,
-    pub avatar:          Option<String>,
-    pub agent_type:      Option<String>,
-    pub shell_command:   Option<String>,
-    pub persona_id:      Option<Uuid>,
-    pub created_by:      Option<Uuid>,
-    pub is_companion:    bool,
-    pub insert_after:    Option<Uuid>,
+    pub name: Option<String>,
+    pub avatar: Option<String>,
+    pub agent_type: Option<String>,
+    pub shell_command: Option<String>,
+    pub persona_id: Option<Uuid>,
+    pub created_by: Option<Uuid>,
+    pub is_companion: bool,
+    pub insert_after: Option<Uuid>,
     /// Defaults to `Passive` - deliberately not the load default a record
     /// with no stored mode gets (`Active`, see `knot_core::SavedAgent`).
     pub activation_mode: ActivationMode,
@@ -42,23 +42,23 @@ pub struct CreateOptions {
 /// a restart; `folder`/`agent_type`/persona changes do.
 #[derive(Debug, Clone, Default)]
 pub struct EditRequest {
-    pub name:                String,
-    pub avatar:              String,
-    pub folder:              Option<String>,
-    pub agent_type:          Option<String>,
-    pub persona_id:          Option<Uuid>,
-    pub persona_changed:     bool,
+    pub name: String,
+    pub avatar: String,
+    pub folder: Option<String>,
+    pub agent_type: Option<String>,
+    pub persona_id: Option<Uuid>,
+    pub persona_changed: bool,
     pub relocate_companions: bool,
     /// Applied verbatim; changing it never triggers a restart, per
     /// `agent-lifecycle`'s "Activation mode" requirement.
-    pub activation_mode:     ActivationMode,
+    pub activation_mode: ActivationMode,
 }
 
 /// An agent removed by [`AgentStore::remove`], in cascade order (companions
 /// before their owner).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemovedAgent {
-    pub id:             Uuid,
+    pub id: Uuid,
     /// Whether the caller owes MCP an unregister call for this id.
     pub was_registered: bool,
 }
@@ -67,8 +67,8 @@ pub struct RemovedAgent {
 /// every operation `openspec/specs/agent-lifecycle/spec.md` names.
 #[derive(Debug, Clone, Default)]
 pub struct AgentStore {
-    agents:               Vec<Agent>,
-    workspaces:           Vec<Workspace>,
+    agents: Vec<Agent>,
+    workspaces: Vec<Workspace>,
     current_workspace_id: Option<Uuid>,
 }
 

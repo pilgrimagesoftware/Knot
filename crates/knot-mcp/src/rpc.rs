@@ -16,46 +16,52 @@ pub struct JsonRpcRequest {
     #[serde(default)]
     pub jsonrpc: String,
     #[serde(default)]
-    pub id:      Option<JsonRpcId>,
-    pub method:  String,
+    pub id: Option<JsonRpcId>,
+    pub method: String,
     #[serde(default)]
-    pub params:  Option<Value>,
+    pub params: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: &'static str,
-    pub id:      Option<JsonRpcId>,
+    pub id: Option<JsonRpcId>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub result:  Option<Value>,
+    pub result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error:   Option<JsonRpcError>,
+    pub error: Option<JsonRpcError>,
 }
 
 impl JsonRpcResponse {
     pub fn success(id: Option<JsonRpcId>, result: impl Serialize) -> Self {
-        Self { jsonrpc: "2.0",
-               id,
-               result: serde_json::to_value(result).ok(),
-               error: None }
+        Self {
+            jsonrpc: "2.0",
+            id,
+            result: serde_json::to_value(result).ok(),
+            error: None,
+        }
     }
 
     pub fn error(id: Option<JsonRpcId>, code: i64, message: impl Into<String>) -> Self {
-        Self { jsonrpc: "2.0",
-               id,
-               result: None,
-               error: Some(JsonRpcError { code,
-                                          message: message.into(),
-                                          data: None }) }
+        Self {
+            jsonrpc: "2.0",
+            id,
+            result: None,
+            error: Some(JsonRpcError {
+                code,
+                message: message.into(),
+                data: None,
+            }),
+        }
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct JsonRpcError {
-    pub code:    i64,
+    pub code: i64,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data:    Option<Value>,
+    pub data: Option<Value>,
 }
 
 const METHOD_NOT_FOUND: i64 = -32601;
@@ -65,45 +71,56 @@ const INVALID_PARAMS: i64 = -32602;
 /// methods, routing `tools/list`/`tools/call` through `catalog`.
 pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> JsonRpcResponse {
     match request.method.as_str() {
-        "initialize" => JsonRpcResponse::success(request.id.clone(),
-                                                 serde_json::json!({
-                                                     "protocolVersion": consts::PROTOCOL_VERSION,
-                                                     "capabilities": { "tools": { "listChanged": false } },
-                                                     "serverInfo": { "name": consts::SERVER_NAME, "version": consts::SERVER_VERSION },
-                                                 })),
+        "initialize" => JsonRpcResponse::success(
+            request.id.clone(),
+            serde_json::json!({
+                "protocolVersion": consts::PROTOCOL_VERSION,
+                "capabilities": { "tools": { "listChanged": false } },
+                "serverInfo": { "name": consts::SERVER_NAME, "version": consts::SERVER_VERSION },
+            }),
+        ),
         "tools/list" => {
             let tools = catalog.list();
-            eprintln!("knot-mcp: tools/list -> {} tools: {}",
-                      tools.len(),
-                      tools.iter()
-                           .map(|tool| tool.name.as_str())
-                           .collect::<Vec<_>>()
-                           .join(", "));
+            eprintln!(
+                "knot-mcp: tools/list -> {} tools: {}",
+                tools.len(),
+                tools
+                    .iter()
+                    .map(|tool| tool.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
             JsonRpcResponse::success(request.id.clone(), serde_json::json!({ "tools": tools }))
         }
         "tools/call" => {
-            let Some(name) = request.params
-                                    .as_ref()
-                                    .and_then(|p| p.get("name"))
-                                    .and_then(Value::as_str)
+            let Some(name) = request
+                .params
+                .as_ref()
+                .and_then(|p| p.get("name"))
+                .and_then(Value::as_str)
             else {
-                return JsonRpcResponse::error(request.id.clone(),
-                                              INVALID_PARAMS,
-                                              "Invalid params: missing tool name");
+                return JsonRpcResponse::error(
+                    request.id.clone(),
+                    INVALID_PARAMS,
+                    "Invalid params: missing tool name",
+                );
             };
-            let arguments = request.params
-                                   .as_ref()
-                                   .and_then(|p| p.get("arguments"))
-                                   .cloned()
-                                   .unwrap_or_else(|| serde_json::json!({}));
+            let arguments = request
+                .params
+                .as_ref()
+                .and_then(|p| p.get("arguments"))
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
             eprintln!("knot-mcp: tools/call {name} {arguments}");
             let result = catalog.call(name, arguments).await;
             JsonRpcResponse::success(request.id.clone(), result)
         }
         "shutdown" => JsonRpcResponse::success(request.id.clone(), serde_json::json!({})),
-        other => JsonRpcResponse::error(request.id.clone(),
-                                        METHOD_NOT_FOUND,
-                                        format!("Method not found: {other}")),
+        other => JsonRpcResponse::error(
+            request.id.clone(),
+            METHOD_NOT_FOUND,
+            format!("Method not found: {other}"),
+        ),
     }
 }
 
@@ -115,10 +132,12 @@ mod tests {
     use crate::tools::{EmptyCatalog, ToolCallResult, ToolDefinition, ToolInputSchema};
 
     fn request(method: &str, params: Option<Value>) -> JsonRpcRequest {
-        JsonRpcRequest { jsonrpc: "2.0".to_string(),
-                         id: Some(JsonRpcId::Int(1)),
-                         method: method.to_string(),
-                         params }
+        JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(JsonRpcId::Int(1)),
+            method: method.to_string(),
+            params,
+        }
     }
 
     #[test]
@@ -154,9 +173,11 @@ mod tests {
     #[async_trait]
     impl ToolCatalog for OneToolCatalog {
         fn list(&self) -> Vec<ToolDefinition> {
-            vec![ToolDefinition { name:         "ping".to_string(),
-                                  description:  "Replies pong".to_string(),
-                                  input_schema: ToolInputSchema::default(), }]
+            vec![ToolDefinition {
+                name: "ping".to_string(),
+                description: "Replies pong".to_string(),
+                input_schema: ToolInputSchema::default(),
+            }]
         }
 
         async fn call(&self, _name: &str, _arguments: Value) -> ToolCallResult {
@@ -174,10 +195,14 @@ mod tests {
         let response = dispatch(&request("tools/list", None), &OneToolCatalog).await;
         let tool = &response.result.unwrap()["tools"][0];
 
-        assert!(tool.get("inputSchema").is_some(),
-                "tools/list must carry `inputSchema`, got {tool}");
-        assert!(tool.get("input_schema").is_none(),
-                "the snake_case spelling must not reach the wire");
+        assert!(
+            tool.get("inputSchema").is_some(),
+            "tools/list must carry `inputSchema`, got {tool}"
+        );
+        assert!(
+            tool.get("input_schema").is_none(),
+            "the snake_case spelling must not reach the wire"
+        );
         assert_eq!(tool["inputSchema"]["type"], "object");
     }
 

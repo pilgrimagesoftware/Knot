@@ -1,21 +1,21 @@
 use super::*;
 #[derive(Debug, PartialEq)]
 pub(crate) struct WorkspaceRow {
-    pub(crate) id:       Uuid,
-    pub(crate) name:     String,
+    pub(crate) id: Uuid,
+    pub(crate) name: String,
     pub(crate) selected: bool,
 }
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct AgentRow {
-    pub(crate) id:           Uuid,
-    pub(crate) avatar:       String,
-    pub(crate) name:         String,
-    pub(crate) agent_type:   String,
-    pub(crate) folder:       String,
-    pub(crate) selected:     bool,
-    pub(crate) attached:     bool,
-    pub(crate) state:        knot_agents::AgentState,
+    pub(crate) id: Uuid,
+    pub(crate) avatar: String,
+    pub(crate) name: String,
+    pub(crate) agent_type: String,
+    pub(crate) folder: String,
+    pub(crate) selected: bool,
+    pub(crate) attached: bool,
+    pub(crate) state: knot_agents::AgentState,
     pub(crate) unread_count: usize,
 }
 
@@ -52,20 +52,33 @@ pub(crate) const DIFF_FILES_COLOR: u32 = 0x3B82F6;
 /// the accent color.
 pub(crate) fn diff_stats_row(stats: &knot_git::DiffStats, muted: gpui_kit::Hsla) -> gpui_kit::Div {
     let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
-    h_flex().flex_shrink_0()
-            .whitespace_nowrap()
-            .text_color(muted)
-            .gap_1()
-            .items_baseline()
-            .child(div().text_color(rgb(DIFF_ADDED_COLOR))
-                        .child(format!("+{}", stats.insertions)))
-            .child(div().text_color(rgb(DIFF_REMOVED_COLOR))
-                        .child(format!("-{}", stats.deletions)))
-            .child(h_flex().items_baseline()
-                           .child(div().child("("))
-                           .child(div().text_color(rgb(DIFF_FILES_COLOR))
-                                       .child(stats.files_changed.to_string()))
-                           .child(div().ml_1().child(format!("{files})"))))
+    h_flex()
+        .flex_shrink_0()
+        .whitespace_nowrap()
+        .text_color(muted)
+        .gap_1()
+        .items_baseline()
+        .child(
+            div()
+                .text_color(rgb(DIFF_ADDED_COLOR))
+                .child(format!("+{}", stats.insertions)),
+        )
+        .child(
+            div()
+                .text_color(rgb(DIFF_REMOVED_COLOR))
+                .child(format!("-{}", stats.deletions)),
+        )
+        .child(
+            h_flex()
+                .items_baseline()
+                .child(div().child("("))
+                .child(
+                    div()
+                        .text_color(rgb(DIFF_FILES_COLOR))
+                        .child(stats.files_changed.to_string()),
+                )
+                .child(div().ml_1().child(format!("{files})"))),
+        )
 }
 
 pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
@@ -130,17 +143,17 @@ impl AgentMenuEntry {
 pub(crate) struct AgentMenuFacts {
     /// A companion can't own companions, be forked, duplicated, moved or
     /// restarted independently of its owner (`agent-lifecycle`).
-    pub(crate) is_companion:         bool,
+    pub(crate) is_companion: bool,
     /// A shell agent has no coding agent to register with MCP.
-    pub(crate) is_shell:             bool,
+    pub(crate) is_shell: bool,
     /// Whether any attached workspace other than this agent's own exists.
-    pub(crate) has_move_targets:     bool,
+    pub(crate) has_move_targets: bool,
     /// Whether the agent has ever shown a markdown file.
     pub(crate) has_markdown_history: bool,
     /// Whether the agent is running, i.e. has a session to stop. Deactivate
     /// is absent rather than disabled when it is not, matching how this
     /// menu hides every other item that does not apply.
-    pub(crate) is_running:           bool,
+    pub(crate) is_running: bool,
 }
 
 /// The agent-row context menu's entries, in order, with dividers.
@@ -153,31 +166,44 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
     use AgentMenuEntry::*;
 
     let owner_only = !facts.is_companion;
-    let groups = [vec![NewCompanion, NewShellCompanion].into_iter()
-                                                       .filter(|_| owner_only)
-                                                       .collect::<Vec<_>>(),
-                  [EditAgent].into_iter()
-                             .chain([ForkAgent, DuplicateAgent].into_iter()
-                                                               .filter(|_| owner_only))
-                             .collect(),
-                  [MoveToWorkspace].into_iter()
-                                   .filter(|_| owner_only && facts.has_move_targets)
-                                   .chain([SaveToBench].into_iter().filter(|_| owner_only))
-                                   .collect(),
-                  [OpenIn].into_iter()
-                          .chain([MarkdownFiles].into_iter()
-                                                .filter(|_| facts.has_markdown_history))
-                          .collect(),
-                  // Deactivate sits with the other session actions, and
-                  // immediately above Restart Agent: both act on the
-                  // session rather than on the agent, and Deactivate is
-                  // the reversible one of the pair.
-                  [RegisterAgent].into_iter()
-                                 .filter(|_| !facts.is_shell)
-                                 .chain([Deactivate].into_iter().filter(|_| facts.is_running))
-                                 .chain([RestartAgent].into_iter().filter(|_| owner_only))
-                                 .chain([RemoveAgent])
-                                 .collect()];
+    let groups = [
+        vec![NewCompanion, NewShellCompanion]
+            .into_iter()
+            .filter(|_| owner_only)
+            .collect::<Vec<_>>(),
+        [EditAgent]
+            .into_iter()
+            .chain(
+                [ForkAgent, DuplicateAgent]
+                    .into_iter()
+                    .filter(|_| owner_only),
+            )
+            .collect(),
+        [MoveToWorkspace]
+            .into_iter()
+            .filter(|_| owner_only && facts.has_move_targets)
+            .chain([SaveToBench].into_iter().filter(|_| owner_only))
+            .collect(),
+        [OpenIn]
+            .into_iter()
+            .chain(
+                [MarkdownFiles]
+                    .into_iter()
+                    .filter(|_| facts.has_markdown_history),
+            )
+            .collect(),
+        // Deactivate sits with the other session actions, and
+        // immediately above Restart Agent: both act on the
+        // session rather than on the agent, and Deactivate is
+        // the reversible one of the pair.
+        [RegisterAgent]
+            .into_iter()
+            .filter(|_| !facts.is_shell)
+            .chain([Deactivate].into_iter().filter(|_| facts.is_running))
+            .chain([RestartAgent].into_iter().filter(|_| owner_only))
+            .chain([RemoveAgent])
+            .collect(),
+    ];
 
     let mut entries = Vec::new();
     for group in groups.into_iter().filter(|group| !group.is_empty()) {
@@ -191,47 +217,53 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct LayoutModel {
-    pub(crate) workspace_rows:      Vec<WorkspaceRow>,
+    pub(crate) workspace_rows: Vec<WorkspaceRow>,
     pub(crate) selected_agent_rows: Vec<AgentRow>,
 }
 
-pub(crate) fn layout_model(store: &knot_agents::AgentStore, agent_selection: Option<Uuid>,
-                           attached_ids: &[Uuid], unread_counts: &BTreeMap<Uuid, usize>)
-                           -> LayoutModel {
+pub(crate) fn layout_model(
+    store: &knot_agents::AgentStore, agent_selection: Option<Uuid>, attached_ids: &[Uuid],
+    unread_counts: &BTreeMap<Uuid, usize>,
+) -> LayoutModel {
     let current = store.current_workspace_id();
-    let workspace_rows = store.workspaces()
-                              .iter()
-                              .map(|workspace| WorkspaceRow { id:       workspace.id,
-                                                              name:     workspace.name.clone(),
-                                                              selected: Some(workspace.id)
-                                                                        == current, })
-                              .collect::<Vec<_>>();
+    let workspace_rows = store
+        .workspaces()
+        .iter()
+        .map(|workspace| WorkspaceRow {
+            id: workspace.id,
+            name: workspace.name.clone(),
+            selected: Some(workspace.id) == current,
+        })
+        .collect::<Vec<_>>();
 
-    let selected_agent_rows =
-        store.workspaces()
-             .iter()
-             .find(|workspace| Some(workspace.id) == current)
-             .map(|workspace| {
-                 workspace.agent_ids
-                          .iter()
-                          .filter_map(|id| store.agent(*id))
-                          .map(|agent| AgentRow { id:           agent.id,
-                                                  avatar:       agent.avatar.clone(),
-                                                  name:         agent.name.clone(),
-                                                  agent_type:   agent.agent_type.clone(),
-                                                  folder:       agent.folder.clone(),
-                                                  selected:     Some(agent.id) == agent_selection,
-                                                  attached:     attached_ids.contains(&agent.id),
-                                                  state:        agent.state,
-                                                  unread_count: unread_counts.get(&agent.id)
-                                                                             .copied()
-                                                                             .unwrap_or(0), })
-                          .collect::<Vec<_>>()
-             })
-             .unwrap_or_default();
+    let selected_agent_rows = store
+        .workspaces()
+        .iter()
+        .find(|workspace| Some(workspace.id) == current)
+        .map(|workspace| {
+            workspace
+                .agent_ids
+                .iter()
+                .filter_map(|id| store.agent(*id))
+                .map(|agent| AgentRow {
+                    id: agent.id,
+                    avatar: agent.avatar.clone(),
+                    name: agent.name.clone(),
+                    agent_type: agent.agent_type.clone(),
+                    folder: agent.folder.clone(),
+                    selected: Some(agent.id) == agent_selection,
+                    attached: attached_ids.contains(&agent.id),
+                    state: agent.state,
+                    unread_count: unread_counts.get(&agent.id).copied().unwrap_or(0),
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
-    LayoutModel { workspace_rows,
-                  selected_agent_rows }
+    LayoutModel {
+        workspace_rows,
+        selected_agent_rows,
+    }
 }
 
 pub(crate) fn command_to_send(input: &str) -> Option<&str> {
@@ -240,10 +272,11 @@ pub(crate) fn command_to_send(input: &str) -> Option<&str> {
 }
 
 pub(crate) fn stale_session_ids(session_ids: &[Uuid], live_ids: &BTreeSet<Uuid>) -> Vec<Uuid> {
-    session_ids.iter()
-               .copied()
-               .filter(|id| !live_ids.contains(id))
-               .collect()
+    session_ids
+        .iter()
+        .copied()
+        .filter(|id| !live_ids.contains(id))
+        .collect()
 }
 
 /// Builds the agent store from persisted layout when
@@ -259,42 +292,49 @@ pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::
         return knot_agents::AgentStore::new();
     }
 
-    let mut store = knot_agents::AgentStore::from_saved(&settings.saved_agents,
-                                                        settings.saved_workspaces.clone());
+    let mut store = knot_agents::AgentStore::from_saved(
+        &settings.saved_agents,
+        settings.saved_workspaces.clone(),
+    );
 
     if settings.restore_conversation_on_launch {
-        let persisted: BTreeMap<Uuid, String> =
-            settings.saved_agents
-                    .iter()
-                    .filter_map(|agent| agent.session_id.clone().map(|sid| (agent.id, sid)))
-                    .collect();
+        let persisted: BTreeMap<Uuid, String> = settings
+            .saved_agents
+            .iter()
+            .filter_map(|agent| agent.session_id.clone().map(|sid| (agent.id, sid)))
+            .collect();
         store.resolve_resume_sessions(&persisted, |folder, agent_type| {
-                 let provider = knot_history::provider(agent_type)?;
-                 provider.load_sessions(folder)
-                         .into_iter()
-                         .next()
-                         .map(|session| session.id)
-             });
+            let provider = knot_history::provider(agent_type)?;
+            provider
+                .load_sessions(folder)
+                .into_iter()
+                .next()
+                .map(|session| session.id)
+        });
     }
 
     store
 }
 
-pub(crate) fn agent_selection_for_workspace(store: &knot_agents::AgentStore, workspace_id: Uuid)
-                                            -> Option<Uuid> {
-    let workspace = store.workspaces()
-                         .iter()
-                         .find(|workspace| workspace.id == workspace_id)?;
-    workspace.active_agent_ids
-             .iter()
-             .chain(workspace.agent_ids.iter())
-             .find(|id| store.agent(**id).is_some())
-             .copied()
+pub(crate) fn agent_selection_for_workspace(
+    store: &knot_agents::AgentStore, workspace_id: Uuid,
+) -> Option<Uuid> {
+    let workspace = store
+        .workspaces()
+        .iter()
+        .find(|workspace| workspace.id == workspace_id)?;
+    workspace
+        .active_agent_ids
+        .iter()
+        .chain(workspace.agent_ids.iter())
+        .find(|id| store.agent(**id).is_some())
+        .copied()
 }
 
 pub(crate) fn initial_agent_selection(store: &knot_agents::AgentStore) -> Option<Uuid> {
-    store.current_workspace_id()
-         .and_then(|id| agent_selection_for_workspace(store, id))
+    store
+        .current_workspace_id()
+        .and_then(|id| agent_selection_for_workspace(store, id))
 }
 
 /// The slice of an agent the shell paints. [`agent_status_snapshot`] diffs
@@ -302,55 +342,65 @@ pub(crate) fn initial_agent_selection(store: &knot_agents::AgentStore) -> Option
 /// buffer append.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentStatusKey {
-    pub(crate) id:            Uuid,
-    pub(crate) state:         knot_agents::AgentState,
-    pub(crate) status_text:   String,
+    pub(crate) id: Uuid,
+    pub(crate) state: knot_agents::AgentState,
+    pub(crate) status_text: String,
     pub(crate) is_registered: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeliveryNotice {
     pub(crate) recipient_name: String,
-    pub(crate) count:          usize,
+    pub(crate) count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AwaitingNotice {
     agent_name: String,
-    message:    String,
+    message: String,
 }
 
-pub(crate) fn delivery_notice(events: &[DeliveryEvent], agents: &[knot_agents::Agent])
-                              -> Option<DeliveryNotice> {
+pub(crate) fn delivery_notice(
+    events: &[DeliveryEvent], agents: &[knot_agents::Agent],
+) -> Option<DeliveryNotice> {
     let event = events.last()?;
     let agent = agents.iter().find(|agent| agent.id == event.agent_id)?;
-    let count = events.iter()
-                      .filter(|event| event.agent_id == agent.id)
-                      .count();
-    Some(DeliveryNotice { recipient_name: agent.name.clone(),
-                          count })
+    let count = events
+        .iter()
+        .filter(|event| event.agent_id == agent.id)
+        .count();
+    Some(DeliveryNotice {
+        recipient_name: agent.name.clone(),
+        count,
+    })
 }
 
 pub(crate) fn agent_status_snapshot(store: &knot_agents::AgentStore) -> Vec<AgentStatusKey> {
-    store.agents()
-         .iter()
-         .map(|agent| AgentStatusKey { id:            agent.id,
-                                       state:         agent.state,
-                                       status_text:   agent.status_text.clone(),
-                                       is_registered: agent.is_registered, })
-         .collect()
+    store
+        .agents()
+        .iter()
+        .map(|agent| AgentStatusKey {
+            id: agent.id,
+            state: agent.state,
+            status_text: agent.status_text.clone(),
+            is_registered: agent.is_registered,
+        })
+        .collect()
 }
 
-pub(crate) fn unread_counts_snapshot(messages: &knot_messaging::MessageStore, agent_ids: &[Uuid])
-                                     -> BTreeMap<Uuid, usize> {
-    agent_ids.iter()
-             .copied()
-             .map(|id| (id, messages.unread_count(id)))
-             .collect()
+pub(crate) fn unread_counts_snapshot(
+    messages: &knot_messaging::MessageStore, agent_ids: &[Uuid],
+) -> BTreeMap<Uuid, usize> {
+    agent_ids
+        .iter()
+        .copied()
+        .map(|id| (id, messages.unread_count(id)))
+        .collect()
 }
 
-pub(crate) fn apply_terminal_status(store: &Arc<Mutex<knot_agents::AgentStore>>, agent_id: Uuid,
-                                    state: knot_agents::AgentState) {
+pub(crate) fn apply_terminal_status(
+    store: &Arc<Mutex<knot_agents::AgentStore>>, agent_id: Uuid, state: knot_agents::AgentState,
+) {
     if let Ok(mut store) = store.lock() {
         store.set_state(agent_id, state);
     }
@@ -361,18 +411,18 @@ pub(crate) fn apply_terminal_status(store: &Arc<Mutex<knot_agents::AgentStore>>,
 /// six-argument predicate invites callers to transpose two of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NudgeCheck<'a> {
-    pub(crate) agent_type:     &'a str,
-    pub(crate) mcp_enabled:    bool,
+    pub(crate) agent_type: &'a str,
+    pub(crate) mcp_enabled: bool,
     /// The most recent unread message for this agent, if any.
     pub(crate) latest_message: Option<Uuid>,
     /// The last message this agent was already nudged about.
-    pub(crate) last_nudged:    Option<Uuid>,
+    pub(crate) last_nudged: Option<Uuid>,
     /// The agent's state is Idle. A nudge must not land mid-work.
-    pub(crate) idle:           bool,
+    pub(crate) idle: bool,
     /// The agent has a live session able to take a prompt right now - for a
     /// panel agent, a ready slot with no turn in flight and no permission
     /// outstanding.
-    pub(crate) can_receive:    bool,
+    pub(crate) can_receive: bool,
 }
 
 /// Whether to send `agent` the "check your inbox" prompt.
@@ -383,19 +433,20 @@ pub(crate) struct NudgeCheck<'a> {
 /// busy agent, or one with no live session, is nudged later instead.
 pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
     check.mcp_enabled
-    && check.agent_type != "shell"
-    && check.idle
-    && check.can_receive
-    && check.latest_message
+        && check.agent_type != "shell"
+        && check.idle
+        && check.can_receive
+        && check
+            .latest_message
             .is_some_and(|message_id| Some(message_id) != check.last_nudged)
 }
 
-pub(crate) fn should_show_awaiting_notice(selected_agent: Option<Uuid>, agent_id: Uuid,
-                                          message: &str, last_message: Option<&String>)
-                                          -> bool {
+pub(crate) fn should_show_awaiting_notice(
+    selected_agent: Option<Uuid>, agent_id: Uuid, message: &str, last_message: Option<&String>,
+) -> bool {
     selected_agent != Some(agent_id)
-    && !message.is_empty()
-    && last_message.is_none_or(|last| last != message)
+        && !message.is_empty()
+        && last_message.is_none_or(|last| last != message)
 }
 
 pub(crate) const AWAITING_INPUT_DEFAULT_BODY: &str = "Needs your attention";
@@ -405,8 +456,9 @@ pub(crate) const AWAITING_INPUT_DEFAULT_BODY: &str = "Needs your attention";
 /// user isn't already looking at" signal `should_show_awaiting_notice`
 /// computes for the in-window toast behind the
 /// `desktop_notifications_enabled` setting.
-pub(crate) fn should_notify(desktop_notifications_enabled: bool, show_awaiting_notice: bool)
-                            -> bool {
+pub(crate) fn should_notify(
+    desktop_notifications_enabled: bool, show_awaiting_notice: bool,
+) -> bool {
     desktop_notifications_enabled && show_awaiting_notice
 }
 
@@ -415,8 +467,7 @@ pub(crate) fn should_notify(desktop_notifications_enabled: bool, show_awaiting_n
 pub(crate) fn notification_body(message: &str) -> &str {
     if message.is_empty() {
         AWAITING_INPUT_DEFAULT_BODY
-    }
-    else {
+    } else {
         message
     }
 }
@@ -432,7 +483,8 @@ pub(crate) fn notification_body(message: &str) -> &str {
 /// that exists, a click only raises the app to the front
 /// (`App::activate(true)`, same as the existing `ShowAllWindows` action);
 /// it doesn't switch the front window's selection to the clicked agent.
-pub(crate) fn notification_response_agent_id(response: &SystemNotificationResponse)
-                                             -> Option<Uuid> {
+pub(crate) fn notification_response_agent_id(
+    response: &SystemNotificationResponse,
+) -> Option<Uuid> {
     Uuid::parse_str(&response.tag).ok()
 }

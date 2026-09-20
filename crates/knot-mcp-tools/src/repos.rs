@@ -14,16 +14,21 @@ use crate::responses::{
 fn to_worktree_responses(repo: &RepoInfo) -> Vec<WorktreeInfoResponse> {
     repo.worktrees
         .iter()
-        .map(|w| WorktreeInfoResponse { name: w.name.clone(),
-                                        path: w.path.display().to_string(), })
+        .map(|w| WorktreeInfoResponse {
+            name: w.name.clone(),
+            path: w.path.display().to_string(),
+        })
         .collect()
 }
 
 pub fn list_repos(repos: &[RepoInfo]) -> ToolCallResult {
-    let repos = repos.iter()
-                     .map(|r| RepoInfoResponse { name:      r.name.clone(),
-                                                 worktrees: to_worktree_responses(r), })
-                     .collect();
+    let repos = repos
+        .iter()
+        .map(|r| RepoInfoResponse {
+            name: r.name.clone(),
+            worktrees: to_worktree_responses(r),
+        })
+        .collect();
     success(&ListReposResponse { repos })
 }
 
@@ -36,17 +41,20 @@ pub fn list_worktrees(repos: &[RepoInfo], arguments: &serde_json::Value) -> Tool
     // The primary clone (index 0, per `knot_discovery::scan`'s grouping) is
     // the repo's identity; a `repoPath` matching neither the primary nor a
     // worktree path yields an empty list rather than an error.
-    let worktrees = repos.iter()
-                         .find(|r| {
-                             r.worktrees
-                              .iter()
-                              .any(|w| w.path.to_string_lossy() == repo_path)
-                         })
-                         .map(to_worktree_responses)
-                         .unwrap_or_default();
+    let worktrees = repos
+        .iter()
+        .find(|r| {
+            r.worktrees
+                .iter()
+                .any(|w| w.path.to_string_lossy() == repo_path)
+        })
+        .map(to_worktree_responses)
+        .unwrap_or_default();
 
-    success(&ListWorktreesResponse { repo_path: repo_path.to_string(),
-                                     worktrees })
+    success(&ListWorktreesResponse {
+        repo_path: repo_path.to_string(),
+        worktrees,
+    })
 }
 
 pub fn create_worktree(arguments: &serde_json::Value) -> ToolCallResult {
@@ -62,9 +70,11 @@ pub fn create_worktree(arguments: &serde_json::Value) -> ToolCallResult {
     match create_worktree_path(repo_path, branch_name) {
         Ok(path) => {
             let path = path.display().to_string();
-            success(&CreateWorktreeResponse { success: true,
-                                              path:    Some(path.clone()),
-                                              message: format!("Worktree created at {path}"), })
+            success(&CreateWorktreeResponse {
+                success: true,
+                path: Some(path.clone()),
+                message: format!("Worktree created at {path}"),
+            })
         }
         Err(err) => ToolCallResult::error(format!("Failed to create worktree: {err}")),
     }
@@ -77,9 +87,10 @@ pub fn create_worktree_path(repo_path: &str, branch_name: &str) -> Result<PathBu
     }
 
     let destination = knot_git::suggest_worktree_path(repo_path_ref, branch_name);
-    Repository::open(repo_path_ref).create_worktree(branch_name, &destination)
-                                   .map(|()| destination)
-                                   .map_err(|error| format!("Failed to create worktree: {error}"))
+    Repository::open(repo_path_ref)
+        .create_worktree(branch_name, &destination)
+        .map(|()| destination)
+        .map_err(|error| format!("Failed to create worktree: {error}"))
 }
 
 #[cfg(test)]
@@ -106,9 +117,13 @@ mod tests {
     }
 
     fn repo_info(name: &str, primary: &Path) -> RepoInfo {
-        RepoInfo { name:      name.to_string(),
-                   worktrees: vec![WorktreeInfo { name: name.to_string(),
-                                                  path: primary.to_path_buf(), }], }
+        RepoInfo {
+            name: name.to_string(),
+            worktrees: vec![WorktreeInfo {
+                name: name.to_string(),
+                path: primary.to_path_buf(),
+            }],
+        }
     }
 
     #[test]
@@ -152,9 +167,9 @@ mod tests {
     fn create_worktree_not_a_repo_errors() {
         let dir = tempfile::tempdir().unwrap();
         let result = create_worktree(&json!({
-                                         "repoPath": dir.path().to_str().unwrap(),
-                                         "branchName": "feature",
-                                     }));
+            "repoPath": dir.path().to_str().unwrap(),
+            "branchName": "feature",
+        }));
         assert_eq!(result.is_error, Some(true));
         assert!(result.content[0].text.contains("Not a git repository"));
     }
@@ -167,9 +182,9 @@ mod tests {
         init_repo(&repo_path);
 
         let result = create_worktree(&json!({
-                                         "repoPath": repo_path.to_str().unwrap(),
-                                         "branchName": "feature",
-                                     }));
+            "repoPath": repo_path.to_str().unwrap(),
+            "branchName": "feature",
+        }));
 
         assert_eq!(result.is_error, None);
         let expected = dir.path().join("repo-feature");
