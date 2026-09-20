@@ -1,105 +1,101 @@
 use super::*;
 /// Opens the settings window, or brings it forward if already open.
-pub(crate) fn open_settings_window(
-    handle: &Rc<RefCell<Option<AnyWindowHandle>>>, settings: knot_core::Settings,
-    store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App,
-) {
+pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
+                                   settings: knot_core::Settings,
+                                   store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
-        && existing
-            .update(cx, |_, window, _| window.activate_window())
-            .is_ok()
+       && existing.update(cx, |_, window, _| window.activate_window())
+                  .is_ok()
     {
         return;
     }
     let options = settings_window_options(cx);
     match cx.open_window(options, move |window, cx| {
-        let selected_agent_type = "claude".to_string();
-        let initial_options = settings
-            .agent_options
-            .get(&selected_agent_type)
-            .cloned()
-            .unwrap_or_default();
-        let agent_options_input = cx.new(|cx| {
-            InputState::new(window, cx)
+                let selected_agent_type = "claude".to_string();
+                let initial_options = settings.agent_options
+                                              .get(&selected_agent_type)
+                                              .cloned()
+                                              .unwrap_or_default();
+                let agent_options_input = cx.new(|cx| {
+                                                InputState::new(window, cx)
                 .placeholder("Extra CLI options")
                 .default_value(initial_options)
-        });
-        let ai_api_key_input = cx.new(|cx| {
-            InputState::new(window, cx)
+                                            });
+                let ai_api_key_input = cx.new(|cx| {
+                                             InputState::new(window, cx)
                 .placeholder("API key")
                 .default_value(settings.ai_api_key.clone())
-        });
-        let autopilot_custom_prompt_input = cx.new(|cx| {
-            InputState::new(window, cx)
+                                         });
+                let autopilot_custom_prompt_input = cx.new(|cx| {
+                                                          InputState::new(window, cx)
                 .placeholder("Custom prompt")
                 .default_value(settings.autopilot_custom_prompt.clone())
-        });
-        let mcp_port_input = cx.new(|cx| {
-            InputState::new(window, cx)
+                                                      });
+                let mcp_port_input = cx.new(|cx| {
+                                           InputState::new(window, cx)
                 .placeholder("Port")
                 .default_value(settings.mcp_server_port.to_string())
-        });
-        let view = cx.new(|cx| {
-            let agent_options_subscription = cx.subscribe(
-                &agent_options_input,
-                |this: &mut SettingsWindow, _, event, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.save_agent_options(cx);
-                    }
-                },
-            );
-            let ai_api_key_subscription = cx.subscribe(
-                &ai_api_key_input,
-                |this: &mut SettingsWindow, _, event, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.save_ai_api_key(cx);
-                    }
-                },
-            );
-            let autopilot_custom_prompt_subscription = cx.subscribe(
-                &autopilot_custom_prompt_input,
-                |this: &mut SettingsWindow, _, event, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.save_autopilot_custom_prompt(cx);
-                    }
-                },
-            );
-            let mcp_port_subscription = cx.subscribe(
-                &mcp_port_input,
-                |this: &mut SettingsWindow, _, event, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.save_mcp_port(cx);
-                    }
-                },
-            );
-            SettingsWindow {
-                settings,
-                store,
-                selected_tab: SettingsTab::General,
-                selected_agent_type,
-                mcp_selected_agent_type: "claude".to_string(),
-                agent_options_input,
-                ai_api_key_input,
-                autopilot_custom_prompt_input,
-                mcp_port_input,
-                _agent_options_subscription: agent_options_subscription,
-                _ai_api_key_subscription: ai_api_key_subscription,
-                _autopilot_custom_prompt_subscription: autopilot_custom_prompt_subscription,
-                _mcp_port_subscription: mcp_port_subscription,
-            }
-        });
-        #[cfg(target_os = "macos")]
-        {
-            let settings_window = view.clone();
-            cx.spawn(async move |cx| {
-                loop {
-                    cx.background_executor()
-                        .timer(Duration::from_millis(300))
-                        .await;
-                    if let Some((target, family, size)) = native_font_panel::poll_selection() {
-                        cx.update(|app| {
-                            settings_window.update(app, |view, cx| {
-                                match target {
+                                       });
+                let view = cx.new(|cx| {
+                                 let agent_options_subscription =
+                                     cx.subscribe(&agent_options_input,
+                                                  |this: &mut SettingsWindow, _, event, cx| {
+                                                      if matches!(event, InputEvent::Change) {
+                                                          this.save_agent_options(cx);
+                                                      }
+                                                  });
+                                 let ai_api_key_subscription =
+                                     cx.subscribe(&ai_api_key_input,
+                                                  |this: &mut SettingsWindow, _, event, cx| {
+                                                      if matches!(event, InputEvent::Change) {
+                                                          this.save_ai_api_key(cx);
+                                                      }
+                                                  });
+                                 let autopilot_custom_prompt_subscription =
+                                     cx.subscribe(&autopilot_custom_prompt_input,
+                                                  |this: &mut SettingsWindow, _, event, cx| {
+                                                      if matches!(event, InputEvent::Change) {
+                                                          this.save_autopilot_custom_prompt(cx);
+                                                      }
+                                                  });
+                                 let mcp_port_subscription =
+                                     cx.subscribe(&mcp_port_input,
+                                                  |this: &mut SettingsWindow, _, event, cx| {
+                                                      if matches!(event, InputEvent::Change) {
+                                                          this.save_mcp_port(cx);
+                                                      }
+                                                  });
+                                 SettingsWindow { settings,
+                                                  store,
+                                                  selected_tab: SettingsTab::General,
+                                                  selected_agent_type,
+                                                  mcp_selected_agent_type: "claude".to_string(),
+                                                  agent_options_input,
+                                                  ai_api_key_input,
+                                                  autopilot_custom_prompt_input,
+                                                  mcp_port_input,
+                                                  _agent_options_subscription:
+                                                      agent_options_subscription,
+                                                  _ai_api_key_subscription:
+                                                      ai_api_key_subscription,
+                                                  _autopilot_custom_prompt_subscription:
+                                                      autopilot_custom_prompt_subscription,
+                                                  _mcp_port_subscription: mcp_port_subscription }
+                             });
+                #[cfg(target_os = "macos")]
+                {
+                    let settings_window = view.clone();
+                    cx.spawn(async move |cx| {
+                          loop {
+                              cx.background_executor()
+                                .timer(Duration::from_millis(300))
+                                .await;
+                              if let Some((target, family, size)) =
+                                  native_font_panel::poll_selection()
+                              {
+                                  cx.update(|app| {
+                                        settings_window.update(app, |view, cx| {
+                                                           match target {
                                     native_font_panel::Target::Ui => {
                                         view.settings.ui_font_name = family;
                                         view.settings.ui_font_size = size;
@@ -116,17 +112,17 @@ pub(crate) fn open_settings_window(
                                         view.settings.terminal_font_size = size;
                                     }
                                 }
-                                view.persist();
-                                cx.notify();
-                            });
-                        });
-                    }
+                                                           view.persist();
+                                                           cx.notify();
+                                                       });
+                                    });
+                              }
+                          }
+                      })
+                      .detach();
                 }
-            })
-            .detach();
-        }
-        cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-    }) {
+                cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+            }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),
         Err(error) => eprintln!("failed to open settings window: {error}"),
     }
@@ -144,15 +140,13 @@ pub(crate) enum SettingsTab {
 }
 
 impl SettingsTab {
-    pub(crate) const ALL: [SettingsTab; 7] = [
-        SettingsTab::General,
-        SettingsTab::Coding,
-        SettingsTab::Personas,
-        SettingsTab::Autopilot,
-        SettingsTab::Voice,
-        SettingsTab::Mcp,
-        SettingsTab::Terminal,
-    ];
+    pub(crate) const ALL: [SettingsTab; 7] = [SettingsTab::General,
+                                              SettingsTab::Coding,
+                                              SettingsTab::Personas,
+                                              SettingsTab::Autopilot,
+                                              SettingsTab::Voice,
+                                              SettingsTab::Mcp,
+                                              SettingsTab::Terminal];
 
     pub(crate) fn label(self) -> &'static str {
         match self {
@@ -202,80 +196,65 @@ impl SettingsWindow {
     /// `text_base` used by row labels/controls) - a section header should
     /// never read smaller than what it's heading.
     fn group(title: &'static str) -> GroupBox {
-        GroupBox::new()
-            .outline()
-            .title(div().text_lg().font_semibold().child(title))
+        GroupBox::new().outline()
+                       .title(div().text_lg().font_semibold().child(title))
     }
 
     /// A label + control row with the label right-aligned in a fixed-width
     /// column, matching the alignment convention already used by
     /// `AgentEditor`/`PersonaEditor`.
     fn row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
-        h_flex()
-            .gap_3()
-            .items_center()
-            .child(
-                div()
-                    .w(px(Self::LABEL_WIDTH))
-                    .flex_shrink_0()
-                    .text_right()
-                    .child(label),
-            )
-            .child(control)
+        h_flex().gap_3()
+                .items_center()
+                .child(div().w(px(Self::LABEL_WIDTH))
+                            .flex_shrink_0()
+                            .text_right()
+                            .child(label))
+                .child(control)
     }
 
     /// Like `row`, but baseline-aligned instead of center-aligned - for rows
     /// whose control is itself text (a read-only value, not a switch/button/
     /// input), so the value's text baseline lines up with the label's.
     fn text_row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
-        h_flex()
-            .gap_3()
-            .items_baseline()
-            .child(
-                div()
-                    .w(px(Self::LABEL_WIDTH))
-                    .flex_shrink_0()
-                    .text_right()
-                    .child(label),
-            )
-            .child(control)
+        h_flex().gap_3()
+                .items_baseline()
+                .child(div().w(px(Self::LABEL_WIDTH))
+                            .flex_shrink_0()
+                            .text_right()
+                            .child(label))
+                .child(control)
     }
 
     /// Muted description text lined up under a row's *control* column,
     /// not spanning the full card width - it explains the control above
     /// it, not the section as a whole.
     fn hint(cx: &Context<Self>, text: &'static str) -> impl IntoElement {
-        h_flex()
-            .gap_3()
-            .child(div().w(px(Self::LABEL_WIDTH)).flex_shrink_0())
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .text_sm()
-                    .whitespace_normal()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(text),
-            )
+        h_flex().gap_3()
+                .child(div().w(px(Self::LABEL_WIDTH)).flex_shrink_0())
+                .child(div().flex_1()
+                            .min_w_0()
+                            .text_sm()
+                            .whitespace_normal()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(text))
     }
 
     /// Renders `text` in the theme's monospace font, for values that are
     /// literally code/commands/identifiers (install commands, model names).
     fn mono_text(cx: &Context<Self>, text: impl Into<gpui_kit::SharedString>) -> gpui_kit::Div {
-        div()
-            .text_sm()
-            .font_family(cx.theme().mono_font_family.clone())
-            .child(text.into())
+        div().text_sm()
+             .font_family(cx.theme().mono_font_family.clone())
+             .child(text.into())
     }
 
     /// A small icon-only action button with a tooltip, used for utility
     /// actions (choose/clear/add/edit/delete/copy) instead of a text label -
     /// text buttons read as arbitrary activators, an icon reads as what it
     /// does. `danger` tints destructive actions (clear/delete) red.
-    pub(crate) fn icon_button(
-        id: impl Into<gpui_kit::ElementId>, icon_path: &'static str,
-        tooltip: impl Into<gpui_kit::SharedString>, danger: bool,
-    ) -> Button {
+    pub(crate) fn icon_button(id: impl Into<gpui_kit::ElementId>, icon_path: &'static str,
+                              tooltip: impl Into<gpui_kit::SharedString>, danger: bool)
+                              -> Button {
         let mut icon = Icon::default().path(icon_path);
         if danger {
             // `.ghost()` and `.danger()` are both button *variants* - only one
@@ -337,29 +316,32 @@ impl SettingsWindow {
     }
 
     fn choose_source_folder(&mut self, cx: &mut Context<Self>) {
-        let receiver = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: Some("Choose Source Folder".into()),
-        });
+        let receiver =
+            cx.prompt_for_paths(PathPromptOptions { files:       false,
+                                                    directories: true,
+                                                    multiple:    false,
+                                                    prompt:
+                                                        Some("Choose Source Folder".into()), });
         let settings_window = cx.entity();
         cx.spawn(async move |_this, cx| {
-            let Ok(Ok(Some(paths))) = receiver.await else {
-                return;
-            };
-            let Some(path) = paths.into_iter().next() else {
-                return;
-            };
-            cx.update(|app| {
-                settings_window.update(app, |view, cx| {
-                    view.settings.source_base_folder = path.to_string_lossy().into_owned();
-                    view.persist();
-                    cx.notify();
+              let Ok(Ok(Some(paths))) = receiver.await
+              else {
+                  return;
+              };
+              let Some(path) = paths.into_iter().next()
+              else {
+                  return;
+              };
+              cx.update(|app| {
+                    settings_window.update(app, |view, cx| {
+                                       view.settings.source_base_folder =
+                                           path.to_string_lossy().into_owned();
+                                       view.persist();
+                                       cx.notify();
+                                   });
                 });
-            });
-        })
-        .detach();
+          })
+          .detach();
     }
 
     fn clear_source_folder(&mut self, cx: &mut Context<Self>) {
@@ -370,15 +352,14 @@ impl SettingsWindow {
 
     fn select_agent_type(&mut self, agent_type: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_agent_type = agent_type.to_string();
-        let value = self
-            .settings
-            .agent_options
-            .get(agent_type)
-            .cloned()
-            .unwrap_or_default();
+        let value = self.settings
+                        .agent_options
+                        .get(agent_type)
+                        .cloned()
+                        .unwrap_or_default();
         cx.update_entity(&self.agent_options_input, |input, input_cx| {
-            input.set_value(value, window, input_cx);
-        });
+              input.set_value(value, window, input_cx);
+          });
         cx.notify();
     }
 
@@ -448,11 +429,10 @@ impl SettingsWindow {
     }
 
     fn save_autopilot_custom_prompt(&mut self, cx: &mut Context<Self>) {
-        self.settings.autopilot_custom_prompt = self
-            .autopilot_custom_prompt_input
-            .read(cx)
-            .value()
-            .to_string();
+        self.settings.autopilot_custom_prompt = self.autopilot_custom_prompt_input
+                                                    .read(cx)
+                                                    .value()
+                                                    .to_string();
         self.persist();
     }
 
@@ -471,8 +451,7 @@ impl SettingsWindow {
             62 => "Right Control",
             63 => "Fn",
             _ => return format!("Key {code}"),
-        }
-        .to_string()
+        }.to_string()
     }
 
     /// Delegated so the URL shown here - and the `mcp add` command built
@@ -516,7 +495,8 @@ impl SettingsWindow {
         let truncated: String = instructions.chars().take(max_chars).collect();
         if instructions.chars().count() > max_chars {
             format!("{truncated}…")
-        } else {
+        }
+        else {
             truncated
         }
     }
@@ -593,22 +573,23 @@ impl SettingsWindow {
 
     fn render_tab_strip(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let selected_index = SettingsTab::ALL
-            .iter()
-            .position(|tab| *tab == self.selected_tab)
-            .unwrap_or(0);
-        TabBar::new("settings-tabs")
-            .underline()
-            .selected_index(selected_index)
-            .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label())))
-            .on_click(move |index, window, app| {
-                let tab = SettingsTab::ALL[*index];
-                settings_window.update(app, |view, cx| {
-                    view.selected_tab = tab;
-                    cx.notify();
-                });
-                window.resize(size(SETTINGS_WINDOW_WIDTH, Self::pane_target_height(tab)));
-            })
+        let selected_index = SettingsTab::ALL.iter()
+                                             .position(|tab| *tab == self.selected_tab)
+                                             .unwrap_or(0);
+        TabBar::new("settings-tabs").underline()
+                                    .selected_index(selected_index)
+                                    .children(SettingsTab::ALL.map(|tab| {
+                                                                  Tab::new().label(tab.label())
+                                                              }))
+                                    .on_click(move |index, window, app| {
+                                        let tab = SettingsTab::ALL[*index];
+                                        settings_window.update(app, |view, cx| {
+                                                           view.selected_tab = tab;
+                                                           cx.notify();
+                                                       });
+                                        window.resize(size(SETTINGS_WINDOW_WIDTH,
+                                                           Self::pane_target_height(tab)));
+                                    })
     }
 
     fn render_general(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -756,7 +737,8 @@ impl SettingsWindow {
         let source_base_folder = self.settings.source_base_folder.clone();
         let folder_label = if source_base_folder.is_empty() {
             "Not configured".to_string()
-        } else {
+        }
+        else {
             source_base_folder
         };
         let agent_type_label = Self::agent_type_label(&self.selected_agent_type);
@@ -862,24 +844,22 @@ impl SettingsWindow {
 
     fn render_personas(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let personas: Vec<knot_core::Persona> = self
-            .settings
-            .active_personas()
-            .into_iter()
-            .cloned()
-            .collect();
+        let personas: Vec<knot_core::Persona> = self.settings
+                                                    .active_personas()
+                                                    .into_iter()
+                                                    .cloned()
+                                                    .collect();
 
         let in_use = self.live_personas_in_use();
 
-        let list =
-            if personas.is_empty() {
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("No personas defined.")
-                    .into_any_element()
-            } else {
-                v_flex()
+        let list = if personas.is_empty() {
+            div().text_sm()
+                 .text_color(cx.theme().muted_foreground)
+                 .child("No personas defined.")
+                 .into_any_element()
+        }
+        else {
+            v_flex()
                     .gap_3()
                     .children(personas.into_iter().enumerate().map(|(index, persona)| {
                         let id = persona.id;
@@ -967,15 +947,14 @@ impl SettingsWindow {
                             )
                     }))
                     .into_any_element()
-            };
+        };
         // Bounded so the list scrolls in place instead of pushing the group's
         // title/action row (which must stay visible) off the top of the
         // window - same cap philosophy as the window's own per-pane height.
-        let list = div()
-            .id("personas-list")
-            .max_h(px(420.))
-            .overflow_y_scroll()
-            .child(list);
+        let list = div().id("personas-list")
+                        .max_h(px(420.))
+                        .overflow_y_scroll()
+                        .child(list);
 
         v_flex().gap_3().child(
             Self::group("Personas")
@@ -1377,15 +1356,13 @@ impl SettingsWindow {
     /// The choice comes back asynchronously via
     /// `native_font_panel::poll_selection`.
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
-    fn font_picker_button(
-        id: &'static str, target: FontPanelTarget, name: String, size: f64,
-    ) -> Button {
-        Button::new(id)
-            .label(format!("{name}, {size:.0}pt"))
-            .on_click(move |_, _, _| {
-                #[cfg(target_os = "macos")]
-                native_font_panel::open(target, &name, size);
-            })
+    fn font_picker_button(id: &'static str, target: FontPanelTarget, name: String, size: f64)
+                          -> Button {
+        Button::new(id).label(format!("{name}, {size:.0}pt"))
+                       .on_click(move |_, _, _| {
+                           #[cfg(target_os = "macos")]
+                           native_font_panel::open(target, &name, size);
+                       })
     }
 
     fn render_appearance(&self, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -1423,63 +1400,55 @@ impl SettingsWindow {
 }
 
 pub(crate) fn persona_editor_window_options(title: &'static str, cx: &App) -> WindowOptions {
-    WindowOptions {
-        titlebar: Some(gpui_kit::TitlebarOptions {
-            title: Some(title.into()),
-            ..Default::default()
-        }),
-        window_bounds: Some(WindowBounds::centered(size(px(460.), px(380.)), cx)),
-        window_min_size: Some(size(px(400.), px(320.))),
-        ..WindowOptions::default()
-    }
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.into()),
+                                                               ..Default::default() }),
+                    window_bounds: Some(WindowBounds::centered(size(px(460.), px(380.)), cx)),
+                    window_min_size: Some(size(px(400.), px(320.))),
+                    ..WindowOptions::default() }
 }
 
 /// Opens the persona add/edit window. `persona` is `None` for "Add Persona…"
 /// and `Some` (fields pre-filled) for a row's edit button.
-pub(crate) fn open_persona_editor(
-    parent: WeakEntity<SettingsWindow>, persona: Option<knot_core::Persona>, cx: &mut App,
-) {
+pub(crate) fn open_persona_editor(parent: WeakEntity<SettingsWindow>,
+                                  persona: Option<knot_core::Persona>, cx: &mut App) {
     let editing_id = persona.as_ref().map(|p| p.id);
     let title = if editing_id.is_some() {
         "Edit Persona"
-    } else {
+    }
+    else {
         "New Persona"
     };
     let name = persona.as_ref().map(|p| p.name.clone()).unwrap_or_default();
-    let instructions = persona
-        .as_ref()
-        .map(|p| p.instructions.clone())
-        .unwrap_or_default();
+    let instructions = persona.as_ref()
+                              .map(|p| p.instructions.clone())
+                              .unwrap_or_default();
     let options = persona_editor_window_options(title, cx);
     let _ = cx.open_window(options, move |window, cx| {
-        let name_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Persona name")
-                .default_value(name)
-        });
-        name_input.update(cx, |state, cx| state.focus(window, cx));
-        let instructions_input = cx.new(|cx| {
-            TextareaState::new(window, cx)
+                  let name_input = cx.new(|cx| {
+                                         InputState::new(window, cx).placeholder("Persona name")
+                                                                    .default_value(name)
+                                     });
+                  name_input.update(cx, |state, cx| state.focus(window, cx));
+                  let instructions_input = cx.new(|cx| {
+                                                 TextareaState::new(window, cx)
                 .placeholder("Instructions")
                 .default_value(instructions)
-        });
-        let view = cx.new(|_| PersonaEditor {
-            parent,
-            editing_id,
-            name_input,
-            instructions_input,
-            error: None,
-        });
-        cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
-    });
+                                             });
+                  let view = cx.new(|_| PersonaEditor { parent,
+                                                        editing_id,
+                                                        name_input,
+                                                        instructions_input,
+                                                        error: None });
+                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+              });
 }
 
 pub(crate) struct PersonaEditor {
-    parent: WeakEntity<SettingsWindow>,
-    editing_id: Option<Uuid>,
-    name_input: Entity<InputState>,
+    parent:             WeakEntity<SettingsWindow>,
+    editing_id:         Option<Uuid>,
+    name_input:         Entity<InputState>,
     instructions_input: Entity<TextareaState>,
-    error: Option<String>,
+    error:              Option<String>,
 }
 
 impl PersonaEditor {
@@ -1491,20 +1460,21 @@ impl PersonaEditor {
             return;
         }
         let instructions = self.instructions_input.read(cx).value().trim().to_string();
-        let Some(parent) = self.parent.upgrade() else {
+        let Some(parent) = self.parent.upgrade()
+        else {
             window.remove_window();
             return;
         };
         parent.update(cx, |view, view_cx| {
-            let result = match self.editing_id {
-                Some(id) => view.settings.update_persona(id, name, instructions),
-                None => view.settings.add_persona(name, instructions).map(|_| ()),
-            };
-            if let Err(error) = result {
-                eprintln!("failed to save persona: {error}");
-            }
-            view_cx.notify();
-        });
+                  let result = match self.editing_id {
+                      Some(id) => view.settings.update_persona(id, name, instructions),
+                      None => view.settings.add_persona(name, instructions).map(|_| ()),
+                  };
+                  if let Err(error) = result {
+                      eprintln!("failed to save persona: {error}");
+                  }
+                  view_cx.notify();
+              });
         window.remove_window();
     }
 }
@@ -1579,17 +1549,17 @@ impl Render for SettingsWindow {
         let mut settings_body = div().id("settings-body").flex_1();
         settings_body = if matches!(self.selected_tab, SettingsTab::Personas) {
             settings_body.overflow_hidden()
-        } else {
+        }
+        else {
             settings_body.overflow_y_scroll()
         };
 
-        v_flex()
-            .size_full()
-            .gap_3()
-            .p_4()
-            .bg(cx.theme().background)
-            .child(self.render_tab_strip(cx))
-            .child(settings_body.child(body))
-            .children(crate::app_support::root_overlays(window, cx))
+        v_flex().size_full()
+                .gap_3()
+                .p_4()
+                .bg(cx.theme().background)
+                .child(self.render_tab_strip(cx))
+                .child(settings_body.child(body))
+                .children(crate::app_support::root_overlays(window, cx))
     }
 }

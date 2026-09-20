@@ -10,9 +10,8 @@ use crate::consts::{
 /// Whether `text` looks like a Knot-injected agent-registration prompt.
 pub fn is_registration_prompt(text: &str) -> bool {
     let lower = text.to_lowercase();
-    REGISTRATION_PROMPT_NEEDLES
-        .iter()
-        .any(|needle| lower.contains(needle))
+    REGISTRATION_PROMPT_NEEDLES.iter()
+                               .any(|needle| lower.contains(needle))
 }
 
 /// Whether `text` is a usable title candidate.
@@ -40,7 +39,8 @@ pub fn truncate(text: &str) -> String {
     if first_line.chars().count() > TITLE_MAX_LEN {
         let head: String = first_line.chars().take(TITLE_TRUNCATE_LEN).collect();
         format!("{head}...")
-    } else {
+    }
+    else {
         first_line.to_owned()
     }
 }
@@ -67,18 +67,18 @@ pub fn format_command_message(content: &str) -> Option<String> {
     let name_end = content[name_start..].find(COMMAND_NAME_CLOSE)? + name_start;
     let command_name = content[name_start..name_end].trim();
 
-    let args = content
-        .find(COMMAND_ARGS_OPEN)
-        .zip(content.find(COMMAND_ARGS_CLOSE))
-        .and_then(|(args_start, args_end)| {
-            let start = args_start + COMMAND_ARGS_OPEN.len();
-            content.get(start..args_end).map(str::trim)
-        })
-        .unwrap_or("");
+    let args = content.find(COMMAND_ARGS_OPEN)
+                      .zip(content.find(COMMAND_ARGS_CLOSE))
+                      .and_then(|(args_start, args_end)| {
+                          let start = args_start + COMMAND_ARGS_OPEN.len();
+                          content.get(start..args_end).map(str::trim)
+                      })
+                      .unwrap_or("");
 
     if args.is_empty() {
         Some(command_name.to_owned())
-    } else {
+    }
+    else {
         Some(format!("{command_name} {args}"))
     }
 }
@@ -91,12 +91,8 @@ mod tests {
     fn rejects_empty_and_registration_prompts() {
         assert!(!is_valid_title(""));
         assert!(!is_valid_title("   "));
-        assert!(!is_valid_title(
-            "You are part of a team of agents working together."
-        ));
-        assert!(!is_valid_title(
-            "<local-command-stdout>x</local-command-stdout>"
-        ));
+        assert!(!is_valid_title("You are part of a team of agents working together."));
+        assert!(!is_valid_title("<local-command-stdout>x</local-command-stdout>"));
         assert!(!is_valid_title("/clear"));
     }
 
@@ -119,10 +115,8 @@ mod tests {
 
     #[test]
     fn extract_title_takes_first_line() {
-        assert_eq!(
-            extract_title("first line\nsecond line").as_deref(),
-            Some("first line")
-        );
+        assert_eq!(extract_title("first line\nsecond line").as_deref(),
+                   Some("first line"));
         assert_eq!(extract_title("   \n  "), None);
     }
 
@@ -136,10 +130,8 @@ mod tests {
     fn format_command_message_name_and_args() {
         let content =
             "<command-name>/review</command-name><command-args>please check</command-args>";
-        assert_eq!(
-            format_command_message(content).as_deref(),
-            Some("/review please check")
-        );
+        assert_eq!(format_command_message(content).as_deref(),
+                   Some("/review please check"));
     }
 
     #[test]

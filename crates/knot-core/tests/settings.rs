@@ -27,14 +27,10 @@ fn loads_swift_shaped_document() {
     assert_eq!(s.markdown_font_size, 16);
     assert_eq!(s.mermaid_theme, "forest");
     assert_eq!(s.mermaid_scale, 1.5);
-    assert_eq!(
-        s.agent_commands.get("custom1").map(String::as_str),
-        Some("my-agent")
-    );
-    assert_eq!(
-        s.agent_options.get("claude").map(String::as_str),
-        Some("--verbose")
-    );
+    assert_eq!(s.agent_commands.get("custom1").map(String::as_str),
+               Some("my-agent"));
+    assert_eq!(s.agent_options.get("claude").map(String::as_str),
+               Some("--verbose"));
     assert_eq!(s.terminal_font_name, "Menlo");
     assert_eq!(s.terminal_font_size, 12.5);
 
@@ -57,10 +53,8 @@ fn loads_swift_shaped_document() {
     assert_eq!(agent.agent_type, "claude");
     assert!(agent.is_companion);
     assert_eq!(agent.shell_command.as_deref(), Some("zsh -l"));
-    assert_eq!(
-        agent.persona_id,
-        Some(Uuid::parse_str("a1000001-0000-0000-0000-000000000001").unwrap())
-    );
+    assert_eq!(agent.persona_id,
+               Some(Uuid::parse_str("a1000001-0000-0000-0000-000000000001").unwrap()));
 
     assert_eq!(s.saved_workspaces.len(), 1);
     let ws = &s.saved_workspaces[0];
@@ -92,41 +86,37 @@ fn reserializes_with_swift_keys() {
     let json = serde_json::to_value(&s).unwrap();
     let obj = json.as_object().unwrap();
 
-    for key in [
-        "appearanceMode",
-        "restoreLayoutOnLaunch",
-        "mcpServerPort",
-        "sourceBaseFolderInitialized",
-        "terminalFontName",
-        "autopilotEnabled",
-        "aiProvider",
-        "aiApiKey",
-        "autopilotAction",
-        "autopilotCustomPrompt",
-        "voiceEnabled",
-        "voiceEngine",
-        "voicePushToTalkKey",
-        "voiceAutoInsert",
-        "savedAgents",
-        "savedWorkspaces",
-        "benchAgents",
-        "recentRepos",
-    ] {
+    for key in ["appearanceMode",
+                "restoreLayoutOnLaunch",
+                "mcpServerPort",
+                "sourceBaseFolderInitialized",
+                "terminalFontName",
+                "autopilotEnabled",
+                "aiProvider",
+                "aiApiKey",
+                "autopilotAction",
+                "autopilotCustomPrompt",
+                "voiceEnabled",
+                "voiceEngine",
+                "voicePushToTalkKey",
+                "voiceAutoInsert",
+                "savedAgents",
+                "savedWorkspaces",
+                "benchAgents",
+                "recentRepos"]
+    {
         assert!(obj.contains_key(key), "missing key {key}");
     }
-    assert!(
-        !obj.contains_key("storePath"),
-        "store_path must not serialize"
-    );
+    assert!(!obj.contains_key("storePath"),
+            "store_path must not serialize");
 
     let agent = obj["savedAgents"][0].as_object().unwrap();
-    for key in [
-        "agentType",
-        "createdBy",
-        "isCompanion",
-        "shellCommand",
-        "personaId",
-    ] {
+    for key in ["agentType",
+                "createdBy",
+                "isCompanion",
+                "shellCommand",
+                "personaId"]
+    {
         assert!(agent.contains_key(key), "saved agent missing key {key}");
     }
 

@@ -57,9 +57,11 @@ impl Default for ActivityTracking {
 pub fn tracking_for(agent_type: &str, view_mode: knot_core::ViewMode) -> ActivityTracking {
     if agent_type == "shell" {
         ActivityTracking::NONE
-    } else if view_mode == knot_core::ViewMode::Panel {
+    }
+    else if view_mode == knot_core::ViewMode::Panel {
         ActivityTracking::ACP_UPDATES
-    } else {
+    }
+    else {
         ActivityTracking::ALL
     }
 }
@@ -70,42 +72,32 @@ mod tests {
 
     #[test]
     fn shell_tracks_nothing() {
-        assert_eq!(
-            tracking_for("shell", knot_core::ViewMode::Terminal),
-            ActivityTracking::NONE
-        );
+        assert_eq!(tracking_for("shell", knot_core::ViewMode::Terminal),
+                   ActivityTracking::NONE);
         assert!(tracking_for("shell", knot_core::ViewMode::Terminal).is_empty());
         // Shell agents never leave Idle regardless of view mode.
-        assert_eq!(
-            tracking_for("shell", knot_core::ViewMode::Panel),
-            ActivityTracking::NONE
-        );
+        assert_eq!(tracking_for("shell", knot_core::ViewMode::Panel),
+                   ActivityTracking::NONE);
     }
 
     #[test]
     fn non_shell_tracks_both_in_terminal_mode() {
         for t in ["claude", "codex", "opencode", "gemini"] {
-            assert_eq!(
-                tracking_for(t, knot_core::ViewMode::Terminal),
-                ActivityTracking::ALL
-            );
+            assert_eq!(tracking_for(t, knot_core::ViewMode::Terminal),
+                       ActivityTracking::ALL);
         }
     }
 
     #[test]
     fn unknown_agent_type_tracks_both_in_terminal_mode() {
-        assert_eq!(
-            tracking_for("unknown-type", knot_core::ViewMode::Terminal),
-            ActivityTracking::ALL
-        );
+        assert_eq!(tracking_for("unknown-type", knot_core::ViewMode::Terminal),
+                   ActivityTracking::ALL);
     }
 
     #[test]
     fn panel_mode_tracks_only_acp_updates() {
-        assert_eq!(
-            tracking_for("claude", knot_core::ViewMode::Panel),
-            ActivityTracking::ACP_UPDATES
-        );
+        assert_eq!(tracking_for("claude", knot_core::ViewMode::Panel),
+                   ActivityTracking::ACP_UPDATES);
         assert!(
             !tracking_for("claude", knot_core::ViewMode::Panel)
                 .contains(ActivityTracking::TERMINAL_OUTPUT)
@@ -122,9 +114,7 @@ mod tests {
         assert_eq!(user_only, ActivityTracking::USER_INPUT);
         assert!(!user_only.contains(ActivityTracking::TERMINAL_OUTPUT));
         assert!(user_only.contains(ActivityTracking::USER_INPUT));
-        assert_eq!(
-            user_only.insert(ActivityTracking::TERMINAL_OUTPUT),
-            ActivityTracking::ALL
-        );
+        assert_eq!(user_only.insert(ActivityTracking::TERMINAL_OUTPUT),
+                   ActivityTracking::ALL);
     }
 }

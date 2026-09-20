@@ -16,18 +16,16 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// the child; the main thread polls for exit and kills on timeout.
 #[derive(Debug, Clone)]
 pub struct Runner {
-    cwd: PathBuf,
+    cwd:     PathBuf,
     timeout: Duration,
     program: OsString,
 }
 
 impl Runner {
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
-        Self {
-            cwd: cwd.into(),
-            timeout: DEFAULT_TIMEOUT,
-            program: OsString::from("git"),
-        }
+        Self { cwd:     cwd.into(),
+               timeout: DEFAULT_TIMEOUT,
+               program: OsString::from("git"), }
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -53,13 +51,12 @@ impl Runner {
     pub fn run(&self, args: &[&str]) -> Result<String> {
         let label = display_command(args);
 
-        let mut child = Command::new(&self.program)
-            .args(args)
-            .current_dir(&self.cwd)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let mut child = Command::new(&self.program).args(args)
+                                                   .current_dir(&self.cwd)
+                                                   .stdin(Stdio::null())
+                                                   .stdout(Stdio::piped())
+                                                   .stderr(Stdio::piped())
+                                                   .spawn()?;
 
         let mut stdout_pipe = child.stdout.take().expect("stdout piped");
         let mut stderr_pipe = child.stderr.take().expect("stderr piped");
@@ -92,15 +89,14 @@ impl Runner {
 
         let output = if stderr.trim().is_empty() {
             stdout
-        } else {
+        }
+        else {
             stderr
         };
 
-        Err(GitError::Command {
-            command: label,
-            output: output.trim().to_owned(),
-            code: status.code().unwrap_or(-1),
-        })
+        Err(GitError::Command { command: label,
+                                output:  output.trim().to_owned(),
+                                code:    status.code().unwrap_or(-1), })
     }
 }
 
@@ -124,17 +120,14 @@ mod tests {
     #[test]
     fn timeout_kills_process_and_names_command() {
         let dir = tempfile::tempdir().unwrap();
-        let runner = Runner::new(dir.path())
-            .with_program("sleep")
-            .with_timeout(Duration::from_millis(50));
+        let runner = Runner::new(dir.path()).with_program("sleep")
+                                            .with_timeout(Duration::from_millis(50));
 
         let started = std::time::Instant::now();
         let err = runner.run(&["5"]).unwrap_err();
 
-        assert!(
-            started.elapsed() < Duration::from_secs(2),
-            "did not abort early"
-        );
+        assert!(started.elapsed() < Duration::from_secs(2),
+                "did not abort early");
         match err {
             GitError::Timeout { command } => assert_eq!(command, "5"),
             other => panic!("expected Timeout, got {other:?}"),

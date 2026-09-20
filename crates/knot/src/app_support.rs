@@ -39,16 +39,17 @@ pub(crate) mod native_font_panel {
     /// Opens the system font panel pre-selected to `current_family` at
     /// `current_size`, for `target`. No-op off the main thread.
     pub fn open(target: Target, current_family: &str, current_size: f64) {
-        let Some(mtm) = MainThreadMarker::new() else {
+        let Some(mtm) = MainThreadMarker::new()
+        else {
             return;
         };
         *LAST_SEEN.lock().unwrap() =
             Some((target, current_family.to_string(), size_key(current_size)));
         let manager = NSFontManager::sharedFontManager(mtm);
-        if let Some(font) = objc2_app_kit::NSFont::fontWithName_size(
-            &NSString::from_str(current_family),
-            current_size,
-        ) {
+        if let Some(font) =
+            objc2_app_kit::NSFont::fontWithName_size(&NSString::from_str(current_family),
+                                                     current_size)
+        {
             manager.setSelectedFont_isMultiple(&font, false);
         }
         if let Some(panel) = manager.fontPanel(true) {
@@ -88,7 +89,8 @@ pub(crate) mod native_character_picker {
 
     /// No-op off the main thread.
     pub fn open() {
-        let Some(mtm) = MainThreadMarker::new() else {
+        let Some(mtm) = MainThreadMarker::new()
+        else {
             return;
         };
         NSApplication::sharedApplication(mtm).orderFrontCharacterPalette(None);
@@ -122,24 +124,20 @@ pub(crate) const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app-icon-32.png
 /// A small app-icon glyph for the leading edge of a custom `TitleBar`, sat
 /// between the traffic lights and the title text.
 pub(crate) fn app_titlebar_icon() -> impl IntoElement {
-    let image = std::sync::Arc::new(gpui_kit::Image::from_bytes(
-        gpui_kit::ImageFormat::Png,
-        APP_ICON_PNG.to_vec(),
-    ));
-    gpui_kit::img(image)
-        .w(px(16.))
-        .h(px(16.))
-        .rounded(px(4.))
-        .flex_shrink_0()
+    let image = std::sync::Arc::new(gpui_kit::Image::from_bytes(gpui_kit::ImageFormat::Png,
+                                                                APP_ICON_PNG.to_vec()));
+    gpui_kit::img(image).w(px(16.))
+                        .h(px(16.))
+                        .rounded(px(4.))
+                        .flex_shrink_0()
 }
 
 /// Replaces a `$HOME` prefix with `~` - matches the Swift reference's
 /// `AgentTerminalView.shortenPath`.
 pub(crate) fn shorten_path(path: &str) -> String {
-    std::env::var("HOME")
-        .ok()
-        .and_then(|home| path.strip_prefix(&home).map(|rest| format!("~{rest}")))
-        .unwrap_or_else(|| path.to_string())
+    std::env::var("HOME").ok()
+                         .and_then(|home| path.strip_prefix(&home).map(|rest| format!("~{rest}")))
+                         .unwrap_or_else(|| path.to_string())
 }
 
 /// Registers the embedded font families and sets Adamina as the app-wide
@@ -148,15 +146,15 @@ pub(crate) fn shorten_path(path: &str) -> String {
 /// app doesn't rely on the platform's generic UI font and neutral-gray
 /// default theme.
 pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
-    if let Err(error) = cx.text_system().add_fonts(vec![
-        std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
-        std::borrow::Cow::Borrowed(MANROPE_REGULAR),
-        std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
-        std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
-        std::borrow::Cow::Borrowed(MANROPE_BOLD),
-        std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
-        std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),
-    ]) {
+    if let Err(error) = cx.text_system()
+                          .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
+                                          std::borrow::Cow::Borrowed(MANROPE_REGULAR),
+                                          std::borrow::Cow::Borrowed(MANROPE_MEDIUM),
+                                          std::borrow::Cow::Borrowed(MANROPE_SEMIBOLD),
+                                          std::borrow::Cow::Borrowed(MANROPE_BOLD),
+                                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_REGULAR),
+                                          std::borrow::Cow::Borrowed(JETBRAINS_MONO_BOLD),])
+    {
         eprintln!("failed to register embedded fonts: {error}");
     }
 
