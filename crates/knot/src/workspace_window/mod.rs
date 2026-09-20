@@ -1627,13 +1627,13 @@ impl WorkspaceWindow {
                     });
                 }
             })
-            .content(move |_, window, app| {
-                PopupMenu::build(window, app, |mut menu, _, _| {
-                    for value in &values {
+            .content(move |_, _window, _app| {
+                v_flex()
+                    .gap_1()
+                    .p_1()
+                    .children(values.iter().enumerate().map(|(index, value)| {
                         let entity = entity.clone();
-                        let Some(session_arc) = session_arc.clone() else {
-                            continue;
-                        };
+                        let session_arc = session_arc.clone();
                         let config_id = config_id.clone();
                         let value_id = value.value.clone();
                         let item_color = is_permission_selector
@@ -1644,38 +1644,31 @@ impl WorkspaceWindow {
                                 ))
                             })
                             .flatten();
-                        let mut item = item_color
-                            .map(|color| {
-                                let label = value.name.clone();
-                                PopupMenuItem::element(move |_, _| {
-                                    div().text_color(rgb(color)).child(label.clone())
-                                })
+                        Button::new((element_id, index))
+                            .label(value.name.clone())
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .when_some(item_color, |button, color| button.text_color(rgb(color)))
+                            .on_click(move |_, _, app| {
+                                let Some(session_arc) = session_arc.clone() else {
+                                    return;
+                                };
+                                let config_id = config_id.clone();
+                                let value_id = value_id.clone();
+                                entity.update(app, move |view, _cx| {
+                                    view.open_config_selector = None;
+                                    if let Ok(slot) = session_arc.lock()
+                                        && let panel_session::PanelSessionSlot::Ready(handle) =
+                                            &*slot
+                                    {
+                                        let future = handle.set_config_option(config_id, value_id);
+                                        let _guard = view.runtime.enter();
+                                        view.runtime.spawn(future);
+                                    }
+                                });
                             })
-                            .unwrap_or_else(|| PopupMenuItem::new(value.name.clone()));
-                        if let Some(color) = item_color {
-                            item = item.icon(
-                                Icon::new(gpui_kit::assets::IconName::CircleDot)
-                                    .text_color(rgb(color)),
-                            );
-                        }
-                        menu = menu.item(item.on_click(move |_, _, app| {
-                            let config_id = config_id.clone();
-                            let value_id = value_id.clone();
-                            let session_arc = Arc::clone(&session_arc);
-                            entity.update(app, move |view, _cx| {
-                                view.open_config_selector = None;
-                                if let Ok(slot) = session_arc.lock()
-                                    && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                                {
-                                    let future = handle.set_config_option(config_id, value_id);
-                                    let _guard = view.runtime.enter();
-                                    view.runtime.spawn(future);
-                                }
-                            });
-                        }));
-                    }
-                    menu
-                })
+                    }))
             })
             .into_any_element()
     }
