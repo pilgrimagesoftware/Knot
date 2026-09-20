@@ -50,8 +50,8 @@ jobs:
             echo "git $v is older than the 2.30 floor"; exit 1
           fi
 
-      - name: Format
-        run: cargo +nightly fmt --all --check
+      - name: Format check
+        run: rustup run nightly cargo fmt --all --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings

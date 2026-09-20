@@ -201,10 +201,13 @@ check-changelog:
 	@./scripts/check-changelog.sh
 
 # Rust workspace (the port). Additive to the Swift targets above.
-rust: rust-fmt rust-lint rust-test rust-build
+rust: rust-fmt-check rust-lint rust-test rust-build
 
 rust-fmt:
-	cargo +nightly fmt --check
+	rustup run nightly cargo fmt
+
+rust-fmt-check:
+	rustup run nightly cargo fmt --check
 
 rust-lint:
 	cargo clippy --workspace --all-targets -- -D warnings
