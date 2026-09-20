@@ -233,6 +233,7 @@ pub(crate) struct WorkspaceWindow {
     /// cancels it).
     panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    panel_stopping:                   BTreeSet<Uuid>,
     panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has
     /// been viewed, created lazily - the `ListState` backing
@@ -350,6 +351,7 @@ impl WorkspaceWindow {
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_prompt_queues: BTreeMap::new(),
+                    panel_stopping: BTreeSet::new(),
                     panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
@@ -846,6 +848,7 @@ impl WorkspaceWindow {
         self.panel_prompt_inputs.remove(&id);
         self.panel_prompt_input_subscriptions.remove(&id);
         self.panel_prompt_queues.remove(&id);
+        self.panel_stopping.remove(&id);
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
@@ -1419,6 +1422,9 @@ impl WorkspaceWindow {
                                config_options: &[knot_acp::ConfigOption], cx: &mut Context<Self>)
                                -> impl IntoElement {
         let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        if !turn_active {
+            self.panel_stopping.remove(&id);
+        }
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
         let send_tooltip = if shift_to_send {
             "Send (Shift+Enter)"
@@ -1546,7 +1552,18 @@ impl WorkspaceWindow {
                             })
                             .child(Textarea::new(input).w_full().disabled(blocked)),
                     )
-                    .child(
+                    .child(if turn_active {
+                        Button::new("panel-stop-prompt")
+                            .label("Stop")
+                            .tooltip("Stop")
+                            .ghost()
+                            .flex_shrink_0()
+                            .disabled(self.panel_stopping.contains(&id))
+                            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                view.stop_panel_prompt(id, cx);
+                            }))
+                            .into_any_element()
+                    } else {
                         Button::new("panel-send-prompt")
                             .label("Send")
                             .tooltip(send_tooltip)
@@ -1555,8 +1572,9 @@ impl WorkspaceWindow {
                             .disabled(!can_send)
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
-                            })),
-                    ),
+                            }))
+                            .into_any_element()
+                    }),
             )
             .child(
                 h_flex()
@@ -2040,6 +2058,31 @@ impl WorkspaceWindow {
                             eprintln!("failed to send panel prompt: {error}");
                         }
                     });
+        cx.notify();
+    }
+
+    fn stop_panel_prompt(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        if !self.panel_stopping.insert(id) {
+            return;
+        }
+        let Some(slot) = self.panel_sessions.get(&id).cloned()
+        else {
+            self.panel_stopping.remove(&id);
+            return;
+        };
+        let session = slot.lock().ok().and_then(|guard| match &*guard {
+            panel_session::PanelSessionSlot::Ready(handle) => Some(handle.session()),
+            _ => None,
+        });
+        let Some(session) = session
+        else {
+            self.panel_stopping.remove(&id);
+            return;
+        };
+        let _runtime_guard = self.runtime.enter();
+        self.runtime.spawn(async move {
+            let _ = session.cancel().await;
+        });
         cx.notify();
     }
 
