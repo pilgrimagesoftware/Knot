@@ -35,6 +35,10 @@ pub(crate) struct DashboardAgent {
     pub is_shell:     bool,
     pub header_title: String,
     pub git_stats:    Option<knot_git::DiffStats>,
+    /// Whether the agent has a session, as the sidebar row means it: a
+    /// `passive` agent that never started and a deactivated one are both
+    /// not running, and the card's working indicator says so.
+    pub is_running:   bool,
 }
 
 /// One workspace's section as needed by a dashboard grid.
@@ -130,6 +134,7 @@ fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
     let header_title = agent.header_title.clone();
     let is_shell = agent.is_shell;
     let state = agent.state;
+    let is_running = agent.is_running;
     let git_stats = agent.git_stats;
 
     // A plain clickable container, not `Button` - `Button`'s "Normal Button"
@@ -161,6 +166,16 @@ fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
                                                       .whitespace_nowrap()
                                                       .text_ellipsis()
                                                       .child(folder_name)))
+                           // The same working indicator the sidebar row
+                           // carries, from the same shared implementation,
+                           // so the two surfaces cannot drift. It sits
+                           // ahead of the status label rather than
+                           // replacing it: the label names the state, the
+                           // indicator animates while the agent works and
+                           // goes blank when it is not running at all,
+                           // which no colour of label says.
+                           .child(div().flex_shrink_0()
+                                       .child(crate::working_indicator::render(state, is_running)))
                            .children((!is_shell).then(|| {
                                                     div().text_sm()
                                                          .flex_shrink_0()
