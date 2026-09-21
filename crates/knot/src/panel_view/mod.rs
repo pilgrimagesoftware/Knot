@@ -30,8 +30,6 @@ use crate::working_indicator;
 /// measures, so scrolling does not pop rows in at the edges.
 pub(crate) const LIST_OVERDRAW: f32 = 400.;
 
-const CARD_BG: u32 = 0x1E1E1E;
-const CARD_BORDER: u32 = 0x333333;
 const ERROR_COLOR: u32 = 0xEF4444;
 const SAFE_COLOR: u32 = 0x22C55E;
 const MUTED: u32 = 0x9CA3AF;
@@ -61,6 +59,15 @@ pub(crate) struct PanelStyle {
     /// The theme's ordinary border, the neutral outline a completed call
     /// recedes to.
     pub(crate) border_color:       Hsla,
+    /// The raised neutral surface a tool-call card sits on. From the
+    /// platform's control background on macOS, so cards track the system
+    /// appearance instead of a fixed near-black.
+    pub(crate) card_color:         Hsla,
+    /// The user prompt bubble's fill - the system accent on macOS - and the
+    /// foreground picked to contrast it, so the prompt stays readable in
+    /// either appearance and under any accent the user has chosen.
+    pub(crate) prompt_color:       Hsla,
+    pub(crate) prompt_foreground:  Hsla,
 }
 
 impl PanelStyle {
@@ -364,11 +371,11 @@ fn render_message(ctx: Message<'_>, message: &PanelMessage, callbacks: &PanelCal
                         .max_w(relative(0.85))
                         .min_w_0()
                         .text_sm()
-                        .text_color(rgb(0xFFFFFF))
+                        .text_color(style.prompt_foreground)
                         .px_3()
                         .py_1p5()
                         .rounded_md()
-                        .bg(rgb(0x2563EB))
+                        .bg(style.prompt_color)
                         .child(text.clone()),
                 )
                 .into_any_element()
@@ -547,7 +554,7 @@ fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, collapsed: boo
             .rounded_md()
             .border_1()
             .border_color(style.outline_color(card_outline(&card.status)))
-            .bg(rgb(CARD_BG))
+            .bg(style.card_color)
             .child(h_flex().id(("panel-tool-call-header", element_id(&card.id)))
                            .w_full()
                            .min_w_0()

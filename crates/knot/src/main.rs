@@ -7,6 +7,7 @@ mod app_state;
 mod app_support;
 mod command_center;
 mod dashboard;
+mod macos;
 mod open_in;
 mod panel_session;
 mod panel_state;

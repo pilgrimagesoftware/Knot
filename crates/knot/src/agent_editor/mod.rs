@@ -94,6 +94,9 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
     let options = agent_window_options(title, cx);
     let _ =
         cx.open_window(options, move |window, cx| {
+              // Every window tracks the OS appearance, so a light/dark flip
+              // re-resolves the system palette and repaints.
+              observe_system_appearance(window);
               let name_input = cx.new(|cx| {
                                      InputState::new(window, cx).placeholder("Name")
                                                    .default_value(editing.as_ref()
@@ -163,7 +166,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                           on_created: Box::new(on_created),
                                           error: None }
                            });
-              cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+              cx.new(|cx| Root::new(view, window, cx))
           });
 }
 

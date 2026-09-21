@@ -434,6 +434,9 @@ impl WorkspaceWindow {
         let options = workspace_window_options(saved_bounds, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
+                  // Every window tracks the OS appearance, so a light/dark flip
+                  // re-resolves the system palette and repaints.
+                  observe_system_appearance(window);
                   // The OS window title (Mission Control, Cmd+`, Window menu)
                   // is separate from the TitleBar row we draw
                   // ourselves - without this it falls back to
@@ -634,7 +637,7 @@ impl WorkspaceWindow {
                                 });
                           view.window_bounds_subscription = Some(subscription);
                       });
-                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                  cx.new(|cx| Root::new(view, window, cx))
               })
         {
             eprintln!("failed to open workspace window: {error}");
@@ -1486,7 +1489,10 @@ impl WorkspaceWindow {
                                              ui_font_family: theme.font_family.clone(),
                                              danger_color: theme.danger,
                                              info_color: theme.info,
-                                             border_color: theme.border };
+                                             border_color: theme.border,
+                                             card_color: theme.secondary,
+                                             prompt_color: theme.primary,
+                                             prompt_foreground: theme.primary_foreground };
                 drop(state);
                 drop(slot_guard);
                 // Reconcile the virtualized list with the folded state:

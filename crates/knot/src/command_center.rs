@@ -13,6 +13,9 @@ impl CommandCenterWindow {
         let options = command_center_window_options(cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
+                  // Every window tracks the OS appearance, so a light/dark flip
+                  // re-resolves the system palette and repaints.
+                  observe_system_appearance(window);
                   window.set_window_title(&knot_core::l10n::t("dashboard.command_center"));
                   let view =
                       cx.new(|_| CommandCenterWindow { store,
@@ -20,7 +23,7 @@ impl CommandCenterWindow {
                                                        settings,
                                                        dashboard_sort:
                                                            dashboard::DashboardSort::default() });
-                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                  cx.new(|cx| Root::new(view, window, cx))
               })
         {
             eprintln!("failed to open command center window: {error}");
