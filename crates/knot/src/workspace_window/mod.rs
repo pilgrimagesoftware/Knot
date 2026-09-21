@@ -1444,12 +1444,27 @@ impl WorkspaceWindow {
                         h_flex()
                             .gap_1()
                             .items_center()
-                            .child(div().flex_1().text_xs().child(prompt.text.clone()))
-                            .child(div().text_xs().child(if prompt.failed {
-                                "failed"
-                            } else {
-                                "queued"
-                            }))
+                            .child(
+                                div()
+                                    .flex_shrink(1.)
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
+                                    .text_xs()
+                                    .font_family(cx.theme().mono_font_family.clone())
+                                    .child(prompt.text.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .text_xs()
+                                    .font_family(self.settings.ui_font_name.clone())
+                                    .when(prompt.failed, |element| {
+                                        element.text_color(cx.theme().danger)
+                                    })
+                                    .child(if prompt.failed { "failed" } else { "queued" }),
+                            )
                             .child(
                                 Button::new(("panel-queued-prompt-action", index as u64))
                                     .label(if prompt.failed { "Retry" } else { "Remove" })
