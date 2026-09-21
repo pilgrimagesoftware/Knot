@@ -634,6 +634,31 @@ fn inbox_prompt_requires_new_unread_message_for_non_shell_mcp_agent() {
             "no live session able to take a prompt means no nudge yet");
 }
 
+/// The id carried out is the one the caller must record as nudged, so the
+/// predicate and the value can't drift - the caller used to re-derive it
+/// with an `expect` after a `true`.
+#[test]
+fn inbox_prompt_message_id_carries_the_message_the_nudge_is_about() {
+    let message = Uuid::new_v4();
+    let ready = NudgeCheck { agent_type:     "claude",
+                             mcp_enabled:    true,
+                             latest_message: Some(message),
+                             last_nudged:    None,
+                             idle:           true,
+                             can_receive:    true, };
+
+    assert_eq!(inbox_prompt_message_id(ready), Some(message));
+    assert_eq!(inbox_prompt_message_id(NudgeCheck { last_nudged: Some(message),
+                                                    ..ready }),
+               None);
+    assert_eq!(inbox_prompt_message_id(NudgeCheck { idle: false,
+                                                    ..ready }),
+               None);
+    assert_eq!(inbox_prompt_message_id(NudgeCheck { latest_message: None,
+                                                    ..ready }),
+               None);
+}
+
 /// A later message re-nudges: the rule is once per message, not once per
 /// agent.
 #[test]

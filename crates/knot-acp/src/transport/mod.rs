@@ -33,6 +33,25 @@ pub struct Transport {
     /// The spawned program's name, for prefixing request/response logs so
     /// concurrent adapter connections can be told apart in stderr.
     program:   String,
+    /// The stdout and stderr pumps, aborted when the transport drops.
+    ///
+    /// Neither task may hold a strong reference back to the transport: the
+    /// `Child` lives in this struct with `kill_on_drop`, so a task holding
+    /// an `Arc<Self>` keeps the subprocess alive forever - the reader waits
+    /// for a pipe that only closes once the child is killed, and the child
+    /// is only killed once the reader lets go. That cycle is why closing a
+    /// window left one orphaned adapter process per panel agent.
+    tasks:     Mutex<Vec<tokio::task::JoinHandle<()>>>,
+}
+
+impl Drop for Transport {
+    fn drop(&mut self) {
+        if let Ok(mut tasks) = self.tasks.lock() {
+            for task in tasks.drain(..) {
+                task.abort();
+            }
+        }
+    }
 }
 
 impl Transport {
@@ -71,7 +90,7 @@ impl Transport {
         let (events_tx, events_rx) = mpsc::unbounded_channel();
 
         let stderr_program = program.clone();
-        tokio::spawn(async move {
+        let stderr_task = tokio::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 eprintln!("[{stderr_program}] {line}");
@@ -83,32 +102,49 @@ impl Transport {
                                                    next_id: AtomicI64::new(1),
                                                    pending: Mutex::new(HashMap::new()),
                                                    events_tx,
-                                                   program });
+                                                   program,
+                                                   tasks: Mutex::new(Vec::new()) });
 
-        let reader_transport = std::sync::Arc::clone(&transport);
-        tokio::spawn(async move {
-            reader_transport.read_loop(stdout).await;
+        let reader_transport = std::sync::Arc::downgrade(&transport);
+        let reader_task = tokio::spawn(async move {
+            Self::read_loop(reader_transport, stdout).await;
         });
+        if let Ok(mut tasks) = transport.tasks.lock() {
+            tasks.push(stderr_task);
+            tasks.push(reader_task);
+        }
 
         Ok((transport, events_rx))
     }
 
-    async fn read_loop(self: std::sync::Arc<Self>, stdout: tokio::process::ChildStdout) {
+    /// Pumps the child's stdout until the pipe closes or the transport goes
+    /// away.
+    ///
+    /// Takes a `Weak`, not an `Arc`: see `Transport::tasks`. The upgrade
+    /// happens per line rather than once, so the last owner dropping ends
+    /// the loop at the next line instead of pinning the subprocess.
+    async fn read_loop(transport: std::sync::Weak<Self>, stdout: tokio::process::ChildStdout) {
         let mut lines = BufReader::new(stdout).lines();
         loop {
-            match lines.next_line().await {
+            let next = lines.next_line().await;
+            let Some(transport) = transport.upgrade()
+            else {
+                return;
+            };
+            match next {
                 Ok(Some(line)) => {
                     if line.trim().is_empty() {
                         continue;
                     }
-                    self.handle_line(&line);
+                    transport.handle_line(&line);
                 }
                 Ok(None) => {
-                    self.end_session(self.exit_cause().await);
+                    let cause = transport.exit_cause().await;
+                    transport.end_session(cause);
                     break;
                 }
                 Err(_) => {
-                    self.end_session(SessionEndCause::BrokenPipe);
+                    transport.end_session(SessionEndCause::BrokenPipe);
                     break;
                 }
             }

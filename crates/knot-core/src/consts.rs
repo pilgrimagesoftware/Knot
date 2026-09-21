@@ -5,6 +5,11 @@ pub const ORG_NAME: &str = "Pilgrimage Software";
 
 pub const SETTINGS_FILE: &str = "settings.json";
 
+/// Extension for the temporary file [`crate::Settings::persist`] writes
+/// before renaming it over [`SETTINGS_FILE`], so an interrupted write
+/// never leaves the real document truncated.
+pub const SETTINGS_TEMP_EXTENSION: &str = "json.tmp";
+
 /// Distinct from Skwad's default (8766) so a Knot instance doesn't fight a
 /// running Skwad instance over the same port.
 pub const MCP_PORT_DEFAULT: u16 = 8767;

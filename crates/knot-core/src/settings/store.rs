@@ -25,9 +25,10 @@ pub use super::records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAg
 use crate::consts::{
     AI_PROVIDER_DEFAULT, APP_NAME, APPEARANCE_MODE_DEFAULT, AUTOPILOT_ACTION_DEFAULT,
     DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT, MERMAID_THEME_DEFAULT,
-    ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE, SOURCE_FOLDER_CANDIDATES,
-    TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT, TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT,
-    UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT, VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
+    ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE, SETTINGS_TEMP_EXTENSION,
+    SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT,
+    TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT,
+    VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
 };
 use crate::error::{Error, Result};
 
@@ -199,6 +200,16 @@ impl Settings {
 
     /// Write the document to [`Settings::store_path`], creating the parent
     /// directory as needed.
+    ///
+    /// Written to a temporary file in the same directory and renamed into
+    /// place, so the settings file is never observed half-written. Nearly
+    /// every mutating helper on this type persists immediately, so this runs
+    /// on most user actions; a truncating write interrupted by a crash or a
+    /// power loss would leave unparseable JSON, and the next launch would
+    /// silently fall back to defaults - losing every agent, workspace and
+    /// persona with no way back. `rename` within one directory is atomic on
+    /// macOS and Linux, so a reader sees either the old document or the new
+    /// one.
     pub fn persist(&self) -> Result<()> {
         let path = self.store_path()
                        .ok_or_else(|| Error::Config("no config directory available".to_string()))?;
@@ -206,8 +217,19 @@ impl Settings {
             fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(self)?;
-        fs::write(&path, json)?;
-        Ok(())
+        // Same directory as the target: `rename` is only atomic within one
+        // filesystem, and a temp dir may be on another.
+        let temporary = path.with_extension(SETTINGS_TEMP_EXTENSION);
+        fs::write(&temporary, json)?;
+        match fs::rename(&temporary, &path) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                // Leaving the temp file behind would shadow the next
+                // attempt's write with a stale document.
+                let _ = fs::remove_file(&temporary);
+                Err(error.into())
+            }
+        }
     }
 
     /// On first launch with no source folder set, adopt the first existing
@@ -656,5 +678,35 @@ mod tests {
                     .filter(|p| p.state == PersonaState::Deleted)
                     .count(),
                    1);
+    }
+
+    #[test]
+    fn persist_leaves_no_temporary_file_behind() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(SETTINGS_FILE);
+        let settings = Settings::with_store_path(&path);
+
+        settings.persist().unwrap();
+
+        assert!(path.exists());
+        assert!(!path.with_extension(SETTINGS_TEMP_EXTENSION).exists());
+    }
+
+    #[test]
+    fn persist_replaces_a_stale_temporary_file_rather_than_reusing_it() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(SETTINGS_FILE);
+        let temporary = path.with_extension(SETTINGS_TEMP_EXTENSION);
+        // What an interrupted write would leave: a partial document that
+        // must not become the next persisted one.
+        fs::write(&temporary, "{ not json").unwrap();
+
+        let mut settings = Settings::with_store_path(&path);
+        settings.ui_font_size = 17.0;
+        settings.persist().unwrap();
+
+        assert!(!temporary.exists());
+        let reloaded = Settings::load_from(&path).unwrap();
+        assert_eq!(reloaded.ui_font_size, 17.0);
     }
 }
