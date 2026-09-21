@@ -68,9 +68,16 @@ pub(crate) fn build_details() -> String {
 /// can open a second About window past the single-instance check. `run` and
 /// the window tests both register through here, so the tests exercise the
 /// wiring the app actually installs.
-pub(crate) fn register_about_action(cx: &mut App) {
+/// `ui_font` is the user's UI font family (`Settings::ui_font_name`,
+/// Manrope by default), which every line but the app name is set in - the
+/// app name is a "title" and keeps the app-wide title font, the same split
+/// the workspace window makes. It is snapshotted at registration, as the
+/// settings window's own `Settings` clone is.
+pub(crate) fn register_about_action(ui_font: gpui_kit::SharedString, cx: &mut App) {
     let handle: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
-    cx.on_action(move |_: &crate::app_bootstrap::AboutKnot, cx| open_about_window(&handle, cx));
+    cx.on_action(move |_: &crate::app_bootstrap::AboutKnot, cx| {
+          open_about_window(&handle, ui_font.clone(), cx);
+      });
 }
 
 /// Raises the open About window, or opens one.
@@ -82,7 +89,8 @@ pub(crate) fn register_about_action(cx: &mut App) {
 /// Unlike the alert dialog this replaces, no `cx.defer` is needed. A menu
 /// dispatch runs inside the active window's update, so opening a dialog *on
 /// that window* was re-entrant; opening a new window is not.
-pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>, cx: &mut App) {
+pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
+                                ui_font: gpui_kit::SharedString, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
        && existing.update(cx, |_, window, _| window.activate_window())
                   .is_ok()
@@ -90,7 +98,7 @@ pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>, c
         return;
     }
     match cx.open_window(about_window_options(cx), |window, cx| {
-                let view = cx.new(AboutWindow::new);
+                let view = cx.new(|cx| AboutWindow::new(ui_font, cx));
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),
@@ -101,19 +109,24 @@ pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>, c
 pub(crate) struct AboutWindow {
     /// Focused on first render so the window has a key target for `Escape`.
     /// A window with nothing focused never sees the key event at all.
-    focus: gpui_kit::FocusHandle,
+    focus:   gpui_kit::FocusHandle,
+    /// See `register_about_action`.
+    ui_font: gpui_kit::SharedString,
 }
 
 impl AboutWindow {
-    fn new(cx: &mut Context<Self>) -> Self {
-        Self { focus: cx.focus_handle(), }
+    fn new(ui_font: gpui_kit::SharedString, cx: &mut Context<Self>) -> Self {
+        Self { focus: cx.focus_handle(),
+               ui_font }
     }
 
     /// One credit line. Muted and small: the credits are the least of what
     /// someone opens this window to read, and must not compete with the
-    /// version.
+    /// version. Centred per line, not only as a block - a line that wraps
+    /// would otherwise sit left-aligned inside a centred column.
     fn credit(cx: &Context<Self>, key: &str) -> gpui_kit::Div {
         div().text_xs()
+             .text_center()
              .text_color(cx.theme().muted_foreground)
              .child(knot_core::l10n::t(key))
     }
@@ -146,37 +159,57 @@ impl Render for AboutWindow {
                 .px_8()
                 .py_8()
                 .bg(cx.theme().background)
+                // Every line but the app name is set in the UI font; the
+                // name is a "title" and keeps the app-wide title font, as
+                // the workspace header and agent rows do.
+                .font_family(self.ui_font.clone())
                 .child(gpui_kit::img(icon).w(px(ICON_SIZE)).h(px(ICON_SIZE)))
                 .child(div().text_2xl()
                             .font_semibold()
+                            .font_family(cx.theme().font_family.clone())
                             .child(knot_core::l10n::t("app.name")))
-                .child(h_flex().gap_2()
+                // The version and build are the text a bug report needs, so
+                // the text itself copies them - a copy button beside it was
+                // one more thing to aim at, and the toolkit's selectable
+                // text is an input control, which would read as an editable
+                // field in an About box.
+                .child(v_flex().id("about-build-details")
                                .items_center()
-                               .child(v_flex().items_center()
-                                              .child(div().text_sm()
-                                                          .text_color(cx.theme().muted_foreground)
-                                                          .child(format!("{} {}",
-                                                                 knot_core::l10n::t("about.version_label"),
-                                                                 version())))
-                                              .child(div().text_sm()
-                                                          .text_color(cx.theme().muted_foreground)
-                                                          .child(format!("{} {}",
-                                                                 knot_core::l10n::t("about.build_label"),
-                                                                 build_identifier()))))
-                               // A copy action rather than selectable text:
-                               // the toolkit's selectable text is an input
-                               // control, which would read as an editable
-                               // field in an About box.
-                               .child(SettingsWindow::icon_button("about-copy-build",
-                                                                  "icons/copy.svg",
-                                                                  knot_core::l10n::t("about.copy_details"),
-                                                                  false).on_click(move |_, _, app| {
-                                          app.write_to_clipboard(ClipboardItem::new_string(details.clone()));
-                                      })))
+                               .px_3()
+                               .py_1()
+                               .rounded(px(6.))
+                               .cursor_pointer()
+                               .hover(|style| style.bg(cx.theme().muted))
+                               .tooltip({
+                                   let hint = knot_core::l10n::t("about.copy_details");
+                                   move |window, cx| Tooltip::new(hint.clone()).build(window, cx)
+                               })
+                               .on_click(move |_, _, app| {
+                                   app.write_to_clipboard(ClipboardItem::new_string(details.clone()));
+                               })
+                               .child(div().text_sm()
+                                           .text_center()
+                                           .text_color(cx.theme().muted_foreground)
+                                           .child(format!("{} {}",
+                                                          knot_core::l10n::t("about.version_label"),
+                                                          version())))
+                               .child(div().text_sm()
+                                           .text_center()
+                                           .text_color(cx.theme().muted_foreground)
+                                           .child(format!("{} {}",
+                                                          knot_core::l10n::t("about.build_label"),
+                                                          build_identifier()))))
                 .child(div().mt_2()
                             .text_xs()
+                            .text_center()
                             .text_color(cx.theme().muted_foreground)
                             .child(knot_core::l10n::t("about.copyright")))
+                // The Rust app is its own work; Skwad is what it was
+                // derived from, and saying so is owed to Kochava Studios.
+                .child(div().text_xs()
+                            .text_center()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(knot_core::l10n::t("about.derived_from")))
                 .child(v_flex().mt_4()
                                .gap_1()
                                .items_center()
@@ -184,6 +217,7 @@ impl Render for AboutWindow {
                                .child(Self::credit(cx, "about.credits.license"))
                                .child(div().mt_2()
                                            .text_xs()
+                                           .text_center()
                                            .font_semibold()
                                            .text_color(cx.theme().muted_foreground)
                                            .child(knot_core::l10n::t("about.credits.built_with")))

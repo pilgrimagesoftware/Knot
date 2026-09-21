@@ -107,14 +107,25 @@ value from another build.
 ### Requirement: The version and build can be copied
 
 The user SHALL be able to get the version and build identifier out of the
-window as text - by selecting them, or through an explicit copy action - so
-they can be pasted into a bug report without being transcribed by eye.
+window as text, so they can be pasted into a bug report without being
+transcribed by eye.
+
+The displayed version and build SHALL themselves be the control: clicking
+them SHALL put both on the clipboard. Because text is not ordinarily
+clickable, they SHALL show that they are interactive when the pointer is
+over them.
 
 #### Scenario: Copying the build details
 
-- **WHEN** the user copies the version and build from the About window
+- **WHEN** the user clicks the version and build in the About window
 - **THEN** the clipboard holds them as text naming both the version and the
   build identifier
+
+#### Scenario: The text says it can be clicked
+
+- **WHEN** the pointer moves over the version and build
+- **THEN** they are visibly distinguished from surrounding text, and the
+  pointer indicates something clickable
 
 ### Requirement: The window credits what the app is built from
 
@@ -125,6 +136,9 @@ The About window SHALL show a credits area naming:
 - The third-party work embedded in the binary that carries an attribution
   obligation - by name and license - specifically the bundled fonts, the UI
   toolkit, and the terminal engine.
+- The work this app was derived from, by name and author. The Rust app is
+  its own work under its own copyright, and says so; the Swift app it was
+  ported from is someone else's, and saying so is owed to them.
 
 The credits area SHALL NOT reproduce full license texts; naming the work and
 its license is what is required here. No "Check for Updates" control SHALL
@@ -134,8 +148,9 @@ port can actually update itself.
 #### Scenario: Attribution is present
 
 - **WHEN** the user opens the About window
-- **THEN** the credits area names the author, the app's license, and each
-  embedded third-party work with its license
+- **THEN** the credits area names the author, the app's license, each
+  embedded third-party work with its license, and the app this one was
+  derived from
 
 #### Scenario: No update control
 
@@ -150,8 +165,8 @@ its content neither reflows usefully nor benefits from being kept in the Dock.
 Dismissal SHALL follow the host platform:
 
 - On macOS the window SHALL follow the platform's About-box shape - icon,
-  name, version and build, copyright, then credits, laid out in that order
-  down the window - and SHALL be dismissed by its close button or by
+  name, version and build, copyright and derivation, then credits, laid out
+  in that order down the window, each line centred - and SHALL be dismissed by its close button or by
   `Escape`. It SHALL NOT carry an in-window Close or OK button, which a macOS
   About box does not have.
 - On other platforms the window SHALL carry an explicit Close button in
@@ -173,8 +188,9 @@ Dismissal SHALL follow the host platform:
 #### Scenario: macOS dismissal
 
 - **WHEN** the About window is shown on macOS
-- **THEN** it shows the icon, name, version and build, copyright and credits
-  in that order, and offers no in-window Close or OK button
+- **THEN** it shows the icon, name, version and build, copyright, derivation
+  and credits in that order, every line centred, and offers no in-window
+  Close or OK button
 
 #### Scenario: Non-macOS dismissal
 

@@ -81,3 +81,25 @@
       building `knot` with and without it: 131,948,168 vs. 131,568,392 bytes
       (debug), a 379,776-byte difference matching the 368 KB asset - the
       fraction of a megabyte the design assumed.
+
+## 5. Review feedback
+
+- [x] 5.1 Replace the copy icon button with a click on the version/build
+      text: hover background, pointer cursor and a tooltip naming what the
+      click does. Verified by build and lint; the click itself could not be
+      driven here - synthetic `CGEvent` clicks do not reach the app from
+      this shell (a click on the window's own close button had no effect
+      either), so it needs a human click.
+- [x] 5.2 Copyright names Pilgrimage Software, with a line below it
+      crediting Skwad by Kochava Studios as the app this was derived from.
+      New key covered by `tests::about_window_labels_resolve`. Packaging
+      metadata (`publisher`, `copyright`, bundle identifier) deliberately
+      left alone - see design, Feedback Round.
+- [x] 5.3 Centre every credit line, the copyright and the derivation with
+      `text_center()` rather than relying on the centred column, which left
+      wrapped lines ragged against the left edge.
+- [x] 5.4 Render every line but the app name in the user's UI font
+      (Manrope by default), passed into the action at registration; the app
+      name keeps the title font.
+- [x] 5.5 `make rust` passes, and the revised window still opens from the
+      menu at 360x592 alongside the workspace window.

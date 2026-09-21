@@ -221,7 +221,7 @@ pub(crate) fn run() {
                                cx.on_action(quit);
                                // Holds its own window handle; see
                                // `about_window::register_about_action`.
-                               register_about_action(cx);
+                               register_about_action(settings.ui_font_name.clone().into(), cx);
                                cx.on_action(hide_app);
                                cx.on_action(hide_others);
                                cx.on_action(show_all_windows);

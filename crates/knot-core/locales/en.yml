@@ -55,9 +55,10 @@ about:
   version_label: "Version"
   build_label: "Build"
   commit_unknown: "commit unknown"
-  copy_details: "Copy version and build"
+  copy_details: "Click to copy the version and build"
   close: "Close"
-  copyright: "Copyright © 2026 Kochava Studios"
+  copyright: "Copyright © 2026 Pilgrimage Software"
+  derived_from: "Derived from Skwad by Kochava Studios"
   credits:
     author: "Created by Paul Schifferer"
     license: "Released under the GNU Affero General Public License v3.0"

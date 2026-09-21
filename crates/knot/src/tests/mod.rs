@@ -997,6 +997,7 @@ fn about_window_labels_resolve() {
                 "about.copy_details",
                 "about.close",
                 "about.copyright",
+                "about.derived_from",
                 "about.credits.author",
                 "about.credits.license",
                 "about.credits.built_with",

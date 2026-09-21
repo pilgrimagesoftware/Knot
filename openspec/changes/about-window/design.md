@@ -120,12 +120,29 @@ megabyte; not worth it.
 
 ### Copying the build details
 
-The version/build line carries a copy affordance that writes
+The version/build block is itself the control: an `id`'d container with a
+hover background, a pointer cursor and a tooltip, whose click writes
 `"Knot <version> (<build>)"` to the clipboard via
-`cx.write_to_clipboard(ClipboardItem::new_string(..))`, the same call the
-settings window's MCP URL copy uses. A copy action is chosen over making the
-text selectable because the toolkit's selectable text is an input control,
-which would read as an editable field in an About box.
+`cx.write_to_clipboard(ClipboardItem::new_string(..))` - the same call the
+settings window's MCP URL copy uses.
+
+*Alternatives considered:* an icon button beside the text (one more target
+to aim at, for text the user is already pointing at), and making the text
+selectable (the toolkit's selectable text is an input control, which would
+read as an editable field in an About box).
+
+### The UI font
+
+Everything but the app name renders in the user's UI font
+(`Settings::ui_font_name`, Manrope by default); the name is a "title" and
+keeps the app-wide title font. That is the split the workspace header and
+agent rows already make. The family is snapshotted into the action's closure
+at registration, as the settings window's `Settings` clone is - a font change
+reaches the About window on the next launch, which is the same freshness the
+settings window has.
+
+*Alternative considered:* reading `Settings` inside the window. Rejected: it
+would make the About window the only window that loads settings for itself.
 
 ### Strings
 
@@ -159,3 +176,23 @@ not translated.
 ## Open Questions
 
 None.
+
+## Feedback Round
+
+Changes made after the first review of the running window, folded into the
+decisions above:
+
+- The copy icon button became a click on the version/build text itself.
+- The copyright names Pilgrimage Software: the Rust app is its own work, not
+  Kochava's. A line crediting Skwad, the Swift app it was derived from, sits
+  below it - the derivation is owed an attribution even though the copyright
+  is not shared.
+- Credit lines are centred per line, not only as a centred column: a line
+  long enough to wrap was sitting left-aligned inside it.
+- The UI font decision above.
+
+The packaging metadata in `crates/knot/Cargo.toml` still names Kochava
+Studios as `publisher` and carries a Kochava `copyright`, and the bundle
+identifier is `net.kochava-studios.knot`. That is left alone here: it is
+signing and bundle identity rather than what the window displays, and
+changing it is its own decision.
