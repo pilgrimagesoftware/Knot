@@ -26,3 +26,4 @@ agent:
 
 panel:
   queued: "Queued"
+  context_usage: "Context usage"
