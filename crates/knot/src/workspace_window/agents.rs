@@ -6,7 +6,10 @@
 //! [`WorkspaceWindow::persist_agents`] - `AgentStore` only mutates memory,
 //! so a roster change that skips the persist is undone by the next launch.
 
-use super::*;
+use uuid::Uuid;
+
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::workspace_agent_ids;
 
 impl WorkspaceWindow {
     /// Removes `id` (and its companions) from the store, tears down their

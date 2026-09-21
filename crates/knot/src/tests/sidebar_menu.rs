@@ -1,7 +1,13 @@
 //! The agent list's background context menu - shape, enablement, and the
 //! bulk actions it runs over a snapshot of the workspace.
 
-use super::*;
+use uuid::Uuid;
+
+use crate::app_state::SidebarMenuFacts;
+use crate::app_state::sidebar_background_menu_entries;
+use crate::tests::workspace;
+use crate::workspace_window::sidebar_menu_facts;
+use crate::workspace_window::workspace_agent_ids;
 
 /// The background menu's labels paired with their enabled flag, separators
 /// rendered as `"-"` - order, divider placement and enablement in one value.

@@ -2,7 +2,34 @@
 //! in-flight response's auto-scroll toggle, and a finished response's action
 //! bar.
 
-use super::*;
+use std::rc::Rc;
+
+use gpui_kit::ClickEvent;
+use gpui_kit::ClipboardItem;
+use gpui_kit::IntoElement;
+use gpui_kit::ListOffset;
+use gpui_kit::ListState;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::WindowExt;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::notification::Notification;
+use gpui_kit::div;
+use gpui_kit::px;
+use gpui_kit::relative;
+use gpui_kit::rgb;
+
+use crate::panel_view::ERROR_COLOR;
+use crate::panel_view::PanelCallbacks;
+use crate::panel_view::PanelMessage;
+use crate::panel_view::PanelState;
+use crate::panel_view::PanelStyle;
+use crate::panel_view::render_tool_call_card;
 
 /// One message's render inputs, grouped so `render_message` keeps a short
 /// parameter list as the panel gains styling.

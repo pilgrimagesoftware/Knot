@@ -6,7 +6,13 @@
 //! `Knot.app` (`make package`) - these prove *when* a notification is
 //! raised and what it says, not that macOS displayed it.
 
-use super::*;
+use gpui_kit::SystemNotificationResponse;
+use uuid::Uuid;
+
+use crate::app_state::AWAITING_INPUT_DEFAULT_BODY;
+use crate::app_state::notification_body;
+use crate::app_state::notification_response_agent_id;
+use crate::app_state::should_notify;
 
 #[test]
 fn should_notify_requires_setting_and_notice() {

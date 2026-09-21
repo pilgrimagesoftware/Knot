@@ -1,4 +1,13 @@
-use super::*;
+use gpui_kit::App;
+use gpui_kit::WindowBounds;
+use gpui_kit::WindowOptions;
+use gpui_kit::component::TitleBar;
+use gpui_kit::px;
+use gpui_kit::size;
+
+use crate::settings_window::SettingsTab;
+use crate::settings_window::SettingsWindow;
+
 /// The workspace window's title bar height. Its traffic lights are placed
 /// from this, so the bar and the buttons cannot drift apart.
 pub(crate) const WORKSPACE_TITLE_BAR_HEIGHT: f32 = 64.;

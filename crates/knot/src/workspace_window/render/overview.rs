@@ -4,7 +4,28 @@
 //! The cards themselves are [`crate::dashboard`]'s; this assembles the data
 //! they need and wires their callbacks back to the window.
 
-use super::super::*;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::div;
+use unicode_segmentation::UnicodeSegmentation;
+use uuid::Uuid;
+
+use crate::agent_editor::AgentEditorRequest;
+use crate::agent_editor::AgentPrefill;
+use crate::agent_editor::open_agent_editor;
+use crate::consts;
+use crate::dashboard;
+use crate::workspace_window::WorkspaceViewMode;
+use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceWindow {
     /// The dashboard pane, or `None` when the window is not showing it.

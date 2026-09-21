@@ -4,7 +4,18 @@
 //! Asserted against the Swift reference's ordering, since the menu is a
 //! port of it - `openspec/specs/agent-list-ui/spec.md`.
 
-use super::*;
+use std::path::PathBuf;
+
+use uuid::Uuid;
+
+use crate::agent_editor::created_agent_type;
+use crate::agent_editor::persona_choices;
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::AgentMenuFacts;
+use crate::app_state::agent_context_menu_entries;
+use crate::tests::menu_labels;
+use crate::tests::workspace;
+use crate::workspace_window::agent_menu_facts;
 
 #[test]
 fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {

@@ -15,10 +15,15 @@
 //! reach the app to show anything. Ctrl-C at the launching terminal is a
 //! kill, not a quit request, and is expected to be abrupt.
 
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::dialog::DialogButtonProps;
+use parking_lot::Mutex;
 
-use super::*;
+use crate::working_indicator;
 
 /// The agent store the guard consults, plus the one-shot bypass the
 /// confirmation sets.

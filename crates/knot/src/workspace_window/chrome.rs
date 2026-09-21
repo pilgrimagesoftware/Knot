@@ -6,7 +6,26 @@
 //! they need and return an element or a value, which is what makes them
 //! separable from the window itself and unit-testable as they stand.
 
-use super::*;
+use gpui_kit::App;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::PathBuilder;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::base::h_flex;
+use gpui_kit::canvas;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Icon;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::div;
+use gpui_kit::point;
+use gpui_kit::px;
+use uuid::Uuid;
+
+use crate::consts;
+use crate::workspace_window::DetailLineSize;
 
 /// One labelled detail line on an agent row: a leading icon saying what the
 /// line is, then the text.

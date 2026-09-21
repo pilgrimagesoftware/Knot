@@ -1,4 +1,20 @@
-use super::super::*;
+use gpui_kit::AppContext;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::PathPromptOptions;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::WindowExt;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::input::Input;
+use gpui_kit::component::menu::DropdownMenu;
+use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::div;
+
+use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
     pub(crate) fn agent_type_label(agent_type: &str) -> &'static str {

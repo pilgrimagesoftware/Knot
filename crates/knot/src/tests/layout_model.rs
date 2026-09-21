@@ -1,7 +1,15 @@
 //! The sidebar's layout model: which rows a store produces, which are
 //! marked selected, and what each row carries.
 
-use super::*;
+use std::collections::BTreeMap;
+
+use uuid::Uuid;
+
+use crate::app_state::agent_selection_for_workspace;
+use crate::app_state::layout_model;
+use crate::app_state::state_label;
+use crate::tests::workspace;
+use crate::workspace_window::runs_a_terminal_process;
 
 #[test]
 fn empty_store_has_no_rows() {

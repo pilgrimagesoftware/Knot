@@ -11,11 +11,19 @@
 //! upgrade that stopped propagating would break the dialog silently, and
 //! this is what would catch it.
 
+use std::sync::Arc;
+
+use gpui_kit::Entity;
 use gpui_kit::component::Root;
+use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::input::InputState;
 use gpui_kit::{AppContext, TestAppContext, VisualTestContext, WindowOptions};
+use parking_lot::Mutex;
+use uuid::Uuid;
 
-use super::*;
+use crate::tests::workspace;
+use crate::workspace_manager::WorkspaceManager;
+use crate::workspace_manager::workspace_name_is_blank;
 
 /// A manager wired to a throwaway settings file, so `persist` writes into
 /// the temp directory rather than the developer's real config.

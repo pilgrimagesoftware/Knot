@@ -1,4 +1,38 @@
-use super::*;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui_kit::AnyWindowHandle;
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::Subscription;
+use gpui_kit::Window;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Root;
+use gpui_kit::component::Theme;
+use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::input::InputState;
+use gpui_kit::component::tab::Tab;
+use gpui_kit::component::tab::TabBar;
+use gpui_kit::div;
+use gpui_kit::px;
+use gpui_kit::size;
+use parking_lot::Mutex;
+
+use crate::app_support::native_font_panel;
+use crate::app_support::observe_system_appearance;
+use crate::consts;
+use crate::window_options::SETTINGS_WINDOW_WIDTH;
+use crate::window_options::settings_window_options;
 
 mod controls;
 /// Public within the crate because its rule is asserted directly by

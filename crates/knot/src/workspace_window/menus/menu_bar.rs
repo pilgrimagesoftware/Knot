@@ -7,8 +7,39 @@
 //! because macOS validates each item against the dispatch path to the
 //! focused node.
 
-use super::super::*;
+use std::sync::Arc;
+
+use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
+
 use super::agent_row::{move_agent_to_workspace, run_agent_menu_action, show_agent_markdown_file};
+use crate::agent_menu::AgentMenuDeactivate;
+use crate::agent_menu::AgentMenuDuplicateAgent;
+use crate::agent_menu::AgentMenuEditAgent;
+use crate::agent_menu::AgentMenuForkAgent;
+use crate::agent_menu::AgentMenuMarkdownFiles;
+use crate::agent_menu::AgentMenuMoveToWorkspace;
+use crate::agent_menu::AgentMenuMoveToWorkspaceTarget;
+use crate::agent_menu::AgentMenuNewCompanion;
+use crate::agent_menu::AgentMenuNewShellCompanion;
+use crate::agent_menu::AgentMenuOpenIn;
+use crate::agent_menu::AgentMenuOpenInApp;
+use crate::agent_menu::AgentMenuRegisterAgent;
+use crate::agent_menu::AgentMenuRemoveAgent;
+use crate::agent_menu::AgentMenuRestartAgent;
+use crate::agent_menu::AgentMenuSaveToBench;
+use crate::agent_menu::AgentMenuShowMarkdownFile;
+use crate::agent_menu::AgentMenuSnapshot;
+use crate::agent_menu::AgentsMenuState;
+use crate::app_bootstrap;
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::agent_context_menu_entries;
+use crate::app_support::shorten_path;
+use crate::open_in;
+use crate::workspace_window::AgentMenuTargets;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::agent_menu_facts;
+use crate::workspace_window::creation::SelectedAgentHeader;
 
 /// Registers the Agents menu's action handlers on `el`, one per item the
 /// selected agent can actually use.

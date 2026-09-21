@@ -2,7 +2,43 @@
 //! it - queued prompts, attached context chips, the send/stop control, and
 //! the three session config selectors.
 
-use super::super::*;
+use std::path::PathBuf;
+
+use gpui_kit::ClickEvent;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::Disableable;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Icon;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::input::Paste;
+use gpui_kit::component::input::Textarea;
+use gpui_kit::component::input::TextareaState;
+use gpui_kit::component::popover::Popover;
+use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::px;
+use gpui_kit::rgb;
+use uuid::Uuid;
+
+use crate::panel_session;
+use crate::panel_view;
+use crate::workspace_window::PERMISSION_SELECTOR_ID;
+use crate::workspace_window::QueuedPanelPrompt;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::context_usage_indicator;
+use crate::workspace_window::element_key;
+use crate::workspace_window::prompt_queue;
+use crate::workspace_window::queued_status_label;
 
 impl WorkspaceWindow {
     /// The input area: attached-context chips, the expandable text entry,

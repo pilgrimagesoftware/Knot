@@ -6,7 +6,24 @@
 //! dozen per-agent maps, and an agent leaving has to be removed from every
 //! one of them; splitting that across files is how a session leak arrives.
 
-use super::*;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use knot_activity::EventSink;
+use knot_git::Repository;
+use knot_terminal::PtyTransport;
+use knot_terminal::SessionConfig;
+use knot_terminal::SessionPlan;
+use knot_terminal::TerminalSession;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_state::apply_terminal_status;
+use crate::consts;
+use crate::panel_session;
+use crate::panel_state;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::runs_a_terminal_process;
 
 impl WorkspaceWindow {
     /// Spawns a PTY-backed terminal session for `id` if one is not already

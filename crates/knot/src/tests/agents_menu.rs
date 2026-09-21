@@ -1,7 +1,19 @@
 //! The menu bar's Agents menu: its pairing with the context menu's item
 //! set, and the shape it is built into. Contract: `openspec/specs/app-menu`.
 
-use super::*;
+use std::path::PathBuf;
+
+use gpui_kit::MenuItem;
+use uuid::Uuid;
+
+use crate::agent_menu::AgentMenuSnapshot;
+use crate::agent_menu::agent_menu_action;
+use crate::agent_menu::agent_menu_entry_for_action;
+use crate::agent_menu::agents_menu;
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::AgentMenuFacts;
+use crate::app_state::agent_context_menu_entries;
+use crate::tests::menu_labels;
 
 /// Exhaustive by construction: a new `AgentMenuEntry` variant makes this
 /// match fail to compile, which is what stops an item being added to the

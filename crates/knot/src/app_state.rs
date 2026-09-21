@@ -1,4 +1,19 @@
-use super::*;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::SystemNotificationResponse;
+use gpui_kit::base::h_flex;
+use gpui_kit::div;
+use gpui_kit::rgb;
+use knot_messaging::DeliveryEvent;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::consts;
+
 // UNWIRED: ported from the Swift reference, no view reads it yet.
 // Reached only from tests; kept as the port's staging area rather than
 // deleted, so the behaviour it encodes is not lost.

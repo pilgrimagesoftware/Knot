@@ -12,8 +12,9 @@ use gpui_kit::{
 };
 use uuid::Uuid;
 
+use crate::app_state::state_color;
+use crate::app_state::state_label;
 use crate::consts;
-use crate::{state_color, state_label};
 
 pub(crate) const CARD_WIDTH: f32 = 280.;
 /// Every agent card is this tall, whatever it has to show. Two of a card's

@@ -2,7 +2,7 @@
 //! keys - a missing entry renders the key, which is visible but easy to
 //! miss in review.
 
-use super::*;
+use crate::workspace_window;
 
 /// Every word the About window shows comes from the catalog, so a missing
 /// key would ship the key string itself where the version, copyright or a

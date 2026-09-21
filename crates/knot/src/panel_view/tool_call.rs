@@ -5,7 +5,35 @@
 //! falls through to something safe for a value Knot has not seen - an
 //! unrecognized status renders as its own text rather than vanishing.
 
-use super::*;
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::rc::Rc;
+
+use gpui_kit::ClickEvent;
+use gpui_kit::Hsla;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::Icon;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::div;
+use gpui_kit::rgb;
+
+use crate::panel_view::CardOutline;
+use crate::panel_view::ERROR_COLOR;
+use crate::panel_view::MUTED;
+use crate::panel_view::PanelStyle;
+use crate::panel_view::SAFE_COLOR;
+use crate::panel_view::ToolCallCard;
+use crate::panel_view::card_outline;
 
 /// A tool-call card: an icon/title/status header over whatever content
 /// the agent has reported so far - diff blocks as an added/removed line

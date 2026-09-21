@@ -1,4 +1,32 @@
-use super::*;
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::Styled;
+use gpui_kit::WeakEntity;
+use gpui_kit::Window;
+use gpui_kit::WindowBounds;
+use gpui_kit::WindowOptions;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Root;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::input::Input;
+use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::Textarea;
+use gpui_kit::component::input::TextareaState;
+use gpui_kit::div;
+use gpui_kit::px;
+use gpui_kit::size;
+use uuid::Uuid;
+
+use crate::app_support::observe_system_appearance;
+use crate::settings_window::SettingsWindow;
 
 pub(crate) fn persona_editor_window_options(title: &'static str, cx: &App) -> WindowOptions {
     WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.into()),

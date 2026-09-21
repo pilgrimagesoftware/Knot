@@ -4,7 +4,13 @@
 //! catch-all default, which is why the defaults are asserted too: an
 //! unrecognized value is indistinguishable from the real default.
 
-use super::*;
+use std::collections::BTreeSet;
+
+use uuid::Uuid;
+
+use crate::settings_window::SettingsTab;
+use crate::settings_window::SettingsWindow;
+use crate::tests::workspace;
 
 #[test]
 fn appearance_label_maps_known_modes() {

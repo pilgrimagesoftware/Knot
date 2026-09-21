@@ -5,7 +5,37 @@
 //! store directly, so the store lock is released before any element is
 //! built - see [`super`]'s `render`.
 
-use super::super::*;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui_kit::ClickEvent;
+use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::base::StyledExt;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Icon;
+use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::px;
+use unicode_segmentation::UnicodeSegmentation;
+
+use crate::app_state::state_color;
+use crate::consts;
+use crate::settings_window::SettingsWindow;
+use crate::workspace_window::AgentMenuTargets;
+use crate::workspace_window::AgentRow;
+use crate::workspace_window::DetailLineSize;
+use crate::workspace_window::WorkspaceViewMode;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::agent_row_context_menu;
+use crate::workspace_window::detail_line;
 use super::sidebar_compact::{CompactAgentRow, compact_agent_row_body};
 
 impl WorkspaceWindow {

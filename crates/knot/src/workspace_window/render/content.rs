@@ -2,7 +2,22 @@
 //! selected agent's header strip and the pane below it (terminal, panel,
 //! markdown viewer, or the dashboard).
 
-use super::super::*;
+use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::div;
+use gpui_kit::px;
+
+use crate::terminal_view;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::terminal_cell_size;
+use crate::workspace_window::terminal_font_family;
 
 impl WorkspaceWindow {
     /// The column that fills the window beside the sidebar.

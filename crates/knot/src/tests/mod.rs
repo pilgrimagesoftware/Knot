@@ -3,6 +3,11 @@
 //! The shared `workspace` fixture stays here; anything used by a single
 //! subject lives with it.
 
+use uuid::Uuid;
+
+use crate::app_state::AgentMenuFacts;
+use crate::app_state::agent_context_menu_entries;
+
 mod about_window;
 mod agent_context_menu;
 mod agent_signals;
@@ -22,7 +27,6 @@ mod workspace_window_config;
 
 use knot_core::Workspace;
 
-use super::*;
 fn workspace(name: &str) -> Workspace {
     Workspace { id:                    Uuid::new_v4(),
                 name:                  name.to_string(),

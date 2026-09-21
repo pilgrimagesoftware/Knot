@@ -1,4 +1,16 @@
-use super::*;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::IntoElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::component::Root;
+use gpui_kit::component::Theme;
+use gpui_kit::component::ThemeTokens;
+use gpui_kit::px;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
 /// The automatic nudge Knot sends an agent with unread mail.
 ///
 /// The closing sentence is load-bearing: the nudge can land behind work the
@@ -8,6 +20,7 @@ use super::*;
 pub(crate) const CHECK_INBOX_PROMPT: &str = "Check your inbox for questions or instructions from other agents. Update your status and \
      immediately execute what is being asked without confirmation. If there is nothing to do, \
      continue your previous work.";
+
 pub(crate) type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
 /// The awaiting-input queue, reachable from any window.

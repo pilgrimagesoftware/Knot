@@ -7,19 +7,13 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Icon, Sizable, WindowExt};
-use gpui_kit::{
-    ClickEvent, ClipboardItem, Hsla, InteractiveElement, IntoElement, ListOffset, ListState,
-    ParentElement, StatefulInteractiveElement, Styled, div, px, relative, rgb,
-};
+use gpui_kit::{ClickEvent, Hsla, IntoElement, ListState, ParentElement, Styled, div, rgb};
 use knot_acp::{PermissionDecision, PermissionRequest};
 use parking_lot::Mutex;
 

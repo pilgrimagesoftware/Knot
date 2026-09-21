@@ -6,7 +6,37 @@
 //! [`crate::panel_state`]; this owns the pane around it and the
 //! virtualized list's reconciliation.
 
-use super::super::*;
+use std::path::Path;
+use std::sync::Arc;
+
+use gpui_kit::ClickEvent;
+use gpui_kit::Context;
+use gpui_kit::FollowMode;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ListAlignment;
+use gpui_kit::ListState;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::StyledExt;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::div;
+use gpui_kit::px;
+use gpui_kit::rgb;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::panel_session;
+use crate::panel_view;
+use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceWindow {
     /// Renders the markdown pane for `id`, which takes over the content

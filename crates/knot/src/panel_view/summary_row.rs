@@ -9,10 +9,24 @@
 //!
 //! Contract: `openspec/specs/collapsed-tool-call-summary/spec.md`.
 
+use std::rc::Rc;
+
+use gpui_kit::InteractiveElement;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
+use gpui_kit::component::Icon;
+use gpui_kit::component::Sizable;
+use gpui_kit::{ClickEvent, IntoElement, div, rgb};
 use knot_core::l10n::{t, t_with};
 
-use super::*;
 use crate::panel_state::ToolRunSummary;
+use crate::panel_view::MUTED;
+use crate::panel_view::PanelState;
+use crate::panel_view::PanelStyle;
+use crate::panel_view::tool_call;
 
 /// What compact mode makes of one message row.
 ///

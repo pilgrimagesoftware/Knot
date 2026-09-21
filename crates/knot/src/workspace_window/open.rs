@@ -8,7 +8,25 @@
 //! from other threads, so one timer asks [`super::repaint`]'s predicates
 //! what has moved and notifies when something has.
 
-use super::*;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::ClipboardItem;
+use gpui_kit::component::Root;
+use gpui_kit::component::input::InputState;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_state::agent_selection_for_workspace;
+use crate::app_support::observe_system_appearance;
+use crate::consts;
+use crate::dashboard;
+use crate::window_options::workspace_window_options;
+use crate::workspace_window::WorkspaceViewMode;
+use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
