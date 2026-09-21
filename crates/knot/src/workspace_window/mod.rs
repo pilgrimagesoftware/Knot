@@ -1626,7 +1626,7 @@ impl WorkspaceWindow {
                 v_flex()
                     .gap_1()
                     .children(queued_prompts.iter().enumerate().map(|(index, prompt)| {
-                        // Both row actions name their entry by id: a
+                        // Every row action names its entry by id: a
                         // delivery landing between this frame and the
                         // click shifts every index behind it, and two
                         // prompts reading the same text are ordinary.
@@ -1685,6 +1685,24 @@ impl WorkspaceWindow {
                                         {
                                             cx.notify();
                                         }
+                                    }))
+                            }))
+                            // Editing returns the message to the composer,
+                            // so it is offered exactly where deletion is:
+                            // a prompt the agent already has is neither.
+                            .children(prompt.is_deletable().then(|| {
+                                Button::new(("panel-queued-prompt-edit", index as u64))
+                                    .icon(gpui_kit::assets::IconName::Pencil)
+                                    .tooltip(knot_core::l10n::t("panel.edit_queued"))
+                                    .accessibility_label(knot_core::l10n::t("panel.edit_queued"))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(move |view,
+                                                          _: &ClickEvent,
+                                                          window,
+                                                          cx| {
+                                        view.edit_queued_prompt(id, prompt_id, window, cx);
                                     }))
                             }))
                             .children(prompt.is_deletable().then(|| {
@@ -2233,6 +2251,61 @@ impl WorkspaceWindow {
         else {
             "Enter to send, Shift+Enter for a newline"
         }
+    }
+
+    /// Returns a queued message to the composer so the user can change it.
+    ///
+    /// The entry leaves the queue and does not hold its place: edited text
+    /// is sent as a new prompt, behind whatever is still waiting. Text the
+    /// user already typed is the only thing this can destroy, so replacing
+    /// it asks first.
+    fn edit_queued_prompt(&mut self, id: Uuid, prompt_id: Uuid, window: &mut Window,
+                          cx: &mut Context<Self>) {
+        let Some(input) = self.panel_prompt_inputs.get(&id).cloned()
+        else {
+            return;
+        };
+        if !prompt_queue::needs_replace_confirmation(&input.read(cx).value()) {
+            self.take_queued_prompt_into(&input, id, prompt_id, window, cx);
+            return;
+        }
+        let view = cx.entity();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+                  let view = view.clone();
+                  let input = input.clone();
+                  alert.title(knot_core::l10n::t("panel.replace_composer_title"))
+                       .description(knot_core::l10n::t("panel.replace_composer_body"))
+                       .confirm()
+                       .on_ok(move |_, window, app| {
+                           view.update(app, |view, cx| {
+                                   view.take_queued_prompt_into(&input, id, prompt_id, window, cx);
+                               });
+                           true
+                       })
+              });
+    }
+
+    /// Moves `prompt_id` out of `id`'s queue and into `input`, focused and
+    /// ready to edit.
+    ///
+    /// A message already in flight is left where it is, so a delivery that
+    /// starts between the click and the confirmation cannot be pulled back
+    /// out from under the agent.
+    fn take_queued_prompt_into(&mut self, input: &Entity<TextareaState>, id: Uuid,
+                               prompt_id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(queue) = self.panel_prompt_queues.get_mut(&id)
+        else {
+            return;
+        };
+        let Some(text) = prompt_queue::take(queue, prompt_id)
+        else {
+            return;
+        };
+        cx.update_entity(input, |state, cx| {
+              state.set_value(text, window, cx);
+              state.focus(window, cx);
+          });
+        cx.notify();
     }
 
     /// Reads and clears `id`'s prompt input, then sends it through the
@@ -2808,7 +2881,10 @@ fn with_agents_menu_actions(el: gpui_kit::Div, selected: Option<&SelectedAgentMe
     // covers a whole submenu; registering it only when the parent entry
     // applies is what disables the leaves - and with them the parent item,
     // which AppKit enables only when a child is enabled.
-    let el = if selected.snapshot.entries.contains(&AgentMenuEntry::MoveToWorkspace) {
+    let el = if selected.snapshot
+                        .entries
+                        .contains(&AgentMenuEntry::MoveToWorkspace)
+    {
         let targets = selected.targets.clone();
         el.on_action(move |action: &AgentMenuMoveToWorkspaceTarget, _window, app| {
                          move_agent_to_workspace(&targets, action.workspace_id, app);
@@ -2826,7 +2902,10 @@ fn with_agents_menu_actions(el: gpui_kit::Div, selected: Option<&SelectedAgentMe
     else {
         el
     };
-    if selected.snapshot.entries.contains(&AgentMenuEntry::MarkdownFiles) {
+    if selected.snapshot
+               .entries
+               .contains(&AgentMenuEntry::MarkdownFiles)
+    {
         let targets = selected.targets.clone();
         el.on_action(move |action: &AgentMenuShowMarkdownFile, _window, app| {
               show_agent_markdown_file(&targets, &action.path, app);

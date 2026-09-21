@@ -106,10 +106,9 @@ fn the_agents_menu_keeps_items_a_companion_cannot_use() {
 fn the_agents_menu_submenus_come_from_the_snapshot() {
     let snapshot = AgentMenuSnapshot { entries:
                                            agent_context_menu_entries(AgentMenuFacts::EVERY_ITEM),
-                                       move_targets:
-                                           vec![(Uuid::new_v4(), "Second".to_string())],
-                                       markdown_history:
-                                           vec![PathBuf::from("/tmp/notes/plan.md")], };
+                                       move_targets:     vec![(Uuid::new_v4(),
+                                                               "Second".to_string())],
+                                       markdown_history: vec![PathBuf::from("/tmp/notes/plan.md")], };
 
     let move_targets = submenu_items(&snapshot, "Move to Workspace");
     assert_eq!(move_targets, vec!["Second".to_string()]);
@@ -136,7 +135,8 @@ fn the_agents_menu_disables_its_submenus_with_nothing_selected() {
     for title in ["Move to Workspace", "Open In…", "Markdown Files"] {
         assert!(labels.iter().any(|label| label == title),
                 "{title} should still be present");
-        assert!(submenu(&empty, title).disabled, "{title} should be disabled");
+        assert!(submenu(&empty, title).disabled,
+                "{title} should be disabled");
     }
     assert!(submenu_items(&empty, "Move to Workspace").is_empty());
     assert!(submenu_items(&empty, "Markdown Files").is_empty());
