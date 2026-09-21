@@ -2139,6 +2139,7 @@ impl WorkspaceWindow {
             if state.pending_permission.is_some() || state.turn_active {
                 return None;
             }
+            drop(state);
             let queue = self.panel_prompt_queues.get_mut(&id)?;
             let prompt = queue.first_mut()?;
             if prompt.failed || prompt.in_flight {
