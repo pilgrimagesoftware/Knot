@@ -30,6 +30,11 @@ panel:
   copied_prompt: "Copied prompt to clipboard"
   copied_response: "Copied response to clipboard"
   queued: "Queued"
+  failed: "Failed"
+  retry: "Retry"
+  retry_queued: "Retry this message"
+  delete_queued: "Delete this queued message"
+  retry_connect: "Try again"
   context_usage: "Context usage"
 
 menu:

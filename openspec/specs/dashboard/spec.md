@@ -1,29 +1,49 @@
 # dashboard Specification
 
 ## Purpose
-TBD - created by archiving change dashboard-view. Update Purpose after archive.
+
+Defines the card-grid view of agents: the in-place dashboard a workspace
+window toggles to in place of its terminal view, the separate Command Center
+window that shows the same grid across workspaces, how each agent's card is
+laid out and sorted, and the tile that creates a new agent from the grid.
 
 ## Requirements
 
 ### Requirement: Dashboard launcher
 
-The workspace window SHALL show an icon-only "Dashboard" button (image +
-tooltip) next to its "New agent" button. Clicking it toggles the
-workspace window's own content between its terminal view and the
-dashboard view - it does not open a separate window.
+The workspace window SHALL show the dashboard launcher as a labelled row at
+the top of its agent list - an icon and the word "Dashboard" - shaped like
+the agent rows it sits above. Clicking it toggles the workspace window's own
+content between its terminal view and the dashboard view; it does not open a
+separate window. The row SHALL show a selected background while the dashboard
+view is the one being shown, as an agent row does when selected.
 
-#### Scenario: Launcher present but inert (this session)
+It is deliberately not an icon-only button in the bottom bar beside "New
+agent". The dashboard is the workspace's overview of every agent, so it
+belongs above them and shaped like them; as a bare icon among the window's
+controls it read as a minor one and went unnoticed. This follows the Swift
+reference's `overviewRow` (`Skwad/Views/Sidebar/SidebarView.swift`).
+
+#### Scenario: The launcher sits above the agent rows
 
 - **WHEN** a workspace window is open
-- **THEN** a "Dashboard" icon button is visible next to "New agent"
-- **AND** clicking it does nothing yet (wiring lands in a later task)
+- **THEN** a labelled "Dashboard" row is visible at the top of the agent
+  list, above the first agent row, and not in the bottom bar beside "New
+  agent"
 
-#### Scenario: Launcher toggles the in-place view (future task)
+#### Scenario: The launcher marks which view is showing
 
-- **WHEN** a workspace window is open and the "Dashboard" button is clicked
+- **WHEN** the workspace window is showing the dashboard view
+- **THEN** the Dashboard row is drawn with a selected background
+- **WHEN** it is showing the terminal view
+- **THEN** the Dashboard row is drawn without one
+
+#### Scenario: Launcher toggles the in-place view
+
+- **WHEN** a workspace window is open and the Dashboard row is clicked
 - **THEN** that window's content switches from the terminal view to the
   dashboard view, scoped to that workspace's agents
-- **AND** clicking a card, or clicking the button again, switches back to
+- **AND** clicking a card, or clicking the row again, switches back to
   the terminal view
 
 ### Requirement: Command Center window

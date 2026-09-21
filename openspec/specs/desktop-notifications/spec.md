@@ -4,7 +4,7 @@ Delivers macOS desktop notifications (via `UNUserNotificationCenter`) when an
 agent needs the user's attention while Knot is backgrounded or hidden to the
 menu bar, and routes a click on that notification back to the agent.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Authorization requested once at startup
 
