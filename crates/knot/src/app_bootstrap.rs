@@ -70,8 +70,12 @@ actions!(knot_app,
           PanelPermissionDeny,
           PanelOpenPermissionSelector]);
 
+/// Every user-facing quit path lands here - the application menu's Quit
+/// Knot item and the `cmd-q` binding both dispatch `Quit` - so the guard
+/// only has to be applied once. See `quit_guard` for why the check cannot
+/// live in `on_app_quit` instead.
 pub(crate) fn quit(_: &Quit, cx: &mut App) {
-    cx.quit();
+    quit_guard::request_quit(cx);
 }
 
 /// Quits on Ctrl-C (or `kill`) from the launching terminal.
@@ -241,6 +245,11 @@ pub(crate) fn run() {
                                Theme::change(cx.window_appearance(), None, cx);
                                apply_visual_identity(&settings, cx);
 
+                               // Before `on_action(quit)`: the guard reads
+                               // the store through this global, and a quit
+                               // arriving without it would be waved
+                               // through unguarded.
+                               cx.set_global(quit_guard::QuitGuard::new(Arc::clone(&store)));
                                cx.on_action(quit);
                                cx.on_action(about_knot);
                                cx.on_action(hide_app);
@@ -297,17 +306,28 @@ pub(crate) fn run() {
                 window.set_window_title(&knot_core::l10n::t("workspace.manager"));
                 let name_input =
                     cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
-                let view = cx.new(|_| WorkspaceManager {
-                    store: Arc::clone(&store),
-                    messages: Arc::clone(&messages),
-                    settings: settings.clone(),
-                    name_input,
-                    editing_id: None,
-                    workspace_dialog_id: None,
-                    show_workspace_dialog: false,
-                    delete_workspace_id: None,
-                    error: None,
-                    _mcp_stop: Some(mcp_stop),
+                let view = cx.new(|cx| {
+                    let name_subscription = cx.subscribe(
+                        &name_input,
+                        |_: &mut WorkspaceManager, _, event, cx| {
+                            if matches!(event, InputEvent::Change) {
+                                cx.notify();
+                            }
+                        },
+                    );
+                    WorkspaceManager {
+                        store: Arc::clone(&store),
+                        messages: Arc::clone(&messages),
+                        settings: settings.clone(),
+                        name_input,
+                        editing_id: None,
+                        workspace_dialog_id: None,
+                        show_workspace_dialog: false,
+                        delete_workspace_id: None,
+                        error: None,
+                        _name_subscription: name_subscription,
+                        _mcp_stop: Some(mcp_stop),
+                    }
                 });
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             })
