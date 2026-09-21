@@ -108,7 +108,26 @@ without reopening the surface.
 The system SHALL render each tool call as a distinct card showing its kind,
 input summary, and result (or in-progress state) once received, and SHALL
 render a file-edit tool call's diff as an added/removed line view rather than
-raw text.
+raw text. This is the default presentation.
+
+When the compact tool-call preference is enabled, contiguous tool-call
+activity SHALL instead render as one updating summary line reporting the
+call count and whichever file or command counts the tool metadata supports.
+Tool execution results SHALL remain available in panel state either way and
+SHALL NOT be discarded by compact rendering.
+
+#### Scenario: Default individual rendering
+- **WHEN** compact mode is disabled and a tool call completes
+- **THEN** the panel renders that call as its own card with its result
+
+#### Scenario: Compact rendering
+- **WHEN** compact mode is enabled and a sequence of tool calls runs
+- **THEN** the panel renders one updating summary line for the sequence
+
+#### Scenario: Failed call remains represented
+- **WHEN** a tool call fails in compact mode
+- **THEN** the summary reflects the failed call and its failure remains
+  inspectable in panel state
 
 #### Scenario: Tool call fails
 - **WHEN** a tool call's result reports an error

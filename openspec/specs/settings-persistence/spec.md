@@ -20,7 +20,8 @@ options strings, terminal font name and size, autopilot-enabled, AI provider,
 AI API key, autopilot action, autopilot custom prompt, voice-enabled, voice
 engine, push-to-talk key code, voice auto-insert, and similar) and serialized
 collections (saved agents, saved workspaces, personas, bench agents, recent
-repos). Writing a value SHALL persist it immediately.
+repos), including the compact tool-call display preference. Writing a value
+SHALL persist it immediately.
 
 `restore-conversation-on-launch` defaults to off (disabled) and is
 decode-tolerant: a persisted settings blob written before this field existed
@@ -37,6 +38,21 @@ load with each defaulted, not an error.
 Swift reference's `ModifierKeyCode.rightCommand`), and `voice_auto_insert`
 defaults to `true`. All four are decode-tolerant: a persisted settings blob
 written before they existed SHALL load with each defaulted, not an error.
+
+The compact tool-call display preference defaults to disabled, so an
+existing install keeps the per-call rendering it already had. It is
+decode-tolerant on the same terms: a persisted settings blob written before
+it existed SHALL load with compact mode disabled, not an error.
+
+#### Scenario: Compact mode persists
+
+- **WHEN** the user enables compact tool-call mode and restarts the app
+- **THEN** compact mode remains enabled
+
+#### Scenario: Legacy settings default compact mode off
+
+- **WHEN** a settings blob predates the compact tool-call preference
+- **THEN** it loads successfully with compact mode disabled
 
 #### Scenario: Scalar persists across restart
 
