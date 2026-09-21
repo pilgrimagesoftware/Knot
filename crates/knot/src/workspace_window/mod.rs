@@ -1448,7 +1448,7 @@ impl WorkspaceWindow {
                             .items_center()
                             .child(
                                 div()
-                                    .flex_shrink(1.)
+                                    .flex_1()
                                     .min_w_0()
                                     .overflow_hidden()
                                     .whitespace_nowrap()
