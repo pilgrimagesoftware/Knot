@@ -1,4 +1,45 @@
 
+## 1.11.0 - 2026-09-21
+
+### Added
+- Virtualize the agent content panel
+- Add tool call status icons
+- Add working indicator
+- Queue panel prompts while agents are busy
+- Queue panel prompts during responses
+- Use icons for queued prompt controls
+
+
+### Documentation
+- Document feature PR preflight
+
+
+### Fixed
+- Pad virtualized panel rows, not the list
+- Resolve adapters on a GUI-safe PATH
+- Spawn ACP adapters and installs on the merged PATH
+- Collapse long tool call titles
+- Auto-install Codex ACP adapter
+- Keep bottom selector menus clickable
+- Sync panel working status
+- Make panel selector options clickable
+- Left-align popup menu labels
+- Format all the things
+- Clear delivered panel prompts from queue
+- Name queued prompt delivery result
+- Add panel stop button
+- Use icons for panel controls
+- Style panel stop control
+- Use solid stop glyph
+- Preserve panel stop implementation
+- Compact queued panel messages
+- Push queued controls to row edge
+- Track queued prompt delivery state
+- Release panel state before queued delivery
+- Render context usage indicator
+
+
+
 ## 1.10.0 - 2026-09-19
 
 ### Added
