@@ -4,7 +4,7 @@
 //! label in, and the text of the label itself - so the rule can be asserted
 //! here without a window, a text system, or an installed font.
 
-use crate::settings_window::font_label;
+use crate::settings_window::font::font_label;
 
 /// Standing in for `cx.text_system().all_font_names()`.
 fn resolvable() -> Vec<String> {
