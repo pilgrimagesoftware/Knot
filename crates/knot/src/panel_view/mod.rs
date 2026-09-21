@@ -15,7 +15,6 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::text::TextView;
 use gpui_kit::component::{Icon, Sizable, WindowExt};
 use gpui_kit::{
     ClickEvent, ClipboardItem, Hsla, InteractiveElement, IntoElement, ListOffset, ListState,
@@ -63,6 +62,11 @@ pub(crate) struct PanelStyle {
     /// card header monospace cannot sweep the status text along with the
     /// title.
     pub(crate) ui_font_family:     gpui_kit::SharedString,
+    /// The user's title family, for Markdown headers in a rendered response.
+    /// Named beside `ui_font_family` rather than read from the theme, which
+    /// carries only the app-wide UI family - a header's face is the one thing
+    /// a Markdown surface cannot inherit.
+    pub(crate) title_font_family:  gpui_kit::SharedString,
     /// The theme's danger colour, for a failed tool call's outline.
     pub(crate) danger_color:       Hsla,
     /// The theme's info colour, for a pending or running call's outline.

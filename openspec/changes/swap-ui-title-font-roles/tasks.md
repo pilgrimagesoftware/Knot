@@ -19,15 +19,15 @@
 
 ## 3. Markdown heading renderer (`knot`)
 
-- [ ] 3.1 Add `crates/knot/src/markdown_view.rs` with the level-to-size-factor and level-to-weight tables from `gpui-base`, a doc comment naming that source and the upgrade check it implies, and a pure helper mapping a heading level plus a base size to its pixel size and font weight; verify with unit tests pinning all six levels and the out-of-range fallback.
-- [ ] 3.2 In the same module, add the block parser claiming `markdown_ast::Node::Heading` - reading `depth`, flattening the heading's inline children to plain text, returning a `MarkdownNode` named `knot-heading` carrying level and text; verify with a unit test that a heading containing a bold run flattens to the words without asterisks and that a non-heading node is not claimed.
-- [ ] 3.3 In the same module, add the block renderer for `knot-heading` - the title family, the level's size and weight, and the bottom padding `gpui-base` gives a heading - and one constructor taking element id, source, UI family, title family and body size that returns the `TextView` with the body family, the `TextViewStyle` heading base, and both hooks installed; verify it compiles and `make lint` is clean.
-- [ ] 3.4 Declare the module in `crates/knot/src/main.rs` and register its tests in `crates/knot/src/tests/mod.rs`; verify `make test` runs the new tests.
+- [x] 3.1 Add `crates/knot/src/markdown_view.rs` with the level-to-size-factor and level-to-weight tables from `gpui-base`, a doc comment naming that source and the upgrade check it implies, and a pure helper mapping a heading level plus a base size to its pixel size and font weight; verify with unit tests pinning all six levels and the out-of-range fallback.
+- [x] 3.2 In the same module, add the block parser claiming `markdown_ast::Node::Heading` - reading `depth`, flattening the heading's inline children to plain text, returning a `MarkdownNode` named `knot-heading` carrying level and text; verify with a unit test that a heading containing a bold run flattens to the words without asterisks and that a non-heading node is not claimed.
+- [x] 3.3 In the same module, add the block renderer for `knot-heading` - the title family, the level's size and weight, and the bottom padding `gpui-base` gives a heading - and one constructor taking element id, source, UI family, title family and body size that returns the `TextView` with the body family, the `TextViewStyle` heading base, and both hooks installed; verify it compiles and `make lint` is clean.
+- [x] 3.4 Declare the module in `crates/knot/src/main.rs` and register its tests in `crates/knot/src/tests/mod.rs`; verify `make test` runs the new tests.
 
 ## 4. Markdown surfaces use the helper
 
-- [ ] 4.1 Route the panel's assistant messages in `crates/knot/src/panel_view/mod.rs` through the new constructor, adding the title family to `PanelStyle` beside `ui_font_family` and `mono_font_family` with a doc comment saying what it draws; verify a response with headers and paragraphs renders headers in Manrope and body in Adamina.
-- [ ] 4.2 Route the Markdown pane in `crates/knot/src/workspace_window/panel/pane.rs` through the same constructor with the same families and body size; verify a file shown through `display-markdown` renders the same two faces as the panel.
+- [x] 4.1 Route the panel's assistant messages in `crates/knot/src/panel_view/mod.rs` through the new constructor, adding the title family to `PanelStyle` beside `ui_font_family` and `mono_font_family` with a doc comment saying what it draws; verify a response with headers and paragraphs renders headers in Manrope and body in Adamina.
+- [x] 4.2 Route the Markdown pane in `crates/knot/src/workspace_window/panel/pane.rs` through the same constructor with the same families and body size; verify a file shown through `display-markdown` renders the same two faces as the panel.
 - [ ] 4.3 Verify the accepted losses and the risks named in `design.md` by hand: select text across a header, stream a response containing a header, and confirm inline code and fenced code blocks still render monospace.
 
 ## 5. Specs, docs and checks

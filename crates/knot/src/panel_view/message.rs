@@ -75,9 +75,13 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                     // keeps from stretching the pane.
                     .child(div().w_full()
                                 .min_w_0()
-                                .child(TextView::markdown(("panel-message-markdown",
-                                                           index as u64),
-                                                          text.clone())))
+                                .child(crate::markdown_view::markdown_view(
+                        ("panel-message-markdown", index as u64),
+                        text.clone(),
+                        style.ui_font_family.clone(),
+                        style.title_font_family.clone(),
+                        style.markdown_font_size,
+                    )))
                     .children((is_last && state.turn_active).then(|| {
                                                                 render_track_toggle(state.tracking,
                                                       callbacks.on_toggle_track.clone())

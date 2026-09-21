@@ -76,9 +76,15 @@ impl WorkspaceWindow {
                     .min_w_0()
                     .overflow_y_scroll()
                     .p_4()
-                    .child(TextView::markdown(
+                    // The same constructor the panel's assistant messages
+                    // use, with the same families and body size: the spec
+                    // requires the two Markdown surfaces to render alike.
+                    .child(crate::markdown_view::markdown_view(
                         ("markdown-pane-body", id.as_u128() as u64),
                         body,
+                        cx.theme().font_family.clone(),
+                        self.settings.title_font_name.clone().into(),
+                        px(self.settings.markdown_font_size as f32),
                     )),
             )
             .into_any_element()
@@ -229,6 +235,10 @@ impl WorkspaceWindow {
                                                                     as f32),
                                              mono_font_family: theme.mono_font_family.clone(),
                                              ui_font_family: theme.font_family.clone(),
+                                             title_font_family: self.settings
+                                                                    .title_font_name
+                                                                    .clone()
+                                                                    .into(),
                                              danger_color: theme.danger,
                                              info_color: theme.info,
                                              border_color: theme.border,
