@@ -83,7 +83,7 @@ the `project-start-change` skill to create the worktree; convention is
 2. Implement against the OpenSpec change / spec contract.
 3. Open a PR to `develop` (`release/*` and `hotfix/*` PR to `main`). Rulesets on
    both branches require the Rust CI matrix (`workspace (ubuntu-latest)` and
-   `workspace (macos-latest)` from `.github/workflows/rust.yml`) to pass, and a
+   `workspace (macos-latest)` from `.github/workflows/ci.yml`) to pass, and a
    PR to merge. Merge with a merge commit or rebase, never squash.
 4. `dependabot` opens weekly grouped PRs against `develop` for `cargo` and
    `github-actions`.
@@ -98,9 +98,10 @@ the `project-start-change` skill to create the worktree; convention is
 ## Running Checks Locally
 
 ```bash
-make rust          # fmt (nightly) + clippy + test + build, whole workspace
+make rust          # fmt + clippy + test + build, whole workspace
 
-make rust-fmt      # cargo +nightly fmt --check
+make rust-fmt        # reformat with the pinned nightly
+make rust-fmt-check  # verify formatting (what CI runs)
 make rust-lint     # cargo clippy --workspace --all-targets -- -D warnings
 make rust-test     # cargo test --workspace
 make rust-build    # cargo build --workspace
@@ -114,8 +115,11 @@ Packaging is configured in `crates/knot/Cargo.toml` under
 `[package.metadata.packager]` and needs `cargo install cargo-packager --locked`.
 CI runs the same command from `.github/workflows/package.yml`.
 
-Run `cargo +nightly fmt` before committing (needs `rustup toolchain install
-nightly`). `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
+Run `make rust-fmt` before committing. `rustfmt.toml` uses unstable options, so
+formatting is only reproducible on one exact nightly, pinned as
+`RUSTFMT_NIGHTLY` in the `Makefile` and installed with `rustup toolchain install
+$(make -s print-rustfmt-nightly)`. CI installs that same pin and runs these same
+targets. `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
 
 The Swift app has its own targets in the same `Makefile` (`make build`,
 `make test`, `make notarize`) and its own CI (`tests.yml`, `build.yml`); those
