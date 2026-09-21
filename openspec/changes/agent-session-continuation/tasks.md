@@ -1,0 +1,13 @@
+# Tasks
+
+## 1. Model auxiliary inbox nudges
+
+- [ ] 1.1 Locate the idle delivery and session prompt queue paths, then add an explicit origin for automatic inbox nudges; verify normal user messages still use the existing origin.
+- [ ] 1.2 Preserve the active turn and pending task when an auxiliary nudge is delivered; verify the active state remains available while the nudge is handled.
+- [ ] 1.3 Resume the preserved task after the nudge is acknowledged; verify the task continues with its original turn identity and does not duplicate output.
+
+## 2. Tests and verification
+
+- [ ] 2.1 Add focused tests for a nudge during paused work, a nudge during an active update, and a nudge with no active task; verify each expected queue transition.
+- [ ] 2.2 Run the affected MCP/session tests and verify all pass.
+- [ ] 2.3 Run repository formatting and broader test checks required by the touched crate and verify no regressions.

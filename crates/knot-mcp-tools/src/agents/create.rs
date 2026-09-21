@@ -8,79 +8,52 @@ use crate::lookup::agent_not_found;
 use crate::responses::{CreateAgentResponse, success};
 
 struct ResolvedCreateFields {
-    name:          Option<String>,
-    icon:          Option<String>,
-    agent_type:    Option<String>,
-    repo_path:     Option<String>,
+    name: Option<String>,
+    icon: Option<String>,
+    agent_type: Option<String>,
+    repo_path: Option<String>,
     shell_command: Option<String>,
-    persona_id:    Option<Uuid>,
+    persona_id: Option<Uuid>,
 }
 
-fn resolve_fields(arguments: &serde_json::Value, bench: Option<&BenchAgent>)
-                  -> ResolvedCreateFields {
-    ResolvedCreateFields { name:          optional_str(arguments, "name").map(str::to_string)
-                                                                         .or_else(|| {
-                                                                             bench.map(|value| {
-                                                                                      value.name
-                                                                                           .clone()
-                                                                                  })
-                                                                         }),
-                           icon:          optional_str(arguments, "icon").map(str::to_string)
-                                                                         .or_else(|| {
-                                                                             bench.map(|value| {
-                                                                                      value.avatar
-                                                                                           .clone()
-                                                                                  })
-                                                                         }),
-                           agent_type:
-                               optional_str(arguments, "agentType").map(str::to_string)
-                                                                   .or_else(|| {
-                                                                       bench.map(|value| {
-                                                                                value.agent_type
-                                                                                     .clone()
-                                                                            })
-                                                                   }),
-                           repo_path:     optional_str(arguments, "repoPath").map(str::to_string)
-                                                                             .or_else(|| {
-                                                                                 bench.map(|value| {
-                                                                                     value.folder
-                                                                                          .clone()
-                                                                                 })
-                                                                             }),
-                           shell_command:
-                               optional_str(arguments, "command").map(str::to_string)
-                                                                 .or_else(|| {
-                                                                     bench.and_then(|value| {
-                                                                              value.shell_command
-                                                                                   .clone()
-                                                                          })
-                                                                 }),
-                           persona_id:
-                               optional_str(arguments, "personaId").and_then(|value| {
-                                                                       Uuid::parse_str(value).ok()
-                                                                   })
-                                                                   .or_else(|| {
-                                                                       bench.and_then(|value| {
-                                                                                value.persona_id
-                                                                            })
-                                                                   }), }
+fn resolve_fields(
+    arguments: &serde_json::Value, bench: Option<&BenchAgent>,
+) -> ResolvedCreateFields {
+    ResolvedCreateFields {
+        name: optional_str(arguments, "name")
+            .map(str::to_string)
+            .or_else(|| bench.map(|value| value.name.clone())),
+        icon: optional_str(arguments, "icon")
+            .map(str::to_string)
+            .or_else(|| bench.map(|value| value.avatar.clone())),
+        agent_type: optional_str(arguments, "agentType")
+            .map(str::to_string)
+            .or_else(|| bench.map(|value| value.agent_type.clone())),
+        repo_path: optional_str(arguments, "repoPath")
+            .map(str::to_string)
+            .or_else(|| bench.map(|value| value.folder.clone())),
+        shell_command: optional_str(arguments, "command")
+            .map(str::to_string)
+            .or_else(|| bench.and_then(|value| value.shell_command.clone())),
+        persona_id: optional_str(arguments, "personaId")
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .or_else(|| bench.and_then(|value| value.persona_id)),
+    }
 }
 
-pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
-                    bench_agents: &[BenchAgent])
-                    -> ToolCallResult {
+pub fn create_agent(
+    store: &mut AgentStore, arguments: &serde_json::Value, bench_agents: &[BenchAgent],
+) -> ToolCallResult {
     let agent_id_str = match require_str(arguments, "agentId") {
         Ok(value) => value,
         Err(error) => return error,
     };
-    let Ok(created_by) = Uuid::parse_str(agent_id_str)
-    else {
+    let Ok(created_by) = Uuid::parse_str(agent_id_str) else {
         return agent_not_found(store, agent_id_str);
     };
     let bench = match optional_str(arguments, "benchAgentId") {
         Some(id_str) => {
-            let Ok(bench_id) = Uuid::parse_str(id_str)
-            else {
+            let Ok(bench_id) = Uuid::parse_str(id_str) else {
                 return ToolCallResult::error(format!("Bench agent not found: {id_str}"));
             };
             match bench_agents.iter().find(|bench| bench.id == bench_id) {
@@ -103,8 +76,10 @@ pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
         missing.push("repoPath");
     }
     if !missing.is_empty() {
-        return ToolCallResult::error(format!("Missing required parameters: {}. Provide these or use benchAgentId to deploy from a template.",
-                                             missing.join(", ")));
+        return ToolCallResult::error(format!(
+            "Missing required parameters: {}. Provide these or use benchAgentId to deploy from a template.",
+            missing.join(", ")
+        ));
     }
 
     let create_worktree = optional_bool(arguments, "createWorktree").unwrap_or(false);
@@ -123,26 +98,31 @@ pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
             Ok(path) => path.to_string_lossy().into_owned(),
             Err(error) => return ToolCallResult::error(error),
         }
-    }
-    else {
+    } else {
         repo_path
     };
-    let id = store.create(folder,
-                          CreateOptions { name:            fields.name,
-                                          avatar:          fields.icon,
-                                          agent_type:      fields.agent_type,
-                                          shell_command:   fields.shell_command,
-                                          persona_id:      fields.persona_id,
-                                          created_by:      Some(created_by),
-                                          is_companion:    companion,
-                                          insert_after:    None,
-                                          // Active, not the dialog's
-                                          // `Passive` default: an agent
-                                          // created over MCP was asked for
-                                          // by another agent, and there is
-                                          // no user to select its row.
-                                          activation_mode: knot_core::ActivationMode::Active, });
-    success(&CreateAgentResponse { success:  true,
-                                   agent_id: Some(id.to_string()),
-                                   message:  "Agent created successfully".to_string(), })
+    let id = store.create(
+        folder,
+        CreateOptions {
+            name: fields.name,
+            avatar: fields.icon,
+            agent_type: fields.agent_type,
+            shell_command: fields.shell_command,
+            persona_id: fields.persona_id,
+            created_by: Some(created_by),
+            is_companion: companion,
+            insert_after: None,
+            // Active, not the dialog's
+            // `Passive` default: an agent
+            // created over MCP was asked for
+            // by another agent, and there is
+            // no user to select its row.
+            activation_mode: knot_core::ActivationMode::Active,
+        },
+    );
+    success(&CreateAgentResponse {
+        success: true,
+        agent_id: Some(id.to_string()),
+        message: "Agent created successfully".to_string(),
+    })
 }

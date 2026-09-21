@@ -29,8 +29,7 @@ fn find_project_dir(folder: &str) -> Option<PathBuf> {
     for entry in entries.filter_map(Result::ok) {
         let dir = entry.path();
         let root_file = dir.join(".project_root");
-        let Ok(root) = fs::read_to_string(&root_file)
-        else {
+        let Ok(root) = fs::read_to_string(&root_file) else {
             continue;
         };
         if root.trim() == folder {
@@ -49,14 +48,16 @@ fn parse_timestamp(raw: &str) -> OffsetDateTime {
 fn find_chat_file(chats_dir: &Path, session_id: &str) -> Option<PathBuf> {
     let short_id: String = session_id.chars().take(8).collect();
     let entries = fs::read_dir(chats_dir).ok()?;
-    entries.filter_map(Result::ok)
-           .map(|e| e.path())
-           .find(|path| {
-               path.extension().and_then(|e| e.to_str()) == Some("json")
-               && path.file_name()
-                      .and_then(|n| n.to_str())
-                      .is_some_and(|name| name.contains(&short_id))
-           })
+    entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|path| {
+            path.extension().and_then(|e| e.to_str()) == Some("json")
+                && path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|name| name.contains(&short_id))
+        })
 }
 
 /// Parse a Gemini chat file for the first `user` message text.
@@ -69,11 +70,12 @@ fn title_from_chat_file(path: &Path) -> Option<String> {
         if message.get("type").and_then(Value::as_str) != Some("user") {
             continue;
         }
-        let Some(text) = message.get("content")
-                                .and_then(Value::as_array)
-                                .and_then(|arr| arr.first())
-                                .and_then(|first| first.get("text"))
-                                .and_then(Value::as_str)
+        let Some(text) = message
+            .get("content")
+            .and_then(Value::as_array)
+            .and_then(|arr| arr.first())
+            .and_then(|first| first.get("text"))
+            .and_then(Value::as_str)
         else {
             continue;
         };
@@ -89,61 +91,60 @@ fn resolve_title(log_message: &str, session_id: &str, chats_dir: &Path) -> Strin
     if is_valid_title(log_message) {
         return crate::title::truncate(log_message);
     }
-    find_chat_file(chats_dir, session_id).and_then(|path| title_from_chat_file(&path))
-                                         .unwrap_or_default()
+    find_chat_file(chats_dir, session_id)
+        .and_then(|path| title_from_chat_file(&path))
+        .unwrap_or_default()
 }
 
 impl HistoryProvider for GeminiProvider {
     fn load_sessions(&self, folder: &str) -> Vec<SessionSummary> {
-        let Some(project_dir) = find_project_dir(folder)
-        else {
+        let Some(project_dir) = find_project_dir(folder) else {
             return Vec::new();
         };
         let logs_path = project_dir.join("logs.json");
-        let Ok(content) = fs::read_to_string(&logs_path)
-        else {
+        let Ok(content) = fs::read_to_string(&logs_path) else {
             return Vec::new();
         };
-        let Ok(entries) = serde_json::from_str::<Vec<Value>>(&content)
-        else {
+        let Ok(entries) = serde_json::from_str::<Vec<Value>>(&content) else {
             return Vec::new();
         };
 
         let mut sessions: HashMap<String, (String, OffsetDateTime)> = HashMap::new();
         for entry in &entries {
-            let (Some(session_id), Some(entry_type), Some(message), Some(timestamp_str)) =
-                (entry.get("sessionId").and_then(Value::as_str),
-                 entry.get("type").and_then(Value::as_str),
-                 entry.get("message").and_then(Value::as_str),
-                 entry.get("timestamp").and_then(Value::as_str))
-            else {
+            let (Some(session_id), Some(entry_type), Some(message), Some(timestamp_str)) = (
+                entry.get("sessionId").and_then(Value::as_str),
+                entry.get("type").and_then(Value::as_str),
+                entry.get("message").and_then(Value::as_str),
+                entry.get("timestamp").and_then(Value::as_str),
+            ) else {
                 continue;
             };
             if entry_type != "user" {
                 continue;
             }
-            sessions.entry(session_id.to_owned())
-                    .or_insert_with(|| (message.to_owned(), parse_timestamp(timestamp_str)));
+            sessions
+                .entry(session_id.to_owned())
+                .or_insert_with(|| (message.to_owned(), parse_timestamp(timestamp_str)));
         }
 
         let mut sorted: Vec<_> = sessions.into_iter().collect();
         sorted.sort_by_key(|(_, (_, timestamp))| std::cmp::Reverse(*timestamp));
 
         let chats_dir = project_dir.join("chats");
-        sorted.into_iter()
-              .take(MAX_SESSIONS)
-              .map(|(session_id, (message, timestamp))| {
-                  SessionSummary { title: resolve_title(&message, &session_id, &chats_dir),
-                                   id: session_id,
-                                   timestamp,
-                                   message_count: 0 }
-              })
-              .collect()
+        sorted
+            .into_iter()
+            .take(MAX_SESSIONS)
+            .map(|(session_id, (message, timestamp))| SessionSummary {
+                title: resolve_title(&message, &session_id, &chats_dir),
+                id: session_id,
+                timestamp,
+                message_count: 0,
+            })
+            .collect()
     }
 
     fn delete_session(&self, id: &str, folder: &str) {
-        let Some(project_dir) = find_project_dir(folder)
-        else {
+        let Some(project_dir) = find_project_dir(folder) else {
             return;
         };
 
@@ -153,12 +154,10 @@ impl HistoryProvider for GeminiProvider {
         }
 
         let logs_path = project_dir.join("logs.json");
-        let Ok(content) = fs::read_to_string(&logs_path)
-        else {
+        let Ok(content) = fs::read_to_string(&logs_path) else {
             return;
         };
-        let Ok(mut entries) = serde_json::from_str::<Vec<Value>>(&content)
-        else {
+        let Ok(mut entries) = serde_json::from_str::<Vec<Value>>(&content) else {
             return;
         };
         entries.retain(|entry| entry.get("sessionId").and_then(Value::as_str) != Some(id));
@@ -190,7 +189,7 @@ mod tests {
         for entry in fs::read_dir(base).unwrap().filter_map(Result::ok) {
             let dir = entry.path();
             if let Ok(root) = fs::read_to_string(dir.join(".project_root"))
-               && root.trim() == "/Users/x/proj"
+                && root.trim() == "/Users/x/proj"
             {
                 found = Some(dir);
             }

@@ -57,10 +57,27 @@ conversation with its available options as actionable controls, SHALL block
 sending further prompts for that session until the request is answered, and
 SHALL send the user's choice back through the ACP client.
 
+The prompt SHALL identify the tool call by a human-readable name rather than
+its opaque id when one is known: the title carried by the request if present,
+else the title of the panel's known tool-call card for that id, else the
+call's kind. If none of these is known, the raw id SHALL be shown rather than
+a blank.
+
 #### Scenario: User denies a permission request
-- **WHEN** the user selects a deny option on a permission prompt
+- **WHEN** the user selects a deny option on a permission request
 - **THEN** the system sends that decision to the agent and the prompt is
   replaced with its resolved state (not left pending)
+
+#### Scenario: The prompt names the tool
+- **WHEN** a permission request arrives for a tool call the panel knows by
+  the title "Reading configuration file"
+- **THEN** the prompt reads "Permission requested for Reading configuration
+  file" (or equivalent), not the call's opaque id
+
+#### Scenario: An unnamed call falls back to its id
+- **WHEN** a permission request carries no title and no matching card is
+  known
+- **THEN** the prompt shows the call's id rather than an empty name
 
 ### Requirement: Terminal remains available
 The system SHALL NOT remove or degrade the existing terminal view. Any agent
@@ -96,9 +113,9 @@ agent named the call - SHALL render in the theme's monospace family. It is a
 command, a path or an identifier, and the project renders those monospace
 everywhere else.
 
-The call's status text SHALL render in the proportional family. It is the
-panel's own words about the call, not anything the agent produced, and it
-SHALL NOT be swept into monospace along with the title.
+The call's status SHALL be expressed by a status icon, and the card's own
+words about the call - the status word shown in the icon's tooltip - SHALL be
+in the proportional family.
 
 #### Scenario: A shell command reads as a command
 
@@ -107,8 +124,9 @@ SHALL NOT be swept into monospace along with the title.
 
 #### Scenario: The status stays prose
 
-- **WHEN** a completed tool call renders with the status text "Done"
-- **THEN** that text is in the proportional family, beside a monospace title
+- **WHEN** a completed tool call renders with the status word "Done" as the
+  status icon's tooltip
+- **THEN** that word is in the proportional family, beside a monospace title
 
 ### Requirement: A tool call's outline says what state it is in
 
@@ -147,6 +165,38 @@ follows a theme change like the rest of the panel.
 - **WHEN** a call starts, runs and then completes
 - **THEN** its outline is the info colour while it runs and the neutral
   border once it is done, without the card being rebuilt around it
+
+### Requirement: Tool call status icon
+
+The system SHALL render a tool call's status as an icon whose glyph and color
+follow the call's state: an in-flight state (pending or running) SHALL use the
+theme's info colour, a failed call the theme's danger colour, and a completed
+call the same neutral muted treatment as the card's finished state. The word
+for the status SHALL be carried by the icon's tooltip.
+
+#### Scenario: A running call reads as running
+
+- **WHEN** a tool call is `pending` or `in_progress`
+- **THEN** its status icon renders in the theme's info colour and its tooltip
+  says "Pending" or "Running…" as appropriate
+
+#### Scenario: A failed call is marked
+
+- **WHEN** a tool call reaches `failed`
+- **THEN** its status icon renders in the theme's danger colour and its
+  tooltip says "Failed"
+
+#### Scenario: A completed call recedes
+
+- **WHEN** a tool call reaches `completed`
+- **THEN** its status icon renders in the neutral muted style and its tooltip
+  says "Done"
+
+#### Scenario: An unrecognized status keeps its text
+
+- **WHEN** a tool call reports a status the panel does not recognize
+- **THEN** the card shows the raw status string rather than a fabricated icon,
+  matching the panel's existing pass-through behavior for unknown statuses
 
 ### Requirement: Response action bar
 Each completed agent response SHALL display an action bar with: copy
@@ -232,15 +282,33 @@ level, applied starting with the next message.
 - **THEN** the next message is sent using the newly selected effort level
 
 ### Requirement: Input area send control
+
 The input area SHALL provide a send control that submits the pending
 message (with any attached context) to the agent. The control SHALL be
 disabled while the input is empty and while a response is in progress if
-the agent does not support concurrent input.
+the agent does not support concurrent input. While a response is in progress,
+the input area SHALL also provide a stop control that interrupts the active
+ACP turn for the selected session.
 
 #### Scenario: Send a message
 - **WHEN** the user activates send with non-empty input
 - **THEN** the message and any attached context are submitted to the
   agent and the input area clears
+
+#### Scenario: Stop an active turn
+- **WHEN** the user activates stop while an ACP turn is in progress
+- **THEN** the selected session receives a cancellation request and the
+  control remains safe to activate again until the turn reaches a terminal
+  state
+
+#### Scenario: Cancellation completes
+- **WHEN** the active turn is cancelled or finishes after a stop request
+- **THEN** the stop control disappears, the input area returns to its normal
+  state, and no later turn is cancelled
+
+#### Scenario: Stop is scoped to one session
+- **WHEN** the user stops work in one panel while another panel is active
+- **THEN** only the selected panel's ACP turn is interrupted
 
 ### Requirement: Input area expand and collapse
 The input area SHALL provide an expand control that grows the input into
@@ -449,3 +517,26 @@ any message even if it is not currently materialized.
 - **WHEN** the user activates the scroll-to-top control
 - **THEN** the panel shows the earliest message regardless of how far it is
   from the viewport
+
+### Requirement: Collapsed tool call header is a single line
+
+A collapsed tool call SHALL render its header on a single line: the title
+SHALL truncate with an ellipsis when it does not fit rather than wrap, and
+the status indicator SHALL remain visible on that same line. An expanded tool
+call SHALL NOT be affected.
+
+#### Scenario: A long title ellipsizes when collapsed
+
+- **WHEN** a collapsed tool call's title is longer than the header's width
+- **THEN** the header is one line tall and the title ends in an ellipsis
+
+#### Scenario: The indicator stays on the line
+
+- **WHEN** a collapsed tool call's title is ellipsized
+- **THEN** the status indicator remains visible at the row's end rather than
+  being pushed off or wrapped
+
+#### Scenario: Expanded cards are unchanged
+
+- **WHEN** the user expands a tool call whose title is long
+- **THEN** the header behaves as it does today and the title is free to wrap

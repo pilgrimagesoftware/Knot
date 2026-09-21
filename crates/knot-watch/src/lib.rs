@@ -30,37 +30,40 @@ type CallbackFn = dyn Fn() + Send + Sync;
 /// Starting an already-running watch is a no-op; stopping cancels any
 /// pending debounced callback.
 pub struct Watch {
-    path:     PathBuf,
+    path: PathBuf,
     debounce: Duration,
     relevant: Arc<RelevantFn>,
     callback: Arc<CallbackFn>,
-    active:   Mutex<Option<Active>>,
+    active: Mutex<Option<Active>>,
 }
 
 struct Active {
     watcher: RecommendedWatcher,
-    task:    JoinHandle<()>,
-    pause:   Arc<Mutex<PauseState>>,
+    task: JoinHandle<()>,
+    pause: Arc<Mutex<PauseState>>,
 }
 
 #[derive(Default)]
 struct PauseState {
-    paused:    bool,
+    paused: bool,
     resume_at: Option<Instant>,
 }
 
 impl Watch {
     /// Create a watch. `relevant` decides whether a changed path should count
     /// toward the debounce; `callback` fires once after changes settle.
-    pub fn new(path: impl Into<PathBuf>, debounce: Duration,
-               relevant: impl Fn(&Path) -> bool + Send + Sync + 'static,
-               callback: impl Fn() + Send + Sync + 'static)
-               -> Self {
-        Self { path: path.into(),
-               debounce,
-               relevant: Arc::new(relevant),
-               callback: Arc::new(callback),
-               active: Mutex::new(None) }
+    pub fn new(
+        path: impl Into<PathBuf>, debounce: Duration,
+        relevant: impl Fn(&Path) -> bool + Send + Sync + 'static,
+        callback: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            debounce,
+            relevant: Arc::new(relevant),
+            callback: Arc::new(callback),
+            active: Mutex::new(None),
+        }
     }
 
     /// Start watching. A no-op if already running.
@@ -79,14 +82,18 @@ impl Watch {
         watcher.watch(&self.path, RecursiveMode::Recursive)?;
 
         let pause = Arc::new(Mutex::new(PauseState::default()));
-        let task = tokio::spawn(watch_loop(evt_rx,
-                                           self.debounce,
-                                           self.relevant.clone(),
-                                           self.callback.clone(),
-                                           pause.clone()));
-        *guard = Some(Active { watcher,
-                               task,
-                               pause });
+        let task = tokio::spawn(watch_loop(
+            evt_rx,
+            self.debounce,
+            self.relevant.clone(),
+            self.callback.clone(),
+            pause.clone(),
+        ));
+        *guard = Some(Active {
+            watcher,
+            task,
+            pause,
+        });
         Ok(())
     }
 
@@ -120,9 +127,10 @@ impl Watch {
     }
 }
 
-async fn watch_loop(mut events: mpsc::UnboundedReceiver<notify::Event>, debounce: Duration,
-                    relevant: Arc<RelevantFn>, callback: Arc<CallbackFn>,
-                    pause: Arc<Mutex<PauseState>>) {
+async fn watch_loop(
+    mut events: mpsc::UnboundedReceiver<notify::Event>, debounce: Duration,
+    relevant: Arc<RelevantFn>, callback: Arc<CallbackFn>, pause: Arc<Mutex<PauseState>>,
+) {
     let mut deadline: Option<Instant> = None;
 
     loop {
@@ -177,24 +185,24 @@ mod tests {
     fn count_callback() -> (Arc<AtomicUsize>, impl Fn() + Send + Sync + 'static) {
         let count = Arc::new(AtomicUsize::new(0));
         let counted = count.clone();
-        (count,
-         move || {
-             counted.fetch_add(1, Ordering::SeqCst);
-         })
+        (count, move || {
+            counted.fetch_add(1, Ordering::SeqCst);
+        })
     }
 
     /// Poll `count` until it stops changing for `quiet`, bounded by an overall
     /// deadline so a watch that never settles fails fast rather than hanging.
     async fn settle(count: &AtomicUsize, quiet: StdDuration) -> usize {
         let overall = timeout(StdDuration::from_secs(10), async {
-                          loop {
-                              let before = count.load(Ordering::SeqCst);
-                              tokio::time::sleep(quiet).await;
-                              if count.load(Ordering::SeqCst) == before {
-                                  return before;
-                              }
-                          }
-                      }).await;
+            loop {
+                let before = count.load(Ordering::SeqCst);
+                tokio::time::sleep(quiet).await;
+                if count.load(Ordering::SeqCst) == before {
+                    return before;
+                }
+            }
+        })
+        .await;
         overall.expect("settle() did not go quiet within 10s")
     }
 
@@ -209,8 +217,10 @@ mod tests {
         watch.start().unwrap();
         let second_pause = Arc::as_ptr(&watch.active.lock().unwrap().as_ref().unwrap().pause);
 
-        assert_eq!(first_pause, second_pause,
-                   "second start() replaced the running watch");
+        assert_eq!(
+            first_pause, second_pause,
+            "second start() replaced the running watch"
+        );
         watch.stop();
     }
 
@@ -224,9 +234,11 @@ mod tests {
 
         fs::write(dir.path().join("after-stop.txt"), "x").unwrap();
         tokio::time::sleep(StdDuration::from_millis(500)).await;
-        assert_eq!(count.load(Ordering::SeqCst),
-                   0,
-                   "events after stop() must not invoke the callback");
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            0,
+            "events after stop() must not invoke the callback"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -269,9 +281,11 @@ mod tests {
         // Past the settle window, past the debounce window: any event from the
         // paused write must not have survived to fire a callback.
         tokio::time::sleep(consts::RESUME_SETTLE + StdDuration::from_millis(300)).await;
-        assert_eq!(count.load(Ordering::SeqCst),
-                   0,
-                   "own write during pause must not self-trigger after resume");
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            0,
+            "own write during pause must not self-trigger after resume"
+        );
         watch.stop();
     }
 
@@ -289,7 +303,9 @@ mod tests {
             state.paused = false;
             state.resume_at = Some(Instant::now() + StdDuration::from_secs(60));
         }
-        assert!(!is_honored(&pause),
-                "events within the settle window after resume must be dropped");
+        assert!(
+            !is_honored(&pause),
+            "events within the settle window after resume must be dropped"
+        );
     }
 }

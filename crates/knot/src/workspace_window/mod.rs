@@ -31,6 +31,14 @@ pub(crate) enum DetailLineSize {
     Body,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QueuedPanelPrompt {
+    text:   String,
+    failed: bool,
+}
+
+type PanelPromptResult = (Uuid, String, Result<(), String>);
+
 /// One labelled detail line on an agent row: a leading icon saying what the
 /// line is, then the text.
 ///
@@ -224,6 +232,9 @@ pub(crate) struct WorkspaceWindow {
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
     panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
+    panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    panel_stopping:                   BTreeSet<Uuid>,
+    panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has
     /// been viewed, created lazily - the `ListState` backing
     /// `render_panel`'s virtualization, and the target of the response
@@ -234,6 +245,7 @@ pub(crate) struct WorkspaceWindow {
     /// `render_panel_pane` can `splice` only the rows that actually
     /// changed and leave off-screen rows' measured heights alone.
     panel_list_row_counts:            BTreeMap<Uuid, usize>,
+    working_indicator_last_repaint:   std::time::Instant,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
@@ -338,8 +350,12 @@ impl WorkspaceWindow {
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
+                    panel_prompt_queues: BTreeMap::new(),
+                    panel_stopping: BTreeSet::new(),
+                    panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
+                    working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
                     view_mode: WorkspaceViewMode::Terminal,
@@ -669,8 +685,52 @@ impl WorkspaceWindow {
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
     fn panel_needs_repaint(&mut self) -> bool {
+        let prompt_results = self.panel_prompt_results
+                                         .lock()
+                                         .map(|mut results| std::mem::take(&mut *results))
+                                         .unwrap_or_default();
+        let prompt_results_changed = !prompt_results.is_empty();
+        for (id, text, result) in prompt_results {
+            if let Some(queue) = self.panel_prompt_queues.get_mut(&id)
+                && let Some(index) = queue.iter().position(|prompt| prompt.text == text)
+            {
+                if result.is_ok() {
+                    queue.remove(index);
+                }
+                else if let Some(prompt) = queue.get_mut(index) {
+                    prompt.failed = true;
+                }
+            }
+        }
         let stats_changed = self.diff_stats_dirty
                                 .swap(false, std::sync::atomic::Ordering::SeqCst);
+        let panel_states = self.panel_sessions
+                               .iter()
+                               .filter_map(|(id, slot)| {
+                                   let slot = slot.lock().ok()?;
+                                   let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                                   else {
+                                       return None;
+                                   };
+                                   let state_arc = handle.state();
+                                   let state = state_arc.lock().ok()?;
+                                   let agent_state = if state.pending_permission.is_some() {
+                                       knot_agents::AgentState::Input
+                                   }
+                                   else if state.turn_active {
+                                       knot_agents::AgentState::Running
+                                   }
+                                   else {
+                                       knot_agents::AgentState::Idle
+                                   };
+                                   Some((*id, agent_state))
+                               })
+                               .collect::<Vec<_>>();
+        if let Ok(mut store) = self.store.lock() {
+            for (id, state) in panel_states {
+                store.set_state(id, state);
+            }
+        }
         let Some(id) = self.selected_agent
         else {
             return stats_changed;
@@ -679,15 +739,33 @@ impl WorkspaceWindow {
         else {
             return false;
         };
-        let (phase, events_arrived) = {
+        let (phase, events_arrived, turn_active) = {
             let slot = slot.lock().unwrap();
             let events_arrived = matches!(&*slot,
                                           panel_session::PanelSessionSlot::Ready(handle)
                                           if handle.take_dirty());
-            (slot.phase(), events_arrived)
+            let turn_active = match &*slot {
+                panel_session::PanelSessionSlot::Ready(handle) => {
+                    handle.state()
+                          .lock()
+                          .map(|state| state.turn_active)
+                          .unwrap_or(false)
+                }
+                _ => false,
+            };
+            (slot.phase(), events_arrived, turn_active)
         };
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
-        phase_changed || events_arrived || stats_changed
+        let indicator_due = turn_active
+                            && self.working_indicator_last_repaint.elapsed()
+                               >= std::time::Duration::from_millis(120);
+        if indicator_due {
+            self.working_indicator_last_repaint = std::time::Instant::now();
+        }
+        if !turn_active {
+            self.drain_panel_prompt(id);
+        }
+        phase_changed || events_arrived || indicator_due || stats_changed || prompt_results_changed
     }
 
     /// Tears down a session (e.g. its agent was removed or restarted).
@@ -769,6 +847,8 @@ impl WorkspaceWindow {
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
         self.panel_prompt_input_subscriptions.remove(&id);
+        self.panel_prompt_queues.remove(&id);
+        self.panel_stopping.remove(&id);
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
@@ -893,40 +973,37 @@ impl WorkspaceWindow {
         if !self.settings.mcp_server_enabled {
             return;
         }
-        let candidates = {
-            let (Ok(store), Ok(messages)) = (self.store.lock(), self.messages.lock())
-            else {
-                return;
+        let candidates =
+            {
+                let (Ok(store), Ok(messages)) = (self.store.lock(), self.messages.lock())
+                else {
+                    return;
+                };
+                let Some(workspace) = store.workspaces()
+                                           .iter()
+                                           .find(|workspace| workspace.id == self.workspace_id)
+                else {
+                    return;
+                };
+                workspace
+                .agent_ids
+                .iter()
+                .filter_map(|id| store.agent(*id))
+                .filter_map(|agent| {
+                    let latest = messages.latest_unread_id(agent.id);
+                    let check = app_state::NudgeCheck {
+                        agent_type: &agent.agent_type,
+                        mcp_enabled: true,
+                        latest_message: latest,
+                        last_nudged: self.nudged_messages.get(&agent.id).copied(),
+                        idle: agent.state == knot_agents::AgentState::Idle,
+                        can_receive: self.panel_can_take_a_prompt(agent.id),
+                    };
+                    (app_state::should_inject_inbox_prompt(check))
+                        .then(|| (agent.id, latest.expect("checked by the predicate")))
+                })
+                .collect::<Vec<_>>()
             };
-            let Some(workspace) = store.workspaces()
-                                       .iter()
-                                       .find(|workspace| workspace.id == self.workspace_id)
-            else {
-                return;
-            };
-            workspace.agent_ids
-                     .iter()
-                     .filter_map(|id| store.agent(*id))
-                     .filter_map(|agent| {
-                         let latest = messages.latest_unread_id(agent.id);
-                         let check =
-                             app_state::NudgeCheck { agent_type:     &agent.agent_type,
-                                                     mcp_enabled:    true,
-                                                     latest_message: latest,
-                                                     last_nudged:    self.nudged_messages
-                                                                         .get(&agent.id)
-                                                                         .copied(),
-                                                     idle:
-                                                         agent.state
-                                                         == knot_agents::AgentState::Idle,
-                                                     can_receive:
-                                                         self.panel_can_take_a_prompt(agent.id), };
-                         (app_state::should_inject_inbox_prompt(check)).then(|| {
-                             (agent.id, latest.expect("checked by the predicate"))
-                         })
-                     })
-                     .collect::<Vec<_>>()
-        };
         for (id, message_id) in candidates {
             self.send_inbox_nudge(id);
             self.nudged_messages.insert(id, message_id);
@@ -1044,46 +1121,58 @@ impl WorkspaceWindow {
         let body = std::fs::read_to_string(file).unwrap_or_else(|error| {
                        format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
                    });
-        v_flex().size_full()
-                .child(h_flex().w_full()
-                               .flex_shrink_0()
-                               .items_center()
-                               .justify_between()
-                               .gap_2()
-                               .px_3()
-                               .py_2()
-                               .border_b_1()
-                               .border_color(cx.theme().border)
-                               .child(div().flex_1()
-                                           .min_w_0()
-                                           .overflow_hidden()
-                                           .whitespace_nowrap()
-                                           .text_ellipsis()
-                                           .font_semibold()
-                                           .child(title))
-                               .child(Button::new("markdown-pane-close").icon(IconName::Close)
-                                                                        .ghost()
-                                                                        .small()
-                                                                        .tooltip("Close")
-                                                                        .on_click(cx.listener(move |view, _, _window, cx| {
-                                                                            if let Ok(mut store) =
-                                                                                view.store.lock()
-                                                                            {
-                                                                                let _ = store.clear_markdown_panel(id);
-                                                                            }
-                                                                            cx.notify();
-                                                                        }))))
-                .child(div().id(("markdown-pane", id.as_u128() as u64))
+        v_flex()
+            .size_full()
+            .child(
+                h_flex()
+                    .w_full()
+                    .flex_shrink_0()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
                             .flex_1()
-                            .min_h_0()
-                            .w_full()
                             .min_w_0()
-                            .overflow_y_scroll()
-                            .p_4()
-                            .child(TextView::markdown(("markdown-pane-body",
-                                                       id.as_u128() as u64),
-                                                      body)))
-                .into_any_element()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .font_semibold()
+                            .child(title),
+                    )
+                    .child(
+                        Button::new("markdown-pane-close")
+                            .icon(IconName::Close)
+                            .ghost()
+                            .small()
+                            .tooltip("Close")
+                            .on_click(cx.listener(move |view, _, _window, cx| {
+                                if let Ok(mut store) = view.store.lock() {
+                                    let _ = store.clear_markdown_panel(id);
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .id(("markdown-pane", id.as_u128() as u64))
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .min_w_0()
+                    .overflow_y_scroll()
+                    .p_4()
+                    .child(TextView::markdown(
+                        ("markdown-pane-body", id.as_u128() as u64),
+                        body,
+                    )),
+            )
+            .into_any_element()
     }
 
     /// The content pane for a selected agent that is not running: a
@@ -1138,21 +1227,29 @@ impl WorkspaceWindow {
                 // an adapter slow to answer `initialize` - so offer the
                 // retry rather than making the user remove and re-add the
                 // agent to get another attempt.
-                v_flex().size_full()
-                        .p_4()
-                        .gap_3()
-                        .items_start()
-                        .child(div().text_color(rgb(0xEF4444))
-                                    .child(format!("Failed to connect: {message}")))
-                        .child(Button::new("panel-retry-connect")
+                v_flex()
+                    .size_full()
+                    .p_4()
+                    .gap_3()
+                    .items_start()
+                    .child(
+                        div()
+                            .text_color(rgb(0xEF4444))
+                            .child(format!("Failed to connect: {message}")),
+                    )
+                    .child(
+                        Button::new("panel-retry-connect")
                             .label("Try again")
-                            .icon(gpui_kit::component::Icon::new(gpui_kit::assets::IconName::RefreshCw))
+                            .icon(gpui_kit::component::Icon::new(
+                                gpui_kit::assets::IconName::RefreshCw,
+                            ))
                             .primary()
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
                                 view.retry_panel_session(id);
                                 cx.notify();
-                            })))
-                        .into_any_element()
+                            })),
+                    )
+                    .into_any_element()
             }
             panel_session::PanelSessionSlot::Ready(handle) => {
                 let state_arc = handle.state();
@@ -1245,6 +1342,10 @@ impl WorkspaceWindow {
                                           .get(&id)
                                           .cloned()
                                           .unwrap_or_default();
+                let queued_prompts = self.panel_prompt_queues
+                                         .get(&id)
+                                         .cloned()
+                                         .unwrap_or_default();
                 let expanded = self.panel_input_expanded.contains(&id);
                 let input = self.panel_prompt_input(id, window, cx);
                 // A conversation shorter than its viewport is not
@@ -1259,17 +1360,15 @@ impl WorkspaceWindow {
                             .relative()
                             .flex_1()
                             .min_h_0()
-                            .child(div().id("panel-conversation").size_full().child(
-                                panel_view::render_panel(
-                                    Arc::clone(&state_arc),
-                                    list.clone(),
-                                    &panel_style,
-                                    panel_view::PanelCallbacks::new(
-                                        on_decision,
-                                        on_toggle_track,
-                                        on_toggle_tool_call,
-                                        on_manual_scroll,
-                                    ),
+                            .child(panel_view::render_panel(
+                                Arc::clone(&state_arc),
+                                list.clone(),
+                                &panel_style,
+                                panel_view::PanelCallbacks::new(
+                                    on_decision,
+                                    on_toggle_track,
+                                    on_toggle_tool_call,
+                                    on_manual_scroll,
                                 ),
                             ))
                             .children(scrolled_up.then(|| {
@@ -1299,6 +1398,7 @@ impl WorkspaceWindow {
                         id,
                         &input,
                         &pending_context,
+                        &queued_prompts,
                         expanded,
                         blocked,
                         turn_active,
@@ -1316,11 +1416,15 @@ impl WorkspaceWindow {
     /// `render_panel_pane`, per design decision "Control bar placement".
     #[allow(clippy::too_many_arguments)]
     fn render_panel_input_area(&mut self, id: Uuid, input: &Entity<TextareaState>,
-                               pending_context: &[PathBuf], expanded: bool, blocked: bool,
-                               _turn_active: bool, config_options: &[knot_acp::ConfigOption],
-                               cx: &mut Context<Self>)
+                               pending_context: &[PathBuf],
+                               queued_prompts: &[QueuedPanelPrompt], expanded: bool,
+                               blocked: bool, turn_active: bool,
+                               config_options: &[knot_acp::ConfigOption], cx: &mut Context<Self>)
                                -> impl IntoElement {
-        let can_send = !blocked && !input.read(cx).value().trim().is_empty();
+        let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        if !turn_active {
+            self.panel_stopping.remove(&id);
+        }
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
         let send_tooltip = if shift_to_send {
             "Send (Shift+Enter)"
@@ -1334,19 +1438,52 @@ impl WorkspaceWindow {
             .p_2()
             .border_t_1()
             .border_color(cx.theme().border)
+            .children((!queued_prompts.is_empty()).then(|| {
+                v_flex().gap_1().children(queued_prompts.iter().enumerate().map(
+                    |(index, prompt)| {
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(div().flex_1().text_xs().child(prompt.text.clone()))
+                            .child(div().text_xs().child(if prompt.failed {
+                                "failed"
+                            } else {
+                                "queued"
+                            }))
+                            .child(
+                                Button::new(("panel-queued-prompt-action", index as u64))
+                                    .label(if prompt.failed { "Retry" } else { "Remove" })
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                        if let Some(queue) = view.panel_prompt_queues.get_mut(&id)
+                                            && index < queue.len()
+                                        {
+                                            if queue[index].failed {
+                                                queue[index].failed = false;
+                                            } else {
+                                                queue.remove(index);
+                                            }
+                                            cx.notify();
+                                        }
+                                    })),
+                            )
+                    },
+                ))
+            }))
             // Files and images dragged from Finder attach the same way the
             // paperclip and a pasted screenshot do, per `acp-panel-ui`'s
             // attached-context requirement.
-            .drag_over::<gpui_kit::ExternalPaths>(|style, _, _, app| {
-                style.bg(app.theme().accent)
-            })
-            .on_drop(cx.listener(move |view, paths: &gpui_kit::ExternalPaths, _, cx| {
-                view.panel_pending_context
-                    .entry(id)
-                    .or_default()
-                    .extend(paths.paths().iter().cloned());
-                cx.notify();
-            }))
+            .drag_over::<gpui_kit::ExternalPaths>(|style, _, _, app| style.bg(app.theme().accent))
+            .on_drop(
+                cx.listener(move |view, paths: &gpui_kit::ExternalPaths, _, cx| {
+                    view.panel_pending_context
+                        .entry(id)
+                        .or_default()
+                        .extend(paths.paths().iter().cloned());
+                    cx.notify();
+                }),
+            )
             .children((!pending_context.is_empty()).then(|| {
                 h_flex()
                     .gap_1()
@@ -1415,17 +1552,30 @@ impl WorkspaceWindow {
                             })
                             .child(Textarea::new(input).w_full().disabled(blocked)),
                     )
-                    .child(
+                    .child(if turn_active {
+                        Button::new("panel-stop-prompt")
+                            .child(div().size(px(10.)).rounded(px(1.)).bg(rgb(0xFFFFFF)))
+                            .tooltip("Stop")
+                            .bg(rgb(0xEF4444))
+                            .text_color(rgb(0xFFFFFF))
+                            .flex_shrink_0()
+                            .disabled(self.panel_stopping.contains(&id))
+                            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                view.stop_panel_prompt(id, cx);
+                            }))
+                            .into_any_element()
+                    } else {
                         Button::new("panel-send-prompt")
-                            .label("Send")
+                            .icon(gpui_kit::assets::IconName::Send)
                             .tooltip(send_tooltip)
                             .primary()
                             .flex_shrink_0()
                             .disabled(!can_send)
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
-                            })),
-                    ),
+                            }))
+                            .into_any_element()
+                    }),
             )
             .child(
                 h_flex()
@@ -1435,11 +1585,12 @@ impl WorkspaceWindow {
                     .items_center()
                     .justify_between()
                     .child(
-                        div().flex_shrink_0()
-                             .text_xs()
-                             .font_family(self.settings.ui_font_name.clone())
-                             .text_color(cx.theme().muted_foreground)
-                             .child(Self::panel_prompt_send_hint(shift_to_send)),
+                        div()
+                            .flex_shrink_0()
+                            .text_xs()
+                            .font_family(self.settings.ui_font_name.clone())
+                            .text_color(cx.theme().muted_foreground)
+                            .child(Self::panel_prompt_send_hint(shift_to_send)),
                     )
                     .child(
                         h_flex()
@@ -1492,12 +1643,10 @@ impl WorkspaceWindow {
                                     .tooltip(if expanded { "Collapse" } else { "Expand" })
                                     .ghost()
                                     .small()
-                                    .on_click(cx.listener(
-                                        move |view, _: &ClickEvent, _, cx| {
-                                            view.toggle_panel_input_expanded(id, cx);
-                                            cx.notify();
-                                        },
-                                    )),
+                                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                        view.toggle_panel_input_expanded(id, cx);
+                                        cx.notify();
+                                    })),
                             ),
                     ),
             )
@@ -1548,25 +1697,27 @@ impl WorkspaceWindow {
                                              .when_some(selector_color, |button, color| {
                                                  button.text_color(rgb(color))
                                              });
-        Popover::new(format!("{element_id}-{id}"))
-            .trigger(trigger)
-            .open(self.open_config_selector == Some(element_id))
-            .on_open_change({
-                let entity = entity.clone();
-                move |open, _, app| {
-                    entity.update(app, |view, cx| {
-                        view.open_config_selector = open.then_some(element_id);
-                        cx.notify();
-                    });
-                }
-            })
-            .content(move |_, window, app| {
-                PopupMenu::build(window, app, |mut menu, _, _| {
-                    for value in &values {
+        Popover::new(format!("{element_id}-{id}")).anchor(gpui_kit::Anchor::BottomLeft)
+                                                  .trigger(trigger)
+                                                  .open(self.open_config_selector
+                                                        == Some(element_id))
+                                                  .on_open_change({
+                                                      let entity = entity.clone();
+                                                      move |open, _, app| {
+                                                          entity.update(app, |view, cx| {
+                                                                    view.open_config_selector =
+                                                                        open.then_some(element_id);
+                                                                    cx.notify();
+                                                                });
+                                                      }
+                                                  })
+                                                  .content(move |_, _window, _app| {
+                                                      v_flex()
+                    .gap_1()
+                    .p_1()
+                    .children(values.iter().enumerate().map(|(index, value)| {
                         let entity = entity.clone();
-                        let Some(session_arc) = session_arc.clone() else {
-                            continue;
-                        };
+                        let session_arc = session_arc.clone();
                         let config_id = config_id.clone();
                         let value_id = value.value.clone();
                         let item_color = is_permission_selector
@@ -1577,40 +1728,34 @@ impl WorkspaceWindow {
                                 ))
                             })
                             .flatten();
-                        let mut item = item_color
-                            .map(|color| {
-                                let label = value.name.clone();
-                                PopupMenuItem::element(move |_, _| {
-                                    div().text_color(rgb(color)).child(label.clone())
-                                })
+                        Button::new((element_id, index))
+                            .accessibility_label(value.name.clone())
+                            .child(div().w_full().child(value.name.clone()))
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .when_some(item_color, |button, color| button.text_color(rgb(color)))
+                            .on_click(move |_, _, app| {
+                                let Some(session_arc) = session_arc.clone() else {
+                                    return;
+                                };
+                                let config_id = config_id.clone();
+                                let value_id = value_id.clone();
+                                entity.update(app, move |view, _cx| {
+                                    view.open_config_selector = None;
+                                    if let Ok(slot) = session_arc.lock()
+                                        && let panel_session::PanelSessionSlot::Ready(handle) =
+                                            &*slot
+                                    {
+                                        let future = handle.set_config_option(config_id, value_id);
+                                        let _guard = view.runtime.enter();
+                                        view.runtime.spawn(future);
+                                    }
+                                });
                             })
-                            .unwrap_or_else(|| PopupMenuItem::new(value.name.clone()));
-                        if let Some(color) = item_color {
-                            item = item.icon(
-                                Icon::new(gpui_kit::assets::IconName::CircleDot)
-                                    .text_color(rgb(color)),
-                            );
-                        }
-                        menu = menu.item(item.on_click(move |_, _, app| {
-                            let config_id = config_id.clone();
-                            let value_id = value_id.clone();
-                            let session_arc = Arc::clone(&session_arc);
-                            entity.update(app, move |view, _cx| {
-                                view.open_config_selector = None;
-                                if let Ok(slot) = session_arc.lock()
-                                    && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                                {
-                                    let future = handle.set_config_option(config_id, value_id);
-                                    let _guard = view.runtime.enter();
-                                    view.runtime.spawn(future);
-                                }
-                            });
-                        }));
-                    }
-                    menu
-                })
-            })
-            .into_any_element()
+                    }))
+                                                  })
+                                                  .into_any_element()
     }
 
     /// Finds the declared config option matching one of `categories`
@@ -1876,49 +2021,110 @@ impl WorkspaceWindow {
                 panel_session::PanelSessionSlot::Ready(handle) => {
                     let state = handle.state();
                     let state = state.lock().unwrap();
-                    let ready = state.pending_permission.is_none();
+                    let ready = state.pending_permission.is_none() && !state.turn_active;
                     drop(state);
                     ready.then(|| {
-                             let state_arc = handle.state();
-                             let mut state = state_arc.lock().unwrap();
-                             if state.turn_active {
-                                 state.enqueue_prompt(text.clone());
-                                 handle.mark_dirty();
-                                 None
-                             }
-                             else {
-                                 state.push_user_message(text.clone());
-                                 handle.mark_dirty();
-                                 Some((handle.session(), handle.recorder()))
-                             }
+                             handle.record_user_message(text.clone());
+                             (handle.session(), handle.recorder())
                          })
                 }
                 _ => None,
             }
         };
-        let Some(session) = session
+        let Some((session, recorder)) = session
         else {
-            self.panel_pending_context.insert(id, context);
+            self.panel_prompt_queues
+                .entry(id)
+                .or_default()
+                .push(QueuedPanelPrompt { text,
+                                          failed: false });
+            cx.update_entity(&input, |state, cx| {
+                  state.set_value("", window, cx);
+              });
+            cx.notify();
             return;
         };
         cx.update_entity(&input, |state, cx| {
               state.set_value("", window, cx);
           });
         let _runtime_guard = self.runtime.enter();
-        if let Some((session, recorder)) = session {
-            self.runtime.spawn(async move {
-                            if let Err(error) = session.prompt(&text).await {
-                                // Shown under the prompt it belongs to, and
-                                // it ends the turn - an error response is all
-                                // the answer this prompt gets, so the
-                                // composer must not stay blocked waiting for
-                                // a `TurnEnd` that will never arrive.
-                                recorder.error(format!("The agent could not answer: {error}"));
-                                eprintln!("failed to send panel prompt: {error}");
-                            }
-                        });
-        }
+        self.runtime.spawn(async move {
+                        if let Err(error) = session.prompt(&text).await {
+                            // Shown under the prompt it belongs to, and
+                            // it ends the turn - an error response is all
+                            // the answer this prompt gets, so the
+                            // composer must not stay blocked waiting for
+                            // a `TurnEnd` that will never arrive.
+                            recorder.error(format!("The agent could not answer: {error}"));
+                            eprintln!("failed to send panel prompt: {error}");
+                        }
+                    });
         cx.notify();
+    }
+
+    fn stop_panel_prompt(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        if !self.panel_stopping.insert(id) {
+            return;
+        }
+        let Some(slot) = self.panel_sessions.get(&id).cloned()
+        else {
+            self.panel_stopping.remove(&id);
+            return;
+        };
+        let session = slot.lock().ok().and_then(|guard| match &*guard {
+            panel_session::PanelSessionSlot::Ready(handle) => Some(handle.session()),
+            _ => None,
+        });
+        let Some(session) = session
+        else {
+            self.panel_stopping.remove(&id);
+            return;
+        };
+        let _runtime_guard = self.runtime.enter();
+        self.runtime.spawn(async move {
+            let _ = session.cancel().await;
+        });
+        cx.notify();
+    }
+
+    fn drain_panel_prompt(&mut self, id: Uuid) {
+        let Some(slot) = self.panel_sessions.get(&id)
+        else {
+            return;
+        };
+        let mut candidate = || -> Option<_> {
+            let guard = slot.lock().ok()?;
+            let panel_session::PanelSessionSlot::Ready(handle) = &*guard
+            else {
+                return None;
+            };
+            let state = handle.state();
+            let state = state.lock().ok()?;
+            if state.pending_permission.is_some() || state.turn_active {
+                return None;
+            }
+            let queue = self.panel_prompt_queues.get_mut(&id)?;
+            let prompt = queue.first_mut()?;
+            if prompt.failed {
+                return None;
+            }
+            prompt.failed = true;
+            Some((handle.session(), handle.recorder(), prompt.text.clone()))
+        };
+        let Some((session, recorder, text)) = candidate()
+        else {
+            return;
+        };
+        let results = Arc::clone(&self.panel_prompt_results);
+        self.runtime.spawn(async move {
+                        let result = session.prompt(&text).await.map_err(|error| error.to_string());
+                        if let Err(error) = &result {
+                            recorder.error(format!("The agent could not answer: {error}"));
+                        }
+                        if let Ok(mut results) = results.lock() {
+                            results.push((id, text, result));
+                        }
+                    });
     }
 
     /// Resizes `id`'s session grid/PTY to match the content pane's current
@@ -2382,12 +2588,14 @@ impl Render for WorkspaceWindow {
                                     // coding-agent type of its own, and an
                                     // unlabelled row gave no clue what it was.
                                     .children(is_companion.then(|| {
-                                        detail_line(gpui_kit::assets::IconName::CornerDownRight,
-                                                    knot_core::l10n::t("agent.companion"),
-                                                    DetailLineSize::Small,
-                                                    ui_font_name.clone(),
-                                                    ui_font_size,
-                                                    cx)
+                                        detail_line(
+                                            gpui_kit::assets::IconName::CornerDownRight,
+                                            knot_core::l10n::t("agent.companion"),
+                                            DetailLineSize::Small,
+                                            ui_font_name.clone(),
+                                            ui_font_size,
+                                            cx,
+                                        )
                                     }))
                                     // The agent type reads as one of the
                                     // row's detail lines, directly under the
@@ -2396,13 +2604,15 @@ impl Render for WorkspaceWindow {
                                     // floated away from the name it
                                     // describes and crowded the state dot.
                                     .children((!is_shell).then(|| {
-                                        detail_line(SettingsWindow::agent_type_icon(&agent_type),
-                                                    SettingsWindow::agent_type_label(&agent_type)
-                                                                                     .to_string(),
-                                                    DetailLineSize::Small,
-                                                    ui_font_name.clone(),
-                                                    ui_font_size,
-                                                    cx)
+                                        detail_line(
+                                            SettingsWindow::agent_type_icon(&agent_type),
+                                            SettingsWindow::agent_type_label(&agent_type)
+                                                .to_string(),
+                                            DetailLineSize::Small,
+                                            ui_font_name.clone(),
+                                            ui_font_size,
+                                            cx,
+                                        )
                                     }))
                                     .children(persona_name.map(|persona_name| {
                                         // A drawn icon, not the `👤` this line
@@ -2419,18 +2629,22 @@ impl Render for WorkspaceWindow {
                                             cx,
                                         )
                                     }))
-                                    .child(detail_line(gpui_kit::assets::IconName::Activity,
-                                                       header_title,
-                                                       DetailLineSize::Body,
-                                                       ui_font_name.clone(),
-                                                       ui_font_size,
-                                                       cx))
-                                    .child(detail_line(gpui_kit::assets::IconName::Folder,
-                                                       folder_name,
-                                                       DetailLineSize::Body,
-                                                       ui_font_name.clone(),
-                                                       ui_font_size,
-                                                       cx)),
+                                    .child(detail_line(
+                                        gpui_kit::assets::IconName::Activity,
+                                        header_title,
+                                        DetailLineSize::Body,
+                                        ui_font_name.clone(),
+                                        ui_font_size,
+                                        cx,
+                                    ))
+                                    .child(detail_line(
+                                        gpui_kit::assets::IconName::Folder,
+                                        folder_name,
+                                        DetailLineSize::Body,
+                                        ui_font_name.clone(),
+                                        ui_font_size,
+                                        cx,
+                                    )),
                             )
                             .children((!is_shell).then(|| {
                                 div()
@@ -2454,17 +2668,16 @@ impl Render for WorkspaceWindow {
                         cx.notify();
                     }))
                     .context_menu({
-                        let targets = AgentMenuTargets { store:
-                                                             Arc::clone(&store_for_menu),
-                                                         settings: settings_for_menu.clone(),
-                                                         window_entity: window_entity.clone(),
-                                                         workspace_id,
-                                                         id,
-                                                         name: menu_name.clone(),
-                                                         folder: menu_folder.clone() };
-                        move |menu, window, cx| {
-                            agent_row_context_menu(&targets, menu, window, cx)
-                        }
+                        let targets = AgentMenuTargets {
+                            store: Arc::clone(&store_for_menu),
+                            settings: settings_for_menu.clone(),
+                            window_entity: window_entity.clone(),
+                            workspace_id,
+                            id,
+                            name: menu_name.clone(),
+                            folder: menu_folder.clone(),
+                        };
+                        move |menu, window, cx| agent_row_context_menu(&targets, menu, window, cx)
                     })
                                    },
             );
@@ -2475,38 +2688,46 @@ impl Render for WorkspaceWindow {
         // of every agent, so it belongs above them, shaped like the rows it
         // summarises. As a bare icon beside "New agent" it read as a minor
         // control and went unnoticed.
-        let dashboard_row =
-            div().id("workspace-dashboard-row")
-                 .cursor_pointer()
-                 .rounded(cx.theme().radius)
-                 .p_2()
-                 .bg(if is_dashboard {
-                     cx.theme().muted
-                 }
-                 else {
-                     cx.theme().transparent
-                 })
-                 .child(h_flex().w_full()
-                                .gap_3()
-                                .items_center()
-                                .child(div().w(px(40.))
-                                            .h(px(40.))
-                                            .flex_shrink_0()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(Icon::default().path("icons/layout-dashboard.svg")))
-                                .child(div().flex_1()
-                                            .min_w_0()
-                                            .font_semibold()
-                                            .child(knot_core::l10n::t("dashboard.title"))))
-                 .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
-                     view.view_mode = match view.view_mode {
-                         WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,
-                         _ => WorkspaceViewMode::Dashboard,
-                     };
-                     cx.notify();
-                 }));
+        let dashboard_row = div()
+            .id("workspace-dashboard-row")
+            .cursor_pointer()
+            .rounded(cx.theme().radius)
+            .p_2()
+            .bg(if is_dashboard {
+                cx.theme().muted
+            } else {
+                cx.theme().transparent
+            })
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_3()
+                    .items_center()
+                    .child(
+                        div()
+                            .w(px(40.))
+                            .h(px(40.))
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(Icon::default().path("icons/layout-dashboard.svg")),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_semibold()
+                            .child(knot_core::l10n::t("dashboard.title")),
+                    ),
+            )
+            .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                view.view_mode = match view.view_mode {
+                    WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,
+                    _ => WorkspaceViewMode::Dashboard,
+                };
+                cx.notify();
+            }));
 
         let selected_header = self.selected_agent_header();
 
@@ -2606,16 +2827,21 @@ impl Render for WorkspaceWindow {
                             entity.update(app, |view, cx| {
                                       let on_created =
                                           WorkspaceWindow::select_and_focus_created_agent(cx);
-                                      open_agent_editor(Arc::clone(&view.store),
-                                                        view.settings.clone(),
-                                                        AgentEditorRequest { workspace_id,
-                                                                             prefill:
-                                                                                 AgentPrefill { folder,
-                                                                                                ..Default::default() },
-                                                                             insert_after,
-                                                                             edit_target: None },
-                                                        on_created,
-                                                        cx);
+                                      open_agent_editor(
+                                Arc::clone(&view.store),
+                                view.settings.clone(),
+                                AgentEditorRequest {
+                                    workspace_id,
+                                    prefill: AgentPrefill {
+                                        folder,
+                                        ..Default::default()
+                                    },
+                                    insert_after,
+                                    edit_target: None,
+                                },
+                                on_created,
+                                cx,
+                            );
                                   });
                         }
                     }
@@ -3140,95 +3366,98 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
     };
     let mut menu = menu;
     for entry in agent_context_menu_entries(facts) {
-        menu =
-            match entry {
-                AgentMenuEntry::Separator => menu.separator(),
-                AgentMenuEntry::MoveToWorkspace => {
-                    let targets = targets.clone();
-                    let move_targets = move_targets.clone();
-                    menu.submenu("Move to Workspace", window, cx, move |mut submenu, _, _| {
-                            for (workspace_id, workspace_name) in &move_targets {
-                                let targets = targets.clone();
-                                let workspace_id = *workspace_id;
-                                submenu = submenu.item(PopupMenuItem::new(workspace_name.clone())
-                                .on_click(move |_, _window, app| {
+        menu = match entry {
+            AgentMenuEntry::Separator => menu.separator(),
+            AgentMenuEntry::MoveToWorkspace => {
+                let targets = targets.clone();
+                let move_targets = move_targets.clone();
+                menu.submenu("Move to Workspace", window, cx, move |mut submenu, _, _| {
+                        for (workspace_id, workspace_name) in &move_targets {
+                            let targets = targets.clone();
+                            let workspace_id = *workspace_id;
+                            submenu =
+                            submenu.item(PopupMenuItem::new(workspace_name.clone()).on_click(
+                                move |_, _window, app| {
                                     if let Ok(mut store) = targets.store.lock() {
                                         store.move_to_workspace(targets.id, workspace_id);
                                     }
                                     targets.window_entity.update(app, |view, cx| {
-                                               // The moved agent may have
-                                               // been this window's
-                                               // selection, and it no
-                                               // longer belongs here.
-                                               if view.selected_agent == Some(targets.id) {
-                                                   view.selected_agent = None;
-                                               }
-                                               view.persist_agents();
-                                               cx.notify();
-                                           });
-                                }));
-                            }
-                            submenu
-                        })
-                }
-                AgentMenuEntry::OpenIn => {
-                    let folder = targets.folder.clone();
-                    menu.submenu("Open In…", window, cx, move |mut submenu, _, _| {
-                            for item in open_in::open_in_entries() {
-                                submenu = match item {
-                                    open_in::OpenInEntry::Separator => submenu.separator(),
-                                    open_in::OpenInEntry::App(app_entry) => {
-                                        let folder = folder.clone();
-                                        submenu.item(PopupMenuItem::new(app_entry.label)
-                                        .on_click(move |_, _window, _app| {
-                                            open_in::open_folder(app_entry.id, &folder);
-                                        }))
-                                    }
-                                };
-                            }
-                            submenu
-                        })
-                }
-                AgentMenuEntry::MarkdownFiles => {
-                    let targets = targets.clone();
-                    let history = markdown_history.clone();
-                    menu.submenu("Markdown Files", window, cx, move |mut submenu, _, _| {
-                            for file in &history {
-                                let targets = targets.clone();
-                                let file = file.clone();
-                                // File name, not the full path: the reference
-                                // labels these by `lastPathComponent`, and a
-                                // full path makes the submenu unreadable.
-                                let label =
-                                    file.file_name()
-                                        .map(|name| name.to_string_lossy().into_owned())
-                                        .unwrap_or_else(|| file.to_string_lossy().into_owned());
-                                submenu = submenu.item(PopupMenuItem::new(label).on_click({
-                                move |_, _window, app| {
-                                    if let Ok(mut store) = targets.store.lock() {
-                                        let _ = store.set_markdown_panel(targets.id,
-                                                                         file.clone(),
-                                                                         false);
-                                    }
-                                    targets.window_entity.update(app, |_, cx| cx.notify());
+                                        // The moved agent may have
+                                        // been this window's
+                                        // selection, and it no
+                                        // longer belongs here.
+                                        if view.selected_agent == Some(targets.id) {
+                                            view.selected_agent = None;
+                                        }
+                                        view.persist_agents();
+                                        cx.notify();
+                                    });
+                                },
+                            ));
+                        }
+                        submenu
+                    })
+            }
+            AgentMenuEntry::OpenIn => {
+                let folder = targets.folder.clone();
+                menu.submenu("Open In…", window, cx, move |mut submenu, _, _| {
+                        for item in open_in::open_in_entries() {
+                            submenu = match item {
+                                open_in::OpenInEntry::Separator => submenu.separator(),
+                                open_in::OpenInEntry::App(app_entry) => {
+                                    let folder = folder.clone();
+                                    submenu.item(PopupMenuItem::new(app_entry.label).on_click(
+                                    move |_, _window, _app| {
+                                        open_in::open_folder(app_entry.id, &folder);
+                                    },
+                                ))
                                 }
-                            }));
-                            }
-                            submenu
-                        })
-                }
-                entry => {
-                    let Some(label) = entry.label()
-                    else {
-                        continue;
-                    };
-                    let targets = targets.clone();
-                    menu.item(PopupMenuItem::new(label).on_click(move |_, window, app| {
-                                                           run_agent_menu_action(entry, &targets,
-                                                                                 window, app);
-                                                       }))
-                }
-            };
+                            };
+                        }
+                        submenu
+                    })
+            }
+            AgentMenuEntry::MarkdownFiles => {
+                let targets = targets.clone();
+                let history = markdown_history.clone();
+                menu.submenu("Markdown Files", window, cx, move |mut submenu, _, _| {
+                        for file in &history {
+                            let targets = targets.clone();
+                            let file = file.clone();
+                            // File name, not the full path: the reference
+                            // labels these by `lastPathComponent`, and a
+                            // full path makes the submenu unreadable.
+                            let label = file.file_name()
+                                            .map(|name| name.to_string_lossy().into_owned())
+                                            .unwrap_or_else(|| file.to_string_lossy().into_owned());
+                            submenu = submenu.item(PopupMenuItem::new(label).on_click({
+                                                       move |_, _window, app| {
+                                                           if let Ok(mut store) =
+                                                               targets.store.lock()
+                                                           {
+                                                               let _ =
+                                        store.set_markdown_panel(targets.id, file.clone(), false);
+                                                           }
+                                                           targets.window_entity
+                                                                  .update(app, |_, cx| cx.notify());
+                                                       }
+                                                   }));
+                        }
+                        submenu
+                    })
+            }
+            entry => {
+                let Some(label) = entry.label()
+                else {
+                    continue;
+                };
+                let targets = targets.clone();
+                menu.item(PopupMenuItem::new(label).on_click(move |_, window, app| {
+                                                       run_agent_menu_action(entry, &targets,
+                                                                             window, app);
+                                                   }))
+            }
+        };
     }
     menu
 }

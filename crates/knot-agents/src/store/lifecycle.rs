@@ -10,55 +10,62 @@ use crate::error::{AgentError, Result};
 impl AgentStore {
     pub fn create(&mut self, folder: impl Into<String>, opts: CreateOptions) -> Uuid {
         let folder = folder.into();
-        let name = opts.name
-                       .unwrap_or_else(|| super::helpers::last_path_component(&folder));
+        let name = opts
+            .name
+            .unwrap_or_else(|| super::helpers::last_path_component(&folder));
         let agent_type = opts.agent_type.unwrap_or_else(|| "claude".to_string());
-        let agent = Agent { id: Uuid::new_v4(),
-                            name,
-                            avatar: opts.avatar.unwrap_or_default(),
-                            folder,
-                            view_mode: view_mode_for(&agent_type),
-                            agent_type,
-                            created_by: opts.created_by,
-                            is_companion: opts.is_companion,
-                            shell_command: opts.shell_command,
-                            persona_id: opts.persona_id,
-                            activation_mode: opts.activation_mode,
-                            // An `Active` agent is activated from birth, so
-                            // it starts when its workspace next opens.
-                            activated: opts.activation_mode == ActivationMode::Active,
-                            state: AgentState::Idle,
-                            status_text: String::new(),
-                            is_registered: false,
-                            is_pending_start: false,
-                            terminal_title: String::new(),
-                            restart_token: Uuid::new_v4(),
-                            session_id: None,
-                            resume_session_id: None,
-                            fork_session: false,
-                            acp_session_id: None,
-                            metadata: BTreeMap::new(),
-                            markdown_file: None,
-                            markdown_maximized: false,
-                            markdown_history: Vec::new(),
-                            mermaid_source: None,
-                            mermaid_title: None };
+        let agent = Agent {
+            id: Uuid::new_v4(),
+            name,
+            avatar: opts.avatar.unwrap_or_default(),
+            folder,
+            view_mode: view_mode_for(&agent_type),
+            agent_type,
+            created_by: opts.created_by,
+            is_companion: opts.is_companion,
+            shell_command: opts.shell_command,
+            persona_id: opts.persona_id,
+            activation_mode: opts.activation_mode,
+            // An `Active` agent is activated from birth, so
+            // it starts when its workspace next opens.
+            activated: opts.activation_mode == ActivationMode::Active,
+            state: AgentState::Idle,
+            status_text: String::new(),
+            is_registered: false,
+            is_pending_start: false,
+            terminal_title: String::new(),
+            restart_token: Uuid::new_v4(),
+            session_id: None,
+            resume_session_id: None,
+            fork_session: false,
+            acp_session_id: None,
+            metadata: BTreeMap::new(),
+            markdown_file: None,
+            markdown_maximized: false,
+            markdown_history: Vec::new(),
+            mermaid_source: None,
+            mermaid_title: None,
+        };
         let id = agent.id;
-        match opts.insert_after
-                  .and_then(|sibling| self.agents.iter().position(|a| a.id == sibling))
+        match opts
+            .insert_after
+            .and_then(|sibling| self.agents.iter().position(|a| a.id == sibling))
         {
             Some(index) => self.agents.insert(index + 1, agent),
             None => self.agents.push(agent),
         }
         let source = opts.created_by.or(opts.insert_after);
-        let workspace_id = source.and_then(|source| self.workspace_of(source))
-                                 .unwrap_or_else(|| self.ensure_current_workspace());
-        if let Some(workspace) = self.workspaces
-                                     .iter_mut()
-                                     .find(|workspace| workspace.id == workspace_id)
+        let workspace_id = source
+            .and_then(|source| self.workspace_of(source))
+            .unwrap_or_else(|| self.ensure_current_workspace());
+        if let Some(workspace) = self
+            .workspaces
+            .iter_mut()
+            .find(|workspace| workspace.id == workspace_id)
         {
-            match opts.insert_after
-                      .and_then(|sibling| workspace.agent_ids.iter().position(|id| *id == sibling))
+            match opts
+                .insert_after
+                .and_then(|sibling| workspace.agent_ids.iter().position(|id| *id == sibling))
             {
                 Some(index) => workspace.agent_ids.insert(index + 1, id),
                 None => workspace.agent_ids.push(id),
@@ -83,14 +90,18 @@ impl AgentStore {
         let folder = owner_agent.folder.clone();
         let activation_mode = owner_agent.activation_mode;
         let owner_activated = owner_agent.activated;
-        let id = self.create(folder,
-                             CreateOptions { name: Some("Shell".to_string()),
-                                             agent_type: Some("shell".to_string()),
-                                             created_by: Some(owner),
-                                             is_companion: true,
-                                             insert_after: Some(owner),
-                                             activation_mode,
-                                             ..Default::default() });
+        let id = self.create(
+            folder,
+            CreateOptions {
+                name: Some("Shell".to_string()),
+                agent_type: Some("shell".to_string()),
+                created_by: Some(owner),
+                is_companion: true,
+                insert_after: Some(owner),
+                activation_mode,
+                ..Default::default()
+            },
+        );
         self.set_activated(id, owner_activated);
         Ok(id)
     }
@@ -113,8 +124,9 @@ impl AgentStore {
             self.agents.remove(position);
             for workspace in &mut self.workspaces {
                 workspace.agent_ids.retain(|agent_id| *agent_id != id);
-                workspace.active_agent_ids
-                         .retain(|agent_id| *agent_id != id);
+                workspace
+                    .active_agent_ids
+                    .retain(|agent_id| *agent_id != id);
             }
             removed.push(RemovedAgent { id, was_registered });
         }
@@ -132,14 +144,14 @@ impl AgentStore {
     /// deactivation lasts as long as the workspace stays open, and this
     /// runs only when it opens.
     pub fn activate_on_workspace_open(&mut self, ids: &[Uuid]) -> Vec<Uuid> {
-        let active = ids.iter()
-                        .copied()
-                        .filter(|id| {
-                            self.agent(*id).is_some_and(|agent| {
-                                               agent.activation_mode == ActivationMode::Active
-                                           })
-                        })
-                        .collect::<Vec<_>>();
+        let active = ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                self.agent(*id)
+                    .is_some_and(|agent| agent.activation_mode == ActivationMode::Active)
+            })
+            .collect::<Vec<_>>();
         for id in &active {
             self.set_activated(*id, true);
         }

@@ -88,6 +88,13 @@ the `project-start-change` skill to create the worktree; convention is
 4. `dependabot` opens weekly grouped PRs against `develop` for `cargo` and
    `github-actions`.
 
+### PR Preflight
+
+- Before committing, confirm `git branch --show-current` is the dedicated feature branch and not `develop` or `main`.
+- Before opening a PR, confirm the base is `develop` for feature work. `main` is only for release and hotfix PRs.
+- Never open a feature PR from `develop` into `main`. If a commit landed on `develop` accidentally, stop and resolve the branch state before opening any PR.
+- After opening a PR, verify its base and head with `gh pr view <number> --json baseRefName,headRefName,url`.
+
 ## Running Checks Locally
 
 ```bash

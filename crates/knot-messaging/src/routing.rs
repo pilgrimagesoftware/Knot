@@ -32,16 +32,18 @@ fn notify_if_idle(notifier: &dyn DeliveryNotifier, recipient: &Agent, message_id
 /// every agent (including `sender`) in the sender's workspace - the only
 /// pool `recipient_id` may be found in, per the spec's workspace scoping.
 /// Returns the new message's id on success.
-pub fn send(store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &Agent,
-            workspace_members: &[Agent], recipient_id: Uuid, content: impl Into<String>)
-            -> Result<Uuid> {
+pub fn send(
+    store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &Agent,
+    workspace_members: &[Agent], recipient_id: Uuid, content: impl Into<String>,
+) -> Result<Uuid> {
     if !sender.is_registered {
         return Err(SendError::SenderNotRegistered);
     }
 
-    let recipient = workspace_members.iter()
-                                     .find(|a| a.id == recipient_id)
-                                     .ok_or(SendError::RecipientNotFound)?;
+    let recipient = workspace_members
+        .iter()
+        .find(|a| a.id == recipient_id)
+        .ok_or(SendError::RecipientNotFound)?;
 
     eligible(sender, recipient)?;
 
@@ -57,9 +59,10 @@ pub fn send(store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &
 /// `workspace_members` (which includes `sender`). Returns the number of
 /// messages created; 0 covers both an unregistered sender and a workspace
 /// with no eligible recipient.
-pub fn broadcast(store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &Agent,
-                 workspace_members: &[Agent], content: impl Into<String>)
-                 -> usize {
+pub fn broadcast(
+    store: &mut MessageStore, notifier: &dyn DeliveryNotifier, sender: &Agent,
+    workspace_members: &[Agent], content: impl Into<String>,
+) -> usize {
     if !sender.is_registered {
         return 0;
     }
@@ -111,34 +114,36 @@ mod tests {
         // going through `AgentStore::create`, which always yields an
         // unregistered, `Idle` agent and has no public mutator for either
         // field.
-        Agent { id:                 Uuid::new_v4(),
-                name:               String::new(),
-                avatar:             String::new(),
-                folder:             "/tmp/a".to_string(),
-                agent_type:         "claude".to_string(),
-                created_by:         None,
-                is_companion:       false,
-                shell_command:      None,
-                persona_id:         None,
-                view_mode:          Default::default(),
-                activation_mode:    Default::default(),
-                activated:          false,
-                state:              AgentState::Idle,
-                status_text:        String::new(),
-                is_registered:      true,
-                is_pending_start:   false,
-                terminal_title:     String::new(),
-                restart_token:      Uuid::new_v4(),
-                session_id:         None,
-                resume_session_id:  None,
-                fork_session:       false,
-                acp_session_id:     None,
-                metadata:           Default::default(),
-                markdown_file:      None,
-                markdown_maximized: false,
-                markdown_history:   Vec::new(),
-                mermaid_source:     None,
-                mermaid_title:      None, }
+        Agent {
+            id: Uuid::new_v4(),
+            name: String::new(),
+            avatar: String::new(),
+            folder: "/tmp/a".to_string(),
+            agent_type: "claude".to_string(),
+            created_by: None,
+            is_companion: false,
+            shell_command: None,
+            persona_id: None,
+            view_mode: Default::default(),
+            activation_mode: Default::default(),
+            activated: false,
+            state: AgentState::Idle,
+            status_text: String::new(),
+            is_registered: true,
+            is_pending_start: false,
+            terminal_title: String::new(),
+            restart_token: Uuid::new_v4(),
+            session_id: None,
+            resume_session_id: None,
+            fork_session: false,
+            acp_session_id: None,
+            metadata: Default::default(),
+            markdown_file: None,
+            markdown_maximized: false,
+            markdown_history: Vec::new(),
+            mermaid_source: None,
+            mermaid_title: None,
+        }
     }
 
     fn shell(owner: Uuid) -> Agent {

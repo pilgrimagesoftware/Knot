@@ -40,3 +40,5 @@ rules:
   specs:
     - Phrase requirements as intended Rust behavior, implementation-neutral.
     - Note where intended behavior diverges from the current Swift app.
+githubCopilot:
+  cloudAgent: true

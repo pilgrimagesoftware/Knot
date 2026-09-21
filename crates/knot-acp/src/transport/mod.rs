@@ -25,45 +25,52 @@ mod events;
 pub use events::TransportEvent;
 
 pub struct Transport {
-    child:     Mutex<Child>,
-    stdin:     AsyncMutex<ChildStdin>,
-    next_id:   AtomicI64,
+    child: Mutex<Child>,
+    stdin: AsyncMutex<ChildStdin>,
+    next_id: AtomicI64,
     pending: Mutex<HashMap<i64, oneshot::Sender<std::result::Result<Value, JsonRpcErrorPayload>>>>,
     events_tx: mpsc::UnboundedSender<TransportEvent>,
     /// The spawned program's name, for prefixing request/response logs so
     /// concurrent adapter connections can be told apart in stderr.
-    program:   String,
+    program: String,
 }
 
 impl Transport {
     /// Spawns `command` and starts the background read loop over its
     /// stdout. Returns the transport plus the event receiver for
     /// server-to-client requests, notifications, and session-end.
-    pub fn spawn(mut command: Command)
-                 -> Result<(std::sync::Arc<Self>, mpsc::UnboundedReceiver<TransportEvent>)> {
-        let program = command.as_std()
-                             .get_program()
-                             .to_string_lossy()
-                             .into_owned();
-        let args = command.as_std()
-                          .get_args()
-                          .map(|arg| arg.to_string_lossy().into_owned())
-                          .collect::<Vec<_>>()
-                          .join(" ");
+    pub fn spawn(
+        mut command: Command,
+    ) -> Result<(
+        std::sync::Arc<Self>,
+        mpsc::UnboundedReceiver<TransportEvent>,
+    )> {
+        let program = command
+            .as_std()
+            .get_program()
+            .to_string_lossy()
+            .into_owned();
+        let args = command
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ");
         eprintln!("knot-acp: [{program}] spawning {program} {args}");
-        command.stdin(Stdio::piped())
-               .stdout(Stdio::piped())
-               // Piped (not discarded) and forwarded to our own stderr,
-               // prefixed by the adapter's command name - an adapter that
-               // fails a request often explains why on stderr, not as a
-               // JSON-RPC error, and silently discarding it (the prior
-               // behavior) made every such failure look like a hang.
-               .stderr(Stdio::piped())
-               // Without this, dropping the `Child` (e.g. the owning
-               // window closing without an explicit `close()`/`stop()`
-               // call) leaves the adapter subprocess running as an orphan
-               // instead of terminating it.
-               .kill_on_drop(true);
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            // Piped (not discarded) and forwarded to our own stderr,
+            // prefixed by the adapter's command name - an adapter that
+            // fails a request often explains why on stderr, not as a
+            // JSON-RPC error, and silently discarding it (the prior
+            // behavior) made every such failure look like a hang.
+            .stderr(Stdio::piped())
+            // Without this, dropping the `Child` (e.g. the owning
+            // window closing without an explicit `close()`/`stop()`
+            // call) leaves the adapter subprocess running as an orphan
+            // instead of terminating it.
+            .kill_on_drop(true);
         let mut child = command.spawn()?;
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
@@ -78,12 +85,14 @@ impl Transport {
             }
         });
 
-        let transport = std::sync::Arc::new(Self { child: Mutex::new(child),
-                                                   stdin: AsyncMutex::new(stdin),
-                                                   next_id: AtomicI64::new(1),
-                                                   pending: Mutex::new(HashMap::new()),
-                                                   events_tx,
-                                                   program });
+        let transport = std::sync::Arc::new(Self {
+            child: Mutex::new(child),
+            stdin: AsyncMutex::new(stdin),
+            next_id: AtomicI64::new(1),
+            pending: Mutex::new(HashMap::new()),
+            events_tx,
+            program,
+        });
 
         let reader_transport = std::sync::Arc::clone(&transport);
         tokio::spawn(async move {
@@ -118,7 +127,9 @@ impl Transport {
     async fn exit_cause(&self) -> SessionEndCause {
         let status = self.child.lock().expect("child mutex poisoned").try_wait();
         match status {
-            Ok(Some(status)) => SessionEndCause::ProcessExited { code: status.code(), },
+            Ok(Some(status)) => SessionEndCause::ProcessExited {
+                code: status.code(),
+            },
             _ => SessionEndCause::ProcessExited { code: None },
         }
     }
@@ -128,9 +139,10 @@ impl Transport {
         // message are both valid; a malformed line is discarded and logged
         // rather than tearing down the connection.
         let messages: Vec<IncomingMessage> = match serde_json::from_str::<Value>(line) {
-            Ok(Value::Array(items)) => items.into_iter()
-                                            .filter_map(|item| serde_json::from_value(item).ok())
-                                            .collect(),
+            Ok(Value::Array(items)) => items
+                .into_iter()
+                .filter_map(|item| serde_json::from_value(item).ok())
+                .collect(),
             Ok(value) => match serde_json::from_value(value) {
                 Ok(message) => vec![message],
                 Err(_) => {
@@ -150,14 +162,14 @@ impl Transport {
 
     fn dispatch(&self, message: IncomingMessage) {
         if message.is_response() {
-            let Some(id) = message.id.as_ref().and_then(Value::as_i64)
-            else {
+            let Some(id) = message.id.as_ref().and_then(Value::as_i64) else {
                 return;
             };
-            let sender = self.pending
-                             .lock()
-                             .expect("pending mutex poisoned")
-                             .remove(&id);
+            let sender = self
+                .pending
+                .lock()
+                .expect("pending mutex poisoned")
+                .remove(&id);
             if let Some(sender) = sender {
                 let outcome = match message.error {
                     Some(error) => Err(error),
@@ -165,17 +177,13 @@ impl Transport {
                 };
                 let _ = sender.send(outcome);
             }
-        }
-        else if message.is_request() {
-            let _ =
-                self.events_tx
-                    .send(TransportEvent::Request { id:     message.id
-                                                                   .expect("checked by is_request"),
-                                                    method: message.method
-                                                                   .expect("checked by is_request"),
-                                                    params: message.params, });
-        }
-        else if message.is_notification() {
+        } else if message.is_request() {
+            let _ = self.events_tx.send(TransportEvent::Request {
+                id: message.id.expect("checked by is_request"),
+                method: message.method.expect("checked by is_request"),
+                params: message.params,
+            });
+        } else if message.is_notification() {
             let _ = self.events_tx.send(TransportEvent::Notification {
                 method: message.method.expect("checked by is_notification"),
                 params: message.params,
@@ -184,15 +192,18 @@ impl Transport {
     }
 
     fn end_session(&self, cause: SessionEndCause) {
-        let pending: Vec<_> = self.pending
-                                  .lock()
-                                  .expect("pending mutex poisoned")
-                                  .drain()
-                                  .collect();
+        let pending: Vec<_> = self
+            .pending
+            .lock()
+            .expect("pending mutex poisoned")
+            .drain()
+            .collect();
         for (_, sender) in pending {
-            let _ = sender.send(Err(JsonRpcErrorPayload { code:    -1,
-                                                          message: cause.to_string(),
-                                                          data:    None, }));
+            let _ = sender.send(Err(JsonRpcErrorPayload {
+                code: -1,
+                message: cause.to_string(),
+                data: None,
+            }));
         }
         let _ = self.events_tx.send(TransportEvent::Ended(cause));
     }
@@ -222,13 +233,16 @@ impl Transport {
             .lock()
             .expect("pending mutex poisoned")
             .insert(id, tx);
-        let request = JsonRpcRequest { jsonrpc: "2.0",
-                                       id,
-                                       method: method.to_owned(),
-                                       params };
-        let line =
-            serde_json::to_string(&request).map_err(|error| AcpError::Rpc { code:    -32700,
-                                             message: error.to_string(), })?;
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0",
+            id,
+            method: method.to_owned(),
+            params,
+        };
+        let line = serde_json::to_string(&request).map_err(|error| AcpError::Rpc {
+            code: -32700,
+            message: error.to_string(),
+        })?;
         let program = &self.program;
         eprintln!("knot-acp: [{program}] -> {method} (id {id})");
         self.write_line(line).await?;
@@ -238,46 +252,58 @@ impl Transport {
                 Ok(value)
             }
             Ok(Err(error)) => {
-                eprintln!("knot-acp: [{program}] <- {method} (id {id}) error: {} {}",
-                          error.code, error.message);
-                Err(AcpError::Rpc { code:    error.code,
-                                    message: error.message, })
+                eprintln!(
+                    "knot-acp: [{program}] <- {method} (id {id}) error: {} {}",
+                    error.code, error.message
+                );
+                Err(AcpError::Rpc {
+                    code: error.code,
+                    message: error.message,
+                })
             }
             Err(_) => {
-                eprintln!("knot-acp: [{program}] <- {method} (id {id}) connection closed before a response");
+                eprintln!(
+                    "knot-acp: [{program}] <- {method} (id {id}) connection closed before a response"
+                );
                 Err(AcpError::ConnectionClosed)
             }
         }
     }
 
     pub async fn notify(&self, method: &str, params: Option<Value>) -> Result<()> {
-        let notification = JsonRpcNotification { jsonrpc: "2.0",
-                                                 method: method.to_owned(),
-                                                 params };
-        let line = serde_json::to_string(&notification).map_err(|error| {
-                                                           AcpError::Rpc { code:    -32700,
-                                                                           message:
-                                                                               error.to_string(), }
-                                                       })?;
+        let notification = JsonRpcNotification {
+            jsonrpc: "2.0",
+            method: method.to_owned(),
+            params,
+        };
+        let line = serde_json::to_string(&notification).map_err(|error| AcpError::Rpc {
+            code: -32700,
+            message: error.to_string(),
+        })?;
         self.write_line(line).await
     }
 
-    pub async fn respond(&self, id: Value,
-                         result: std::result::Result<Value, JsonRpcErrorPayload>)
-                         -> Result<()> {
+    pub async fn respond(
+        &self, id: Value, result: std::result::Result<Value, JsonRpcErrorPayload>,
+    ) -> Result<()> {
         let response = match result {
-            Ok(result) => JsonRpcResponse { jsonrpc: "2.0",
-                                            id,
-                                            result: Some(result),
-                                            error: None },
-            Err(error) => JsonRpcResponse { jsonrpc: "2.0",
-                                            id,
-                                            result: None,
-                                            error: Some(error) },
+            Ok(result) => JsonRpcResponse {
+                jsonrpc: "2.0",
+                id,
+                result: Some(result),
+                error: None,
+            },
+            Err(error) => JsonRpcResponse {
+                jsonrpc: "2.0",
+                id,
+                result: None,
+                error: Some(error),
+            },
         };
-        let line =
-            serde_json::to_string(&response).map_err(|error| AcpError::Rpc { code:    -32700,
-                                             message: error.to_string(), })?;
+        let line = serde_json::to_string(&response).map_err(|error| AcpError::Rpc {
+            code: -32700,
+            message: error.to_string(),
+        })?;
         self.write_line(line).await
     }
 }
@@ -313,9 +339,13 @@ mod tests {
         let (first, second) =
             tokio::join!(transport.request("a", None), transport.request("b", None));
 
-        assert_eq!(first.expect("first response"),
-                   serde_json::json!({ "echoed": true }));
-        assert_eq!(second.expect("second response"),
-                   serde_json::json!({ "echoed": true }));
+        assert_eq!(
+            first.expect("first response"),
+            serde_json::json!({ "echoed": true })
+        );
+        assert_eq!(
+            second.expect("second response"),
+            serde_json::json!({ "echoed": true })
+        );
     }
 }
