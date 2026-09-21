@@ -51,4 +51,4 @@ history.
   `prepare-release` / `tag-release` / `release` workflows, which include a
   merge-back-to-`develop` step for exactly this.
 - Two long-lived branches now need their CI and branch-protection rules kept
-  in sync (`rust.yml` runs on both; both carry the same ruleset).
+  in sync (`ci.yml` runs on both; both carry the same ruleset).

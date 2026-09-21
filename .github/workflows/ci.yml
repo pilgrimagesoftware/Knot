@@ -1,4 +1,4 @@
-name: Rust
+name: CI
 
 on:
   push:
@@ -35,19 +35,18 @@ jobs:
           components: clippy
           cache-key: ${{ matrix.os }}
 
-      # rustfmt lives on a pinned nightly: this repo's rustfmt.toml enables
-      # unstable options (indent_style, group_imports, wrap_comments, ...), so
-      # formatting is only reproducible against one exact toolchain. Bumping
-      # this pin is a deliberate change -- run `make rust-fmt` with the new
-      # nightly and commit the reformat in the same PR.
-      # Installed with plain rustup, not setup-rust-toolchain: that action makes
-      # the toolchain it installs the default, which would send the Clippy,
-      # Test and Build steps below to nightly (where cargo-clippy is absent).
+      # The rustfmt pin lives in the Makefile (RUSTFMT_NIGHTLY), which is also
+      # what runs the check -- so the toolchain and the command it is invoked
+      # with can never drift apart between here and a developer's machine.
+      #
+      # Installed with plain rustup rather than setup-rust-toolchain: that
+      # action makes whatever it installs the default toolchain, which would
+      # send Clippy, Test and Build below to nightly (no cargo-clippy there).
       - name: rustfmt toolchain (pinned)
-        run: rustup toolchain install nightly-2026-09-21 --profile minimal --component rustfmt
+        run: rustup toolchain install "$(make -s print-rustfmt-nightly)" --profile minimal --component rustfmt
 
       - name: Format
-        run: cargo +nightly-2026-09-21 fmt --all --check
+        run: make rust-fmt-check
 
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |
@@ -59,7 +58,7 @@ jobs:
           fi
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: make rust-lint
 
       # Split per-crate (rather than one `cargo test --workspace`) so a hang or
       # failure names the crate directly in the job summary instead of a
@@ -76,4 +75,4 @@ jobs:
         run: cargo test -p knot
 
       - name: Build
-        run: cargo build --workspace
+        run: make rust-build

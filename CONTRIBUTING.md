@@ -10,7 +10,8 @@ change and tied to a spec contract.
 - Rust toolchain is pinned by `rust-toolchain.toml` (1.98.0, with `rustfmt` and
   `clippy`). `rustup` picks it up automatically.
 - `git` >= 2.30 must be on `PATH` - `knot-git` tests parse porcelain v2 output.
-- Nightly `rustfmt` is used for formatting: `rustup toolchain install nightly`.
+- Formatting uses a pinned nightly `rustfmt`, named by `RUSTFMT_NIGHTLY` in the
+  `Makefile`: `rustup toolchain install $(make -s print-rustfmt-nightly)`.
 
 ## Workflow
 
@@ -23,25 +24,27 @@ git-flow. `develop` is the integration branch; `main` is release-only.
    back to them.
 3. Keep commits scoped and conventional (see below).
 4. Open a PR against `develop` (release/hotfix against `main`). CI
-   (`.github/workflows/rust.yml`) must pass: `cargo fmt --check`,
-   `cargo clippy -D warnings`, `cargo test`, `cargo build` on Linux and macOS.
+   (`.github/workflows/ci.yml`) must pass on Linux and macOS. It calls the same
+   `make` targets you run locally: `rust-fmt-check`, `rust-lint`, `rust-build`,
+   plus `cargo test` per crate.
 5. PRs merge with a merge commit or rebase - never squash - so Conventional
    Commit prefixes survive in history.
 
 ## Running checks locally
 
 ```bash
-make rust          # fmt (nightly) + clippy + test + build for the whole workspace
+make rust          # fmt + clippy + test + build for the whole workspace
 
 # or individually
-make rust-fmt
+make rust-fmt        # reformat with the pinned nightly
+make rust-fmt-check  # verify formatting
 make rust-lint
 make rust-test
 make rust-build
 ```
 
-`make rust-fmt` runs `cargo +nightly fmt --check`. Run `cargo +nightly fmt`
-before committing.
+`make rust-fmt` reformats with the pinned nightly; `make rust-fmt-check` is the
+read-only check CI runs. Run `make rust-fmt` before committing.
 
 ## Commit messages
 

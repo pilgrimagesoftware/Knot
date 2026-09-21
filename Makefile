@@ -1,4 +1,4 @@
-.PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog rust rust-fmt rust-lint rust-test rust-build rust-package
+.PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog rust rust-fmt rust-fmt-check rust-lint rust-test rust-build rust-package print-rustfmt-nightly
 
 # Load .env file if it exists
 -include .env
@@ -203,10 +203,16 @@ check-changelog:
 # Rust workspace (the port). Additive to the Swift targets above.
 rust: rust-fmt-check rust-lint rust-test rust-build
 
-# Pinned to match the rustfmt check in .github/workflows/rust.yml. rustfmt.toml
-# enables unstable options, so formatting is only reproducible against one exact
-# nightly. Change both places together and commit the reformat with the bump.
+# The single source of truth for the rustfmt toolchain. rustfmt.toml enables
+# unstable options, so formatting is only reproducible against one exact
+# nightly. CI installs whatever this names (via print-rustfmt-nightly) and then
+# runs these same targets, so a bump here is picked up everywhere -- just run
+# `make rust-fmt` and commit the reformat alongside it.
 RUSTFMT_NIGHTLY ?= nightly-2026-09-21
+
+# Used by CI to install the pinned toolchain before running rust-fmt-check.
+print-rustfmt-nightly:
+	@echo $(RUSTFMT_NIGHTLY)
 
 rust-fmt:
 	# --all to match rust-fmt-check; run twice because rustfmt is not
