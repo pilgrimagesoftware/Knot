@@ -97,20 +97,24 @@ impl WorkspaceWindow {
     /// because the requirement also covers a message that arrived while its
     /// recipient was working: by the time that agent goes idle the event is
     /// long gone, but the unread message is still in the store to be found.
+    ///
+    /// A message is recorded as nudged only when the nudge was actually
+    /// taken - sent or queued. An agent with no panel session takes
+    /// nothing, and the spec's "delivered when that agent next has a live
+    /// session" depends on the message still looking un-nudged next poll.
     pub(in crate::workspace_window) fn deliver_inbox_nudges(&mut self) {
         if !self.settings.mcp_server_enabled {
             return;
         }
-        let candidates =
-            {
-                let (store, messages) = (self.store.lock(), self.messages.lock());
-                let Some(workspace) = store.workspaces()
-                                           .iter()
-                                           .find(|workspace| workspace.id == self.workspace_id)
-                else {
-                    return;
-                };
-                workspace
+        let candidates = {
+            let (store, messages) = (self.store.lock(), self.messages.lock());
+            let Some(workspace) = store.workspaces()
+                                       .iter()
+                                       .find(|workspace| workspace.id == self.workspace_id)
+            else {
+                return;
+            };
+            workspace
                 .agent_ids
                 .iter()
                 .filter_map(|id| store.agent(*id))
@@ -122,67 +126,37 @@ impl WorkspaceWindow {
                         latest_message: latest,
                         last_nudged: self.nudged_messages.get(&agent.id).copied(),
                         idle: agent.state == knot_agents::AgentState::Idle,
-                        can_receive: self.panel_can_take_a_prompt(agent.id),
                     };
                     app_state::inbox_prompt_message_id(check)
                         .map(|message_id| (agent.id, message_id))
                 })
                 .collect::<Vec<_>>()
-            };
-        for (id, message_id) in candidates {
-            self.send_inbox_nudge(id);
-            self.nudged_messages.insert(id, message_id);
-        }
-    }
-
-    /// Whether `id`'s panel session could take a prompt this instant: ready,
-    /// no permission outstanding, no turn in flight. The same gate the
-    /// composer uses - a nudge must not be what discovers a session is busy.
-    pub(in crate::workspace_window) fn panel_can_take_a_prompt(&self, id: Uuid) -> bool {
-        let Some(slot) = self.panel_sessions.get(&id)
-        else {
-            return false;
         };
-        let guard = slot.lock();
-        match &*guard {
-            panel_session::PanelSessionSlot::Ready(handle) => {
-                let state = handle.state();
-                let state = state.lock();
-                state.pending_permission.is_none() && !state.turn_active
+        for (id, message_id) in candidates {
+            if self.send_inbox_nudge(id) {
+                self.nudged_messages.insert(id, message_id);
             }
-            _ => false,
         }
     }
 
     /// Sends the inbox prompt into `id`'s panel session, recording it in the
     /// conversation the way any other prompt is.
-    pub(in crate::workspace_window) fn send_inbox_nudge(&mut self, id: Uuid) {
-        let Some(slot) = self.panel_sessions.get(&id)
-        else {
-            return;
-        };
-        let session = {
-            let guard = slot.lock();
-            match &*guard {
-                panel_session::PanelSessionSlot::Ready(handle) => {
-                    handle.record_user_message(app_support::CHECK_INBOX_PROMPT.to_string());
-                    Some((handle.session(), handle.recorder()))
-                }
-                _ => None,
-            }
-        };
-        let Some((session, recorder)) = session
-        else {
-            return;
-        };
-        let _runtime_guard = self.runtime.enter();
-        self.runtime.spawn(async move {
-                        if let Err(error) = session.prompt(app_support::CHECK_INBOX_PROMPT).await {
-                            recorder.error(format!("The inbox nudge could not be delivered: \
-                                                    {error}"));
-                            eprintln!("failed to deliver the inbox nudge: {error}");
-                        }
-                    });
+    ///
+    /// Routed through [`Self::deliver_panel_prompt`] rather than prompting
+    /// the session directly, per `mcp-messaging`'s "Inbox nudges preserve
+    /// interrupted session work": a turn can start between the poll's
+    /// eligibility check and this call, and the direct path would prompt
+    /// straight over it. Queueing instead leaves the running turn to
+    /// finish, and the drain in `panel_needs_repaint` delivers the nudge
+    /// once it does.
+    ///
+    /// Returns whether the nudge was taken - sent or queued. `false` means
+    /// `id` has no panel session, so nothing was delivered and nothing
+    /// should be recorded as nudged.
+    pub(in crate::workspace_window) fn send_inbox_nudge(&mut self, id: Uuid) -> bool {
+        self.deliver_panel_prompt(id,
+                                  app_support::CHECK_INBOX_PROMPT.to_string(),
+                                  PromptOrigin::InboxNudge)
     }
 
     /// Sends `id` its MCP registration prompt by hand, for an agent that

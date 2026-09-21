@@ -50,7 +50,7 @@ pub(crate) enum DetailLineSize {
 
 pub(crate) mod prompt_queue;
 
-use prompt_queue::{QueuedPanelPrompt, queued_status_label};
+use prompt_queue::{PromptOrigin, QueuedPanelPrompt, queued_status_label};
 
 /// A delivery result on its way back from the runtime: the agent whose
 /// queue it belongs to, the queue entry it answers, and how the prompt

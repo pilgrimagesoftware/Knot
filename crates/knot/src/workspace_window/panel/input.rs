@@ -83,8 +83,9 @@ impl WorkspaceWindow {
                                     } else {
                                         gpui_kit::assets::IconName::Clock4
                                     }))
-                                    .tooltip(queued_status_label(prompt.failed))
-                                    .accessibility_label(queued_status_label(prompt.failed))
+                                    .tooltip(queued_status_label(prompt.failed, prompt.origin))
+                                    .accessibility_label(queued_status_label(prompt.failed,
+                                                                             prompt.origin))
                                     .text_color(if prompt.failed {
                                         cx.theme().danger
                                     } else {

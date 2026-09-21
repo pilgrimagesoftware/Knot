@@ -95,6 +95,20 @@ impl WorkspaceWindow {
                 store.set_state(id, state);
             }
         }
+        // Every agent with something waiting, not just the selected one.
+        // This ran only for `selected_agent`, so a prompt queued behind a
+        // background agent's turn sat there until the user happened to
+        // click that agent - and the inbox nudge is queued precisely for
+        // agents nobody is looking at. `drain_panel_prompt` re-checks the
+        // session itself, so there is nothing to gate on here.
+        let waiting = self.panel_prompt_queues
+                          .iter()
+                          .filter(|(_, queue)| !queue.is_empty())
+                          .map(|(id, _)| *id)
+                          .collect::<Vec<_>>();
+        for id in waiting {
+            self.drain_panel_prompt(id);
+        }
         let Some(id) = self.selected_agent
         else {
             return stats_changed;
@@ -120,9 +134,6 @@ impl WorkspaceWindow {
                                >= consts::WORKING_INDICATOR_MIN_REPAINT;
         if indicator_due {
             self.working_indicator_last_repaint = std::time::Instant::now();
-        }
-        if !turn_active {
-            self.drain_panel_prompt(id);
         }
         phase_changed || events_arrived || indicator_due || stats_changed || prompt_results_changed
     }

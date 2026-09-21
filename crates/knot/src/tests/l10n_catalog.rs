@@ -36,6 +36,7 @@ fn about_window_labels_resolve() {
 #[test]
 fn queued_message_control_labels_resolve() {
     for key in ["panel.queued",
+                "panel.queued_inbox_nudge",
                 "panel.failed",
                 "panel.retry",
                 "panel.retry_queued",
@@ -53,8 +54,25 @@ fn queued_message_control_labels_resolve() {
 
 #[test]
 fn the_queued_status_label_follows_the_failed_mark() {
-    assert_eq!(workspace_window::prompt_queue::queued_status_label(false),
+    use workspace_window::prompt_queue::{PromptOrigin, queued_status_label};
+
+    assert_eq!(queued_status_label(false, PromptOrigin::User),
                knot_core::l10n::t("panel.queued"));
-    assert_eq!(workspace_window::prompt_queue::queued_status_label(true),
+    assert_eq!(queued_status_label(true, PromptOrigin::User),
+               knot_core::l10n::t("panel.failed"));
+}
+
+/// A queued nudge is labelled as one, so a prompt the user never typed does
+/// not read as one they did - except when it failed, where the state the
+/// user must act on wins.
+#[test]
+fn a_queued_inbox_nudge_says_where_it_came_from() {
+    use workspace_window::prompt_queue::{PromptOrigin, queued_status_label};
+
+    assert_eq!(queued_status_label(false, PromptOrigin::InboxNudge),
+               knot_core::l10n::t("panel.queued_inbox_nudge"));
+    assert_ne!(queued_status_label(false, PromptOrigin::InboxNudge),
+               queued_status_label(false, PromptOrigin::User));
+    assert_eq!(queued_status_label(true, PromptOrigin::InboxNudge),
                knot_core::l10n::t("panel.failed"));
 }
