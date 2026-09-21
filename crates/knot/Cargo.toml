@@ -64,7 +64,7 @@ tempfile.workspace = true
 [package.metadata.packager]
 name = "knot"
 product-name = "Knot"
-identifier = "net.kochava-studios.knot"
+identifier = "com.pilgrimagesoftware.knot"
 description = "AI coding agents, tied together"
 homepage = "https://github.com/pilgrimagesoftware/Knot"
 authors = ["Paul Schifferer <paul@schifferers.net>"]

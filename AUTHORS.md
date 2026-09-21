@@ -1,3 +1,3 @@
-Kochava Studios
+Pilgrimage Software
 paulyhedral
 Claude Code

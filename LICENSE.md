@@ -628,7 +628,7 @@ state the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
     Knot - A macOS app for managing AI coding agent teams.
-    Copyright (C) 2026 Kochava Studios
+    Copyright (C) 2026 Pilgrimage Software
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as

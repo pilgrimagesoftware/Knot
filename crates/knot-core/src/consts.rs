@@ -1,7 +1,7 @@
 pub const APP_NAME: &str = "Knot";
 
 pub const ORG_QUALIFIER: &str = "net";
-pub const ORG_NAME: &str = "Kochava Studios";
+pub const ORG_NAME: &str = "Pilgrimage Software";
 
 pub const SETTINGS_FILE: &str = "settings.json";
 
