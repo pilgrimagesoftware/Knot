@@ -219,12 +219,32 @@ scroll to the top of the conversation history.
 
 ### Requirement: Track response toggle
 
-The response action bar SHALL include a track toggle. While enabled for a
-given response, the panel's virtualized list SHALL keep following the streamed
-output for that response, auto-scrolling so the newest output stays visible.
-Manually scrolling the history away from the tail SHALL disable following.
-Disabling the toggle SHALL stop following even while the list is at the tail,
-so following is only ever resumed by enabling the toggle or jumping to latest.
+The response still being streamed SHALL carry a track toggle in place of the
+response action bar, and SHALL show the action bar instead once its turn
+ends. The two SHALL NOT appear together: tracking only means something while
+output is still arriving, and the action bar's items - copy, jump to the
+prompt, jump to the top - only mean something once there is a finished
+response to act on.
+
+While the toggle is enabled for a given response, the panel's virtualized
+list SHALL keep following the streamed output for that response,
+auto-scrolling so the newest output stays visible. Manually scrolling the
+history away from the tail SHALL disable following. Disabling the toggle
+SHALL stop following even while the list is at the tail, so following is only
+ever resumed by enabling the toggle or jumping to latest.
+
+#### Scenario: The toggle gives way to the action bar
+
+- **WHEN** the last response is still streaming
+- **THEN** it shows the track toggle and not the response action bar
+- **WHEN** that turn ends
+- **THEN** it shows the response action bar and not the track toggle
+
+#### Scenario: An earlier response never shows the toggle
+
+- **WHEN** a response that is not the last one is rendered
+- **THEN** it shows the response action bar, whether or not a later turn is
+  active
 
 #### Scenario: Tracking follows streamed output
 
