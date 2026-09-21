@@ -44,3 +44,10 @@ panel:
 
 menu:
   agents: "Agents"
+
+quit:
+  working_title: "Agents are still working"
+  working_message_one: "One agent is still working. Quitting now ends its session, and any work in progress is lost."
+  working_message_many: "%{count} agents are still working. Quitting now ends their sessions, and any work in progress is lost."
+  working_confirm: "Quit Anyway"
+  working_cancel: "Keep Working"
