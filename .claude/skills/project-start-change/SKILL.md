@@ -44,12 +44,21 @@ below as `<owner>/<repo>`.
 
 ### 5. Create the worktree
 
-Use this repo's fixed worktree convention (do not use `EnterWorktree` - it creates worktrees
-under `.claude/worktrees/`, which conflicts with the path used here):
+Worktrees live in a peer directory beside the checkout, named `<checkout>-Worktrees`, one
+subdirectory per branch. Derive it from wherever the repo actually is rather than assuming a
+path - the checkout root moves between machines, the convention does not:
 
 ```
-git worktree add /Users/paulyhedral/Projects/Code/Knot/Worktrees/<branch-slug> -b <branch-name> origin/develop
+REPO=$(git rev-parse --show-toplevel)
+git worktree add "$REPO-Worktrees/<branch-slug>" -b <branch-name> origin/develop
 ```
+
+So a checkout at `~/Code/ThirdParty/Knot` puts its worktrees in
+`~/Code/ThirdParty/Knot-Worktrees/<branch-slug>` - a sibling of the checkout, never inside it,
+so worktree files never show up as untracked noise in the primary checkout.
+
+Do not use `EnterWorktree` to create one: it puts worktrees under `.claude/worktrees/`, which
+is inside the checkout and conflicts with this convention.
 
 - `<branch-name>`: `<issue-number>-<change-name>`, matching GitHub's own suggested linked
   branch name so the branch auto-links to the issue.
