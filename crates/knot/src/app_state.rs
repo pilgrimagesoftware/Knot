@@ -497,12 +497,25 @@ pub(crate) struct NudgeCheck<'a> {
 /// already been nudged about must not nudge again on the next poll; and a
 /// busy agent, or one with no live session, is nudged later instead.
 pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
-    check.mcp_enabled
-    && check.agent_type != "shell"
-    && check.idle
-    && check.can_receive
-    && check.latest_message
-            .is_some_and(|message_id| Some(message_id) != check.last_nudged)
+    inbox_prompt_message_id(check).is_some()
+}
+
+/// The message id an inbox nudge would be *about*, or `None` when no nudge is
+/// due - the same decision [`should_inject_inbox_prompt`] reports as a bool,
+/// carrying the value out with it.
+///
+/// Callers need both the verdict and the id they must record as nudged.
+/// Returning it here rather than re-reading `latest_message` after a `true`
+/// keeps the two from drifting: the caller used to `expect()` that the field
+/// this predicate had checked was still `Some`, which is a panic in the
+/// repaint poll the moment a condition above changes without the caller
+/// changing with it.
+pub(crate) fn inbox_prompt_message_id(check: NudgeCheck<'_>) -> Option<Uuid> {
+    if !(check.mcp_enabled && check.agent_type != "shell" && check.idle && check.can_receive) {
+        return None;
+    }
+    check.latest_message
+         .filter(|message_id| Some(*message_id) != check.last_nudged)
 }
 
 pub(crate) fn should_show_awaiting_notice(selected_agent: Option<Uuid>, agent_id: Uuid,

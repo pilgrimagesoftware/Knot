@@ -70,10 +70,19 @@ impl AcpClient {
         let (events_tx, events_rx) = mpsc::unbounded_channel();
         let events_for_client = events_tx.clone();
 
-        let transport_for_loop = Arc::clone(&transport);
+        // `Weak`, not `Arc`: this pump only ends when the transport's
+        // `events_tx` drops, and that cannot happen while the pump itself
+        // holds the transport alive. Holding a strong reference here was
+        // the second half of the cycle that orphaned adapter subprocesses
+        // (see `Transport::tasks`).
+        let transport_for_loop = Arc::downgrade(&transport);
         let pending_for_loop = Arc::clone(&permission_pending);
         tokio::spawn(async move {
             while let Some(event) = transport_events.recv().await {
+                let Some(transport_for_loop) = transport_for_loop.upgrade()
+                else {
+                    break;
+                };
                 match event {
                     TransportEvent::Notification { method, params }
                         if method == "session/update" =>

@@ -89,6 +89,18 @@ pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
     agent_type == "shell"
 }
 
+/// A stable GPUI element key for a [`Uuid`]-identified row.
+///
+/// GPUI element ids take a `&'static str` or an integer, not a `Uuid`, so a
+/// row's id has to be narrowed to 64 bits. Element ids only scope
+/// interaction state (hover, press) within one parent, so the birthday-bound
+/// collision risk across a handful of sibling rows is not a concern - what
+/// matters is that the key follows the *entry* rather than its position,
+/// which a list index does not.
+pub(crate) fn element_key(id: Uuid) -> u64 {
+    id.as_u64_pair().0
+}
+
 /// The font family to actually render the terminal with: the user's
 /// `terminal_font_name` setting if GPUI can actually resolve it (checked
 /// against the platform's font catalog plus whatever we've embedded),
@@ -392,10 +404,40 @@ pub(crate) struct WorkspaceWindow {
 }
 
 impl Drop for WorkspaceWindow {
+    /// Tears down both launch paths, not just the terminal one.
+    ///
+    /// `sessions` holds the PTY-backed shell agents; `panel_sessions` holds
+    /// the ACP connections, each owning an adapter subprocess. Only the
+    /// former was shut down here, so closing a workspace window left one
+    /// orphaned adapter per panel agent - the same gap `remove_session`
+    /// documents for a single agent, applied to the whole window.
     fn drop(&mut self) {
         for session in self.sessions.values() {
             if let Ok(mut session) = session.lock() {
                 let _ = session.shutdown();
+            }
+        }
+        // Dropping the slot is what guarantees the teardown: it releases
+        // the last `AcpClient`, which releases the transport, whose
+        // `kill_on_drop` child then dies. The spawned `stop()` is the
+        // polite `session/close` on top of that, and best-effort only -
+        // this runtime is itself dropped moments later, so a task that has
+        // not started may never run. Nothing depends on it having.
+        for slot in std::mem::take(&mut self.panel_sessions).into_values() {
+            let handle = match slot.lock() {
+                Ok(mut slot) => {
+                    match std::mem::replace(&mut *slot,
+                                            panel_session::PanelSessionSlot::connecting().0)
+                    {
+                        panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
+                        _ => None,
+                    }
+                }
+                Err(_) => None,
+            };
+            if let Some(handle) = handle {
+                let _runtime_guard = self.runtime.enter();
+                self.runtime.spawn(async move { handle.stop().await });
             }
         }
     }
@@ -812,6 +854,44 @@ impl WorkspaceWindow {
                     });
     }
 
+    /// Requests fresh diff stats for every agent the dashboard draws a card
+    /// for, on the same TTL as the selected agent's.
+    ///
+    /// The dashboard shows one stat per agent, so computing them inline the
+    /// way `selected_agent_header` once did costs a `git` subprocess *per
+    /// card* per render rather than one - see [`Self::refresh_diff_stats`]
+    /// for why that ran the UI at the speed of `git`. Companions get no
+    /// card, so they are skipped here too.
+    fn refresh_dashboard_diff_stats(&mut self) {
+        let folders = match self.store.lock() {
+            Ok(store) => store.workspaces()
+                              .iter()
+                              .find(|workspace| workspace.id == self.workspace_id)
+                              .map(|workspace| {
+                                  workspace.agent_ids
+                                           .iter()
+                                           .filter_map(|id| store.agent(*id))
+                                           .filter(|agent| !agent.is_companion)
+                                           .map(|agent| (agent.id, agent.folder.clone()))
+                                           .collect::<Vec<_>>()
+                              })
+                              .unwrap_or_default(),
+            Err(_) => return,
+        };
+        for (id, folder) in folders {
+            self.refresh_diff_stats(id, &folder);
+        }
+    }
+
+    /// The cached diff stat per agent, copied out so a render can read it
+    /// without holding the cache lock across the element tree it builds.
+    fn diff_stats_snapshot(&self) -> BTreeMap<Uuid, Option<knot_git::DiffStats>> {
+        self.diff_stats
+            .lock()
+            .map(|cache| cache.clone())
+            .unwrap_or_default()
+    }
+
     /// Whether the dashboard's working indicators need a repaint now: an
     /// agent in this workspace is Working, and the spinner has moved on
     /// since they were last drawn.
@@ -1024,6 +1104,17 @@ impl WorkspaceWindow {
     /// other. That divergence is exactly the shape a session leak arrives in.
     fn teardown_session(&mut self, id: Uuid) {
         self.remove_session(id);
+        // Keyed by agent id and written from the render/poll path, so
+        // without pruning here every agent the window has ever shown keeps
+        // a diff-stat cache entry, a request timestamp and a nudge marker
+        // for the window's whole life - including agents that no longer
+        // exist. A stale nudge marker is not just memory: an id reused by a
+        // recreated agent would inherit it and skip its first inbox prompt.
+        if let Ok(mut cache) = self.diff_stats.lock() {
+            cache.remove(&id);
+        }
+        self.diff_stats_requested.remove(&id);
+        self.nudged_messages.remove(&id);
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
         self.panel_prompt_input_subscriptions.remove(&id);
@@ -1251,8 +1342,8 @@ impl WorkspaceWindow {
                         idle: agent.state == knot_agents::AgentState::Idle,
                         can_receive: self.panel_can_take_a_prompt(agent.id),
                     };
-                    (app_state::should_inject_inbox_prompt(check))
-                        .then(|| (agent.id, latest.expect("checked by the predicate")))
+                    app_state::inbox_prompt_message_id(check)
+                        .map(|message_id| (agent.id, message_id))
                 })
                 .collect::<Vec<_>>()
             };
@@ -1712,11 +1803,15 @@ impl WorkspaceWindow {
             .children((!queued_prompts.is_empty()).then(|| {
                 v_flex()
                     .gap_1()
-                    .children(queued_prompts.iter().enumerate().map(|(index, prompt)| {
+                    .children(queued_prompts.iter().map(|prompt| {
                         // Every row action names its entry by id: a
                         // delivery landing between this frame and the
                         // click shifts every index behind it, and two
-                        // prompts reading the same text are ordinary.
+                        // prompts reading the same text are ordinary. The
+                        // element ids go by id for the same reason - GPUI
+                        // keys hover and press state off them, so an
+                        // index-keyed row inherits the state of whatever
+                        // row held its position last frame.
                         let prompt_id = prompt.id;
                         h_flex()
                             .w_full()
@@ -1735,7 +1830,7 @@ impl WorkspaceWindow {
                                     .child(prompt.text.clone()),
                             )
                             .child(
-                                Button::new(("panel-queued-prompt-status", index as u64))
+                                Button::new(("panel-queued-prompt-status", element_key(prompt_id)))
                                     .child(Icon::new(if prompt.failed {
                                         gpui_kit::assets::IconName::CircleX
                                     } else {
@@ -1755,7 +1850,7 @@ impl WorkspaceWindow {
                             // failed prompt can be dismissed rather than
                             // only re-sent - one row action cannot be both.
                             .children(prompt.failed.then(|| {
-                                Button::new(("panel-queued-prompt-retry", index as u64))
+                                Button::new(("panel-queued-prompt-retry", element_key(prompt_id)))
                                     .icon(IconName::RotateCw)
                                     .tooltip(knot_core::l10n::t("panel.retry"))
                                     .accessibility_label(knot_core::l10n::t("panel.retry_queued"))
@@ -1778,7 +1873,7 @@ impl WorkspaceWindow {
                             // so it is offered exactly where deletion is:
                             // a prompt the agent already has is neither.
                             .children(prompt.is_deletable().then(|| {
-                                Button::new(("panel-queued-prompt-edit", index as u64))
+                                Button::new(("panel-queued-prompt-edit", element_key(prompt_id)))
                                     .icon(gpui_kit::assets::IconName::Pencil)
                                     .tooltip(knot_core::l10n::t("panel.edit_queued"))
                                     .accessibility_label(knot_core::l10n::t("panel.edit_queued"))
@@ -1793,7 +1888,7 @@ impl WorkspaceWindow {
                                     }))
                             }))
                             .children(prompt.is_deletable().then(|| {
-                                Button::new(("panel-queued-prompt-delete", index as u64))
+                                Button::new(("panel-queued-prompt-delete", element_key(prompt_id)))
                                     .icon(gpui_kit::assets::IconName::Trash)
                                     .tooltip(knot_core::l10n::t("panel.delete_queued"))
                                     .accessibility_label(knot_core::l10n::t("panel.delete_queued"))
@@ -3079,6 +3174,9 @@ impl Render for WorkspaceWindow {
                 self.refresh_diff_stats(id, &folder);
             }
         }
+        if is_dashboard {
+            self.refresh_dashboard_diff_stats();
+        }
 
         // See `root_focus`: without this the Agents menu's items are never
         // on the dispatch path macOS validates them against. Done here
@@ -3343,6 +3441,13 @@ impl Render for WorkspaceWindow {
 
         let selected_header = self.selected_agent_header();
 
+        let dashboard_diff_stats = if is_dashboard {
+            self.diff_stats_snapshot()
+        }
+        else {
+            BTreeMap::new()
+        };
+
         let dashboard_workspace =
             is_dashboard.then(|| {
                             let store = self.store.lock().unwrap();
@@ -3350,9 +3455,10 @@ impl Render for WorkspaceWindow {
                                 store.workspaces()
                                      .iter()
                                      .find(|workspace| workspace.id == self.workspace_id);
-                            let (name, color_hex, dash_agents) = match workspace {
-                                Some(workspace) => {
-                                    let dash_agents = workspace
+                            let (name, color_hex, dash_agents) =
+                                match workspace {
+                                    Some(workspace) => {
+                                        let dash_agents = workspace
                         .agent_ids
                         .iter()
                         .filter_map(|id| store.agent(*id))
@@ -3362,7 +3468,8 @@ impl Render for WorkspaceWindow {
                                 .file_name()
                                 .map(|name| name.to_string_lossy().into_owned())
                                 .unwrap_or_else(|| agent.folder.clone());
-                            let git_stats = Repository::open(&agent.folder).diff_stats().ok();
+                            let git_stats =
+                                dashboard_diff_stats.get(&agent.id).copied().flatten();
                             dashboard::DashboardAgent {
                                 id: agent.id,
                                 avatar: agent
@@ -3381,12 +3488,12 @@ impl Render for WorkspaceWindow {
                             }
                         })
                         .collect::<Vec<_>>();
-                                    (workspace.name.clone(),
-                                     workspace.color_hex.clone(),
-                                     dash_agents)
-                                }
-                                None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
-                            };
+                                        (workspace.name.clone(),
+                                         workspace.color_hex.clone(),
+                                         dash_agents)
+                                    }
+                                    None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
+                                };
                             dashboard::DashboardWorkspace { id: self.workspace_id,
                                                             name,
                                                             color_hex,
