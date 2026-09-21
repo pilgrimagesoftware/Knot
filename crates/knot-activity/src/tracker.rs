@@ -140,8 +140,10 @@ fn apply(sink: &mut EventSink, effects: Vec<Effect>) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
+
+    use parking_lot::Mutex;
 
     use super::*;
     use crate::tracking_for;
@@ -150,22 +152,19 @@ mod tests {
         let mut sink = EventSink::default();
         let status_log = Arc::clone(log);
         sink.on_status = Some(Box::new(move |event| {
-                                  status_log.lock().unwrap().push(format!("status:{event:?}"));
+                                  status_log.lock().push(format!("status:{event:?}"));
                               }));
         let check_log = Arc::clone(log);
         sink.on_check_messages = Some(Box::new(move || {
-                                          check_log.lock().unwrap().push("check-messages".into());
+                                          check_log.lock().push("check-messages".into());
                                       }));
         let inject_log = Arc::clone(log);
-        sink.on_inject_registration =
-            Some(Box::new(move |prompt| {
-                     inject_log.lock().unwrap().push(format!("inject:{prompt}"));
-                 }));
+        sink.on_inject_registration = Some(Box::new(move |prompt| {
+                                               inject_log.lock().push(format!("inject:{prompt}"));
+                                           }));
         let input_log = Arc::clone(log);
         sink.on_awaiting_input = Some(Box::new(move |message| {
-                                          input_log.lock()
-                                                   .unwrap()
-                                                   .push(format!("awaiting:{message:?}"));
+                                          input_log.lock().push(format!("awaiting:{message:?}"));
                                       }));
         sink
     }
@@ -182,7 +181,7 @@ mod tests {
     }
 
     fn snap(log: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
-        log.lock().unwrap().clone()
+        log.lock().clone()
     }
 
     /// Under the paused clock, `advance` moves time but woken timer tasks only

@@ -25,21 +25,20 @@ impl WorkspaceWindow {
                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                       settings: knot_core::Settings, workspace_id: Uuid,
                                       select_agent: Option<Uuid>, cx: &mut App) {
-        let workspace_name = store.lock()
-                                  .ok()
-                                  .and_then(|store| {
-                                      store.workspaces()
-                                           .iter()
-                                           .find(|workspace| workspace.id == workspace_id)
-                                           .map(|workspace| workspace.name.clone())
-                                  })
-                                  .unwrap_or_else(|| "Workspace".to_string());
-        let saved_bounds = store.lock().ok().and_then(|store| {
-                                                store.workspaces()
-                                                     .iter()
-                                                     .find(|workspace| workspace.id == workspace_id)
-                                                     .and_then(|workspace| workspace.window_bounds)
-                                            });
+        let workspace_name = {
+                                 let store = store.lock();
+                                 store.workspaces()
+                                      .iter()
+                                      .find(|workspace| workspace.id == workspace_id)
+                                      .map(|workspace| workspace.name.clone())
+                             }.unwrap_or_else(|| "Workspace".to_string());
+        let saved_bounds = {
+            let store = store.lock();
+            store.workspaces()
+                 .iter()
+                 .find(|workspace| workspace.id == workspace_id)
+                 .and_then(|workspace| workspace.window_bounds)
+        };
         let options = workspace_window_options(saved_bounds, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
@@ -61,10 +60,9 @@ impl WorkspaceWindow {
                   let new_agent_folder_input =
                       cx.new(|cx| InputState::new(window, cx).placeholder("Agent folder path"));
                   let selected_agent = select_agent.or_else(|| {
-                                                       store
-                    .lock()
-                    .ok()
-                    .and_then(|store| agent_selection_for_workspace(&store, workspace_id))
+                                                       let store = store.lock();
+                                                       agent_selection_for_workspace(&store,
+                                                                                     workspace_id)
                                                    });
                   let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
                   let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
@@ -116,17 +114,15 @@ impl WorkspaceWindow {
                             // window opens, not
                             // just the one initially selected.
                             let agent_ids: Vec<Uuid> =
-                                window.store
-                                      .lock()
-                                      .ok()
-                                      .and_then(|store| {
-                                          store.workspaces()
-                                               .iter()
-                                               .find(|workspace| workspace.id == workspace_id)
-                                               .map(|workspace| workspace.agent_ids.clone())
-                                      })
-                                      .unwrap_or_default();
-                            if let Ok(mut store) = window.store.lock() {
+                                {
+                                    let store = window.store.lock();
+                                    store.workspaces()
+                                         .iter()
+                                         .find(|workspace| workspace.id == workspace_id)
+                                         .map(|workspace| workspace.agent_ids.clone())
+                                }.unwrap_or_default();
+                            {
+                                let mut store = window.store.lock();
                                 // The workspace's `active` agents start
                                 // here, and only they: `activated` is
                                 // runtime-only and loads false, so the
@@ -162,13 +158,8 @@ impl WorkspaceWindow {
                             cx.background_executor()
                               .timer(consts::REPAINT_POLL_INTERVAL)
                               .await;
-                            let texts =
-                                clipboard_writes.lock()
-                                                .map(|mut queue| std::mem::take(&mut *queue))
-                                                .unwrap_or_default();
-                            let exited = exited_drain.lock()
-                                                     .map(|mut queue| std::mem::take(&mut *queue))
-                                                     .unwrap_or_default();
+                            let texts = std::mem::take(&mut *clipboard_writes.lock());
+                            let exited = std::mem::take(&mut *exited_drain.lock());
                             for text in texts {
                                 cx.update(|app| {
                                       app.write_to_clipboard(ClipboardItem::new_string(text));
@@ -194,11 +185,9 @@ impl WorkspaceWindow {
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))
-                                                         .and_then(|session| {
-                                                             session.lock().ok()?.grid()
-                                                         })
+                                                         .and_then(|session| session.lock().grid())
                                                          .is_some_and(|grid| {
-                                                             grid.lock().unwrap().take_dirty()
+                                                             grid.lock().take_dirty()
                                                          });
                                                  let panel_dirty = view.panel_needs_repaint();
                                                  let spinner_dirty = view.spinner_repaint_due();
@@ -235,11 +224,7 @@ impl WorkspaceWindow {
                                     let changed =
                                         view.store
                                             .lock()
-                                            .map(|mut store| {
-                                                store.set_workspace_window_bounds(workspace_id,
-                                                                                  saved)
-                                            })
-                                            .unwrap_or(false);
+                                            .set_workspace_window_bounds(workspace_id, saved);
                                     if changed {
                                         view.persist_agents();
                                     }

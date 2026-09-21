@@ -27,7 +27,7 @@ impl Render for Blank {
 
 /// A store holding `working` agents in the Working state and `idle` agents
 /// left as created.
-fn store_with(working: usize, idle: usize) -> std::sync::Arc<std::sync::Mutex<AgentStore>> {
+fn store_with(working: usize, idle: usize) -> std::sync::Arc<parking_lot::Mutex<AgentStore>> {
     let mut store = AgentStore::new();
     for index in 0..working {
         let id = store.create(format!("/tmp/working-{index}"), CreateOptions::default());
@@ -37,12 +37,12 @@ fn store_with(working: usize, idle: usize) -> std::sync::Arc<std::sync::Mutex<Ag
     for index in 0..idle {
         store.create(format!("/tmp/idle-{index}"), CreateOptions::default());
     }
-    std::sync::Arc::new(std::sync::Mutex::new(store))
+    std::sync::Arc::new(parking_lot::Mutex::new(store))
 }
 
 /// A test app with the guard installed over `store`, and one open window
 /// for a dialog to land in.
-fn app_with(store: std::sync::Arc<std::sync::Mutex<AgentStore>>, cx: &mut TestAppContext)
+fn app_with(store: std::sync::Arc<parking_lot::Mutex<AgentStore>>, cx: &mut TestAppContext)
             -> AnyWindowHandle {
     let window = cx.update(|cx| {
                        gpui_kit::init(cx);
@@ -194,7 +194,7 @@ fn agents_going_idle_while_the_warning_is_open_changes_neither_action(cx: &mut T
 
     // The work finishes while the user is still looking at the dialog.
     {
-        let mut store = store.lock().expect("the store lock is poisoned");
+        let mut store = store.lock();
         let ids = store.agents()
                        .iter()
                        .map(|agent| agent.id)

@@ -35,7 +35,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use about_window::*;
 use agent_editor::*;
@@ -69,6 +69,7 @@ use knot_git::Repository;
 use knot_mcp::ToolCatalog;
 use knot_messaging::{DeliveryEvent, QueuedNotifier};
 use knot_terminal::{PtyTransport, SessionConfig, SessionPlan, TerminalSession};
+use parking_lot::Mutex;
 use settings_window::*;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;

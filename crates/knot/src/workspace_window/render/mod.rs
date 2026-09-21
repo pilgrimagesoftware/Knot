@@ -26,7 +26,7 @@ impl Render for WorkspaceWindow {
         let title_font_name = self.settings.title_font_name.clone();
         let title_font_size = px(self.settings.title_font_size as f32);
         let (_workspace_name, agents) = {
-            let store = self.store.lock().unwrap();
+            let store = self.store.lock();
             let Some(workspace) = store.workspaces()
                                        .iter()
                                        .find(|workspace| workspace.id == self.workspace_id)
@@ -74,8 +74,8 @@ impl Render for WorkspaceWindow {
         if let Some(id) = self.selected_agent {
             let folder = self.store
                              .lock()
-                             .ok()
-                             .and_then(|store| store.agent(id).map(|agent| agent.folder.clone()));
+                             .agent(id)
+                             .map(|agent| agent.folder.clone());
             if let Some(folder) = folder {
                 self.refresh_diff_stats(id, &folder);
             }
@@ -127,9 +127,7 @@ impl Render for WorkspaceWindow {
             }))
             .on_action(cx.listener(|view, _: &PanelOpenPermissionSelector, _, cx| {
                 if view.selected_agent.is_some_and(|id| {
-                    view.store.lock().ok().and_then(|store| {
-                        store.agent(id).map(|agent| agent.view_mode)
-                    }) == Some(knot_core::ViewMode::Panel)
+                    view.store.lock().agent(id).map(|agent| agent.view_mode) == Some(knot_core::ViewMode::Panel)
                 }) {
                     view.open_config_selector = Some(PERMISSION_SELECTOR_ID);
                     cx.notify();

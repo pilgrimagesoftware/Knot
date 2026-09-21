@@ -29,13 +29,13 @@ pub(crate) enum FontPanelTarget {
 #[cfg(target_os = "macos")]
 pub(crate) mod native_font_panel {
     use std::cell::OnceCell;
-    use std::sync::Mutex;
 
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject};
     use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send};
     use objc2_app_kit::{NSFont, NSFontManager};
     use objc2_foundation::NSString;
+    use parking_lot::Mutex;
 
     pub(crate) use super::FontPanelTarget as Target;
 
@@ -74,7 +74,7 @@ pub(crate) mod native_font_panel {
             /// nothing useful until after this returns.
             #[unsafe(method(changeFont:))]
             fn change_font(&self, sender: &NSFontManager) {
-                let Some((_, family, size)) = SESSION.lock().unwrap().clone()
+                let Some((_, family, size)) = SESSION.lock().clone()
                 else {
                     return;
                 };
@@ -89,7 +89,7 @@ pub(crate) mod native_font_panel {
                 else {
                     return;
                 };
-                *CHOSEN.lock().unwrap() = Some((family.to_string(), converted.pointSize()));
+                *CHOSEN.lock() = Some((family.to_string(), converted.pointSize()));
             }
         }
     );
@@ -107,9 +107,8 @@ pub(crate) mod native_font_panel {
         else {
             return;
         };
-        *SESSION.lock().unwrap() =
-            Some((target, current_family.to_string(), size_key(current_size)));
-        *CHOSEN.lock().unwrap() = None;
+        *SESSION.lock() = Some((target, current_family.to_string(), size_key(current_size)));
+        *CHOSEN.lock() = None;
         let manager = NSFontManager::sharedFontManager(mtm);
         RECEIVER.with(|receiver| {
                     let receiver = receiver.get_or_init(|| FontPanelReceiver::new(mtm));
@@ -131,9 +130,9 @@ pub(crate) mod native_font_panel {
     /// `(target, family, size)`, leaving it as the base the next conversion
     /// starts from. `None` until the user changes something in the panel.
     pub fn poll_selection() -> Option<(Target, String, f64)> {
-        let (target, ..) = SESSION.lock().unwrap().clone()?;
-        let (family, size) = CHOSEN.lock().unwrap().take()?;
-        *SESSION.lock().unwrap() = Some((target, family.clone(), size_key(size)));
+        let (target, ..) = SESSION.lock().clone()?;
+        let (family, size) = CHOSEN.lock().take()?;
+        *SESSION.lock() = Some((target, family.clone(), size_key(size)));
         Some((target, family, size))
     }
 }

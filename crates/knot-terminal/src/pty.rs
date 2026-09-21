@@ -1,8 +1,9 @@
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 
+use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use crate::{Result, TerminalError, TerminalTransport};
@@ -66,8 +67,8 @@ impl PtyTransport {
                 }
             }
             let code = child_for_wait.lock()
+                                     .wait()
                                      .ok()
-                                     .and_then(|mut child| child.wait().ok())
                                      .map(|status| status.exit_code() as i32);
             on_exit(code);
         });
@@ -82,7 +83,8 @@ impl PtyTransport {
 
 impl Drop for PtyTransport {
     fn drop(&mut self) {
-        if let Ok(mut child) = self.child.lock() {
+        {
+            let mut child = self.child.lock();
             let _ = child.kill();
         }
     }
@@ -92,7 +94,6 @@ impl TerminalTransport for PtyTransport {
     fn send_text(&mut self, text: &str) -> Result<()> {
         self.writer
             .lock()
-            .map_err(|_| TerminalError::Transport("PTY writer lock poisoned".to_string()))?
             .write_all(text.as_bytes())
             .map_err(|error| TerminalError::Transport(error.to_string()))
     }
@@ -104,7 +105,6 @@ impl TerminalTransport for PtyTransport {
     fn terminate(&mut self) -> Result<()> {
         self.child
             .lock()
-            .map_err(|_| TerminalError::Transport("PTY child lock poisoned".to_string()))?
             .kill()
             .map_err(|error| TerminalError::Transport(error.to_string()))
     }

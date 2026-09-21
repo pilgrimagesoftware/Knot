@@ -28,10 +28,7 @@ impl WorkspaceWindow {
     /// end rather than rewriting `saved_agents` per agent, without a second
     /// copy of the teardown cascade going out of step with this one.
     pub(super) fn remove_agent_unpersisted(&mut self, id: Uuid) {
-        let removed = match self.store.lock() {
-            Ok(mut store) => store.remove(id),
-            Err(_) => return,
-        };
+        let removed = self.store.lock().remove(id);
         for removed_agent in removed {
             self.teardown_session(removed_agent.id);
             if self.selected_agent == Some(removed_agent.id) {
@@ -51,9 +48,7 @@ impl WorkspaceWindow {
     /// asked for.
     pub(super) fn select_agent(&mut self, id: Uuid) {
         self.selected_agent = Some(id);
-        if let Ok(mut store) = self.store.lock() {
-            store.set_activated(id, true);
-        }
+        self.store.lock().set_activated(id, true);
     }
 
     /// Stops `id`'s session without removing the agent, per
@@ -66,10 +61,7 @@ impl WorkspaceWindow {
     /// Companions go first, mirroring the removal cascade - a companion has
     /// no session worth keeping once its owner's is gone.
     pub(super) fn deactivate_agent(&mut self, id: Uuid) {
-        let deactivated = match self.store.lock() {
-            Ok(mut store) => store.deactivate(id),
-            Err(_) => return,
-        };
+        let deactivated = self.store.lock().deactivate(id);
         for agent_id in deactivated {
             self.teardown_session(agent_id);
         }
@@ -77,7 +69,11 @@ impl WorkspaceWindow {
 
     /// Writes the store's current agents and workspaces back to settings.
     pub(super) fn persist_agents(&mut self) {
-        if let Ok(store) = self.store.lock() {
+        // Scoped so the store guard is released before the settings file is
+        // written: `persist` is blocking I/O, and nothing else should wait on
+        // the roster while it runs.
+        {
+            let store = self.store.lock();
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
@@ -87,10 +83,7 @@ impl WorkspaceWindow {
 
     /// Every agent id in this window's workspace, snapshotted.
     pub(super) fn workspace_agent_ids(&self) -> Vec<Uuid> {
-        self.store
-            .lock()
-            .map(|store| workspace_agent_ids(&store, self.workspace_id))
-            .unwrap_or_default()
+        workspace_agent_ids(&self.store.lock(), self.workspace_id)
     }
 
     /// Restarts every agent in the workspace, per `agent-list-ui`'s "Restart
@@ -98,7 +91,8 @@ impl WorkspaceWindow {
     /// agent, with a single persist at the end.
     pub(super) fn restart_all_agents(&mut self) {
         for id in self.workspace_agent_ids() {
-            if let Ok(mut store) = self.store.lock() {
+            {
+                let mut store = self.store.lock();
                 let _ = store.restart(id);
             }
             self.remove_session(id);
@@ -128,8 +122,8 @@ impl WorkspaceWindow {
         for id in self.workspace_agent_ids() {
             let running = self.store
                               .lock()
-                              .ok()
-                              .and_then(|store| store.agent(id).map(|agent| agent.activated))
+                              .agent(id)
+                              .map(|agent| agent.activated)
                               .unwrap_or(false);
             if running {
                 self.deactivate_agent(id);
@@ -149,9 +143,8 @@ impl WorkspaceWindow {
             if self.deliver_panel_prompt(id, text.to_string()) {
                 continue;
             }
-            if let Some(session) = self.sessions.get(&id)
-               && let Ok(mut session) = session.lock()
-            {
+            if let Some(session) = self.sessions.get(&id) {
+                let mut session = session.lock();
                 let _ = session.send_text(text);
             }
         }

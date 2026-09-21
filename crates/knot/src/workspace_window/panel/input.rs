@@ -32,14 +32,14 @@ impl WorkspaceWindow {
         };
         let context_usage =
             self.panel_sessions.get(&id).and_then(|slot| {
-                                            let slot = slot.lock().ok()?;
+                                            let slot = slot.lock();
                                             let panel_session::PanelSessionSlot::Ready(handle) =
                                                 &*slot
                                             else {
                                                 return None;
                                             };
                                             let state = handle.state();
-                                            state.lock().ok()?.context_usage
+                                            state.lock().context_usage
                                         });
         v_flex()
             .flex_shrink_0()
@@ -438,9 +438,8 @@ impl WorkspaceWindow {
                                 let value_id = value_id.clone();
                                 entity.update(app, move |view, _cx| {
                                     view.open_config_selector = None;
-                                    if let Ok(slot) = session_arc.lock()
-                                        && let panel_session::PanelSessionSlot::Ready(handle) =
-                                            &*slot
+                                    if let panel_session::PanelSessionSlot::Ready(handle) =
+                                        &*session_arc.lock()
                                     {
                                         let future = handle.set_config_option(config_id, value_id);
                                         let _guard = view.runtime.enter();

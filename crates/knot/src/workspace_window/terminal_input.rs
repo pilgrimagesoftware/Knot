@@ -24,13 +24,9 @@ impl WorkspaceWindow {
         let size = knot_terminal::GridSize { columns: (pane_width / cell_width) as usize,
                                              rows:    (pane_height / cell_height) as usize, };
 
-        let current = session.lock()
-                             .ok()
-                             .and_then(|session| session.grid())
-                             .map(|grid| grid.lock().unwrap().size());
-        if current != Some(size)
-           && let Ok(mut session) = session.lock()
-        {
+        let current = session.lock().grid().map(|grid| grid.lock().size());
+        if current != Some(size) {
+            let mut session = session.lock();
             let _ = session.resize(size);
         }
     }
@@ -62,7 +58,8 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        if let Ok(mut session) = session.lock() {
+        {
+            let mut session = session.lock();
             let _ = session.send_text(&text);
         }
     }
@@ -92,18 +89,18 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let Some(grid) = session.lock().ok().and_then(|session| session.grid())
+        let Some(grid) = session.lock().grid()
         else {
             return;
         };
         let (column, row) = self.grid_position(position, cx);
-        let sgr = grid.lock().unwrap().sgr_mouse_mode();
+        let sgr = grid.lock().sgr_mouse_mode();
         if !sgr {
             // No mouse-aware program is listening - left-button press starts
             // (replacing any prior) text selection instead of forwarding the
             // click, per terminal-input's spec.
             if button == knot_terminal::MouseButton::Left && pressed {
-                grid.lock().unwrap().start_selection(column, row);
+                grid.lock().start_selection(column, row);
             }
             return;
         }
@@ -115,8 +112,8 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        if let (Ok(text), Ok(mut session)) = (String::from_utf8(bytes), session.lock()) {
-            let _ = session.send_text(&text);
+        if let Ok(text) = String::from_utf8(bytes) {
+            let _ = session.lock().send_text(&text);
         }
     }
 
@@ -129,11 +126,11 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let Some(grid) = session.lock().ok().and_then(|session| session.grid())
+        let Some(grid) = session.lock().grid()
         else {
             return;
         };
-        let mut grid = grid.lock().unwrap();
+        let mut grid = grid.lock();
         if grid.sgr_mouse_mode() {
             return;
         }
@@ -150,9 +147,8 @@ impl WorkspaceWindow {
             return;
         };
         let Some(text) = session.lock()
-                                .ok()
-                                .and_then(|session| session.grid())
-                                .and_then(|grid| grid.lock().unwrap().selection_text())
+                                .grid()
+                                .and_then(|grid| grid.lock().selection_text())
         else {
             return;
         };

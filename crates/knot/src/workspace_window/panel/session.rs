@@ -18,7 +18,7 @@ impl WorkspaceWindow {
             return;
         }
         let agent = {
-            let store = self.store.lock().unwrap();
+            let store = self.store.lock();
             store.agent(id).cloned()
         };
         let Some(agent) = agent
@@ -62,9 +62,8 @@ impl WorkspaceWindow {
                                                             mcp_url: mcp_url.as_deref(),
                                                             registration_prompt };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {
-                            if let Ok(mut store) = store.lock() {
-                                store.set_acp_session_id(id, session_id.to_string());
-                            }
+                            let mut store = store.lock();
+                            store.set_acp_session_id(id, session_id.to_string());
                         }).await;
                     });
     }
@@ -83,10 +82,7 @@ impl WorkspaceWindow {
         }
         let candidates =
             {
-                let (Ok(store), Ok(messages)) = (self.store.lock(), self.messages.lock())
-                else {
-                    return;
-                };
+                let (store, messages) = (self.store.lock(), self.messages.lock());
                 let Some(workspace) = store.workspaces()
                                            .iter()
                                            .find(|workspace| workspace.id == self.workspace_id)
@@ -126,16 +122,12 @@ impl WorkspaceWindow {
         else {
             return false;
         };
-        let Ok(guard) = slot.lock()
-        else {
-            return false;
-        };
+        let guard = slot.lock();
         match &*guard {
             panel_session::PanelSessionSlot::Ready(handle) => {
-                handle.state()
-                      .lock()
-                      .map(|state| state.pending_permission.is_none() && !state.turn_active)
-                      .unwrap_or(false)
+                let state = handle.state();
+                let state = state.lock();
+                state.pending_permission.is_none() && !state.turn_active
             }
             _ => false,
         }
@@ -149,7 +141,7 @@ impl WorkspaceWindow {
             return;
         };
         let session = {
-            let guard = slot.lock().unwrap();
+            let guard = slot.lock();
             match &*guard {
                 panel_session::PanelSessionSlot::Ready(handle) => {
                     handle.record_user_message(app_support::CHECK_INBOX_PROMPT.to_string());
@@ -187,7 +179,7 @@ impl WorkspaceWindow {
         };
         let prompt = knot_agent_launch::registration_prompt(id);
         let session = {
-            let guard = slot.lock().unwrap();
+            let guard = slot.lock();
             match &*guard {
                 panel_session::PanelSessionSlot::Ready(handle) => {
                     handle.record_user_message(prompt.clone());
