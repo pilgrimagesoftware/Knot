@@ -81,7 +81,7 @@ immediately on change.
 ### Requirement: Window scope
 
 The settings window SHALL show a tab strip with seven tabs — General,
-Coding, Personas, Autopilot, Voice, MCP, Terminal — in that order, with
+Coding, Personas, Autopilot, Voice, MCP, Appearance — in that order, with
 General selected by default when the window opens. Every tab SHALL render
 its real pane; none render a placeholder. No "check for updates" control
 SHALL be shown anywhere in the window.
@@ -89,16 +89,44 @@ SHALL be shown anywhere in the window.
 #### Scenario: General is the default tab
 
 - **WHEN** the settings window opens
-- **THEN** the General tab is selected and its three sections (Appearance,
-  Startup, Notifications) are visible
+- **THEN** the General tab is selected and its four sections (Appearance,
+  Startup, Notifications, Agent Panel) are visible
+
+### Requirement: Agent Panel control
+
+The General tab SHALL show an "Agent Panel" section with a "Shift+Enter to
+send" toggle bound to `agent_panel_shift_enter_sends`, persisting
+immediately on change, and a hint stating what the off state does: Enter
+sends the message and Shift+Enter adds a newline.
+
+The hint is required rather than decorative. The toggle names one of the two
+arrangements, and which key sends in the other is not recoverable from a
+switch labelled with the first.
+
+#### Scenario: Toggling Shift+Enter to send persists
+
+- **WHEN** the user turns on "Shift+Enter to send"
+- **THEN** `agent_panel_shift_enter_sends` is saved as `true` immediately
+
+#### Scenario: The section explains the off state
+
+- **WHEN** the General tab is open
+- **THEN** the Agent Panel section states that with the toggle off, Enter
+  sends the message and Shift+Enter adds a newline
 
 ### Requirement: Coding tab
 
 The Coding tab SHALL show a "Source Folder" section (current
 `source_base_folder`, a folder picker, and a clear action) and an "Agent
 Options" section (an agent-type picker with a per-type options field bound
-to `agent_options`). It SHALL NOT show an "Open With" section or editable
-custom-command fields — those depend on features not yet in the Rust port.
+to `agent_options`). The agent-type picker SHALL offer Claude, Codex,
+OpenCode, Gemini, Copilot and Shell. It SHALL NOT show an "Open With"
+section or editable custom-command fields — those depend on features not yet
+in the Rust port.
+
+The clear action SHALL ask for confirmation before clearing. Unlike every
+other control on this tab, it discards a path the user chose through a file
+dialog and cannot retype from memory.
 
 #### Scenario: Choosing a source folder persists it
 
@@ -110,8 +138,14 @@ custom-command fields — those depend on features not yet in the Rust port.
 #### Scenario: Clearing the source folder
 
 - **WHEN** the user clicks the clear action next to a configured source
-  folder
+  folder and confirms the prompt
 - **THEN** `source_base_folder` is saved as an empty string
+
+#### Scenario: Cancelling the clear
+
+- **WHEN** the user clicks the clear action and dismisses the prompt without
+  confirming
+- **THEN** `source_base_folder` is unchanged
 
 #### Scenario: Editing options for an agent type persists it
 
@@ -249,9 +283,15 @@ false, matching the Swift reference's dependent-control disabling.
 
 The MCP tab SHALL show an "Enable MCP server" toggle bound to
 `mcp_server_enabled`, a port field bound to `mcp_server_port`, a read-only
-server URL derived from the current port, and an installation-command
-generator (agent-type picker + the exact command for that type + copy
-action), each persisting on change.
+server URL derived from the current port with a copy action of its own, and
+an installation-command generator (agent-type picker + the exact command for
+that type + copy action), each persisting on change. The installation
+command's agent-type picker SHALL offer Claude, Codex, OpenCode, Gemini and
+Copilot — not Shell, which runs no MCP client to register.
+
+The URL SHALL be the MCP endpoint an agent connects to, not the server's
+root: it carries the `/mcp` path, and a URL without it is one an agent
+cannot use.
 
 #### Scenario: Toggling the MCP server persists
 
@@ -262,7 +302,13 @@ action), each persisting on change.
 
 - **WHEN** the user sets the port field to `9000`
 - **THEN** `mcp_server_port` is saved as `9000` and the displayed URL
-  updates to reflect port `9000`
+  updates to reflect port `9000`, keeping its `/mcp` path
+
+#### Scenario: Copying the server URL
+
+- **WHEN** the user clicks the copy action beside the URL
+- **THEN** the system clipboard receives exactly the displayed URL,
+  including its `/mcp` path
 
 #### Scenario: Installation command matches the selected agent type
 
@@ -276,22 +322,38 @@ action), each persisting on change.
 - **THEN** the system clipboard receives exactly the currently-displayed
   command text
 
-### Requirement: Terminal tab
+### Requirement: Appearance tab
 
-The Terminal tab SHALL show a "Font" section with a font-name picker bound
-to `terminal_font_name` and a numeric size field bound to
-`terminal_font_size`, persisting on change. It SHALL NOT show an engine
-picker or color pickers.
+The Appearance tab SHALL show a "Fonts" section with one row per
+configurable font — UI, Title and Terminal — bound to `ui_font_name` /
+`ui_font_size`, `title_font_name` / `title_font_size`, and
+`terminal_font_name` / `terminal_font_size` respectively.
+
+Each row SHALL offer a single control naming the current family and size,
+which opens the OS font panel pre-selected to that family and size. One
+control picks both, because the panel carries its own size field; the tab
+SHALL NOT show a separate numeric size field. A choice made in the panel
+SHALL persist immediately.
+
+The tab SHALL NOT show a terminal engine picker or color pickers.
 
 #### Scenario: Changing the font name persists
 
-- **WHEN** the user picks "JetBrains Mono" in the font picker
+- **WHEN** the user picks "JetBrains Mono" in the font panel opened from the
+  Terminal row
 - **THEN** `terminal_font_name` is saved as `"JetBrains Mono"` immediately
 
 #### Scenario: Changing the font size persists
 
-- **WHEN** the user sets the size field to `14`
+- **WHEN** the user sets the size to `14` in the font panel opened from the
+  Terminal row
 - **THEN** `terminal_font_size` is saved as `14.0` immediately
+
+#### Scenario: Each row drives its own font
+
+- **WHEN** the user picks a family in the font panel opened from the UI row
+- **THEN** `ui_font_name` is saved and `title_font_name` and
+  `terminal_font_name` are unchanged
 
 ### Requirement: Tab switching preserves window state
 
