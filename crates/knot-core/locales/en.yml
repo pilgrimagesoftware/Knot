@@ -31,3 +31,6 @@ panel:
   copied_response: "Copied response to clipboard"
   queued: "Queued"
   context_usage: "Context usage"
+
+menu:
+  agents: "Agents"

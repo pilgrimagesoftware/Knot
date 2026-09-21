@@ -83,6 +83,24 @@ the ones last built.
 Everything else - which items exist, whether they are enabled - is handled by
 the availability mechanism above and needs no rebuild.
 
+**Except the submenus' own parent items**, which the availability mechanism
+cannot reach. AppKit only sends `validateMenuItem:` to items that carry an
+action, and a submenu's parent carries none, so it draws enabled however
+unavailable its leaves are - checked against the running app, where all three
+read enabled with nothing selected while every plain item read disabled. Their
+state therefore comes from the snapshot too: it carries the selected agent's
+entry list alongside the submenu contents, and a submenu whose entry is absent
+is built `.disabled(true)`.
+
+That in turn is why the rebuild has to follow the *active* window rather than
+just any window whose selection changed. A disabled-by-availability item stops
+being available the moment focus leaves the window that registered it; a
+statically disabled submenu does not. So the window that put its selection on
+the menu bar records that it did, in an `AgentsMenuState` global, and hands the
+menu back when it is no longer active - which is what disables the submenus
+again behind the workspace manager, and what stops two open workspace windows
+overwriting each other on alternating polls.
+
 ### Dialogs must be deferred, for a second reason
 
 The destructive items open confirmations, and the context menu already defers

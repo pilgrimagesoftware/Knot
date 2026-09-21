@@ -364,6 +364,10 @@ pub(crate) struct WorkspaceWindow {
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     panel_input_expanded:             BTreeSet<Uuid>,
+    /// This window's handle, so the poll can tell whether it is the active
+    /// window before replacing the app-wide menu bar - two open workspace
+    /// windows must not fight over whose selection the Agents menu shows.
+    window_handle:                    AnyWindowHandle,
     view_mode:                        WorkspaceViewMode,
     dashboard_sort:                   dashboard::DashboardSort,
     new_agent_name_input:             Entity<InputState>,
@@ -467,6 +471,7 @@ impl WorkspaceWindow {
                     panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
+                    window_handle: window.window_handle(),
                     working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
@@ -570,6 +575,7 @@ impl WorkspaceWindow {
                                                  if grid_dirty || panel_dirty {
                                                      cx.notify();
                                                  }
+                                                 view.refresh_agents_menu(cx);
                                              });
                               });
                         }
@@ -2573,6 +2579,79 @@ impl WorkspaceWindow {
                                                                      .into_any_element()
     }
 
+    /// Rebuilds the menu bar when the Agents menu's submenus would now
+    /// list something different.
+    ///
+    /// A `Menu` is a static snapshot: Move to Workspace and Markdown Files
+    /// cannot re-read the store when they open, so a workspace created or
+    /// a markdown file shown since the bar was built would be missing from
+    /// them (`app-menu`). Everything else in the menu - which items exist,
+    /// and whether each is enabled - is handled by action availability and
+    /// needs no rebuild, which is why this compares before calling rather
+    /// than replacing the bar on every tick.
+    ///
+    /// Only the active window rebuilds: the menu bar is app-wide, and two
+    /// open workspace windows would otherwise overwrite each other's
+    /// submenus on alternating polls.
+    fn refresh_agents_menu(&mut self, cx: &mut Context<Self>) {
+        let active = cx.active_window() == Some(self.window_handle);
+        let owned = cx.global::<AgentsMenuState>().owner == Some(self.window_handle);
+        if !active && !owned {
+            // The menu bar is showing someone else's selection, or nobody's.
+            return;
+        }
+        // Becoming inactive hands the menu back rather than leaving this
+        // window's submenus up behind the workspace manager, and only the
+        // window holding it may do so - which is what makes the order the
+        // two windows happen to poll in stop mattering.
+        let (owner, snapshot) = if active {
+            (Some(self.window_handle),
+             self.selected_agent_menu(cx)
+                 .map(|selected| selected.snapshot)
+                 .unwrap_or_default())
+        }
+        else {
+            (None, AgentMenuSnapshot::default())
+        };
+        let state = cx.global::<AgentsMenuState>();
+        if state.owner == owner && state.snapshot == snapshot {
+            return;
+        }
+        cx.set_global(AgentsMenuState { owner,
+                                        snapshot: snapshot.clone() });
+        app_bootstrap::set_app_menus(&snapshot, cx);
+    }
+
+    /// Everything the menu bar's Agents menu needs about the sidebar's
+    /// selection - `None` when nothing is selected, which is what leaves
+    /// every item in that menu disabled.
+    ///
+    /// Read here rather than when the menu opens, because macOS validates
+    /// menu items against the *last rendered frame's* dispatch tree; the
+    /// item set this returns is what decides which handlers that frame
+    /// carries.
+    fn selected_agent_menu(&self, cx: &Context<Self>) -> Option<SelectedAgentMenu> {
+        let id = self.selected_agent?;
+        let store = self.store.lock().ok()?;
+        let (name, folder) = {
+            let agent = store.agent(id)?;
+            (agent.name.clone(), agent.folder.clone())
+        };
+        let (facts, move_targets, markdown_history) = agent_menu_facts(&store, id);
+        drop(store);
+        Some(SelectedAgentMenu { targets:  AgentMenuTargets { store: Arc::clone(&self.store),
+                                                              settings: self.settings.clone(),
+                                                              window_entity: cx.entity(),
+                                                              workspace_id: self.workspace_id,
+                                                              id,
+                                                              name,
+                                                              folder },
+                                 snapshot: AgentMenuSnapshot { entries:
+                                                                   agent_context_menu_entries(facts),
+                                                               move_targets,
+                                                               markdown_history }, })
+    }
+
     fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
         let id = self.selected_agent?;
         let store = self.store.lock().ok()?;
@@ -2588,6 +2667,100 @@ impl WorkspaceWindow {
                                    header_title: agent.header_title().to_string(),
                                    agent_type: agent.agent_type.clone(),
                                    state })
+    }
+}
+
+/// What the menu bar's Agents menu needs to know about the sidebar's
+/// selection, gathered in one pass over the store.
+struct SelectedAgentMenu {
+    targets:  AgentMenuTargets,
+    /// The items that apply to this agent, and what its submenus should
+    /// list. An item absent from `snapshot.entries` gets no action handler,
+    /// which is what makes macOS draw it disabled - see `agent_menu`'s
+    /// module docs.
+    snapshot: AgentMenuSnapshot,
+}
+
+/// Registers the Agents menu's action handlers on `el`, one per item the
+/// selected agent can actually use.
+///
+/// Every item is in the menu; only the applicable ones get a handler, and
+/// macOS greys the rest by asking gpui whether each action is available.
+/// With nothing selected no handler is registered at all, so the whole menu
+/// is disabled (`app-menu`).
+macro_rules! agents_menu_handlers {
+    ($el:expr, $selected:expr, [ $( $entry:ident => $action:ty ),* $(,)? ]) => {{
+        let mut el = $el;
+        if let Some(selected) = $selected {
+            $(
+                if selected.snapshot.entries.contains(&AgentMenuEntry::$entry) {
+                    let targets = selected.targets.clone();
+                    el = el.on_action(move |_: &$action, window, app| {
+                               run_agent_menu_action(AgentMenuEntry::$entry, &targets, window, app);
+                           });
+                }
+            )*
+        }
+        el
+    }};
+}
+
+/// The Agents menu's handlers, registered on the workspace window's root
+/// element - in the focus path, and deliberately not global: a global
+/// listener makes `App::is_action_available` true unconditionally, which
+/// would leave every item enabled with no agent selected and no window
+/// open.
+fn with_agents_menu_actions(el: gpui_kit::Div, selected: Option<&SelectedAgentMenu>)
+                            -> gpui_kit::Div {
+    let el = agents_menu_handlers!(el,
+                                   selected,
+                                   [NewCompanion => AgentMenuNewCompanion,
+                                    NewShellCompanion => AgentMenuNewShellCompanion,
+                                    EditAgent => AgentMenuEditAgent,
+                                    ForkAgent => AgentMenuForkAgent,
+                                    DuplicateAgent => AgentMenuDuplicateAgent,
+                                    MoveToWorkspace => AgentMenuMoveToWorkspace,
+                                    SaveToBench => AgentMenuSaveToBench,
+                                    OpenIn => AgentMenuOpenIn,
+                                    MarkdownFiles => AgentMenuMarkdownFiles,
+                                    RegisterAgent => AgentMenuRegisterAgent,
+                                    Deactivate => AgentMenuDeactivate,
+                                    RestartAgent => AgentMenuRestartAgent,
+                                    RemoveAgent => AgentMenuRemoveAgent]);
+    let Some(selected) = selected
+    else {
+        return el;
+    };
+    // The submenu leaves. Each carries its own payload, so one handler
+    // covers a whole submenu; registering it only when the parent entry
+    // applies is what disables the leaves - and with them the parent item,
+    // which AppKit enables only when a child is enabled.
+    let el = if selected.snapshot.entries.contains(&AgentMenuEntry::MoveToWorkspace) {
+        let targets = selected.targets.clone();
+        el.on_action(move |action: &AgentMenuMoveToWorkspaceTarget, _window, app| {
+                         move_agent_to_workspace(&targets, action.workspace_id, app);
+                     })
+    }
+    else {
+        el
+    };
+    let el = if selected.snapshot.entries.contains(&AgentMenuEntry::OpenIn) {
+        let folder = selected.targets.folder.clone();
+        el.on_action(move |action: &AgentMenuOpenInApp, _window, _app| {
+              open_in::open_folder(action.app_id.as_ref(), &folder);
+          })
+    }
+    else {
+        el
+    };
+    if selected.snapshot.entries.contains(&AgentMenuEntry::MarkdownFiles) {
+        let targets = selected.targets.clone();
+        el.on_action(move |action: &AgentMenuShowMarkdownFile, _window, app| {
+              show_agent_markdown_file(&targets, &action.path, app);
+          })
+    }
+    else {
+        el
     }
 }
 
@@ -3147,8 +3320,10 @@ impl Render for WorkspaceWindow {
                 None => div().into_any_element(),
             }
         };
+        let selected_menu = self.selected_agent_menu(cx);
         h_flex()
             .size_full()
+            .map(|el| with_agents_menu_actions(el, selected_menu.as_ref()))
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
                 view.answer_selected_permission(knot_acp::PermissionDecision::Allow);
                 cx.notify();
@@ -3550,20 +3725,7 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
                             submenu =
                             submenu.item(PopupMenuItem::new(workspace_name.clone()).on_click(
                                 move |_, _window, app| {
-                                    if let Ok(mut store) = targets.store.lock() {
-                                        store.move_to_workspace(targets.id, workspace_id);
-                                    }
-                                    targets.window_entity.update(app, |view, cx| {
-                                        // The moved agent may have
-                                        // been this window's
-                                        // selection, and it no
-                                        // longer belongs here.
-                                        if view.selected_agent == Some(targets.id) {
-                                            view.selected_agent = None;
-                                        }
-                                        view.persist_agents();
-                                        cx.notify();
-                                    });
+                                    move_agent_to_workspace(&targets, workspace_id, app);
                                 },
                             ));
                         }
@@ -3599,19 +3761,11 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
                             // File name, not the full path: the reference
                             // labels these by `lastPathComponent`, and a
                             // full path makes the submenu unreadable.
-                            let label = file.file_name()
-                                            .map(|name| name.to_string_lossy().into_owned())
-                                            .unwrap_or_else(|| file.to_string_lossy().into_owned());
+                            let label = markdown_label(&file);
                             submenu = submenu.item(PopupMenuItem::new(label).on_click({
                                                        move |_, _window, app| {
-                                                           if let Ok(mut store) =
-                                                               targets.store.lock()
-                                                           {
-                                                               let _ =
-                                        store.set_markdown_panel(targets.id, file.clone(), false);
-                                                           }
-                                                           targets.window_entity
-                                                                  .update(app, |_, cx| cx.notify());
+                                                           show_agent_markdown_file(&targets,
+                                                                                    &file, app);
                                                        }
                                                    }));
                         }
@@ -3632,6 +3786,36 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
         };
     }
     menu
+}
+
+/// Moves `targets`' agent to `workspace_id`.
+///
+/// Shared by the row's context menu and the menu bar's Agents menu, which
+/// is the point: `app-menu` requires an item to do the same thing from
+/// either surface, and the way to guarantee that is one body.
+fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: Uuid, app: &mut App) {
+    if let Ok(mut store) = targets.store.lock() {
+        store.move_to_workspace(targets.id, workspace_id);
+    }
+    targets.window_entity.update(app, |view, cx| {
+                             // The moved agent may have been this window's
+                             // selection, and
+                             // it no longer belongs here.
+                             if view.selected_agent == Some(targets.id) {
+                                 view.selected_agent = None;
+                             }
+                             view.persist_agents();
+                             cx.notify();
+                         });
+}
+
+/// Shows `file` in `targets`' agent's markdown pane. Shared by both menus,
+/// as [`move_agent_to_workspace`] is.
+fn show_agent_markdown_file(targets: &AgentMenuTargets, file: &Path, app: &mut App) {
+    if let Ok(mut store) = targets.store.lock() {
+        let _ = store.set_markdown_panel(targets.id, file.to_path_buf(), false);
+    }
+    targets.window_entity.update(app, |_, cx| cx.notify());
 }
 
 /// Runs one plain (non-submenu) menu entry.
