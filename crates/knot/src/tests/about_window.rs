@@ -36,7 +36,7 @@ impl Render for Blank {
 fn app_with_one_window(cx: &mut TestAppContext) -> AnyWindowHandle {
     cx.update(|cx| {
           gpui_kit::init(cx);
-          register_about_action(knot_core::Settings::default().ui_font_name.into(), cx);
+          register_about_action(knot_core::Settings::default().title_font_name.into(), cx);
           let window = cx.open_window(WindowOptions::default(), |window, cx| {
                              let view = cx.new(|_| Blank);
                              cx.new(|cx| Root::new(view, window, cx))

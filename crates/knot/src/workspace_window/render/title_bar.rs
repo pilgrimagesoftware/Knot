@@ -8,10 +8,10 @@ impl WorkspaceWindow {
     /// The header's leading half.
     pub(super) fn title_bar_left(&self, is_dashboard: bool,
                                  selected_header: &Option<SelectedAgentHeader>,
-                                 ui_font_name: &str, ui_font_size: gpui_kit::Pixels,
+                                 title_font_name: &str, title_font_size: gpui_kit::Pixels,
                                  cx: &mut Context<Self>)
                                  -> gpui_kit::AnyElement {
-        let ui_font_name = ui_font_name.to_owned();
+        let title_font_name = title_font_name.to_owned();
         // Matches the Swift reference's title bar: it shows the selected
         // agent's identity directly (not a separate workspace-name strip
         // above a second header row) so the header abuts the traffic
@@ -45,14 +45,14 @@ impl WorkspaceWindow {
                                         .overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
-                                        .font_family(ui_font_name.clone())
-                                        .text_size(ui_font_size)
+                                        .font_family(title_font_name.clone())
+                                        .text_size(title_font_size)
                                         .text_color(cx.theme().muted_foreground)
                                         .child(header.folder.clone()))
                             .when(!header.header_title.is_empty(), |row| {
                                 row.child(div().flex_shrink_0()
-                                               .font_family(ui_font_name.clone())
-                                               .text_size(ui_font_size)
+                                               .font_family(title_font_name.clone())
+                                               .text_size(title_font_size)
                                                .text_color(cx.theme().muted_foreground)
                                                .child("●"))
                                    .child(div().flex_1()
@@ -60,8 +60,8 @@ impl WorkspaceWindow {
                                                .overflow_hidden()
                                                .whitespace_nowrap()
                                                .text_ellipsis()
-                                               .font_family(ui_font_name.clone())
-                                               .text_size(ui_font_size)
+                                               .font_family(title_font_name.clone())
+                                               .text_size(title_font_size)
                                                .text_color(cx.theme().muted_foreground)
                                                .child(header.header_title.clone()))
                             })
@@ -78,10 +78,10 @@ impl WorkspaceWindow {
     /// The header's trailing half.
     pub(super) fn title_bar_right(&self, is_dashboard: bool,
                                   selected_header: &Option<SelectedAgentHeader>,
-                                  ui_font_name: &str, ui_font_size: gpui_kit::Pixels,
+                                  title_font_name: &str, title_font_size: gpui_kit::Pixels,
                                   cx: &mut Context<Self>)
                                   -> gpui_kit::AnyElement {
-        let ui_font_name = ui_font_name.to_owned();
+        let title_font_name = title_font_name.to_owned();
         let weak = cx.entity().downgrade();
         if is_dashboard {
             dashboard::sort_picker(self.dashboard_sort, {
@@ -109,15 +109,15 @@ impl WorkspaceWindow {
                                                        .h(px(10.))
                                                        .rounded_full()
                                                        .bg(state_color(*state)))
-                                           .child(div().font_family(ui_font_name.clone())
-                                                       .text_size(ui_font_size)
+                                           .child(div().font_family(title_font_name.clone())
+                                                       .text_size(title_font_size)
                                                        .text_color(cx.theme().muted_foreground)
                                                        .child(state_label(*state))))
                             .child(match git_stats {
                                        Some(Some(stats)) => {
                                            Self::render_diff_stats(stats,
-                                                                   ui_font_name.clone(),
-                                                                   ui_font_size,
+                                                                   title_font_name.clone(),
+                                                                   title_font_size,
                                                                    cx)
                                        }
                                        // The refresh ran and found no
@@ -125,8 +125,8 @@ impl WorkspaceWindow {
                                        // isn't a git checkout, so there
                                        // are no stats to wait for.
                                        Some(None) => div().into_any_element(),
-                                       None => div().font_family(ui_font_name.clone())
-                                                    .text_size(ui_font_size)
+                                       None => div().font_family(title_font_name.clone())
+                                                    .text_size(title_font_size)
                                                     .text_color(cx.theme().muted_foreground)
                                                     .child(knot_core::l10n::t("git.stats_pending"))
                                                     .into_any_element(),

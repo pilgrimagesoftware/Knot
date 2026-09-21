@@ -9,6 +9,11 @@
 //! document. Every mutating helper writes the document immediately. A
 //! collection blob that fails to decode yields an empty collection rather than
 //! failing the load, so the app always starts.
+//!
+//! Two upgrades run on load. The terminal font's `"SF Mono"` default is
+//! replaced value-for-value, and a document written before the two
+//! proportional fonts swapped roles has them exchanged once, gated on the
+//! `settingsVersion` marker - see [`migrate_font_roles`].
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -26,9 +31,9 @@ use crate::consts::{
     AI_PROVIDER_DEFAULT, APP_NAME, APPEARANCE_MODE_DEFAULT, AUTOPILOT_ACTION_DEFAULT,
     DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT, MERMAID_THEME_DEFAULT,
     ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE, SETTINGS_TEMP_EXTENSION,
-    SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT,
-    TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT,
-    VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
+    SETTINGS_VERSION_CURRENT, SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT,
+    TERMINAL_FONT_SIZE_DEFAULT, TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT,
+    UI_FONT_SIZE_DEFAULT, VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
 };
 use crate::error::{Error, Result};
 
@@ -38,6 +43,16 @@ use crate::error::{Error, Result};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
+    /// Which arrangement the persisted document was written under, so a
+    /// load-time migration runs exactly once. See [`SETTINGS_VERSION_CURRENT`]
+    /// and [`migrate_font_roles`].
+    ///
+    /// Its own serde default, rather than the container's: a document with no
+    /// `settingsVersion` key predates the marker and must read as `0`, while a
+    /// fresh [`Settings::default`] is already current and must not be
+    /// migrated.
+    #[serde(default = "de_legacy_settings_version")]
+    pub settings_version:               u32,
     pub appearance_mode:                String,
     pub restore_layout_on_launch:       bool,
     pub restore_conversation_on_launch: bool,
@@ -89,7 +104,8 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { appearance_mode:                APPEARANCE_MODE_DEFAULT.to_string(),
+        Self { settings_version:               SETTINGS_VERSION_CURRENT,
+               appearance_mode:                APPEARANCE_MODE_DEFAULT.to_string(),
                restore_layout_on_launch:       true,
                restore_conversation_on_launch: false,
                keep_in_menu_bar:               false,
@@ -162,10 +178,12 @@ impl Settings {
             Err(err) => return Err(err.into()),
         };
 
-        let value: Value = match serde_json::from_slice::<Value>(&bytes) {
+        let mut value: Value = match serde_json::from_slice::<Value>(&bytes) {
             Ok(value) if value.is_object() => value,
             _ => return Ok(Self::bound(store)),
         };
+
+        migrate_font_roles(&mut value);
 
         let mut settings: Self = serde_json::from_value(value).unwrap_or_default();
         settings.store_path = store;
@@ -394,6 +412,67 @@ fn de_tolerant_vec<'de, D, T>(deserializer: D) -> std::result::Result<Vec<T>, D:
           T: DeserializeOwned {
     let value = Value::deserialize(deserializer)?;
     Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// The version a document carrying no `settingsVersion` key was written under:
+/// the pre-swap font roles.
+fn de_legacy_settings_version() -> u32 {
+    0
+}
+
+/// Exchange the two proportional font settings in a pre-swap document.
+///
+/// Before the roles were swapped, `uiFontName` / `uiFontSize` held the title
+/// face and `titleFontName` / `titleFontSize` held the application-wide
+/// default. Exchanging the values keeps a user's customized fonts on the text
+/// they were chosen for.
+///
+/// Runs on the raw document because only the raw document says which keys the
+/// user actually customized: after deserializing, an absent key is
+/// indistinguishable from one holding the default, so exchanging both would
+/// invert the defaults for every user who never picked a font. An absent key
+/// therefore stays absent and takes the new default.
+///
+/// Gated on `settingsVersion`, so it runs exactly once. The migrated value is
+/// not written eagerly; the next persist records it, the same as the
+/// `"SF Mono"` upgrade.
+fn migrate_font_roles(document: &mut Value) {
+    let Some(object) = document.as_object_mut()
+    else {
+        return;
+    };
+    let version = object.get("settingsVersion")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_else(|| u64::from(de_legacy_settings_version()));
+    if version >= u64::from(SETTINGS_VERSION_CURRENT) {
+        return;
+    }
+
+    exchange_entries(object, "uiFontName", "titleFontName");
+    exchange_entries(object, "uiFontSize", "titleFontSize");
+
+    object.insert("settingsVersion".to_string(),
+                  Value::from(SETTINGS_VERSION_CURRENT));
+}
+
+/// Move the values under `left` and `right` past each other. A key the
+/// document does not carry is left absent rather than created, so a setting
+/// the user never customized keeps its default instead of inheriting the
+/// other's value.
+fn exchange_entries(object: &mut serde_json::Map<String, Value>, left: &str, right: &str) {
+    match (object.remove(left), object.remove(right)) {
+        (Some(was_left), Some(was_right)) => {
+            object.insert(left.to_string(), was_right);
+            object.insert(right.to_string(), was_left);
+        }
+        (Some(was_left), None) => {
+            object.insert(right.to_string(), was_left);
+        }
+        (None, Some(was_right)) => {
+            object.insert(left.to_string(), was_right);
+        }
+        (None, None) => {}
+    }
 }
 
 #[cfg(test)]

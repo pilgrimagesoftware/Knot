@@ -244,11 +244,12 @@ fn register_embedded_fonts_with_core_text() {
     }
 }
 
-/// Registers the embedded font families and sets Adamina as the app-wide
-/// default font (Manrope stays registered for the workspace header/cell
-/// text that applies it explicitly), then lays the platform palette over
-/// the theme, so the app doesn't rely on the platform's generic UI font and
-/// neutral-gray default theme.
+/// Registers the embedded font families and sets the UI font (Adamina) as the
+/// app-wide default (the title font, Manrope, stays registered for the
+/// workspace header, sidebar cell text, About credits, panel input and
+/// Markdown headers that apply it explicitly), then lays the platform palette
+/// over the theme, so the app doesn't rely on the platform's generic UI font
+/// and neutral-gray default theme.
 pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
     if let Err(error) = cx.text_system()
                           .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
@@ -264,15 +265,14 @@ pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App
     #[cfg(target_os = "macos")]
     register_embedded_fonts_with_core_text();
 
-    // The app-wide default stays the "title" font (Adamina) - Manrope
-    // (`ui_font_name`) is applied explicitly only to the workspace header
-    // and agent-cell text that isn't the agent's name, per the user's
-    // request. Everything else (dialogs, buttons, settings labels) keeps
-    // the existing font unchanged.
+    // The app-wide default is the UI font (`ui_font_name`, Adamina), so
+    // dialogs, buttons, settings labels and Markdown body text all inherit
+    // it. The title font (`title_font_name`, Manrope) is applied explicitly
+    // at the few sites that draw titles and headers.
     let theme = cx.global_mut::<Theme>();
-    theme.font_family = settings.title_font_name.clone().into();
+    theme.font_family = settings.ui_font_name.clone().into();
     theme.mono_font_family = "JetBrains Mono".into();
-    theme.font_size = px(settings.title_font_size as f32);
+    theme.font_size = px(settings.ui_font_size as f32);
 
     apply_system_palette(cx);
 }

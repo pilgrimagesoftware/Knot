@@ -108,15 +108,22 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                         settings_window.update(app, |view, cx| {
                                                            match target {
                                     native_font_panel::Target::Ui => {
-                                        view.settings.ui_font_name = family;
+                                        view.settings.ui_font_name = family.clone();
                                         view.settings.ui_font_size = size;
-                                    }
-                                    native_font_panel::Target::Title => {
-                                        view.settings.title_font_name = family.clone();
-                                        view.settings.title_font_size = size;
+                                        // The UI font is the app-wide
+                                        // default, so the live theme carries
+                                        // it: every open window redraws in
+                                        // the new family without reopening.
                                         let theme = cx.global_mut::<Theme>();
                                         theme.font_family = family.into();
                                         theme.font_size = px(size as f32);
+                                    }
+                                    native_font_panel::Target::Title => {
+                                        // Read per frame at the sites that
+                                        // draw titles and headers, so nothing
+                                        // global needs updating here.
+                                        view.settings.title_font_name = family;
+                                        view.settings.title_font_size = size;
                                     }
                                     native_font_panel::Target::Terminal => {
                                         view.settings.terminal_font_name = family;

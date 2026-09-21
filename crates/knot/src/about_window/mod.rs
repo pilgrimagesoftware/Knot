@@ -68,15 +68,15 @@ pub(crate) fn build_details() -> String {
 /// can open a second About window past the single-instance check. `run` and
 /// the window tests both register through here, so the tests exercise the
 /// wiring the app actually installs.
-/// `ui_font` is the user's UI font family (`Settings::ui_font_name`,
-/// Manrope by default), which every line but the app name is set in - the
-/// app name is a "title" and keeps the app-wide title font, the same split
-/// the workspace window makes. It is snapshotted at registration, as the
-/// settings window's own `Settings` clone is.
-pub(crate) fn register_about_action(ui_font: gpui_kit::SharedString, cx: &mut App) {
+/// `title_font` is the user's title font family (`Settings::title_font_name`,
+/// Manrope by default), which every line but the app name is set in - the app
+/// name keeps the app-wide UI font, the same split the workspace window makes.
+/// It is snapshotted at registration, as the settings window's own `Settings`
+/// clone is.
+pub(crate) fn register_about_action(title_font: gpui_kit::SharedString, cx: &mut App) {
     let handle: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
     cx.on_action(move |_: &crate::app_bootstrap::AboutKnot, cx| {
-          open_about_window(&handle, ui_font.clone(), cx);
+          open_about_window(&handle, title_font.clone(), cx);
       });
 }
 
@@ -90,7 +90,7 @@ pub(crate) fn register_about_action(ui_font: gpui_kit::SharedString, cx: &mut Ap
 /// dispatch runs inside the active window's update, so opening a dialog *on
 /// that window* was re-entrant; opening a new window is not.
 pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
-                                ui_font: gpui_kit::SharedString, cx: &mut App) {
+                                title_font: gpui_kit::SharedString, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
        && existing.update(cx, |_, window, _| window.activate_window())
                   .is_ok()
@@ -98,7 +98,7 @@ pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
         return;
     }
     match cx.open_window(about_window_options(cx), |window, cx| {
-                let view = cx.new(|cx| AboutWindow::new(ui_font, cx));
+                let view = cx.new(|cx| AboutWindow::new(title_font, cx));
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),
@@ -109,15 +109,15 @@ pub(crate) fn open_about_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
 pub(crate) struct AboutWindow {
     /// Focused on first render so the window has a key target for `Escape`.
     /// A window with nothing focused never sees the key event at all.
-    focus:   gpui_kit::FocusHandle,
+    focus:      gpui_kit::FocusHandle,
     /// See `register_about_action`.
-    ui_font: gpui_kit::SharedString,
+    title_font: gpui_kit::SharedString,
 }
 
 impl AboutWindow {
-    fn new(ui_font: gpui_kit::SharedString, cx: &mut Context<Self>) -> Self {
+    fn new(title_font: gpui_kit::SharedString, cx: &mut Context<Self>) -> Self {
         Self { focus: cx.focus_handle(),
-               ui_font }
+               title_font }
     }
 
     /// One credit line. Muted and small: the credits are the least of what
@@ -159,10 +159,10 @@ impl Render for AboutWindow {
                 .px_8()
                 .py_8()
                 .bg(cx.theme().background)
-                // Every line but the app name is set in the UI font; the
-                // name is a "title" and keeps the app-wide title font, as
-                // the workspace header and agent rows do.
-                .font_family(self.ui_font.clone())
+                // Every line but the app name is set in the title font; the
+                // name keeps the app-wide UI font, as the workspace header
+                // and agent rows do.
+                .font_family(self.title_font.clone())
                 .child(gpui_kit::img(icon).w(px(ICON_SIZE)).h(px(ICON_SIZE)))
                 .child(div().text_2xl()
                             .font_semibold()

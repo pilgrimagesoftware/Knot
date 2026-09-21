@@ -20,11 +20,11 @@ mod title_bar;
 
 impl Render for WorkspaceWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Manrope applies explicitly to header/cell text that isn't the
-        // agent's name - the name (a "title") keeps the app-wide default
-        // font (Adamina), so it needs no override here.
-        let ui_font_name = self.settings.ui_font_name.clone();
-        let ui_font_size = px(self.settings.ui_font_size as f32);
+        // The title font (Manrope) applies explicitly to header and cell text
+        // that isn't the agent's name - the name keeps the app-wide UI font
+        // (Adamina), so it needs no override here.
+        let title_font_name = self.settings.title_font_name.clone();
+        let title_font_size = px(self.settings.title_font_size as f32);
         let (_workspace_name, agents) = {
             let store = self.store.lock().unwrap();
             let Some(workspace) = store.workspaces()
@@ -92,7 +92,7 @@ impl Render for WorkspaceWindow {
             window.focus(&self.root_focus.clone(), cx);
         }
 
-        let agent_rows = self.agent_rows(agents, ui_font_name.clone(), ui_font_size, cx);
+        let agent_rows = self.agent_rows(agents, title_font_name.clone(), title_font_size, cx);
         let dashboard_row = self.dashboard_row(is_dashboard, cx);
 
         let selected_header = self.selected_agent_header();
@@ -101,13 +101,13 @@ impl Render for WorkspaceWindow {
 
         let title_bar_left = self.title_bar_left(is_dashboard,
                                                  &selected_header,
-                                                 &ui_font_name,
-                                                 ui_font_size,
+                                                 &title_font_name,
+                                                 title_font_size,
                                                  cx);
         let title_bar_right = self.title_bar_right(is_dashboard,
                                                    &selected_header,
-                                                   &ui_font_name,
-                                                   ui_font_size,
+                                                   &title_font_name,
+                                                   title_font_size,
                                                    cx);
         let selected_menu = self.selected_agent_menu(cx);
         let background_targets = SidebarMenuTargets { store:         Arc::clone(&self.store),
