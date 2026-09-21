@@ -16,6 +16,7 @@ mod command_center;
 mod consts;
 mod dashboard;
 mod macos;
+mod markdown_view;
 mod open_in;
 mod panel_session;
 mod panel_state;
@@ -53,7 +54,6 @@ use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMe
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::text::TextView;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;

@@ -124,3 +124,30 @@ fn reserializes_with_swift_keys() {
     assert!(persona.contains_key("type"));
     assert!(persona.contains_key("state"));
 }
+
+/// The font-role migration is only correct if persisting records that it ran:
+/// a second load that exchanged the values again would invert a user's fonts
+/// on every launch.
+#[test]
+fn a_migrated_document_is_recorded_as_migrated() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path,
+                   r#"{"uiFontName":"Helvetica Neue","uiFontSize":13,
+                       "titleFontName":"Palatino","titleFontSize":18}"#).unwrap();
+
+    let migrated = Settings::load_from(&path).unwrap();
+    assert_eq!(migrated.ui_font_name, "Palatino");
+    assert_eq!(migrated.title_font_name, "Helvetica Neue");
+    migrated.persist().unwrap();
+
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(written["settingsVersion"], serde_json::json!(1));
+
+    let reloaded = Settings::load_from(&path).unwrap();
+    assert_eq!(reloaded.ui_font_name, migrated.ui_font_name);
+    assert_eq!(reloaded.ui_font_size, migrated.ui_font_size);
+    assert_eq!(reloaded.title_font_name, migrated.title_font_name);
+    assert_eq!(reloaded.title_font_size, migrated.title_font_size);
+}

@@ -280,7 +280,7 @@ impl WorkspaceWindow {
                                 div()
                                     .flex_shrink_0()
                                     .text_xs()
-                                    .font_family(self.settings.ui_font_name.clone())
+                                    .font_family(self.settings.title_font_name.clone())
                                     .text_color(cx.theme().muted_foreground)
                                     .child(Self::panel_prompt_send_hint(shift_to_send)),
                             ),

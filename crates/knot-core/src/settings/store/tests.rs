@@ -46,6 +46,91 @@ fn persisted_custom_terminal_font_is_not_overridden() {
     assert_eq!(s.terminal_font_name, "Fira Code");
 }
 
+/// Writes `document` to a fresh store and loads it back, so each font-role
+/// migration case reads as the document it is about.
+fn load_document(document: &str) -> (tempfile::TempDir, Settings) {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    fs::write(&path, document).unwrap();
+    let settings = Settings::load_from(&path).unwrap();
+    (dir, settings)
+}
+
+#[test]
+fn a_fresh_store_is_already_at_the_current_settings_version() {
+    assert_eq!(Settings::default().settings_version,
+               SETTINGS_VERSION_CURRENT);
+}
+
+#[test]
+fn a_document_without_the_marker_reads_as_pre_migration() {
+    // Not the container-level default, which is `SETTINGS_VERSION_CURRENT` -
+    // the field's own serde default has to win on the deserialize path, or an
+    // unmigrated document would declare itself migrated.
+    assert_eq!(de_legacy_settings_version(), 0);
+
+    let mut document: Value = serde_json::from_str("{}").unwrap();
+    let object = document.as_object_mut().unwrap();
+    assert!(!object.contains_key("settingsVersion"));
+
+    let settings: Settings = serde_json::from_value(document).unwrap();
+    assert_eq!(settings.settings_version, 0);
+}
+
+#[test]
+fn the_font_defaults_name_what_they_draw() {
+    let s = Settings::default();
+    assert_eq!(s.ui_font_name, "Adamina");
+    assert_eq!(s.ui_font_size, 16.0);
+    assert_eq!(s.title_font_name, "Manrope");
+    assert_eq!(s.title_font_size, 14.0);
+}
+
+#[test]
+fn both_customized_fonts_are_exchanged() {
+    let (_dir, s) = load_document(r#"{"uiFontName":"Helvetica Neue","uiFontSize":13,
+                                      "titleFontName":"Palatino","titleFontSize":18}"#);
+    assert_eq!(s.ui_font_name, "Palatino");
+    assert_eq!(s.ui_font_size, 18.0);
+    assert_eq!(s.title_font_name, "Helvetica Neue");
+    assert_eq!(s.title_font_size, 13.0);
+    assert_eq!(s.settings_version, SETTINGS_VERSION_CURRENT);
+}
+
+#[test]
+fn one_customized_font_moves_and_the_other_takes_the_new_default() {
+    let (_dir, s) = load_document(r#"{"titleFontName":"Palatino"}"#);
+    assert_eq!(s.ui_font_name, "Palatino");
+    // Not "Palatino" - an absent key stays absent through the exchange rather
+    // than inheriting the other's value.
+    assert_eq!(s.title_font_name, "Manrope");
+}
+
+#[test]
+fn a_document_that_customized_neither_font_keeps_the_new_defaults() {
+    let (_dir, s) = load_document(r#"{"appearanceMode":"dark"}"#);
+    assert_eq!(s.ui_font_name, "Adamina");
+    assert_eq!(s.ui_font_size, 16.0);
+    assert_eq!(s.title_font_name, "Manrope");
+    assert_eq!(s.title_font_size, 14.0);
+}
+
+#[test]
+fn the_migration_does_not_run_twice() {
+    let (_dir, s) = load_document(r#"{"settingsVersion":1,
+                                      "uiFontName":"Adamina","titleFontName":"Manrope"}"#);
+    assert_eq!(s.ui_font_name, "Adamina");
+    assert_eq!(s.title_font_name, "Manrope");
+}
+
+#[test]
+fn the_migration_leaves_the_terminal_font_alone() {
+    let (_dir, s) = load_document(r#"{"terminalFontName":"Fira Code","terminalFontSize":11,
+                                      "uiFontName":"Helvetica Neue","titleFontName":"Palatino"}"#);
+    assert_eq!(s.terminal_font_name, "Fira Code");
+    assert_eq!(s.terminal_font_size, 11.0);
+}
+
 #[test]
 fn missing_file_yields_defaults() {
     let dir = tempdir().unwrap();

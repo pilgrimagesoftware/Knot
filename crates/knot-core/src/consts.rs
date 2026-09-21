@@ -24,13 +24,26 @@ pub const TERMINAL_FONT_DEFAULT: &str = "JetBrains Mono";
 
 pub const TERMINAL_FONT_SIZE_DEFAULT: f64 = 13.0;
 
-pub const UI_FONT_DEFAULT: &str = "Manrope";
+/// The application's default proportional family: the face the interface and
+/// all body text is drawn in, Markdown body text included.
+pub const UI_FONT_DEFAULT: &str = "Adamina";
 
-pub const UI_FONT_SIZE_DEFAULT: f64 = 14.0;
+/// The application's default text size, paired with [`UI_FONT_DEFAULT`].
+pub const UI_FONT_SIZE_DEFAULT: f64 = 16.0;
 
-pub const TITLE_FONT_DEFAULT: &str = "Adamina";
+/// The family for titles and headers: the workspace header, the sidebar's
+/// secondary cell text, the About window's credit lines, the panel input and
+/// Markdown headers.
+pub const TITLE_FONT_DEFAULT: &str = "Manrope";
 
-pub const TITLE_FONT_SIZE_DEFAULT: f64 = 16.0;
+/// The text size for titles and headers, paired with [`TITLE_FONT_DEFAULT`].
+pub const TITLE_FONT_SIZE_DEFAULT: f64 = 14.0;
+
+/// Version the current font-role arrangement is recorded under in a persisted
+/// settings document. Version `0` - a document carrying no `settingsVersion`
+/// key at all - means the pre-swap roles, where `uiFontName` held the title
+/// face and `titleFontName` held the application-wide default.
+pub const SETTINGS_VERSION_CURRENT: u32 = 1;
 
 pub const APPEARANCE_MODE_DEFAULT: &str = "auto";
 

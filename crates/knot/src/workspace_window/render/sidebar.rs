@@ -12,8 +12,8 @@ impl WorkspaceWindow {
     ///
     /// Collected rather than returned lazily because the closures borrow
     /// `cx`, which the caller needs back to build the rest of the tree.
-    pub(super) fn agent_rows(&mut self, agents: Vec<AgentRow>, ui_font_name: String,
-                             ui_font_size: gpui_kit::Pixels, cx: &mut Context<Self>)
+    pub(super) fn agent_rows(&mut self, agents: Vec<AgentRow>, title_font_name: String,
+                             title_font_size: gpui_kit::Pixels, cx: &mut Context<Self>)
                              -> Vec<gpui_kit::AnyElement> {
         let store_for_menu = Arc::clone(&self.store);
         let settings_for_menu = self.settings.clone();
@@ -121,8 +121,8 @@ impl WorkspaceWindow {
                                             gpui_kit::assets::IconName::CornerDownRight,
                                             knot_core::l10n::t("agent.companion"),
                                             DetailLineSize::Small,
-                                            ui_font_name.clone(),
-                                            ui_font_size,
+                                            title_font_name.clone(),
+                                            title_font_size,
                                             cx,
                                         )
                                     }))
@@ -138,8 +138,8 @@ impl WorkspaceWindow {
                                             SettingsWindow::agent_type_label(&agent_type)
                                                 .to_string(),
                                             DetailLineSize::Small,
-                                            ui_font_name.clone(),
-                                            ui_font_size,
+                                            title_font_name.clone(),
+                                            title_font_size,
                                             cx,
                                         )
                                     }))
@@ -153,8 +153,8 @@ impl WorkspaceWindow {
                                             gpui_kit::assets::IconName::User,
                                             persona_name,
                                             DetailLineSize::Small,
-                                            ui_font_name.clone(),
-                                            ui_font_size,
+                                            title_font_name.clone(),
+                                            title_font_size,
                                             cx,
                                         )
                                     }))
@@ -162,16 +162,16 @@ impl WorkspaceWindow {
                                         gpui_kit::assets::IconName::Activity,
                                         header_title,
                                         DetailLineSize::Body,
-                                        ui_font_name.clone(),
-                                        ui_font_size,
+                                        title_font_name.clone(),
+                                        title_font_size,
                                         cx,
                                     ))
                                     .child(detail_line(
                                         gpui_kit::assets::IconName::Folder,
                                         folder_name,
                                         DetailLineSize::Body,
-                                        ui_font_name.clone(),
-                                        ui_font_size,
+                                        title_font_name.clone(),
+                                        title_font_size,
                                         cx,
                                     )),
                             )
