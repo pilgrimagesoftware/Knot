@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::app_state;
 use crate::app_support;
 use crate::panel_session;
+use crate::workspace_window::PromptOrigin;
 use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceWindow {

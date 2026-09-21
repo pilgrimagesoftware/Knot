@@ -11,7 +11,14 @@
 //! identical either way, which is the point: two full row layouts would drift
 //! apart the first time one of those changed.
 
-use super::super::*;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::h_flex;
+use gpui_kit::div;
+use gpui_kit::px;
+
+use crate::app_state::state_color;
 
 /// What the compact row draws. A struct rather than three positional
 /// parameters, and deliberately a subset of [`AgentRow`]: everything the

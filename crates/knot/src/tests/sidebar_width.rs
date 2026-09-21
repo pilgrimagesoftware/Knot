@@ -5,7 +5,7 @@ use knot_core::consts::{
     SIDEBAR_COMPACT_BREAKPOINT, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN,
 };
 
-use super::*;
+use crate::workspace_window::sidebar_is_compact;
 
 #[test]
 fn a_sidebar_narrower_than_the_breakpoint_is_compact() {

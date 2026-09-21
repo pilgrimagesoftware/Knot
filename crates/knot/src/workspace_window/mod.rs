@@ -9,6 +9,7 @@ use gpui_kit::ListState;
 use gpui_kit::Subscription;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::input::TextareaState;
+use gpui_kit::component::resizable::ResizableState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
 use parking_lot::Mutex;

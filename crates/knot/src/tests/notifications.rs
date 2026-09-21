@@ -13,6 +13,7 @@ use crate::app_state::AWAITING_INPUT_DEFAULT_BODY;
 use crate::app_state::notification_body;
 use crate::app_state::notification_response_agent_id;
 use crate::app_state::should_notify;
+use crate::app_state::should_show_awaiting_notice;
 
 #[test]
 fn should_notify_requires_setting_and_notice() {

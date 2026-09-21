@@ -18,6 +18,9 @@ use gpui_kit::rgb;
 
 use super::font::font_label;
 use crate::app_support::FontPanelTarget;
+// macOS-only: the module it names is `cfg(target_os = "macos")`, and so
+// is every use of it here.
+#[cfg(target_os = "macos")]
 use crate::app_support::native_font_panel;
 use crate::settings_window::SettingsWindow;
 

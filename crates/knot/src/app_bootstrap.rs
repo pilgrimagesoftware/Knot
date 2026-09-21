@@ -26,6 +26,7 @@ use crate::agent_menu::agents_menu;
 use crate::app_state::build_agent_store;
 use crate::app_state::notification_response_agent_id;
 use crate::app_support;
+use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;

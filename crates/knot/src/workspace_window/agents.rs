@@ -8,6 +8,7 @@
 
 use uuid::Uuid;
 
+use crate::workspace_window::PromptOrigin;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::workspace_agent_ids;
 

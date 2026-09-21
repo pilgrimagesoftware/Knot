@@ -24,6 +24,7 @@ use uuid::Uuid;
 use crate::panel_session;
 use crate::workspace_window::PANEL_INPUT_ROWS_COLLAPSED;
 use crate::workspace_window::PANEL_INPUT_ROWS_EXPANDED;
+use crate::workspace_window::PromptOrigin;
 use crate::workspace_window::QueuedPanelPrompt;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::prompt_queue;

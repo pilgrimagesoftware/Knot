@@ -19,9 +19,9 @@ use crate::app_state::delivery_notice;
 use crate::app_state::inbox_prompt_message_id;
 use crate::app_state::layout_model;
 use crate::app_state::should_inject_inbox_prompt;
-use crate::app_state::should_show_awaiting_notice;
 use crate::app_state::stale_session_ids;
 use crate::app_state::unread_counts_snapshot;
+use crate::app_support;
 use crate::tests::workspace;
 
 #[test]

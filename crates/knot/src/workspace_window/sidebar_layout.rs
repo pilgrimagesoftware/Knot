@@ -9,9 +9,10 @@
 //! bar and the new-agent button all take the `bool` this produces, and cannot
 //! disagree about where compact begins.
 
+use gpui_kit::App;
 use knot_core::consts::{SIDEBAR_COMPACT_BREAKPOINT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN};
 
-use super::*;
+use crate::workspace_window::WorkspaceWindow;
 
 /// Whether a sidebar `width` draws the compact layout.
 ///

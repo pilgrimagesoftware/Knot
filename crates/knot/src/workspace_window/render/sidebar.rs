@@ -21,11 +21,13 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Icon;
 use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::div;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::px;
 use unicode_segmentation::UnicodeSegmentation;
 
+use super::sidebar_compact::{CompactAgentRow, compact_agent_row_body};
 use crate::app_state::state_color;
 use crate::consts;
 use crate::settings_window::SettingsWindow;
@@ -36,7 +38,6 @@ use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::agent_row_context_menu;
 use crate::workspace_window::detail_line;
-use super::sidebar_compact::{CompactAgentRow, compact_agent_row_body};
 
 impl WorkspaceWindow {
     /// One element per agent in this workspace, in sidebar order.

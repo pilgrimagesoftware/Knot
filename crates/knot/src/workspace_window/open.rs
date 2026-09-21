@@ -17,6 +17,7 @@ use gpui_kit::AppContext;
 use gpui_kit::ClipboardItem;
 use gpui_kit::component::Root;
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::resizable::ResizableState;
 use parking_lot::Mutex;
 use uuid::Uuid;
 

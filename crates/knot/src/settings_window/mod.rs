@@ -18,6 +18,8 @@ use gpui_kit::Window;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Root;
+// macOS-only: used solely by the native font-panel poll below.
+#[cfg(target_os = "macos")]
 use gpui_kit::component::Theme;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::input::InputState;
@@ -28,8 +30,13 @@ use gpui_kit::px;
 use gpui_kit::size;
 use parking_lot::Mutex;
 
+// macOS-only: the module it names is `cfg(target_os = "macos")`, and so
+// is every use of it here.
+#[cfg(target_os = "macos")]
 use crate::app_support::native_font_panel;
 use crate::app_support::observe_system_appearance;
+// macOS-only: used solely by the native font-panel poll below.
+#[cfg(target_os = "macos")]
 use crate::consts;
 use crate::window_options::SETTINGS_WINDOW_WIDTH;
 use crate::window_options::settings_window_options;

@@ -16,6 +16,9 @@ use parking_lot::Mutex;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
+// macOS-only: the module it names is `cfg(target_os = "macos")`, and so
+// is every use of it here.
+#[cfg(target_os = "macos")]
 use crate::app_support::native_character_picker;
 use crate::app_support::observe_system_appearance;
 use crate::consts;

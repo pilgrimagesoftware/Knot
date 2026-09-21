@@ -11,7 +11,6 @@ use gpui_kit::px;
 use uuid::Uuid;
 
 use crate::workspace_window::TERMINAL_HEADER_HEIGHT;
-use crate::workspace_window::TERMINAL_SIDEBAR_WIDTH;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::terminal_cell_size;
 use crate::workspace_window::terminal_font_family;
