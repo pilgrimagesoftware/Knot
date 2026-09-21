@@ -438,6 +438,10 @@ impl WorkspaceWindow {
                                 let value_id = value_id.clone();
                                 entity.update(app, move |view, _cx| {
                                     view.open_config_selector = None;
+                                    // Persist first: the selection is durable
+                                    // whether or not a session is live to
+                                    // apply it to.
+                                    view.remember_session_config(id, config_id.clone(), value_id.clone());
                                     if let Ok(slot) = session_arc.lock()
                                         && let panel_session::PanelSessionSlot::Ready(handle) =
                                             &*slot

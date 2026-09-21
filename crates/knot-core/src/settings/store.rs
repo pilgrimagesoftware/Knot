@@ -71,6 +71,11 @@ pub struct Settings {
     /// Which chord sends a Panel-mode prompt: `false` (default) is Enter to
     /// send / Shift+Enter for a newline; `true` swaps them.
     pub agent_panel_shift_enter_sends:  bool,
+    /// Collapse a Panel turn's contiguous tool calls into one summary line
+    /// instead of a card per call. Off by default, so existing installs keep
+    /// the per-call rendering. See
+    /// `openspec/specs/collapsed-tool-call-summary/spec.md`.
+    pub agent_panel_compact_tool_calls: bool,
 
     #[serde(deserialize_with = "de_tolerant_vec")]
     pub saved_agents:     Vec<SavedAgent>,
@@ -119,6 +124,7 @@ impl Default for Settings {
                voice_push_to_talk_key:         VOICE_PUSH_TO_TALK_KEY_DEFAULT,
                voice_auto_insert:              true,
                agent_panel_shift_enter_sends:  false,
+               agent_panel_compact_tool_calls: false,
                saved_agents:                   Vec::new(),
                saved_workspaces:               Vec::new(),
                personas:                       Vec::new(),

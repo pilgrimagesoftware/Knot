@@ -2,9 +2,9 @@
 
 ## 1. Persist session setup and display preference
 
-- [ ] 1.1 Extend durable agent/session settings with optional model, permission mode, and effort fields; add decode defaults and verify legacy records load in focused persistence tests.
-- [ ] 1.2 Add the compact tool-call display preference to the single settings store with a disabled default; verify it round-trips and legacy settings decode successfully.
-- [ ] 1.3 Wire model, permission, and effort selectors to save changes and apply them only to the next turn; verify an in-flight turn keeps its original setup.
+- [x] 1.1 Extend durable agent/session settings with optional model, permission mode, and effort fields; add decode defaults and verify legacy records load in focused persistence tests.
+- [x] 1.2 Add the compact tool-call display preference to the single settings store with a disabled default; verify it round-trips and legacy settings decode successfully.
+- [x] 1.3 Wire model, permission, and effort selectors to save changes and apply them only to the next turn; verify an in-flight turn keeps its original setup.
 
 ## 2. Add compact tool-call aggregation
 

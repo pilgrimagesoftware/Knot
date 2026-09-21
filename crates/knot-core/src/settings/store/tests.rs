@@ -308,3 +308,25 @@ fn persist_replaces_a_stale_temporary_file_rather_than_reusing_it() {
     let reloaded = Settings::load_from(&path).unwrap();
     assert_eq!(reloaded.ui_font_size, 17.0);
 }
+
+#[test]
+fn legacy_settings_blob_defaults_compact_tool_calls_off() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    fs::write(&path, r#"{"restoreLayoutOnLaunch":true}"#).unwrap();
+    let s = Settings::load_from(&path).unwrap();
+    assert!(!s.agent_panel_compact_tool_calls);
+}
+
+#[test]
+fn compact_tool_calls_round_trips_through_the_store() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    let mut s = Settings::load_from(&path).unwrap();
+    assert!(!s.agent_panel_compact_tool_calls);
+    s.agent_panel_compact_tool_calls = true;
+    s.persist().unwrap();
+
+    let reloaded = Settings::load_from(&path).unwrap();
+    assert!(reloaded.agent_panel_compact_tool_calls);
+}

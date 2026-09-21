@@ -101,3 +101,55 @@ fn deactivating_survives_until_the_workspace_is_reopened() {
     store.activate_on_workspace_open(&[id]);
     assert!(store.agent(id).unwrap().activated);
 }
+
+/// `session-setup-persistence`: a selection recorded mid-session changes
+/// only the stored setup. Nothing about the turn in flight - its state, its
+/// session ids - is touched, so the running turn keeps the setup it started
+/// with and the new value is what the next session replays.
+#[test]
+fn recording_a_setup_selection_leaves_the_running_turn_alone() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    store.set_session_id(id, "term-1".to_string());
+    store.set_acp_session_id(id, "acp-1".to_string());
+    store.set_state(id, AgentState::Running);
+
+    store.set_session_config_option(id, "model".to_string(), "opus".to_string())
+         .unwrap();
+
+    let agent = store.agent(id).unwrap();
+    assert_eq!(agent.state, AgentState::Running, "the turn keeps running");
+    assert_eq!(agent.session_id.as_deref(), Some("term-1"));
+    assert_eq!(agent.acp_session_id.as_deref(), Some("acp-1"));
+    assert_eq!(agent.session_config.get("model").map(String::as_str),
+               Some("opus"));
+}
+
+/// The recorded setup is what a later launch replays: it reaches the saved
+/// record, and `from_saved` puts it back on the runtime agent.
+#[test]
+fn a_recorded_setup_survives_save_and_reload() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    store.set_session_config_option(id, "model".to_string(), "opus".to_string())
+         .unwrap();
+    store.set_session_config_option(id, "permission_mode".to_string(), "plan".to_string())
+         .unwrap();
+
+    let saved = store.saved_agents(false);
+    let reloaded = AgentStore::from_saved(&saved, Vec::new());
+
+    assert_eq!(reloaded.session_config(id),
+               BTreeMap::from([("model".to_string(), "opus".to_string()),
+                               ("permission_mode".to_string(), "plan".to_string())]));
+}
+
+/// An agent saved before the field existed replays nothing, leaving the
+/// adapter's own defaults in place.
+#[test]
+fn a_legacy_agent_replays_an_empty_setup() {
+    let saved = knot_core::SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
+    let id = saved.id;
+    let store = AgentStore::from_saved(&[saved], Vec::new());
+    assert!(store.session_config(id).is_empty());
+}

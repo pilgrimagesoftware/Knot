@@ -57,6 +57,13 @@ pub struct Agent {
     /// When this agent's session starts on its own. Durable; distinct from
     /// [`Agent::activated`], which is runtime-only.
     pub activation_mode: ActivationMode,
+    /// The Panel session setup last chosen for this agent - model,
+    /// permission mode, reasoning effort - as adapter-declared ACP
+    /// config-option id -> selected value. Durable, and deliberately not
+    /// gated by `restore-conversation-on-launch`: it is a setup preference,
+    /// not conversation content. See
+    /// `openspec/specs/session-setup-persistence/spec.md`.
+    pub session_config:  BTreeMap<String, String>,
 
     // Runtime-only
     /// Whether this agent has been activated in this run and so may start.
@@ -152,6 +159,7 @@ mod tests {
                 persona_id:         None,
                 view_mode:          ViewMode::Terminal,
                 activation_mode:    ActivationMode::Passive,
+                session_config:     BTreeMap::new(),
                 activated:          false,
                 state:              AgentState::Idle,
                 status_text:        String::new(),
