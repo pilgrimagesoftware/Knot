@@ -316,6 +316,17 @@ pub(crate) struct WorkspaceWindow {
     /// tracker; the UI thread has no tokio runtime of its own, so enter
     /// this one around each spawn (see `ensure_session`).
     runtime:                          tokio::runtime::Runtime,
+    /// Focus target for the window's root element.
+    ///
+    /// Nothing else in this window claims focus until the user clicks a
+    /// pane, and a window with focus nowhere is why the Agents menu drew
+    /// disabled with an agent selected: macOS validates each item against
+    /// the dispatch path to the focused node, and gpui resolves "no focus"
+    /// to the dispatch-tree *root*, which sits above the element carrying
+    /// those handlers. Focusing the root element puts them back on the
+    /// path, and leaves them there once a pane takes focus, since the root
+    /// is that pane's ancestor.
+    root_focus:                       gpui_kit::FocusHandle,
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
     terminal_focus:                   gpui_kit::FocusHandle,
@@ -460,6 +471,7 @@ impl WorkspaceWindow {
                     panel_states: BTreeMap::new(),
                     runtime: tokio::runtime::Runtime::new()
                         .expect("failed to start terminal session runtime"),
+                    root_focus: cx.focus_handle(),
                     terminal_focus: cx.focus_handle(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
@@ -2827,6 +2839,14 @@ impl Render for WorkspaceWindow {
             }
         }
 
+        // See `root_focus`: without this the Agents menu's items are never
+        // on the dispatch path macOS validates them against. Done here
+        // rather than beside the element it focuses, because the agent rows
+        // built below borrow `cx` until the tree is assembled.
+        if window.focused(cx).is_none() {
+            window.focus(&self.root_focus.clone(), cx);
+        }
+
         let store_for_menu = Arc::clone(&self.store);
         let settings_for_menu = self.settings.clone();
         let workspace_id = self.workspace_id;
@@ -3324,6 +3344,7 @@ impl Render for WorkspaceWindow {
         h_flex()
             .size_full()
             .map(|el| with_agents_menu_actions(el, selected_menu.as_ref()))
+            .track_focus(&self.root_focus)
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
                 view.answer_selected_permission(knot_acp::PermissionDecision::Allow);
                 cx.notify();
