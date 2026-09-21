@@ -42,3 +42,19 @@ panel:
 
 menu:
   agents: "Agents"
+
+about:
+  title: "About Knot"
+  version_label: "Version"
+  build_label: "Build"
+  commit_unknown: "commit unknown"
+  copy_details: "Copy version and build"
+  close: "Close"
+  copyright: "Copyright © 2026 Kochava Studios"
+  credits:
+    author: "Created by Paul Schifferer"
+    license: "Released under the GNU Affero General Public License v3.0"
+    built_with: "Built with"
+    toolkit: "gpui-kit — Apache-2.0"
+    terminal: "Alacritty terminal — Apache-2.0"
+    fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"

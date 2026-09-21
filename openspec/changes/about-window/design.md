@@ -99,11 +99,13 @@ focusing it when the window opens, and matching `event.keystroke.key` in an
 `on_key_down` listener, calling `window.remove_window()`. A global key binding
 was rejected: it would bind `Escape` app-wide, where other windows may want it.
 
-The window is opened with `is_resizable: false`, `is_minimizable: false`, a
-fixed `window_bounds`, and a titlebar titled from the catalog. On macOS the
-title text sits above content that names the app anyway; this is what the
-platform does with an About box that uses a standard titlebar, and it avoids
-a custom-drawn titlebar for one window.
+The window is opened with `is_resizable: false`, `is_minimizable: false` and
+fixed `window_bounds`. Its titlebar carries no text on macOS - the system's
+own About panel has none, and the body already names the app, which is the
+two-titles-for-one-window case `knot-ui-conventions` rules out. On other
+platforms a titled window is the expectation, so the title from the catalog
+is shown there. Either way the titlebar is the platform's own; a custom-drawn
+one is not worth it for a window this simple.
 
 ### The icon is embedded at build time, downscaled at render
 
@@ -142,6 +144,11 @@ not translated.
   unchanged but the working tree became dirty, so `-dirty` can be stale] →
   Accepted. The dirty marker is a courtesy for local builds; released builds
   are made from clean checkouts in CI.
+- [An untitled titlebar on macOS leaves the window without an accessible
+  name: AppKit's own About panel keeps its title and hides it
+  (`titleVisibility`), which gpui-kit exposes no way to do] → Accepted for
+  platform fidelity - the window is identified by the icon and app name it
+  renders - and revisited if the toolkit gains the option.
 - [The About window is the first window in the app to handle `Escape`, so
   there is no established pattern to copy] → Scoped to this view's own focus
   handle, so it cannot affect key handling in any other window.

@@ -1,4 +1,4 @@
-mod about_dialog;
+mod about_window;
 mod agents_menu;
 
 use knot_core::Workspace;
@@ -981,6 +981,31 @@ fn removing_an_agent_also_drops_its_companions_from_the_snapshot() {
     settings.saved_workspaces = store.saved_workspaces();
 
     assert!(build_agent_store(&settings).agents().is_empty());
+}
+
+/// Every word the About window shows comes from the catalog, so a missing
+/// key would ship the key string itself where the version, copyright or a
+/// credit line belongs.
+#[test]
+fn about_window_labels_resolve() {
+    for key in ["about.title",
+                "about.version_label",
+                "about.build_label",
+                "about.commit_unknown",
+                "about.copy_details",
+                "about.close",
+                "about.copyright",
+                "about.credits.author",
+                "about.credits.license",
+                "about.credits.built_with",
+                "about.credits.toolkit",
+                "about.credits.terminal",
+                "about.credits.fonts"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
 }
 
 /// The queued-row controls carry no visible text of their own, so their

@@ -130,38 +130,6 @@ pub(crate) fn show_all_windows(_: &ShowAllWindows, cx: &mut App) {
     cx.activate(true);
 }
 
-pub(crate) fn about_knot(_: &AboutKnot, cx: &mut App) {
-    // Falls back to any open window: `active_window` can be empty (no
-    // window key at the moment the menu fires), and the silent `if let`
-    // this used to be made "About Knot" look like a dead menu item.
-    let window = cx.active_window().or_else(|| cx.windows().first().copied());
-    let Some(window) = window
-    else {
-        eprintln!("About Knot: no open window to show the dialog on");
-        return;
-    };
-    // Deferred, because the menu runs this *inside* the active window's
-    // update: `App::dispatch_action` wraps the dispatch in
-    // `active_window.update(...)`, which takes the window out of
-    // `cx.windows` for the duration, and gpui reports a re-entrant
-    // `window.update` with the same "window not found" it uses for a
-    // closed window. `cx.defer` runs at the end of the effect cycle, once
-    // the window has been returned to the app.
-    cx.defer(move |cx| {
-          let result = window.update(cx, |_, window, cx| {
-                                 window.open_alert_dialog(cx, |alert, _, _| {
-                                           alert
-                    .title("About Knot")
-                    .description("Knot is a workspace for coordinating coding agents.")
-                    .show_cancel(false)
-                                       });
-                             });
-          if let Err(error) = result {
-              eprintln!("About Knot: window went away before the dialog opened: {error}");
-          }
-      });
-}
-
 /// Installs the menu bar.
 ///
 /// Called again whenever `snapshot` changes, because a `Menu` is a static
@@ -242,7 +210,9 @@ pub(crate) fn run() {
                                apply_visual_identity(&settings, cx);
 
                                cx.on_action(quit);
-                               cx.on_action(about_knot);
+                               // Holds its own window handle; see
+                               // `about_window::register_about_action`.
+                               register_about_action(cx);
                                cx.on_action(hide_app);
                                cx.on_action(hide_others);
                                cx.on_action(show_all_windows);
