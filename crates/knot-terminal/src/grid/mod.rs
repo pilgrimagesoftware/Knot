@@ -20,7 +20,7 @@ use alacritty_terminal::vte::ansi::Processor;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GridSize {
     pub columns: usize,
-    pub rows: usize,
+    pub rows:    usize,
 }
 
 impl Dimensions for GridSize {
@@ -54,26 +54,24 @@ impl EventListener for EventForwarder {
 /// visible cell grid and any events (title changes, clipboard requests,
 /// bell) the running program triggered.
 pub struct Grid {
-    term: Term<EventForwarder>,
+    term:   Term<EventForwarder>,
     parser: Processor,
     events: mpsc::Receiver<Event>,
     /// Set whenever the visible grid changes (feed/resize/selection); a UI
     /// poll loop reads and clears this via [`Self::take_dirty`] to decide
     /// whether a repaint is actually needed, since the PTY reader thread
     /// that calls `feed` has no way to trigger one itself.
-    dirty: bool,
+    dirty:  bool,
 }
 
 impl Grid {
     pub fn new(size: GridSize) -> Self {
         let (tx, rx) = mpsc::channel();
         let term = Term::new(TermConfig::default(), &size, EventForwarder(tx));
-        Self {
-            term,
-            parser: Processor::new(),
-            events: rx,
-            dirty: false,
-        }
+        Self { term,
+               parser: Processor::new(),
+               events: rx,
+               dirty: false }
     }
 
     /// Parses `bytes` (raw PTY output) into the grid, updating cell
@@ -159,10 +157,9 @@ impl Grid {
     /// A visible row's cells, left to right. Panics if `row` is out of
     /// bounds for the grid's current size.
     pub fn row_cells(&self, row: usize) -> Vec<Cell> {
-        self.term.grid()[Line(row as i32)]
-            .into_iter()
-            .cloned()
-            .collect()
+        self.term.grid()[Line(row as i32)].into_iter()
+                                          .cloned()
+                                          .collect()
     }
 
     /// A visible row's text content, with trailing blank cells trimmed -
@@ -176,10 +173,8 @@ impl Grid {
     }
 
     pub fn size(&self) -> GridSize {
-        GridSize {
-            columns: self.term.columns(),
-            rows: self.term.screen_lines(),
-        }
+        GridSize { columns: self.term.columns(),
+                   rows:    self.term.screen_lines(), }
     }
 }
 
@@ -241,17 +236,11 @@ mod tests {
     #[test]
     fn resize_updates_reported_size() {
         let mut grid = grid(20, 5);
-        grid.resize(GridSize {
-            columns: 40,
-            rows: 10,
-        });
-        assert_eq!(
-            grid.size(),
-            GridSize {
-                columns: 40,
-                rows: 10,
-            }
-        );
+        grid.resize(GridSize { columns: 40,
+                               rows:    10, });
+        assert_eq!(grid.size(),
+                   GridSize { columns: 40,
+                              rows:    10, });
     }
 
     #[test]
@@ -260,9 +249,9 @@ mod tests {
         grid.feed(b"\x1b]0;my title\x07");
         let events = grid.drain_events();
         assert!(events.iter().any(|event| matches!(
-            event,
-            GridEvent::Title(title) if title == "my title"
-        )));
+                                 event,
+                                 GridEvent::Title(title) if title == "my title"
+                             )));
     }
 
     #[test]
@@ -322,10 +311,8 @@ mod tests {
         assert!(grid.take_dirty());
         assert!(!grid.take_dirty(), "dirty flag clears after being read");
 
-        grid.resize(GridSize {
-            columns: 30,
-            rows: 10,
-        });
+        grid.resize(GridSize { columns: 30,
+                               rows:    10, });
         assert!(grid.take_dirty());
     }
 }

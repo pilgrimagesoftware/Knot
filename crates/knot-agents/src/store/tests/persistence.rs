@@ -18,25 +18,21 @@ fn resume_resolution_prefers_persisted_id_and_falls_back() {
     let id = saved.id;
     let mut store = AgentStore::from_saved(&[saved], Vec::new());
     store.resolve_resume_sessions(&BTreeMap::from([(id, "saved".to_string())]), |_, _| {
-        Some("fallback".to_string())
-    });
-    assert_eq!(
-        store.agent(id).unwrap().resume_session_id.as_deref(),
-        Some("saved")
-    );
+             Some("fallback".to_string())
+         });
+    assert_eq!(store.agent(id).unwrap().resume_session_id.as_deref(),
+               Some("saved"));
 
     let saved = knot_core::SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
     let id = saved.id;
     let mut store = AgentStore::from_saved(&[saved], Vec::new());
     store.resolve_resume_sessions(&BTreeMap::new(), |folder, agent_type| {
-        assert_eq!(folder, "/tmp/proj");
-        assert_eq!(agent_type, "claude");
-        Some("fallback".to_string())
-    });
-    assert_eq!(
-        store.agent(id).unwrap().resume_session_id.as_deref(),
-        Some("fallback")
-    );
+             assert_eq!(folder, "/tmp/proj");
+             assert_eq!(agent_type, "claude");
+             Some("fallback".to_string())
+         });
+    assert_eq!(store.agent(id).unwrap().resume_session_id.as_deref(),
+               Some("fallback"));
 }
 
 /// 4.2: a settings file written before activation mode existed must behave
@@ -45,19 +41,16 @@ fn resume_resolution_prefers_persisted_id_and_falls_back() {
 /// workspace-open pass turns that into the runtime flag `ensure_*` gates on.
 #[test]
 fn a_legacy_settings_file_still_starts_every_agent_on_open() {
-    let json = format!(
-        r#"[{{"id":"{}","name":"A","avatar":"x","folder":"/tmp/a"}},
+    let json = format!(r#"[{{"id":"{}","name":"A","avatar":"x","folder":"/tmp/a"}},
                            {{"id":"{}","name":"B","avatar":"y","folder":"/tmp/b"}}]"#,
-        Uuid::new_v4(),
-        Uuid::new_v4()
-    );
+                       Uuid::new_v4(),
+                       Uuid::new_v4());
     let saved: Vec<knot_core::SavedAgent> = serde_json::from_str(&json).unwrap();
     let mut store = AgentStore::from_saved(&saved, Vec::new());
-    let ids = store
-        .agents()
-        .iter()
-        .map(|agent| agent.id)
-        .collect::<Vec<_>>();
+    let ids = store.agents()
+                   .iter()
+                   .map(|agent| agent.id)
+                   .collect::<Vec<_>>();
 
     // Loading alone activates nothing - `activated` is runtime-only.
     assert!(store.agents().iter().all(|agent| !agent.activated));
@@ -74,13 +67,10 @@ fn a_legacy_settings_file_still_starts_every_agent_on_open() {
 #[test]
 fn opening_a_workspace_starts_only_its_active_agents() {
     let mut store = AgentStore::new();
-    let active = store.create(
-        "/tmp/a",
-        CreateOptions {
-            activation_mode: knot_core::ActivationMode::Active,
-            ..Default::default()
-        },
-    );
+    let active = store.create("/tmp/a",
+                              CreateOptions { activation_mode:
+                                                  knot_core::ActivationMode::Active,
+                                              ..Default::default() });
     let passive = store.create("/tmp/b", CreateOptions::default());
     // Reload, the way a relaunch does: every runtime flag resets.
     let saved = store.saved_agents(false);
@@ -91,10 +81,8 @@ fn opening_a_workspace_starts_only_its_active_agents() {
 
     assert_eq!(activated, vec![active]);
     assert!(store.agent(active).unwrap().activated);
-    assert!(
-        !store.agent(passive).unwrap().activated,
-        "a passive agent stays stopped across a relaunch"
-    );
+    assert!(!store.agent(passive).unwrap().activated,
+            "a passive agent stays stopped across a relaunch");
 }
 
 /// Deactivation lasts as long as the workspace stays open: nothing
@@ -103,13 +91,9 @@ fn opening_a_workspace_starts_only_its_active_agents() {
 #[test]
 fn deactivating_survives_until_the_workspace_is_reopened() {
     let mut store = AgentStore::new();
-    let id = store.create(
-        "/tmp/a",
-        CreateOptions {
-            activation_mode: knot_core::ActivationMode::Active,
-            ..Default::default()
-        },
-    );
+    let id = store.create("/tmp/a",
+                          CreateOptions { activation_mode: knot_core::ActivationMode::Active,
+                                          ..Default::default() });
 
     store.deactivate(id);
     assert!(!store.agent(id).unwrap().activated);

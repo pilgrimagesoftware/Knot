@@ -8,31 +8,27 @@ const TRAFFIC_LIGHT_DIAMETER: f32 = 12.;
 const TRAFFIC_LIGHT_INSET: f32 = 9.;
 
 pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
-    WindowOptions {
-        window_bounds: Some(WindowBounds::centered(size(px(800.), px(600.)), cx)),
-        window_min_size: Some(size(px(640.), px(420.))),
-        ..TitleBar::window_options()
-    }
+    WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(800.), px(600.)), cx)),
+                    window_min_size: Some(size(px(640.), px(420.))),
+                    ..TitleBar::window_options() }
 }
 
 /// `saved` is the workspace's last known window frame, restored verbatim so
 /// reopening puts the window back where the user left it; `None` (a
 /// workspace never opened before) centres a default-sized window instead.
-pub(crate) fn workspace_window_options(
-    saved: Option<knot_core::SavedWindowBounds>, cx: &App,
-) -> WindowOptions {
+pub(crate) fn workspace_window_options(saved: Option<knot_core::SavedWindowBounds>, cx: &App)
+                                       -> WindowOptions {
     let bounds = match saved {
-        Some(saved) => WindowBounds::Windowed(gpui_kit::Bounds {
-            origin: gpui_kit::point(px(saved.x), px(saved.y)),
-            size: size(px(saved.width), px(saved.height)),
-        }),
+        Some(saved) => WindowBounds::Windowed(gpui_kit::Bounds { origin:
+                                                                     gpui_kit::point(px(saved.x),
+                                                                                     px(saved.y)),
+                                                                 size:   size(px(saved.width),
+                                                                              px(saved.height)), }),
         None => WindowBounds::centered(size(px(960.), px(640.)), cx),
     };
-    let mut options = WindowOptions {
-        window_bounds: Some(bounds),
-        window_min_size: Some(size(px(760.), px(520.))),
-        ..TitleBar::window_options()
-    };
+    let mut options = WindowOptions { window_bounds: Some(bounds),
+                                      window_min_size: Some(size(px(760.), px(520.))),
+                                      ..TitleBar::window_options() };
     // AppKit places the traffic lights at a fixed offset, and the toolkit's
     // default (9px) centres them in its own ~30px bar. This window's bar is
     // taller, which left them stranded near the top edge and out of line
@@ -45,23 +41,18 @@ pub(crate) fn workspace_window_options(
 }
 
 pub(crate) fn command_center_window_options(cx: &App) -> WindowOptions {
-    WindowOptions {
-        window_bounds: Some(WindowBounds::centered(size(px(960.), px(640.)), cx)),
-        window_min_size: Some(size(px(760.), px(520.))),
-        ..TitleBar::window_options()
-    }
+    WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(960.), px(640.)), cx)),
+                    window_min_size: Some(size(px(760.), px(520.))),
+                    ..TitleBar::window_options() }
 }
 
 pub(crate) fn agent_window_options(title: &str, cx: &App) -> WindowOptions {
-    WindowOptions {
-        titlebar: Some(gpui_kit::TitlebarOptions {
-            title: Some(title.to_string().into()),
-            ..Default::default()
-        }),
-        window_bounds: Some(WindowBounds::centered(size(px(520.), px(500.)), cx)),
-        window_min_size: Some(size(px(460.), px(460.))),
-        ..WindowOptions::default()
-    }
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.to_string()
+                                                                                .into()),
+                                                               ..Default::default() }),
+                    window_bounds: Some(WindowBounds::centered(size(px(520.), px(500.)), cx)),
+                    window_min_size: Some(size(px(460.), px(460.))),
+                    ..WindowOptions::default() }
 }
 
 /// Fixed width for the settings window; only height varies per pane.

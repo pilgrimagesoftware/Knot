@@ -15,55 +15,59 @@ pub enum LineKind {
 pub fn classify(line: &str) -> LineKind {
     if line.starts_with("@@") {
         LineKind::HunkHeader
-    } else if line.starts_with("diff --git")
-        || line.starts_with("index ")
-        || line.starts_with("--- ")
-        || line.starts_with("+++ ")
-        || line.starts_with("new file")
-        || line.starts_with("deleted file")
-        || line.starts_with("old mode")
-        || line.starts_with("new mode")
-        || line.starts_with("similarity index")
-        || line.starts_with("dissimilarity index")
-        || line.starts_with("rename ")
-        || line.starts_with("copy ")
-        || line.starts_with("Binary files ")
+    }
+    else if line.starts_with("diff --git")
+              || line.starts_with("index ")
+              || line.starts_with("--- ")
+              || line.starts_with("+++ ")
+              || line.starts_with("new file")
+              || line.starts_with("deleted file")
+              || line.starts_with("old mode")
+              || line.starts_with("new mode")
+              || line.starts_with("similarity index")
+              || line.starts_with("dissimilarity index")
+              || line.starts_with("rename ")
+              || line.starts_with("copy ")
+              || line.starts_with("Binary files ")
     {
         LineKind::Header
-    } else if line.starts_with('+') {
+    }
+    else if line.starts_with('+') {
         LineKind::Addition
-    } else if line.starts_with('-') {
+    }
+    else if line.starts_with('-') {
         LineKind::Deletion
-    } else {
+    }
+    else {
         LineKind::Context
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
-    pub kind: LineKind,
-    pub text: String,
+    pub kind:       LineKind,
+    pub text:       String,
     pub old_lineno: Option<u32>,
     pub new_lineno: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hunk {
-    pub header: String,
+    pub header:    String,
     pub old_start: u32,
     pub old_count: u32,
     pub new_start: u32,
     pub new_count: u32,
-    pub lines: Vec<DiffLine>,
+    pub lines:     Vec<DiffLine>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileDiff {
-    pub path: PathBuf,
+    pub path:     PathBuf,
     /// Original path for a rename or copy, otherwise `None`.
     pub old_path: Option<PathBuf>,
-    pub binary: bool,
-    pub hunks: Vec<Hunk>,
+    pub binary:   bool,
+    pub hunks:    Vec<Hunk>,
 }
 
 impl FileDiff {
@@ -95,26 +99,33 @@ pub fn parse_diff(output: &str) -> Vec<FileDiff> {
             continue;
         }
 
-        let Some(file) = files.last_mut() else {
+        let Some(file) = files.last_mut()
+        else {
             continue;
         };
 
         if let Some(rest) = line.strip_prefix("rename from ") {
             file.old_path = Some(PathBuf::from(rest));
-        } else if let Some(rest) = line.strip_prefix("rename to ") {
+        }
+        else if let Some(rest) = line.strip_prefix("rename to ") {
             file.path = PathBuf::from(rest);
-        } else if let Some(rest) = line.strip_prefix("copy from ") {
+        }
+        else if let Some(rest) = line.strip_prefix("copy from ") {
             file.old_path = Some(PathBuf::from(rest));
-        } else if let Some(rest) = line.strip_prefix("copy to ") {
+        }
+        else if let Some(rest) = line.strip_prefix("copy to ") {
             file.path = PathBuf::from(rest);
-        } else if line.starts_with("Binary files ") {
+        }
+        else if line.starts_with("Binary files ") {
             file.binary = true;
-        } else if line.starts_with("@@") {
+        }
+        else if line.starts_with("@@") {
             let hunk = parse_hunk_header(line);
             old_lineno = hunk.old_start;
             new_lineno = hunk.new_start;
             file.hunks.push(hunk);
-        } else if let Some(hunk) = file.hunks.last_mut() {
+        }
+        else if let Some(hunk) = file.hunks.last_mut() {
             push_hunk_line(hunk, line, &mut old_lineno, &mut new_lineno);
         }
     }
@@ -123,16 +134,13 @@ pub fn parse_diff(output: &str) -> Vec<FileDiff> {
 }
 
 fn new_file_diff(paths: &str) -> FileDiff {
-    let path = split_git_paths(paths)
-        .map(|(_, b)| b)
-        .unwrap_or_else(|| paths.to_owned());
+    let path = split_git_paths(paths).map(|(_, b)| b)
+                                     .unwrap_or_else(|| paths.to_owned());
 
-    FileDiff {
-        path: PathBuf::from(path),
-        old_path: None,
-        binary: false,
-        hunks: Vec::new(),
-    }
+    FileDiff { path:     PathBuf::from(path),
+               old_path: None,
+               binary:   false,
+               hunks:    Vec::new(), }
 }
 
 /// Splits `a/<x> b/<y>` into `(x, y)`. Uses the ` b/` boundary; paths with a
@@ -144,11 +152,10 @@ fn split_git_paths(paths: &str) -> Option<(String, String)> {
 }
 
 fn parse_hunk_header(line: &str) -> Hunk {
-    let inner = line
-        .strip_prefix("@@ ")
-        .and_then(|rest| rest.split_once(" @@"))
-        .map(|(ranges, _)| ranges)
-        .unwrap_or("");
+    let inner = line.strip_prefix("@@ ")
+                    .and_then(|rest| rest.split_once(" @@"))
+                    .map(|(ranges, _)| ranges)
+                    .unwrap_or("");
 
     let mut old_start = 0;
     let mut old_count = 1;
@@ -158,19 +165,18 @@ fn parse_hunk_header(line: &str) -> Hunk {
     for token in inner.split_whitespace() {
         if let Some(range) = token.strip_prefix('-') {
             (old_start, old_count) = parse_range(range);
-        } else if let Some(range) = token.strip_prefix('+') {
+        }
+        else if let Some(range) = token.strip_prefix('+') {
             (new_start, new_count) = parse_range(range);
         }
     }
 
-    Hunk {
-        header: line.to_owned(),
-        old_start,
-        old_count,
-        new_start,
-        new_count,
-        lines: Vec::new(),
-    }
+    Hunk { header: line.to_owned(),
+           old_start,
+           old_count,
+           new_start,
+           new_count,
+           lines: Vec::new() }
 }
 
 /// `<start>` or `<start>,<count>`. Count defaults to 1 when omitted.
@@ -213,12 +219,10 @@ fn push_hunk_line(hunk: &mut Hunk, line: &str, old_lineno: &mut u32, new_lineno:
         }
     };
 
-    hunk.lines.push(DiffLine {
-        kind,
-        text: text.to_owned(),
-        old_lineno: old,
-        new_lineno: new,
-    });
+    hunk.lines.push(DiffLine { kind,
+                               text: text.to_owned(),
+                               old_lineno: old,
+                               new_lineno: new });
 }
 
 #[cfg(test)]

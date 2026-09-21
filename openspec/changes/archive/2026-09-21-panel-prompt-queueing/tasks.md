@@ -45,6 +45,6 @@
 
 - [x] 4.1 Route the new user-facing strings ("Queued", any tooltips) through
       `knot_core::l10n::t`.
-- [ ] 4.2 `make rust` passes clean (fmt, clippy, tests, build).
+- [x] 4.2 `make rust` passes clean (fmt, clippy, tests, build).
 - [ ] 4.3 Exercise in the app: enqueue three prompts during one response,
       confirm they deliver in order with no overlap, one turn at a time.

@@ -26,14 +26,16 @@ fn title_from_rollout(path: &str) -> Option<String> {
         if trimmed.is_empty() {
             continue;
         }
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed)
+        else {
             continue;
         };
         let payload = json.get("payload")?;
         if payload.get("type").and_then(serde_json::Value::as_str) != Some("user_message") {
             continue;
         }
-        let Some(message) = payload.get("message").and_then(serde_json::Value::as_str) else {
+        let Some(message) = payload.get("message").and_then(serde_json::Value::as_str)
+        else {
             continue;
         };
         if !is_valid_title(message) {
@@ -53,61 +55,68 @@ fn resolve_title(db_title: &str, rollout_path: &str) -> String {
 
 impl HistoryProvider for CodexProvider {
     fn load_sessions(&self, folder: &str) -> Vec<SessionSummary> {
-        let Some(path) = db_path() else {
+        let Some(path) = db_path()
+        else {
             return Vec::new();
         };
         if !path.exists() {
             return Vec::new();
         }
-        let Ok(conn) = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY) else {
+        let Ok(conn) = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        else {
             return Vec::new();
         };
 
         let query = "SELECT id, rollout_path, title, updated_at FROM threads \
                      WHERE cwd = ?1 AND archived = 0 ORDER BY updated_at DESC LIMIT ?2";
-        let Ok(mut stmt) = conn.prepare(query) else {
+        let Ok(mut stmt) = conn.prepare(query)
+        else {
             return Vec::new();
         };
 
         let rows = stmt.query_map(params![folder, MAX_SESSIONS as i64], |row| {
-            let id: String = row.get(0)?;
-            let rollout_path: String = row.get(1)?;
-            let title: String = row.get(2)?;
-            let updated_at: i64 = row.get(3)?;
-            Ok((id, rollout_path, title, updated_at))
-        });
+                           let id: String = row.get(0)?;
+                           let rollout_path: String = row.get(1)?;
+                           let title: String = row.get(2)?;
+                           let updated_at: i64 = row.get(3)?;
+                           Ok((id, rollout_path, title, updated_at))
+                       });
 
-        let Ok(rows) = rows else {
+        let Ok(rows) = rows
+        else {
             return Vec::new();
         };
 
         rows.filter_map(Result::ok)
-            .map(|(id, rollout_path, title, updated_at)| SessionSummary {
+            .map(|(id, rollout_path, title, updated_at)| {
+                SessionSummary {
                 id,
                 title: resolve_title(&title, &rollout_path),
                 timestamp: OffsetDateTime::from_unix_timestamp(updated_at)
                     .unwrap_or(OffsetDateTime::UNIX_EPOCH),
                 message_count: 0,
+            }
             })
             .collect()
     }
 
     fn delete_session(&self, id: &str, _folder: &str) {
-        let Some(path) = db_path() else {
+        let Some(path) = db_path()
+        else {
             return;
         };
         if !path.exists() {
             return;
         }
-        let Ok(conn) = Connection::open(&path) else {
+        let Ok(conn) = Connection::open(&path)
+        else {
             return;
         };
 
-        if let Ok(rollout_path) = conn.query_row(
-            "SELECT rollout_path FROM threads WHERE id = ?1",
-            params![id],
-            |row| row.get::<_, String>(0),
-        ) {
+        if let Ok(rollout_path) = conn.query_row("SELECT rollout_path FROM threads WHERE id = ?1",
+                                                 params![id],
+                                                 |row| row.get::<_, String>(0))
+        {
             let _ = fs::remove_file(rollout_path);
         }
 
@@ -121,7 +130,7 @@ mod tests {
 
     fn seed_db(conn: &Connection) {
         conn.execute_batch(
-            "CREATE TABLE threads (
+                           "CREATE TABLE threads (
                 id TEXT PRIMARY KEY,
                 rollout_path TEXT NOT NULL,
                 title TEXT NOT NULL,
@@ -130,7 +139,7 @@ mod tests {
                 archived INTEGER NOT NULL DEFAULT 0
             );",
         )
-        .unwrap();
+            .unwrap();
         conn.execute(
             "INSERT INTO threads VALUES ('t1', '/tmp/t1.jsonl', 'first task', 200, '/proj', 0)",
             [],
@@ -172,11 +181,10 @@ mod tests {
                 "SELECT id FROM threads WHERE cwd = ?1 AND archived = 0 ORDER BY updated_at DESC LIMIT ?2",
             )
             .unwrap();
-        let ids: Vec<String> = stmt
-            .query_map(params!["/proj", 20i64], |row| row.get(0))
-            .unwrap()
-            .filter_map(Result::ok)
-            .collect();
+        let ids: Vec<String> = stmt.query_map(params!["/proj", 20i64], |row| row.get(0))
+                                   .unwrap()
+                                   .filter_map(Result::ok)
+                                   .collect();
 
         assert_eq!(ids, vec!["t1", "t2"]);
     }
@@ -190,7 +198,7 @@ mod tests {
 
         let conn = Connection::open(&db_path).unwrap();
         conn.execute_batch(
-            "CREATE TABLE threads (
+                           "CREATE TABLE threads (
                 id TEXT PRIMARY KEY,
                 rollout_path TEXT NOT NULL,
                 title TEXT NOT NULL,
@@ -199,29 +207,25 @@ mod tests {
                 archived INTEGER NOT NULL DEFAULT 0
             );",
         )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO threads VALUES ('t1', ?1, 'first task', 200, '/proj', 0)",
-            params![rollout_path.to_str().unwrap()],
-        )
-        .unwrap();
+            .unwrap();
+        conn.execute("INSERT INTO threads VALUES ('t1', ?1, 'first task', 200, '/proj', 0)",
+                     params![rollout_path.to_str().unwrap()])
+            .unwrap();
 
-        if let Ok(path) = conn.query_row(
-            "SELECT rollout_path FROM threads WHERE id = 't1'",
-            [],
-            |row| row.get::<_, String>(0),
-        ) {
+        if let Ok(path) = conn.query_row("SELECT rollout_path FROM threads WHERE id = 't1'",
+                                         [],
+                                         |row| row.get::<_, String>(0))
+        {
             fs::remove_file(&path).unwrap();
         }
         conn.execute("UPDATE threads SET archived = 1 WHERE id = 't1'", [])
             .unwrap();
 
         assert!(!rollout_path.exists());
-        let archived: i64 = conn
-            .query_row("SELECT archived FROM threads WHERE id = 't1'", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
+        let archived: i64 = conn.query_row("SELECT archived FROM threads WHERE id = 't1'",
+                                           [],
+                                           |row| row.get(0))
+                                .unwrap();
         assert_eq!(archived, 1);
     }
 }

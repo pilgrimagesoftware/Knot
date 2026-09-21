@@ -9,27 +9,25 @@ use crate::consts;
 /// A tracked MCP session for one agent.
 #[derive(Debug, Clone)]
 pub struct McpSession {
-    pub id: String,
-    pub agent_id: Uuid,
-    pub created_at: Instant,
+    pub id:            String,
+    pub agent_id:      Uuid,
+    pub created_at:    Instant,
     pub last_activity: Instant,
 }
 
 impl McpSession {
     fn new(agent_id: Uuid) -> Self {
         let now = Instant::now();
-        Self {
-            id: Uuid::new_v4().to_string(),
-            agent_id,
-            created_at: now,
-            last_activity: now,
-        }
+        Self { id: Uuid::new_v4().to_string(),
+               agent_id,
+               created_at: now,
+               last_activity: now }
     }
 }
 
 #[derive(Default)]
 struct SessionTable {
-    sessions: HashMap<String, McpSession>,
+    sessions:         HashMap<String, McpSession>,
     agent_to_session: HashMap<Uuid, String>,
 }
 
@@ -102,12 +100,11 @@ impl McpSessionManager {
     /// Removes sessions whose `last_activity` is older than `timeout`.
     pub fn cleanup_stale(&self, timeout: Duration) {
         let mut table = self.table.lock().unwrap();
-        let stale: Vec<String> = table
-            .sessions
-            .values()
-            .filter(|s| s.last_activity.elapsed() > timeout)
-            .map(|s| s.id.clone())
-            .collect();
+        let stale: Vec<String> = table.sessions
+                                      .values()
+                                      .filter(|s| s.last_activity.elapsed() > timeout)
+                                      .map(|s| s.id.clone())
+                                      .collect();
         for id in stale {
             if let Some(session) = table.sessions.remove(&id) {
                 table.agent_to_session.remove(&session.agent_id);

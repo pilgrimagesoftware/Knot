@@ -10,10 +10,8 @@ pub const REGISTRATION_USER_PROMPT: &str = "List other agents names and project 
 /// CLIs and their ACP adapters are typically installed into. `~`-prefixed
 /// entries are resolved against `HOME` at call time - a GUI process keeps
 /// `HOME` even though it lost the shell environment.
-pub const ADAPTER_PATH_FALLBACK_DIRS: &[&str] = &[
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "~/.cargo/bin",
-    "~/.local/bin",
-    "~/.npm-global/bin",
-];
+pub const ADAPTER_PATH_FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin",
+                                                  "/usr/local/bin",
+                                                  "~/.cargo/bin",
+                                                  "~/.local/bin",
+                                                  "~/.npm-global/bin"];

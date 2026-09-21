@@ -16,9 +16,7 @@ pub struct Repository {
 
 impl Repository {
     pub fn open(path: impl Into<PathBuf>) -> Self {
-        Self {
-            runner: Runner::new(path),
-        }
+        Self { runner: Runner::new(path), }
     }
 
     pub fn with_runner(runner: Runner) -> Self {

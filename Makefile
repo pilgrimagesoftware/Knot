@@ -204,7 +204,10 @@ check-changelog:
 rust: rust-fmt-check rust-lint rust-test rust-build
 
 rust-fmt:
-	rustup run nightly cargo fmt
+	# --all to match rust-fmt-check; run twice because rustfmt is not
+	# idempotent in one pass under indent_style = "Visual".
+	rustup run nightly cargo fmt --all
+	rustup run nightly cargo fmt --all
 
 rust-fmt-check:
 	rustup run nightly cargo fmt --all --check

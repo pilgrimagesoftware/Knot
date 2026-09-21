@@ -37,7 +37,7 @@ the remaining prompts.
 - **WHEN** the user enqueues "first" and then "second" while a response is in
   progress
 - **THEN** "first" is delivered when the current turn ends and "second" is
-  delivered when the turn "first" starts ends in turn
+  delivered when the turn "first" started has ended
 
 #### Scenario: A queued prompt is marked until delivered
 - **WHEN** a prompt is enqueued during a response
