@@ -10,7 +10,11 @@
 //! and callers never need a `cfg` of their own - [`resolve`] hands back the
 //! fixed palette everywhere AppKit is not available.
 
-use gpui_kit::{Hsla, Rgba, rgb};
+// Only `relative_luminance` converts to `Rgba`, and it is gated the same way
+// - see the comment above `accent_states`.
+#[cfg(any(target_os = "macos", test))]
+use gpui_kit::Rgba;
+use gpui_kit::{Hsla, rgb};
 
 /// The fixed accent family the app painted before it read the system: the
 /// Tailwind blue 500/600/700 triple. Still what non-macOS targets get, so
@@ -19,17 +23,37 @@ const FIXED_ACCENT: u32 = 0x3B82F6;
 const FIXED_ACCENT_HOVER: u32 = 0x2563EB;
 const FIXED_ACCENT_ACTIVE: u32 = 0x1D4ED8;
 
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 /// How far [`accent_states`] moves lightness for the hover and active
 /// states. Chosen to land near the fixed triple's own spacing for a
 /// default-blue accent, so the interaction states keep the weight they had.
 const HOVER_LIGHTNESS_STEP: f32 = 0.06;
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 const ACTIVE_LIGHTNESS_STEP: f32 = 0.12;
 
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 /// Above this relative luminance an accent is "light" and needs dark text.
 /// 0.55 rather than the midpoint: white-on-color stays legible further down
 /// the scale than black-on-color does up it.
 const LIGHT_ACCENT_LUMINANCE: f32 = 0.55;
 
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 /// The dark foreground for a light accent - near-black rather than black,
 /// so a mid-tone accent does not get a hard, printed-looking contrast.
 const DARK_FOREGROUND: u32 = 0x1A1A1A;
@@ -73,6 +97,11 @@ impl SystemPalette {
                neutrals:          None, }
     }
 
+    // Only the AppKit path derives these, and that path is macOS-only - but the
+    // tests run everywhere, so they stay compiled under `test` on every
+    // platform. `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these
+    // must not be dead, and an allow would hide it if they became so.
+    #[cfg(any(target_os = "macos", test))]
     /// Builds the full palette from a single system accent, deriving the
     /// interaction states and the contrasting foreground from it.
     fn from_accent(accent: Hsla, neutrals: Option<SystemNeutrals>) -> Self {
@@ -101,6 +130,11 @@ pub(crate) fn resolve() -> SystemPalette {
     }
 }
 
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 /// The hover and active shades for `accent`.
 ///
 /// `controlAccentColor` is a single color, but the components need two more
@@ -124,6 +158,11 @@ fn accent_states(accent: Hsla) -> (Hsla, Hsla) {
     (step(HOVER_LIGHTNESS_STEP), step(ACTIVE_LIGHTNESS_STEP))
 }
 
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 /// White or near-black, whichever reads against `background`.
 ///
 /// Uses the standard sRGB luminance coefficients on the color's own
@@ -139,6 +178,11 @@ fn contrast_foreground(background: Hsla) -> Hsla {
     }
 }
 
+// Only the AppKit path derives these, and that path is macOS-only - but the
+// tests run everywhere, so they stay compiled under `test` on every platform.
+// `#[cfg]` rather than `#[allow(dead_code)]`: on macOS these must not be dead,
+// and an allow would hide it if they became so.
+#[cfg(any(target_os = "macos", test))]
 /// Relative luminance in the 0.0 (black) to 1.0 (white) range, by the sRGB
 /// coefficients. Deliberately the simple gamma-naive form: it only has to
 /// order colors either side of one threshold, not model perception.

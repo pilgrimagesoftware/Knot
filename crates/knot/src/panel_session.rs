@@ -67,6 +67,9 @@ impl PanelSessionHandle {
         self.dirty.swap(false, Ordering::SeqCst)
     }
 
+    // The window sends through `deliver_panel_prompt`, which also handles
+    // queueing; this is the unqueued path, kept as the slot's own API.
+    #[allow(dead_code)]
     pub async fn prompt(&self, text: &str) -> AcpResult<()> {
         self.session.prompt(text).await
     }
@@ -167,6 +170,8 @@ impl PanelSessionHandle {
         self.session.stop().await;
     }
 
+    // As `prompt` above: the window cancels via `stop_panel_prompt`.
+    #[allow(dead_code)]
     pub async fn cancel(&self) -> AcpResult<()> {
         self.session.cancel().await
     }
@@ -306,8 +311,6 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use knot_agent_launch::AdapterConfig;
 
     use super::*;
@@ -356,7 +359,7 @@ mod tests {
                 if phase == PanelPhase::Ready {
                     return true;
                 }
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             }
             false
         };

@@ -1,5 +1,7 @@
 use gpui_kit::{Div, ParentElement, Styled, div, hsla, px, rgb};
 
+use crate::consts;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WorkingIndicatorState {
     Off,
@@ -47,12 +49,12 @@ pub(crate) fn render(agent_state: knot_agents::AgentState, is_running: bool) -> 
     let state = state(agent_state, is_running);
     let (mark, color) = match state {
         WorkingIndicatorState::Off => ("", hsla(0., 0., 0., 0.)),
-        WorkingIndicatorState::Working => {
-            (SPINNER_MARKS[(spinner_frame() as usize) % SPINNER_MARKS.len()], rgb(0xF97316).into())
-        }
-        WorkingIndicatorState::Idle => ("-", rgb(0x6B7280).into()),
-        WorkingIndicatorState::AwaitingInput => ("!", rgb(0x3B82F6).into()),
-        WorkingIndicatorState::Error => ("×", rgb(0xEF4444).into()),
+        WorkingIndicatorState::Working => (SPINNER_MARKS
+                                               [(spinner_frame() as usize) % SPINNER_MARKS.len()],
+                                           rgb(consts::COLOR_RUNNING).into()),
+        WorkingIndicatorState::Idle => ("-", rgb(consts::COLOR_STOPPED).into()),
+        WorkingIndicatorState::AwaitingInput => ("!", rgb(consts::COLOR_INPUT).into()),
+        WorkingIndicatorState::Error => ("×", rgb(consts::COLOR_ERROR).into()),
     };
     div().w(px(12.))
          .h(px(16.))

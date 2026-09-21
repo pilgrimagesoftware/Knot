@@ -249,10 +249,6 @@ impl Drop for WorkspaceWindow {
     }
 }
 
-impl WorkspaceWindow {
-    /// How stale a cached diff stat may get before the next render asks
-    /// for a fresh one.
-    const DIFF_STATS_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(2);
-}
+impl WorkspaceWindow {}
 
 impl WorkspaceWindow {}

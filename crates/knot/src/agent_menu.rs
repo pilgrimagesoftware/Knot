@@ -97,6 +97,9 @@ pub(crate) fn agent_menu_action(entry: AgentMenuEntry) -> Option<Box<dyn Action>
          })
 }
 
+// The inverse of `action_for_agent_menu_entry`, unused since the menu
+// bar started dispatching by entry rather than by action type.
+#[allow(dead_code)]
 /// The entry `action` invokes, or `None` for anything else - the other half
 /// of [`agent_menu_action`]'s pairing.
 pub(crate) fn agent_menu_entry_for_action(action: &dyn Action) -> Option<AgentMenuEntry> {

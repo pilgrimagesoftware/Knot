@@ -1,4 +1,9 @@
-#![allow(dead_code)]
+//! The `knot` binary.
+//!
+//! NOTE: no crate-wide `allow(dead_code)`. Anything unreachable carries its
+//! own `#[allow(dead_code)]` and a comment saying why - grep `UNWIRED` for
+//! the ported-but-not-yet-connected inventory, and `SUPERSEDED` for code a
+//! newer path replaced.
 
 mod about_window;
 mod agent_editor;
@@ -8,6 +13,7 @@ mod app_state;
 mod app_support;
 mod broadcast_sheet;
 mod command_center;
+mod consts;
 mod dashboard;
 mod macos;
 mod open_in;
@@ -29,8 +35,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-#[cfg(target_os = "macos")]
-use std::time::Duration;
 
 use about_window::*;
 use agent_editor::*;

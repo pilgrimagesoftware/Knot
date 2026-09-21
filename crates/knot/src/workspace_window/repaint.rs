@@ -127,7 +127,7 @@ impl WorkspaceWindow {
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
         let indicator_due = turn_active
                             && self.working_indicator_last_repaint.elapsed()
-                               >= std::time::Duration::from_millis(120);
+                               >= consts::WORKING_INDICATOR_MIN_REPAINT;
         if indicator_due {
             self.working_indicator_last_repaint = std::time::Instant::now();
         }

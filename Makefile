@@ -201,7 +201,14 @@ check-changelog:
 	@./scripts/check-changelog.sh
 
 # Rust workspace (the port). Additive to the Swift targets above.
-rust: rust-fmt-check rust-lint rust-test rust-build
+rust: rust-fmt-check rust-size rust-lint rust-test rust-build
+
+# The largest a Rust source file may get before it has to be split. See
+# scripts/check-file-size.sh for why this is enforced rather than advised.
+RUST_FILE_LINE_LIMIT ?= 700
+
+rust-size:
+	@./scripts/check-file-size.sh $(RUST_FILE_LINE_LIMIT)
 
 # The single source of truth for the rustfmt toolchain. rustfmt.toml enables
 # unstable options, so formatting is only reproducible against one exact

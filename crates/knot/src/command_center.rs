@@ -81,7 +81,7 @@ impl Render for CommandCenterWindow {
                                                                   avatar: agent.avatar
                                                                                .graphemes(true)
                                                                                .next()
-                                                                               .unwrap_or("🤖")
+                                                                               .unwrap_or(consts::DEFAULT_AGENT_AVATAR)
                                                                                .to_string(),
                                                                   name: agent.name.clone(),
                                                                   folder_name,
