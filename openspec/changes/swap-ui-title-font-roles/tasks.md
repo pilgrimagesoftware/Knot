@@ -35,3 +35,24 @@
 - [ ] 5.1 Confirm the rendered result against `specs/acp-panel-ui/spec.md` scenario by scenario - header plus paragraph, list/table/quote, code, level sizes, a marked header, the Markdown pane, and changing the UI font with a response on screen.
 - [ ] 5.2 Change the UI font and then the Title font from the Appearance tab and verify each row governs the text its label names, per `specs/settings-ui/spec.md`.
 - [x] 5.3 Run `make` (fmt, clippy, test, build) and verify the whole workspace is clean.
+
+## Deferred
+
+Tasks 4.3, 5.1 and 5.2 are by-hand verification in the running app, and were
+deferred past the merge by explicit decision rather than completed. An agent
+session cannot perform them: the shell has no Screen Recording permission,
+synthetic mouse events are ignored, and GPUI draws its content into a single
+`AXGroup` that exposes no text, so a rendered face, a selection dragged across
+a header, and a streamed response are all unobservable from a session. See
+`~/Code/papercuts.md`, 2026-09-21.
+
+What is still unverified, and the fallback each points to:
+
+- Selection across a header and the streaming fade over one. `design.md` names
+  both as risks of drawing a header as a custom block; if either regresses, the
+  fallback is to leave headers in the body face and reopen the upstream
+  question of a heading-face refinement in gpui-kit.
+- The seven `specs/acp-panel-ui/spec.md` scenarios end to end, and that inline
+  and fenced code still render monospace.
+- That the Appearance tab's UI and Title rows each govern the text their label
+  names, per `specs/settings-ui/spec.md`.
