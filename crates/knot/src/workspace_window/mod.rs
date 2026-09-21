@@ -33,8 +33,9 @@ pub(crate) enum DetailLineSize {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct QueuedPanelPrompt {
-    text:   String,
-    failed: bool,
+    text:      String,
+    failed:    bool,
+    in_flight: bool,
 }
 
 type PanelPromptResult = (Uuid, String, Result<(), String>);
@@ -698,6 +699,7 @@ impl WorkspaceWindow {
                     queue.remove(index);
                 }
                 else if let Some(prompt) = queue.get_mut(index) {
+                    prompt.in_flight = false;
                     prompt.failed = true;
                 }
             }
@@ -1442,17 +1444,50 @@ impl WorkspaceWindow {
                 v_flex().gap_1().children(queued_prompts.iter().enumerate().map(
                     |(index, prompt)| {
                         h_flex()
+                            .w_full()
+                            .min_w_0()
                             .gap_1()
                             .items_center()
-                            .child(div().flex_1().text_xs().child(prompt.text.clone()))
-                            .child(div().text_xs().child(if prompt.failed {
-                                "failed"
-                            } else {
-                                "queued"
-                            }))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
+                                    .text_xs()
+                                    .font_family(cx.theme().mono_font_family.clone())
+                                    .child(prompt.text.clone()),
+                            )
+                            .child(
+                                Button::new(("panel-queued-prompt-status", index as u64))
+                                    .child(Icon::new(if prompt.failed {
+                                        gpui_kit::assets::IconName::CircleX
+                                    } else {
+                                        gpui_kit::assets::IconName::Clock4
+                                    }))
+                                    .tooltip(if prompt.failed { "Failed" } else { "Queued" })
+                                    .text_color(if prompt.failed {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .ghost()
+                                    .xsmall()
+                            )
                             .child(
                                 Button::new(("panel-queued-prompt-action", index as u64))
-                                    .label(if prompt.failed { "Retry" } else { "Remove" })
+                                    .icon(if prompt.failed {
+                                        IconName::RotateCw
+                                    } else {
+                                        IconName::CircleX
+                                    })
+                                    .tooltip(if prompt.failed { "Retry" } else { "Remove" })
+                                    .text_color(if prompt.failed {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
@@ -2037,7 +2072,8 @@ impl WorkspaceWindow {
                 .entry(id)
                 .or_default()
                 .push(QueuedPanelPrompt { text,
-                                          failed: false });
+                                          failed: false,
+                                          in_flight: false });
             cx.update_entity(&input, |state, cx| {
                   state.set_value("", window, cx);
               });
@@ -2103,12 +2139,14 @@ impl WorkspaceWindow {
             if state.pending_permission.is_some() || state.turn_active {
                 return None;
             }
+            drop(state);
             let queue = self.panel_prompt_queues.get_mut(&id)?;
             let prompt = queue.first_mut()?;
-            if prompt.failed {
+            if prompt.failed || prompt.in_flight {
                 return None;
             }
-            prompt.failed = true;
+            prompt.in_flight = true;
+            handle.record_user_message(prompt.text.clone());
             Some((handle.session(), handle.recorder(), prompt.text.clone()))
         };
         let Some((session, recorder, text)) = candidate()
