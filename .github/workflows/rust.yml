@@ -40,12 +40,11 @@ jobs:
       # formatting is only reproducible against one exact toolchain. Bumping
       # this pin is a deliberate change -- run `make rust-fmt` with the new
       # nightly and commit the reformat in the same PR.
+      # Installed with plain rustup, not setup-rust-toolchain: that action makes
+      # the toolchain it installs the default, which would send the Clippy,
+      # Test and Build steps below to nightly (where cargo-clippy is absent).
       - name: rustfmt toolchain (pinned)
-        uses: actions-rust-lang/setup-rust-toolchain@v2
-        with:
-          toolchain: nightly-2026-09-21
-          components: rustfmt
-          cache-key: ${{ matrix.os }}-rustfmt
+        run: rustup toolchain install nightly-2026-09-21 --profile minimal --component rustfmt
 
       - name: Format
         run: cargo +nightly-2026-09-21 fmt --all --check
