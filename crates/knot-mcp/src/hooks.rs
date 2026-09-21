@@ -11,15 +11,15 @@ const REGISTRATION_PROMPT: &str = "List other agents names and project (no ID) i
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct HookRequest {
-    pub agent_id: String,
+    pub agent_id:   String,
     #[serde(default = "default_agent")]
-    pub agent: String,
+    pub agent:      String,
     pub session_id: Option<String>,
-    pub source: Option<String>,
-    pub hook: Option<String>,
-    pub status: Option<String>,
+    pub source:     Option<String>,
+    pub hook:       Option<String>,
+    pub status:     Option<String>,
     #[serde(default)]
-    pub payload: Value,
+    pub payload:    Value,
 }
 
 pub trait AgentHookHandler: Send + Sync {
@@ -86,27 +86,23 @@ pub fn extract_metadata(agent: &str, payload: &Value) -> BTreeMap<String, String
 
     keys.iter()
         .filter_map(|key| {
-            payload
-                .get(*key)
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .map(|value| ((*key).to_string(), value.to_string()))
+            payload.get(*key)
+                   .and_then(Value::as_str)
+                   .filter(|value| !value.is_empty())
+                   .map(|value| ((*key).to_string(), value.to_string()))
         })
         .collect()
 }
 
 pub fn codex_turn_complete(payload: &Value) -> Result<Option<String>, HookError> {
     if payload.get("type").and_then(Value::as_str) != Some("agent-turn-complete") {
-        return Err(HookError::InvalidPayload(
-            "Unsupported Codex hook event".to_string(),
-        ));
+        return Err(HookError::InvalidPayload("Unsupported Codex hook event".to_string()));
     }
 
-    Ok(payload
-        .get("thread-id")
-        .and_then(Value::as_str)
-        .filter(|thread_id| !thread_id.is_empty())
-        .map(str::to_string))
+    Ok(payload.get("thread-id")
+              .and_then(Value::as_str)
+              .filter(|thread_id| !thread_id.is_empty())
+              .map(str::to_string))
 }
 
 pub fn last_assistant_message_from_transcript(path: impl AsRef<Path>) -> Option<String> {
@@ -114,7 +110,8 @@ pub fn last_assistant_message_from_transcript(path: impl AsRef<Path>) -> Option<
     let lines: Vec<String> = BufReader::new(file).lines().map_while(Result::ok).collect();
 
     for (index, line) in lines.iter().enumerate().rev() {
-        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+        let Ok(entry) = serde_json::from_str::<Value>(line)
+        else {
             continue;
         };
         if entry.get("type").and_then(Value::as_str) != Some("assistant") {
@@ -126,11 +123,15 @@ pub fn last_assistant_message_from_transcript(path: impl AsRef<Path>) -> Option<
             continue;
         }
 
-        let previous_user = lines[..index].iter().rev().find_map(|line| {
-            let entry: Value = serde_json::from_str(line).ok()?;
-            (entry.get("type").and_then(Value::as_str) == Some("user"))
-                .then(|| message_text(entry.get("message")?.get("content")?))?
-        });
+        let previous_user =
+            lines[..index].iter().rev().find_map(|line| {
+                                           let entry: Value = serde_json::from_str(line).ok()?;
+                                           (entry.get("type").and_then(Value::as_str)
+                                            == Some("user")).then(|| {
+                                                                message_text(entry.get("message")?
+                                                                                  .get("content")?)
+                                                            })?
+                                       });
         if previous_user.as_deref() == Some(REGISTRATION_PROMPT) {
             return Some(String::new());
         }
@@ -145,10 +146,9 @@ fn message_text(content: &Value) -> Option<String> {
     }
 
     let parts = content.as_array()?;
-    let text = parts
-        .iter()
-        .filter_map(|part| part.get("text").and_then(Value::as_str))
-        .collect::<String>();
+    let text = parts.iter()
+                    .filter_map(|part| part.get("text").and_then(Value::as_str))
+                    .collect::<String>();
     Some(text)
 }
 
@@ -177,15 +177,12 @@ mod tests {
     #[test]
     fn unknown_agent_is_rejected() {
         let request: HookRequest = serde_json::from_value(json!({
-            "agent_id": Uuid::new_v4(),
-            "agent": "gemini"
-        }))
-        .unwrap();
+                                                              "agent_id": Uuid::new_v4(),
+                                                              "agent": "gemini"
+                                                          })).unwrap();
 
-        assert_eq!(
-            request.validate_agent(),
-            Err(HookError::UnknownAgent("gemini".to_string()))
-        );
+        assert_eq!(request.validate_agent(),
+                   Err(HookError::UnknownAgent("gemini".to_string())));
     }
 
     #[test]
@@ -194,57 +191,47 @@ mod tests {
         assert_eq!(claude_status("input"), Ok(HookStatus::AwaitingInput));
         assert!(claude_status("done").is_err());
 
-        let metadata = extract_metadata(
-            "codex",
-            &json!({"cwd": "/tmp/project", "thread-id": "thread-1", "model": "ignored", "turn-id": ""}),
-        );
+        let metadata = extract_metadata("codex",
+                                        &json!({"cwd": "/tmp/project", "thread-id": "thread-1", "model": "ignored", "turn-id": ""}));
         assert_eq!(metadata.get("cwd"), Some(&"/tmp/project".to_string()));
         assert_eq!(metadata.get("thread-id"), Some(&"thread-1".to_string()));
         assert!(!metadata.contains_key("model"));
         assert!(!metadata.contains_key("turn-id"));
 
-        assert_eq!(
-            codex_turn_complete(&json!({"type": "agent-turn-complete", "thread-id": "t1"})),
-            Ok(Some("t1".to_string()))
-        );
+        assert_eq!(codex_turn_complete(&json!({"type": "agent-turn-complete", "thread-id": "t1"})),
+                   Ok(Some("t1".to_string())));
         assert!(codex_turn_complete(&json!({"type": "notify"})).is_err());
     }
 
     #[test]
     fn transcript_returns_last_assistant_text_and_supports_parts() {
         let path = std::env::temp_dir().join(format!("knot-transcript-{}.jsonl", Uuid::new_v4()));
-        let content = [
-            json!({"type":"user","message":{"content":"Do the work"}}),
-            json!({"type":"assistant","message":{"content":[{"type":"text","text":"First"}]}}),
-            json!({"type":"assistant","message":{"content":"Last"}}),
-        ]
-        .into_iter()
-        .map(|entry| entry.to_string())
-        .collect::<Vec<_>>()
-        .join("\n");
+        let content =
+            [json!({"type":"user","message":{"content":"Do the work"}}),
+             json!({"type":"assistant","message":{"content":[{"type":"text","text":"First"}]}}),
+             json!({"type":"assistant","message":{"content":"Last"}})].into_iter()
+                                                                      .map(|entry| {
+                                                                          entry.to_string()
+                                                                      })
+                                                                      .collect::<Vec<_>>()
+                                                                      .join("\n");
         fs::write(&path, content).unwrap();
 
-        assert_eq!(
-            last_assistant_message_from_transcript(&path),
-            Some("Last".to_string())
-        );
+        assert_eq!(last_assistant_message_from_transcript(&path),
+                   Some("Last".to_string()));
         fs::remove_file(path).unwrap();
     }
 
     #[test]
     fn transcript_suppresses_registration_reply() {
         let path = std::env::temp_dir().join(format!("knot-transcript-{}.jsonl", Uuid::new_v4()));
-        let content = format!(
-            "{}\n{}",
-            json!({"type":"user","message":{"content":REGISTRATION_PROMPT}}),
-            json!({"type":"assistant","message":{"content":"Registered"}}),
-        );
+        let content = format!("{}\n{}",
+                              json!({"type":"user","message":{"content":REGISTRATION_PROMPT}}),
+                              json!({"type":"assistant","message":{"content":"Registered"}}),);
         fs::write(&path, content).unwrap();
 
-        assert_eq!(
-            last_assistant_message_from_transcript(&path),
-            Some(String::new())
-        );
+        assert_eq!(last_assistant_message_from_transcript(&path),
+                   Some(String::new()));
         fs::remove_file(path).unwrap();
     }
 }

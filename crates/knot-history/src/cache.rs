@@ -37,7 +37,8 @@ impl HistoryCache {
     /// Reload from disk and replace the entry. No-op for an unsupported
     /// agent type.
     pub fn refresh(&self, agent_type: &str, folder: &str) {
-        let Some(p) = provider(agent_type) else {
+        let Some(p) = provider(agent_type)
+        else {
             return;
         };
         let sessions = p.load_sessions(folder);
@@ -54,7 +55,8 @@ impl HistoryCache {
     /// Delete a session via its provider, then refresh the entry so the
     /// list reflects the removal. No-op for an unsupported agent type.
     pub fn delete_session(&self, agent_type: &str, id: &str, folder: &str) {
-        let Some(p) = provider(agent_type) else {
+        let Some(p) = provider(agent_type)
+        else {
             return;
         };
         p.delete_session(id, folder);
@@ -77,19 +79,15 @@ mod tests {
         let cache = HistoryCache::new();
         // Seed an entry directly, bypassing disk I/O, to test invalidate in
         // isolation.
-        cache
-            .entries
-            .lock()
-            .unwrap()
-            .insert(("claude".to_owned(), "/proj".to_owned()), vec![]);
+        cache.entries
+             .lock()
+             .unwrap()
+             .insert(("claude".to_owned(), "/proj".to_owned()), vec![]);
         cache.invalidate("claude", "/proj");
-        assert!(
-            !cache
-                .entries
-                .lock()
-                .unwrap()
-                .contains_key(&("claude".to_owned(), "/proj".to_owned()))
-        );
+        assert!(!cache.entries
+                      .lock()
+                      .unwrap()
+                      .contains_key(&("claude".to_owned(), "/proj".to_owned())));
     }
 
     #[test]

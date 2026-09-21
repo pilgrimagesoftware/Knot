@@ -60,13 +60,14 @@ impl MessageStore {
         }
         let mut to_remove = read_count - READ_RETENTION_LIMIT;
         self.messages.retain(|m| {
-            if m.is_read && to_remove > 0 {
-                to_remove -= 1;
-                false
-            } else {
-                true
-            }
-        });
+                         if m.is_read && to_remove > 0 {
+                             to_remove -= 1;
+                             false
+                         }
+                         else {
+                             true
+                         }
+                     });
     }
 }
 

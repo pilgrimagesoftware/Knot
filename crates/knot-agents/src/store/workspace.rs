@@ -19,13 +19,11 @@ impl AgentStore {
     /// workspace restores its frame. Returns whether the workspace exists
     /// and the frame actually changed - the caller persists only then,
     /// since bounds observers fire continuously through a drag.
-    pub fn set_workspace_window_bounds(
-        &mut self, id: Uuid, bounds: knot_core::SavedWindowBounds,
-    ) -> bool {
-        let Some(workspace) = self
-            .workspaces
-            .iter_mut()
-            .find(|workspace| workspace.id == id)
+    pub fn set_workspace_window_bounds(&mut self, id: Uuid, bounds: knot_core::SavedWindowBounds)
+                                       -> bool {
+        let Some(workspace) = self.workspaces
+                                  .iter_mut()
+                                  .find(|workspace| workspace.id == id)
         else {
             return false;
         };
@@ -37,10 +35,9 @@ impl AgentStore {
     }
 
     pub fn rename_workspace(&mut self, id: Uuid, name: impl Into<String>) -> bool {
-        let Some(workspace) = self
-            .workspaces
-            .iter_mut()
-            .find(|workspace| workspace.id == id)
+        let Some(workspace) = self.workspaces
+                                  .iter_mut()
+                                  .find(|workspace| workspace.id == id)
         else {
             return false;
         };
@@ -52,10 +49,9 @@ impl AgentStore {
         if self.workspaces.len() <= 1 {
             return false;
         }
-        let Some(index) = self
-            .workspaces
-            .iter()
-            .position(|workspace| workspace.id == id)
+        let Some(index) = self.workspaces
+                              .iter()
+                              .position(|workspace| workspace.id == id)
         else {
             return false;
         };
@@ -64,11 +60,10 @@ impl AgentStore {
             self.remove(agent_id);
         }
         if self.current_workspace_id == Some(id) {
-            self.current_workspace_id = self
-                .workspaces
-                .get(index.saturating_sub(1))
-                .or_else(|| self.workspaces.first())
-                .map(|workspace| workspace.id);
+            self.current_workspace_id = self.workspaces
+                                            .get(index.saturating_sub(1))
+                                            .or_else(|| self.workspaces.first())
+                                            .map(|workspace| workspace.id);
         }
         true
     }
@@ -77,24 +72,23 @@ impl AgentStore {
         if id == target_id {
             return false;
         }
-        let Some(source_index) = self
-            .workspaces
-            .iter()
-            .position(|workspace| workspace.id == id)
+        let Some(source_index) = self.workspaces
+                                     .iter()
+                                     .position(|workspace| workspace.id == id)
         else {
             return false;
         };
-        let Some(target_index) = self
-            .workspaces
-            .iter()
-            .position(|workspace| workspace.id == target_id)
+        let Some(target_index) = self.workspaces
+                                     .iter()
+                                     .position(|workspace| workspace.id == target_id)
         else {
             return false;
         };
         let workspace = self.workspaces.remove(source_index);
         let insertion_index = if source_index < target_index {
             target_index - 1
-        } else {
+        }
+        else {
             target_index
         };
         self.workspaces.insert(insertion_index, workspace);
@@ -103,7 +97,7 @@ impl AgentStore {
 
     pub(super) fn ensure_current_workspace(&mut self) -> Uuid {
         if let Some(id) = self.current_workspace_id
-            && self.workspaces.iter().any(|workspace| workspace.id == id)
+           && self.workspaces.iter().any(|workspace| workspace.id == id)
         {
             return id;
         }
@@ -126,19 +120,17 @@ impl AgentStore {
             if source == target_workspace_id {
                 return;
             }
-            if let Some(workspace) = self
-                .workspaces
-                .iter_mut()
-                .find(|workspace| workspace.id == source)
+            if let Some(workspace) = self.workspaces
+                                         .iter_mut()
+                                         .find(|workspace| workspace.id == source)
             {
                 workspace.agent_ids.retain(|id| *id != agent_id);
                 workspace.active_agent_ids.retain(|id| *id != agent_id);
             }
         }
-        if let Some(workspace) = self
-            .workspaces
-            .iter_mut()
-            .find(|workspace| workspace.id == target_workspace_id)
+        if let Some(workspace) = self.workspaces
+                                     .iter_mut()
+                                     .find(|workspace| workspace.id == target_workspace_id)
         {
             workspace.agent_ids.push(agent_id);
             if workspace.active_agent_ids.is_empty() {

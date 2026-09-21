@@ -22,29 +22,25 @@ pub trait TerminalTransport: Send {
 /// callers built around a full agent config don't need a separate
 /// shell-only variant.
 pub struct SessionConfig<'a> {
-    pub settings: &'a Settings,
-    pub agent: &'a Agent,
-    pub persona: Option<&'a Persona>,
+    pub settings:    &'a Settings,
+    pub agent:       &'a Agent,
+    pub persona:     Option<&'a Persona>,
     pub plugin_root: Option<&'a Path>,
 }
 
 pub struct SessionPlan {
-    pub agent_command: String,
+    pub agent_command:          String,
     pub initialization_command: String,
 }
 
 impl SessionPlan {
     pub fn build(config: &SessionConfig<'_>) -> Self {
-        let request = LaunchRequest {
-            agent_type: &config.agent.agent_type,
-            shell_command: config.agent.shell_command.as_deref(),
-        };
+        let request = LaunchRequest { agent_type:    &config.agent.agent_type,
+                                      shell_command: config.agent.shell_command.as_deref(), };
         let agent_command = build_agent_command(&request);
         let initialization_command =
             build_initialization_command(&config.agent.folder, &agent_command);
-        Self {
-            agent_command,
-            initialization_command,
-        }
+        Self { agent_command,
+               initialization_command }
     }
 }

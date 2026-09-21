@@ -46,9 +46,9 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, ClickEvent, ClipboardEntry, ClipboardItem, Context, Entity,
     FollowMode, ImageFormat, InteractiveElement, IntoElement, KeyBinding, ListAlignment, ListState,
-    Menu, MenuItem, ParentElement, PathPromptOptions, Render, StatefulInteractiveElement, Styled,
-    Subscription, SystemMenuType, SystemNotificationResponse, WeakEntity, Window, WindowBounds,
-    WindowOptions, actions, canvas, div, point, px, rgb, size, PathBuilder,
+    Menu, MenuItem, ParentElement, PathBuilder, PathPromptOptions, Render,
+    StatefulInteractiveElement, Styled, Subscription, SystemMenuType, SystemNotificationResponse,
+    WeakEntity, Window, WindowBounds, WindowOptions, actions, canvas, div, point, px, rgb, size,
 };
 use knot_activity::EventSink;
 use knot_git::Repository;
