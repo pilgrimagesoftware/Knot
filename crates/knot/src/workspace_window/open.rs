@@ -64,6 +64,7 @@ impl WorkspaceWindow {
                                                        agent_selection_for_workspace(&store,
                                                                                      workspace_id)
                                                    });
+                  let sidebar_resize = cx.new(|_| ResizableState::default());
                   let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
                   let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
                   let view =
@@ -85,6 +86,7 @@ impl WorkspaceWindow {
                     panel_states: BTreeMap::new(),
                     runtime: tokio::runtime::Runtime::new()
                         .expect("failed to start terminal session runtime"),
+                    sidebar_resize,
                     root_focus: cx.focus_handle(),
                     terminal_focus: cx.focus_handle(),
                     clipboard_writes: Arc::clone(&clipboard_writes),

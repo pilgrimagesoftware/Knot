@@ -132,6 +132,42 @@ fn the_migration_leaves_the_terminal_font_alone() {
 }
 
 #[test]
+fn a_fresh_store_opens_the_sidebar_at_the_default_width() {
+    assert_eq!(Settings::default().sidebar_width, SIDEBAR_WIDTH_DEFAULT);
+}
+
+#[test]
+fn a_document_without_the_sidebar_width_takes_the_default() {
+    let (_dir, s) = load_document(r#"{"settingsVersion":1,"mcpServerPort":9000}"#);
+    assert_eq!(s.mcp_server_port, 9000);
+    assert_eq!(s.sidebar_width, SIDEBAR_WIDTH_DEFAULT);
+}
+
+#[test]
+fn an_in_range_sidebar_width_is_honored() {
+    let (_dir, s) = load_document(r#"{"settingsVersion":1,"sidebarWidth":320}"#);
+    assert_eq!(s.sidebar_width, 320.0);
+}
+
+#[test]
+fn a_sidebar_width_below_the_minimum_clamps_up() {
+    let (_dir, s) = load_document(r#"{"settingsVersion":1,"sidebarWidth":40}"#);
+    assert_eq!(s.sidebar_width, SIDEBAR_WIDTH_MIN);
+}
+
+#[test]
+fn a_sidebar_width_above_the_maximum_clamps_down() {
+    let (_dir, s) = load_document(r#"{"settingsVersion":1,"sidebarWidth":5000}"#);
+    assert_eq!(s.sidebar_width, SIDEBAR_WIDTH_MAX);
+}
+
+#[test]
+fn a_non_numeric_sidebar_width_leaves_the_default() {
+    let (_dir, s) = load_document(r#"{"settingsVersion":1,"sidebarWidth":"wide"}"#);
+    assert_eq!(s.sidebar_width, SIDEBAR_WIDTH_DEFAULT);
+}
+
+#[test]
 fn missing_file_yields_defaults() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("settings.json");

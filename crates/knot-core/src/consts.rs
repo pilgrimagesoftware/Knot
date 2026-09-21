@@ -51,6 +51,26 @@ pub const MERMAID_THEME_DEFAULT: &str = "auto";
 
 pub const MARKDOWN_FONT_SIZE_DEFAULT: i32 = 14;
 
+/// The workspace sidebar's width when nothing has been persisted, matching the
+/// Swift reference's `sidebarWidth` default.
+pub const SIDEBAR_WIDTH_DEFAULT: f64 = 250.0;
+
+/// The narrowest the sidebar may be dragged. Above the Swift reference's 80px
+/// because the Rust window puts the title bar - and so the traffic lights -
+/// inside the sidebar column, and the toolkit reserves 80px of left padding
+/// for them; 120px leaves the application icon visible beside them and fits
+/// the compact row's avatar. Revisit this floor if that reservation changes.
+pub const SIDEBAR_WIDTH_MIN: f64 = 120.0;
+
+/// The widest the sidebar may be dragged, as in the Swift reference.
+pub const SIDEBAR_WIDTH_MAX: f64 = 400.0;
+
+/// Below this width the sidebar drops its text and draws the compact layout -
+/// avatar-only rows, an icon-only dashboard row, no application-name label and
+/// an icon-only new-agent button. Ported from `SidebarView.swift`'s
+/// `isCompact`.
+pub const SIDEBAR_COMPACT_BREAKPOINT: f64 = 160.0;
+
 pub const SOURCE_FOLDER_CANDIDATES: [&str; 3] = ["~/src", "~/source", "~/sources"];
 
 pub const AI_PROVIDER_DEFAULT: &str = "openai";

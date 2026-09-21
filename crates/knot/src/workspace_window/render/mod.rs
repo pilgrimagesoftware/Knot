@@ -16,6 +16,7 @@ use super::*;
 mod content;
 mod overview;
 mod sidebar;
+mod sidebar_compact;
 mod title_bar;
 
 impl Render for WorkspaceWindow {
@@ -92,8 +93,18 @@ impl Render for WorkspaceWindow {
             window.focus(&self.root_focus.clone(), cx);
         }
 
-        let agent_rows = self.agent_rows(agents, title_font_name.clone(), title_font_size, cx);
-        let dashboard_row = self.dashboard_row(is_dashboard, cx);
+        // The one place the compact breakpoint is read. Every surface that
+        // changes below it takes this `bool`, so none of them can disagree
+        // about where compact begins.
+        let sidebar_width = self.sidebar_width(cx);
+        let compact = sidebar_is_compact(sidebar_width);
+
+        let agent_rows = self.agent_rows(agents,
+                                         title_font_name.clone(),
+                                         title_font_size,
+                                         compact,
+                                         cx);
+        let dashboard_row = self.dashboard_row(is_dashboard, compact, cx);
 
         let selected_header = self.selected_agent_header();
 
@@ -134,6 +145,32 @@ impl Render for WorkspaceWindow {
                 }
             }))
             .child(
+                // The two columns are the two panels of a resizable group,
+                // so the boundary between them is a divider the user drags.
+                // The group's handle is absolutely positioned and takes no
+                // layout width, which is what keeps the alignment the
+                // sidebar column's comment below depends on.
+                h_resizable("workspace-columns")
+                    .with_state(&self.sidebar_resize)
+                    .on_resize(cx.listener(|view, state: &Entity<ResizableState>, _window, cx| {
+                        let Some(width) = state.read(cx)
+                                               .sizes()
+                                               .first()
+                                               .map(|width| f64::from(f32::from(*width)))
+                        else {
+                            return;
+                        };
+                        view.persist_sidebar_width(width);
+                    }))
+                    .child(resizable_panel()
+                        .size(px(sidebar_width as f32))
+                        .size_range(px(knot_core::consts::SIDEBAR_WIDTH_MIN as f32)
+                                    ..px(knot_core::consts::SIDEBAR_WIDTH_MAX as f32))
+                        // The panel grows by default; a sized panel beside a
+                        // flexible one has to opt out or it takes the slack
+                        // back on the frame after a drag.
+                        .flex_none()
+                        .child(
                 // The sidebar column owns the traffic lights (Swift's own
                 // sidebar panel does the same - they sit within its width,
                 // not the content pane's). The content header below is a
@@ -142,9 +179,8 @@ impl Render for WorkspaceWindow {
                 // GPUI reserves inside TitleBar for the traffic lights -
                 // that's what kept misaligning it with the divider below.
                 v_flex()
-                    .w(px(250.))
+                    .w_full()
                     .h_full()
-                    .flex_shrink_0()
                     .bg(cx.theme().title_bar)
                     .child(
                         TitleBar::new()
@@ -152,11 +188,17 @@ impl Render for WorkspaceWindow {
                             .border_color(gpui_kit::transparent_black())
                             .bg(cx.theme().title_bar)
                             .child(
+                                // Compact drops the application name and
+                                // keeps the icon: at this width the label
+                                // has nowhere to go but into the traffic
+                                // lights.
                                 h_flex()
                                     .gap_2()
                                     .items_center()
                                     .child(app_titlebar_icon())
-                                    .child(knot_core::l10n::t("app.name")),
+                                    .when(!compact, |row| {
+                                        row.child(knot_core::l10n::t("app.name"))
+                                    }),
                             ),
                     )
                     .child(
@@ -206,12 +248,21 @@ impl Render for WorkspaceWindow {
                             .items_center()
                             .px_4()
                             .gap_2()
+                            .when(compact, |row| row.justify_center())
                             .border_t_1()
                             .border_color(cx.theme().border)
                             .child(
                                 Button::new("workspace-new-agent")
                                     .icon(IconName::Plus)
-                                    .label("New agent")
+                                    // Compact keeps the icon and moves the
+                                    // label into a tooltip, so the control
+                                    // still says what it does.
+                                    .when(!compact, |button| {
+                                        button.label(knot_core::l10n::t("sidebar.new_agent"))
+                                    })
+                                    .when(compact, |button| {
+                                        button.tooltip(knot_core::l10n::t("sidebar.new_agent"))
+                                    })
                                     .ghost()
                                     .on_click(cx.listener(
                                         |view, _: &ClickEvent, _window, cx| {
@@ -220,13 +271,14 @@ impl Render for WorkspaceWindow {
                                     )),
                             )
                     ),
+                        ))
+                    .child(resizable_panel().child(self.content_column(is_dashboard,
+                                                                       dashboard_content,
+                                                                       title_bar_left,
+                                                                       title_bar_right,
+                                                                       window,
+                                                                       cx))),
             )
-            .child(self.content_column(is_dashboard,
-                                       dashboard_content,
-                                       title_bar_left,
-                                       title_bar_right,
-                                       window,
-                                       cx))
                     .children(app_support::root_overlays(window, cx))
     }
 }
