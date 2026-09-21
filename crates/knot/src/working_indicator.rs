@@ -31,9 +31,9 @@ const SPINNER_MARKS: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "�
 /// increasing count rather than an index into `SPINNER_MARKS`.
 ///
 /// `render` reads the clock, so the spinner only advances when something
-/// repaints. A surface that is not otherwise redrawing - the sidebar and
-/// the dashboard, unlike the panel, redraw only on an event - has to drive
-/// its own repaints, and needs to know when a repaint would actually change
+/// repaints. A surface that is not otherwise redrawing - the dashboard,
+/// unlike the panel, redraws only on an event - has to drive its own
+/// repaints, and needs to know when a repaint would actually change
 /// anything. Comparing this count against the last one repaints at the
 /// spinner's own cadence instead of at the poll's.
 pub(crate) fn spinner_frame() -> u128 {
