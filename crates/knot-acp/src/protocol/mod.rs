@@ -168,6 +168,10 @@ impl ToolCallContent {
 /// distinguished, not flattened into one opaque payload.
 #[derive(Debug, Clone)]
 pub enum SessionUpdate {
+    Usage {
+        used: u64,
+        size: u64,
+    },
     TextDelta {
         text: String,
     },
@@ -227,6 +231,10 @@ impl SessionUpdate {
             .unwrap_or_else(|| params.clone());
         let kind = update.get("sessionUpdate").and_then(Value::as_str);
         match kind {
+            Some("usage_update") => SessionUpdate::Usage {
+                used: update.get("used").and_then(Value::as_u64).unwrap_or_default(),
+                size: update.get("size").and_then(Value::as_u64).unwrap_or_default(),
+            },
             Some("agent_message_chunk") | Some("text_delta") => SessionUpdate::TextDelta {
                 text: text_content(&update),
             },
@@ -536,5 +544,21 @@ mod tests {
         let update = SessionUpdate::from_params(params.clone());
 
         assert!(matches!(update, SessionUpdate::Unknown { raw } if raw == params));
+    }
+
+    #[test]
+    fn usage_update_parses_context_window_tokens() {
+        let params = serde_json::json!({
+            "update": {
+                "sessionUpdate": "usage_update",
+                "used": 53_000,
+                "size": 200_000
+            }
+        });
+
+        assert!(matches!(
+            SessionUpdate::from_params(params),
+            SessionUpdate::Usage { used: 53_000, size: 200_000 }
+        ));
     }
 }

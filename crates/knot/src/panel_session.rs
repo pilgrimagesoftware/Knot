@@ -172,6 +172,10 @@ impl PanelSessionHandle {
     pub async fn stop(&self) {
         self.session.stop().await;
     }
+
+    pub async fn cancel(&self) -> AcpResult<()> {
+        self.session.cancel().await
+    }
 }
 
 /// Writes into a panel conversation without holding its handle: an owned

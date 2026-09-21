@@ -40,6 +40,7 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::text::TextView;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
@@ -47,7 +48,7 @@ use gpui_kit::{
     FollowMode, ImageFormat, InteractiveElement, IntoElement, KeyBinding, ListAlignment, ListState,
     Menu, MenuItem, ParentElement, PathPromptOptions, Render, StatefulInteractiveElement, Styled,
     Subscription, SystemMenuType, SystemNotificationResponse, WeakEntity, Window, WindowBounds,
-    WindowOptions, actions, div, px, rgb, size,
+    WindowOptions, actions, canvas, div, point, px, rgb, size, PathBuilder,
 };
 use knot_activity::EventSink;
 use knot_git::Repository;
