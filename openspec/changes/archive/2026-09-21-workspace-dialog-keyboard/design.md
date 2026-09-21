@@ -53,10 +53,12 @@ The overlay `div` gets a `.on_key_down` listener that matches the keystroke's
 
 Alternatives considered:
 
-- *Subscribe to an `Input` submit/confirm event.* gpui-component's `Input` in
-  0.6 exposes no enter-confirmed event this code can subscribe to, and Escape
-  is not an input concern at all. Two different mechanisms for the dialog's
-  two keys is worse than one.
+- *Subscribe to an `Input` submit/confirm event.* Correction found during
+  implementation: gpui-component 0.6 *does* emit `InputEvent::PressEnter`, so
+  Return alone could have been taken this way. Escape still is not an input
+  concern at all, so this route covers one of the two keys and leaves the
+  other needing the listener anyway. Two different mechanisms for the
+  dialog's two keys is worse than one, which is why the choice below stands.
 - *A gpui action plus `cx.bind_keys`.* Actions are the right shape for
   application commands, and a future `ConfirmDialog` / `CancelDialog` action
   pair with a `key_context` on the overlay is where this ends up if the app
@@ -69,11 +71,18 @@ Key handling sits on the overlay rather than on the window so it cannot fire
 while the dialog is closed - the overlay is only in the tree when
 `show_workspace_dialog` is true.
 
-**Risk, to settle in task 1.1 rather than assume:** a focused `Input` may
-consume Return and Escape before the event bubbles to the overlay. If it does,
-the listener must move to `.on_key_down` with capture semantics, or the design
-falls back to the action-plus-`key_context` alternative above. This is the one
-unknown in the change and it is checkable in a single run of the app.
+**Risk, settled in task 1.1:** a focused `Input` may consume Return and
+Escape before the event bubbles to the overlay. It does not. gpui-base binds
+both keys in its `Input` key context, and gpui dispatches a matched binding
+before any bubble-phase key listener - but both handlers call `cx.propagate()`
+in the case this dialog is in: `enter` on a single-line field
+(`gpui-base-0.6.4/src/input/base/state.rs:1990`) and `escape` with
+`clean_on_escape` unset, which is its default
+(`state.rs:2043`, `state.rs:705`). The bubble listener therefore runs, and the
+action-plus-`key_context` fallback is not needed. The tests in
+`crates/knot/src/tests/workspace_dialog.rs` drive real keystrokes so a
+dependency upgrade that stopped propagating would fail rather than regress
+silently.
 
 ### Disable the confirm button rather than validating on press
 

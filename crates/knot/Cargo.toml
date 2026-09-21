@@ -31,6 +31,8 @@ unicode-segmentation = "1.13"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-app-kit = { version = "0.3", features = [
+    "NSColor",
+    "NSColorSpace",
     "NSFont",
     "NSFontManager",
     "NSFontPanel",
@@ -49,6 +51,7 @@ objc2-core-foundation = { version = "0.3", features = ["CFArray", "CFData"] }
 # dialogs) can be covered without a display. Dev-only: the shipped binary
 # still builds against the default features.
 gpui-kit = { version = "0.6", features = ["test-support"] }
+tempfile.workspace = true
 
 # Packaging config for cargo-packager, which assembles Knot.app and the DMG.
 # Paths are relative to this manifest. Mirrors the layout the other
