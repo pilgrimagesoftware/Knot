@@ -41,7 +41,8 @@ pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 /// How often the settings window drains the native font panel's selections.
 ///
 /// The panel is an AppKit window with no callback into GPUI, so its choice is
-/// picked up by polling a shared slot.
+/// picked up by polling a shared slot. macOS-only, because the panel is.
+#[cfg(target_os = "macos")]
 pub(crate) const FONT_PANEL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 
 // ---------------------------------------------------------------------------
