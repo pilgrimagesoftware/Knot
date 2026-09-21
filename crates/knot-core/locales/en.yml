@@ -37,5 +37,8 @@ panel:
   retry_connect: "Try again"
   context_usage: "Context usage"
 
+settings:
+  font_unavailable: "unavailable"
+
 menu:
   agents: "Agents"

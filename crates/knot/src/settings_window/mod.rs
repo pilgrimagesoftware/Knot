@@ -1355,17 +1355,32 @@ impl SettingsWindow {
     /// one control picks both, since the panel itself has a size field.
     /// The choice comes back asynchronously via
     /// `native_font_panel::poll_selection`.
+    ///
+    /// The label is drawn in the family it names, so the row shows the face
+    /// rather than only spelling it. That is what `cx` is for: the family has
+    /// to be tested against the text system before it can be applied.
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
-    fn font_picker_button(id: &'static str, target: FontPanelTarget, name: String, size: f64)
+    fn font_picker_button(id: &'static str, target: FontPanelTarget, name: String, size: f64,
+                          cx: &App)
                           -> Button {
-        Button::new(id).label(format!("{name}, {size:.0}pt"))
-                       .on_click(move |_, _, _| {
-                           #[cfg(target_os = "macos")]
-                           native_font_panel::open(target, &name, size);
-                       })
+        let preview = font_label(&name, size, &cx.text_system().all_font_names());
+        let mut button = Button::new(id).label(preview.text);
+        // Route taken for the preview (design.md's first trade-off): `Styled`
+        // on `Button` refines the root div's style, and a div's text style
+        // cascades to its descendants, so the family reaches the label
+        // without replacing `.label()` with a styled child of our own. Only
+        // the family is set - the label keeps the window's own text size
+        // rather than `size`, so one row's setting cannot resize the section.
+        if let Some(family) = preview.family {
+            button = button.font_family(family);
+        }
+        button.on_click(move |_, _, _| {
+                  #[cfg(target_os = "macos")]
+                  native_font_panel::open(target, &name, size);
+              })
     }
 
-    fn render_appearance(&self, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_appearance(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex().gap_3().child(
             Self::group("Fonts")
                 .child(Self::row(
@@ -1375,6 +1390,7 @@ impl SettingsWindow {
                         FontPanelTarget::Ui,
                         self.settings.ui_font_name.clone(),
                         self.settings.ui_font_size,
+                        cx,
                     ),
                 ))
                 .child(Self::row(
@@ -1384,6 +1400,7 @@ impl SettingsWindow {
                         FontPanelTarget::Title,
                         self.settings.title_font_name.clone(),
                         self.settings.title_font_size,
+                        cx,
                     ),
                 ))
                 .child(Self::row(
@@ -1393,9 +1410,43 @@ impl SettingsWindow {
                         FontPanelTarget::Terminal,
                         self.settings.terminal_font_name.clone(),
                         self.settings.terminal_font_size,
+                        cx,
                     ),
                 )),
         )
+    }
+}
+
+/// What a font picker's label should read, and the family it should be drawn
+/// in.
+pub(crate) struct FontLabel {
+    /// The family to draw the label in, or `None` to leave the settings
+    /// window's own face in place because the configured family does not
+    /// resolve. Never the substitute's name: the row goes on naming what is
+    /// persisted, and marks itself instead.
+    pub(crate) family: Option<gpui_kit::SharedString>,
+    pub(crate) text:   String,
+}
+
+/// The decision behind a font picker's label, split out from
+/// `font_picker_button` so it can be tested without a window.
+///
+/// `resolvable` is `cx.text_system().all_font_names()` - the same question
+/// `terminal_font_family` asks, so the preview and the terminal cannot
+/// disagree about whether a family exists. A family that is not in that list
+/// is marked rather than substituted: a label drawn in one face while naming
+/// another would report a fault as a preference. The persisted value is not
+/// touched either way, since a font missing today may be installed tomorrow.
+pub(crate) fn font_label(name: &str, size: f64, resolvable: &[String]) -> FontLabel {
+    let text = format!("{name}, {size:.0}pt");
+    if resolvable.iter().any(|candidate| candidate == name) {
+        FontLabel { family: Some(name.to_string().into()),
+                    text }
+    }
+    else {
+        FontLabel { family: None,
+                    text:   format!("{text} ({})",
+                                    knot_core::l10n::t("settings.font_unavailable")), }
     }
 }
 
