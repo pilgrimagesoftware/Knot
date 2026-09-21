@@ -36,6 +36,9 @@ panel:
   retry: "Retry"
   retry_queued: "Retry this message"
   delete_queued: "Delete this queued message"
+  edit_queued: "Edit this queued message"
+  replace_composer_title: "Replace Composer Text"
+  replace_composer_body: "What you typed will be replaced by the queued message you are editing."
   retry_connect: "Try again"
   context_usage: "Context usage"
 
