@@ -56,6 +56,6 @@
 
 - [x] 5.1 Run `make rust` and verify fmt, clippy, tests and build all pass
       for the workspace.
-- [ ] 5.2 (needs a human at the app) Walk the dialog once by keyboard only - open it from the New
+- [x] 5.2 Walk the dialog once by keyboard only - open it from the New
       workspace button, type, Return; reopen it, type, Escape - and confirm
       neither path needs the pointer.
