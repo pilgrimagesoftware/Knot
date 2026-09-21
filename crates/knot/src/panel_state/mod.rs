@@ -6,7 +6,7 @@
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use knot_acp::{
     ConfigOption, PermissionRequest, SessionEndCause, SessionEvent, SessionUpdate, ToolCallContent,
@@ -115,6 +115,12 @@ pub struct PanelState {
     /// that the call's status later changed, so a card opened while running
     /// does not slam shut on completion.
     tool_call_collapsed:    HashMap<String, bool>,
+    /// The runs the user has opened in compact mode, keyed by the id of
+    /// the run's first tool call. Only the opened ones are stored, for the
+    /// same reason `tool_call_collapsed` stores only overrides: a run the
+    /// user has never touched follows the mode's default, and a run that
+    /// grows another call afterwards does not forget it was opened.
+    tool_run_expanded:      HashSet<String>,
 }
 
 impl PanelState {
@@ -215,6 +221,20 @@ impl PanelState {
             return;
         };
         self.tool_call_collapsed.insert(id.to_string(), !collapsed);
+    }
+
+    /// Whether the run headed by `head_id` is drawn as its individual
+    /// cards despite compact mode - the inspection path the spec requires
+    /// compact rendering to keep.
+    pub fn is_tool_run_expanded(&self, head_id: &str) -> bool {
+        self.tool_run_expanded.contains(head_id)
+    }
+
+    /// Opens or closes one run in compact mode.
+    pub fn toggle_tool_run(&mut self, head_id: String) {
+        if !self.tool_run_expanded.remove(&head_id) {
+            self.tool_run_expanded.insert(head_id);
+        }
     }
 
     fn apply_update(&mut self, update: SessionUpdate) {
@@ -323,6 +343,10 @@ impl PanelState {
             })
     }
 }
+
+mod summary;
+
+pub use summary::ToolRunSummary;
 
 #[cfg(test)]
 mod tests;

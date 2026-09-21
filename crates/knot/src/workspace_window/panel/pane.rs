@@ -202,6 +202,14 @@ impl WorkspaceWindow {
                         handle.toggle_tool_call(&tool_call_id);
                     }
                 };
+                let tool_run_slot = Arc::clone(slot);
+                let on_toggle_tool_run = move |head_id: String| {
+                    if let Ok(slot) = tool_run_slot.lock()
+                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    {
+                        handle.toggle_tool_run(head_id);
+                    }
+                };
                 let manual_slot = Arc::clone(slot);
                 let on_manual_scroll = move || {
                     if let Ok(slot) = manual_slot.lock()
@@ -234,7 +242,9 @@ impl WorkspaceWindow {
                                              border_color: theme.border,
                                              card_color: theme.secondary,
                                              prompt_color: theme.primary,
-                                             prompt_foreground: theme.primary_foreground };
+                                             prompt_foreground: theme.primary_foreground,
+                                             compact_tool_calls:
+                                                 self.settings.agent_panel_compact_tool_calls };
                 drop(state);
                 drop(slot_guard);
                 // Reconcile the virtualized list with the folded state:
@@ -289,6 +299,7 @@ impl WorkspaceWindow {
                                     on_decision,
                                     on_toggle_track,
                                     on_toggle_tool_call,
+                                    on_toggle_tool_run,
                                     on_manual_scroll,
                                 ),
                             ))

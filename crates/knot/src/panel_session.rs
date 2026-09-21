@@ -137,6 +137,14 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Opens or closes one compact summary's run of tool calls.
+    pub fn toggle_tool_run(&self, head_id: String) {
+        if let Ok(mut state) = self.state.lock() {
+            state.toggle_tool_run(head_id);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// Sets auto-scroll directly, for the scroll-to-latest control.
     pub fn set_tracking(&self, tracking: bool) {
         if let Ok(mut state) = self.state.lock() {
