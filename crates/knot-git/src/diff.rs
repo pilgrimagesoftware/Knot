@@ -10,39 +10,6 @@ pub enum LineKind {
     HunkHeader,
 }
 
-/// Classifies one raw diff line. `---`/`+++` file markers are headers, not
-/// deletion/addition lines.
-pub fn classify(line: &str) -> LineKind {
-    if line.starts_with("@@") {
-        LineKind::HunkHeader
-    }
-    else if line.starts_with("diff --git")
-              || line.starts_with("index ")
-              || line.starts_with("--- ")
-              || line.starts_with("+++ ")
-              || line.starts_with("new file")
-              || line.starts_with("deleted file")
-              || line.starts_with("old mode")
-              || line.starts_with("new mode")
-              || line.starts_with("similarity index")
-              || line.starts_with("dissimilarity index")
-              || line.starts_with("rename ")
-              || line.starts_with("copy ")
-              || line.starts_with("Binary files ")
-    {
-        LineKind::Header
-    }
-    else if line.starts_with('+') {
-        LineKind::Addition
-    }
-    else if line.starts_with('-') {
-        LineKind::Deletion
-    }
-    else {
-        LineKind::Context
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
     pub kind:       LineKind,
@@ -227,7 +194,7 @@ fn push_hunk_line(hunk: &mut Hunk, line: &str, old_lineno: &mut u32, new_lineno:
 
 #[cfg(test)]
 mod tests {
-    use super::{LineKind, classify, parse_diff};
+    use super::parse_diff;
 
     const NO_COUNTS: &str = "\
 diff --git a/file.txt b/file.txt
@@ -288,16 +255,5 @@ index 1111111..2222222 100644
 
         assert_eq!(file.additions(), 3);
         assert_eq!(file.deletions(), 2);
-    }
-
-    #[test]
-    fn classify_covers_every_kind() {
-        assert_eq!(classify("diff --git a/x b/x"), LineKind::Header);
-        assert_eq!(classify("--- a/x"), LineKind::Header);
-        assert_eq!(classify("+++ b/x"), LineKind::Header);
-        assert_eq!(classify("@@ -1 +1 @@"), LineKind::HunkHeader);
-        assert_eq!(classify("+added"), LineKind::Addition);
-        assert_eq!(classify("-removed"), LineKind::Deletion);
-        assert_eq!(classify(" context"), LineKind::Context);
     }
 }
