@@ -23,7 +23,7 @@ impl WorkspaceWindow {
 
         let dashboard_workspace =
             is_dashboard.then(|| {
-                            let store = self.store.lock().unwrap();
+                            let store = self.store.lock();
                             let workspace =
                                 store.workspaces()
                                      .iter()
@@ -97,22 +97,20 @@ impl WorkspaceWindow {
                 let store = Arc::clone(&self.store);
                 move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
                     let (folder, insert_after) =
-                        store.lock()
-                             .ok()
-                             .and_then(|store| {
-                                 store.workspaces()
-                                      .iter()
-                                      .find(|workspace| workspace.id == workspace_id)
-                                      .map(|workspace| {
-                                          let folder = workspace.agent_ids
-                                                                .iter()
-                                                                .filter_map(|id| store.agent(*id))
-                                                                .next()
-                                                                .map(|agent| agent.folder.clone());
-                                          (folder, workspace.agent_ids.last().copied())
-                                      })
-                             })
-                             .unwrap_or((None, None));
+                        {
+                            let store = store.lock();
+                            store.workspaces()
+                                 .iter()
+                                 .find(|workspace| workspace.id == workspace_id)
+                                 .map(|workspace| {
+                                     let folder = workspace.agent_ids
+                                                           .iter()
+                                                           .filter_map(|id| store.agent(*id))
+                                                           .next()
+                                                           .map(|agent| agent.folder.clone());
+                                     (folder, workspace.agent_ids.last().copied())
+                                 })
+                        }.unwrap_or((None, None));
                     if let Some(entity) = weak.upgrade() {
                         entity.update(app, |view, cx| {
                                   let on_created =

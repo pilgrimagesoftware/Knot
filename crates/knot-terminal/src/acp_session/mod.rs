@@ -4,7 +4,7 @@
 //! `openspec/specs/acp-panel-ui/spec.md`'s "Switch to Terminal mid-turn"
 //! scenario.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use knot_acp::{
@@ -12,6 +12,7 @@ use knot_acp::{
     SessionEvent,
 };
 use knot_agent_launch::{AdapterConfig, InstallMethod, adapter_path};
+use parking_lot::Mutex;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
@@ -53,7 +54,8 @@ impl ConnectStep {
 pub type ConnectProgress = Arc<Mutex<ConnectStep>>;
 
 fn report(progress: &ConnectProgress, step: ConnectStep) {
-    if let Ok(mut current) = progress.lock() {
+    {
+        let mut current = progress.lock();
         *current = step;
     }
 }
@@ -243,9 +245,10 @@ async fn run_install(install: InstallMethod) -> AcpResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use knot_agent_launch::{AdapterConfig, InstallMethod, adapter_path};
+    use parking_lot::Mutex;
 
     use super::*;
     use crate::{TerminalError, TerminalTransport};
@@ -262,7 +265,7 @@ mod tests {
 
     impl TerminalTransport for FakeTransport {
         fn send_text(&mut self, text: &str) -> Result<(), TerminalError> {
-            self.sent.lock().unwrap().push(text.to_string());
+            self.sent.lock().push(text.to_string());
             Ok(())
         }
 
@@ -394,7 +397,7 @@ done"#,
 
         session.stop().await;
 
-        assert_eq!(*sent.lock().unwrap(),
+        assert_eq!(*sent.lock(),
                    vec!["terminal is alive".to_string()],
                    "the terminal transport must be untouched by the ACP session's lifecycle");
     }

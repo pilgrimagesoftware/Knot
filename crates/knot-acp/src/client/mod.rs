@@ -2,8 +2,8 @@
 //! built on top of the generic [`Transport`].
 
 use std::sync::Arc;
-use std::sync::Mutex;
 
+use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
@@ -119,9 +119,7 @@ impl AcpClient {
                         .unwrap_or_default();
                         let rpc_key = id.to_string();
                         let (decision_tx, decision_rx) = oneshot::channel();
-                        pending_for_loop.lock()
-                                        .expect("permission mutex poisoned")
-                                        .insert(rpc_key.clone(), decision_tx);
+                        pending_for_loop.lock().insert(rpc_key.clone(), decision_tx);
                         let _ =
                             events_tx.send(SessionEvent::PermissionRequest(PermissionRequest {
                                 rpc_id: id.clone(),
@@ -155,10 +153,7 @@ impl AcpClient {
                         // Per the "session closed while a permission request
                         // is pending" scenario: any still-pending permission
                         // decisions resolve to Deny rather than hanging.
-                        let pending: Vec<_> = pending_for_loop.lock()
-                                                              .expect("permission mutex poisoned")
-                                                              .drain()
-                                                              .collect();
+                        let pending: Vec<_> = pending_for_loop.lock().drain().collect();
                         for (_, sender) in pending {
                             let _ = sender.send(PermissionDecision::Deny);
                         }
@@ -284,11 +279,7 @@ impl AcpClient {
     /// [`SessionEvent::PermissionRequest`].
     pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
         let key = request.rpc_id.to_string();
-        if let Some(sender) = self.permission_pending
-                                  .lock()
-                                  .expect("permission mutex poisoned")
-                                  .remove(&key)
-        {
+        if let Some(sender) = self.permission_pending.lock().remove(&key) {
             let _ = sender.send(decision);
         }
     }

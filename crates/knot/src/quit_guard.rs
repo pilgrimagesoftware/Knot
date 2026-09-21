@@ -78,13 +78,7 @@ fn working_agents(cx: &App) -> usize {
     else {
         return 0;
     };
-    match agents.lock() {
-        Ok(store) => working_agent_count(store.agents()),
-        Err(error) => {
-            eprintln!("quit guard: the agent store lock is poisoned: {error}");
-            0
-        }
-    }
+    working_agent_count(agents.lock().agents())
 }
 
 /// Takes the one-shot bypass, clearing it.

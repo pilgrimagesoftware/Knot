@@ -8,9 +8,9 @@
 
 use std::collections::HashMap;
 use std::process::Stdio;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
 
+use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
@@ -46,10 +46,8 @@ pub struct Transport {
 
 impl Drop for Transport {
     fn drop(&mut self) {
-        if let Ok(mut tasks) = self.tasks.lock() {
-            for task in tasks.drain(..) {
-                task.abort();
-            }
+        for task in self.tasks.lock().drain(..) {
+            task.abort();
         }
     }
 }
@@ -109,7 +107,8 @@ impl Transport {
         let reader_task = tokio::spawn(async move {
             Self::read_loop(reader_transport, stdout).await;
         });
-        if let Ok(mut tasks) = transport.tasks.lock() {
+        {
+            let mut tasks = transport.tasks.lock();
             tasks.push(stderr_task);
             tasks.push(reader_task);
         }
@@ -152,7 +151,7 @@ impl Transport {
     }
 
     async fn exit_cause(&self) -> SessionEndCause {
-        let status = self.child.lock().expect("child mutex poisoned").try_wait();
+        let status = self.child.lock().try_wait();
         match status {
             Ok(Some(status)) => SessionEndCause::ProcessExited { code: status.code(), },
             _ => SessionEndCause::ProcessExited { code: None },
@@ -190,10 +189,7 @@ impl Transport {
             else {
                 return;
             };
-            let sender = self.pending
-                             .lock()
-                             .expect("pending mutex poisoned")
-                             .remove(&id);
+            let sender = self.pending.lock().remove(&id);
             if let Some(sender) = sender {
                 let outcome = match message.error {
                     Some(error) => Err(error),
@@ -220,11 +216,7 @@ impl Transport {
     }
 
     fn end_session(&self, cause: SessionEndCause) {
-        let pending: Vec<_> = self.pending
-                                  .lock()
-                                  .expect("pending mutex poisoned")
-                                  .drain()
-                                  .collect();
+        let pending: Vec<_> = self.pending.lock().drain().collect();
         for (_, sender) in pending {
             let _ = sender.send(Err(JsonRpcErrorPayload { code:    -1,
                                                           message: cause.to_string(),
@@ -247,17 +239,14 @@ impl Transport {
     /// error via the normal exit path once the read loop observes stdout
     /// close.
     pub async fn close(&self) {
-        let mut child = self.child.lock().expect("child mutex poisoned");
+        let mut child = self.child.lock();
         let _ = child.start_kill();
     }
 
     pub async fn request(&self, method: &str, params: Option<Value>) -> Result<Value> {
         let id = self.send_request_id();
         let (tx, rx) = oneshot::channel();
-        self.pending
-            .lock()
-            .expect("pending mutex poisoned")
-            .insert(id, tx);
+        self.pending.lock().insert(id, tx);
         let request = JsonRpcRequest { jsonrpc: "2.0",
                                        id,
                                        method: method.to_owned(),

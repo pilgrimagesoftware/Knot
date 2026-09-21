@@ -33,23 +33,20 @@ impl CommandCenterWindow {
     /// Folder + insert-after prefill for a workspace's "Add Agent" tile,
     /// matching the Swift reference's `addAgent(to:)`.
     fn add_agent_prefill(&self, workspace_id: Uuid) -> (Option<String>, Option<Uuid>) {
-        self.store
-            .lock()
-            .ok()
-            .and_then(|store| {
-                store.workspaces()
-                     .iter()
-                     .find(|workspace| workspace.id == workspace_id)
-                     .map(|workspace| {
-                         let folder = workspace.agent_ids
-                                               .iter()
-                                               .filter_map(|id| store.agent(*id))
-                                               .next()
-                                               .map(|agent| agent.folder.clone());
-                         (folder, workspace.agent_ids.last().copied())
-                     })
-            })
-            .unwrap_or((None, None))
+        {
+            let store = self.store.lock();
+            store.workspaces()
+                 .iter()
+                 .find(|workspace| workspace.id == workspace_id)
+                 .map(|workspace| {
+                     let folder = workspace.agent_ids
+                                           .iter()
+                                           .filter_map(|id| store.agent(*id))
+                                           .next()
+                                           .map(|agent| agent.folder.clone());
+                     (folder, workspace.agent_ids.last().copied())
+                 })
+        }.unwrap_or((None, None))
     }
 }
 
@@ -57,7 +54,7 @@ impl Render for CommandCenterWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         let dashboard_workspaces = {
-            let store = self.store.lock().unwrap();
+            let store = self.store.lock();
             store.workspaces()
                  .iter()
                  .map(|workspace| {
@@ -113,13 +110,15 @@ impl Render for CommandCenterWindow {
                         return;
                     };
                     entity.update(app, |view, cx| {
-                        let Some(workspace_id) = view.store.lock().ok().and_then(|store| {
-                            store
-                                .workspaces()
-                                .iter()
-                                .find(|workspace| workspace.agent_ids.contains(&id))
-                                .map(|workspace| workspace.id)
-                        }) else {
+                        let Some(workspace_id) = view.store
+                                                       .lock()
+                                                       .workspaces()
+                                                       .iter()
+                                                       .find(|workspace| {
+                                                           workspace.agent_ids.contains(&id)
+                                                       })
+                                                       .map(|workspace| workspace.id)
+                        else {
                             return;
                         };
                         WorkspaceWindow::open_with_selection(

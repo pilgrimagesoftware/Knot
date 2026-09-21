@@ -60,7 +60,8 @@ impl WorkspaceWindow {
                             .small()
                             .tooltip("Close")
                             .on_click(cx.listener(move |view, _, _window, cx| {
-                                if let Ok(mut store) = view.store.lock() {
+                                {
+                                    let mut store = view.store.lock();
                                     let _ = store.clear_markdown_panel(id);
                                 }
                                 cx.notify();
@@ -120,10 +121,10 @@ impl WorkspaceWindow {
         else {
             return div().into_any_element();
         };
-        let slot_guard = slot.lock().unwrap();
+        let slot_guard = slot.lock();
         match &*slot_guard {
             panel_session::PanelSessionSlot::Connecting(progress) => {
-                let step = progress.lock().map(|step| step.label()).unwrap_or_default();
+                let step = progress.lock().label();
                 v_flex().size_full()
                         .items_center()
                         .justify_center()
@@ -171,7 +172,7 @@ impl WorkspaceWindow {
             }
             panel_session::PanelSessionSlot::Ready(handle) => {
                 let state_arc = handle.state();
-                let state = state_arc.lock().unwrap();
+                let state = state_arc.lock();
                 let blocked = state.pending_permission.is_some();
                 let session_arc = Arc::clone(slot);
                 let pending = state.pending_permission.clone();
@@ -180,41 +181,32 @@ impl WorkspaceWindow {
                     else {
                         return;
                     };
-                    if let Ok(slot) = session_arc.lock()
-                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                    {
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*session_arc.lock() {
                         handle.answer_permission(request, decision);
                     }
                 };
                 let track_slot = Arc::clone(slot);
                 let on_toggle_track = move || {
-                    if let Ok(slot) = track_slot.lock()
-                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                    {
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*track_slot.lock() {
                         handle.toggle_tracking();
                     }
                 };
                 let tool_call_slot = Arc::clone(slot);
                 let on_toggle_tool_call = move |tool_call_id: String| {
-                    if let Ok(slot) = tool_call_slot.lock()
-                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*tool_call_slot.lock()
                     {
                         handle.toggle_tool_call(&tool_call_id);
                     }
                 };
                 let tool_run_slot = Arc::clone(slot);
                 let on_toggle_tool_run = move |head_id: String| {
-                    if let Ok(slot) = tool_run_slot.lock()
-                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                    {
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*tool_run_slot.lock() {
                         handle.toggle_tool_run(head_id);
                     }
                 };
                 let manual_slot = Arc::clone(slot);
                 let on_manual_scroll = move || {
-                    if let Ok(slot) = manual_slot.lock()
-                       && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                    {
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*manual_slot.lock() {
                         handle.clear_tracking();
                     }
                 };
@@ -257,7 +249,7 @@ impl WorkspaceWindow {
                 let list = self.panel_list(id, list_slot);
                 let known = self.panel_list_row_counts.get(&id).copied().unwrap_or(0);
                 {
-                    let state = state_arc.lock().unwrap();
+                    let state = state_arc.lock();
                     let count = panel_view::sync_row_count(&list, known, &state);
                     self.panel_list_row_counts.insert(id, count);
                 }
@@ -315,10 +307,9 @@ impl WorkspaceWindow {
                                             // resumes following new
                                             // output, which is what the
                                             // control implies.
-                                            if let Ok(slot) = follow_slot.lock()
-                                                && let panel_session::PanelSessionSlot::Ready(
-                                                    handle,
-                                                ) = &*slot
+                                            if let panel_session::PanelSessionSlot::Ready(
+                                                handle,
+                                            ) = &*follow_slot.lock()
                                             {
                                                 handle.set_tracking(true);
                                             }
@@ -359,9 +350,7 @@ impl WorkspaceWindow {
         }
         let list = ListState::new(0, ListAlignment::Top, px(panel_view::LIST_OVERDRAW));
         list.set_scroll_handler(move |_event, _window, _cx| {
-                if let Ok(slot) = slot.lock()
-                   && let panel_session::PanelSessionSlot::Ready(handle) = &*slot
-                {
+                if let panel_session::PanelSessionSlot::Ready(handle) = &*slot.lock() {
                     handle.clear_tracking();
                 }
             });

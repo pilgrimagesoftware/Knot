@@ -69,7 +69,7 @@ impl WorkspaceWindow {
                         self.selected_agent
                                     .and_then(|id| {
                                         let (is_panel_mode, markdown_file, stopped) = {
-                                            let store = self.store.lock().unwrap();
+                                            let store = self.store.lock();
                                             let agent = store.agent(id);
                                             (agent.map(|agent| agent.view_mode)
                                              == Some(knot_core::ViewMode::Panel),
@@ -106,7 +106,7 @@ impl WorkspaceWindow {
                                                                                cx));
                                         }
                                         let grid =
-                                            self.sessions.get(&id)?.lock().ok()?.grid()?;
+                                            self.sessions.get(&id)?.lock().grid()?;
                                         Some(
                                             div()
                                                 .id("terminal-pane")
@@ -205,7 +205,7 @@ impl WorkspaceWindow {
                                                     },
                                                 ))
                                                 .child(terminal_view::render_grid(
-                                                    &grid.lock().unwrap(),
+                                                    &grid.lock(),
                                                     terminal_font_family(
                                                         &self.settings,
                                                         cx,

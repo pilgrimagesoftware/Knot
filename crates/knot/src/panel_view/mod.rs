@@ -9,7 +9,7 @@
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -22,6 +22,7 @@ use gpui_kit::{
     ParentElement, StatefulInteractiveElement, Styled, div, px, relative, rgb,
 };
 use knot_acp::{PermissionDecision, PermissionRequest};
+use parking_lot::Mutex;
 
 use crate::panel_state::{PanelMessage, PanelState, ToolCallCard};
 use crate::working_indicator;
@@ -204,7 +205,7 @@ pub(crate) fn render_panel(state: Arc<Mutex<PanelState>>, list: ListState, style
     let row_list = list.clone();
     let row_style = style.clone();
     gpui_kit::list(list.clone(), move |index, _window, _cx| {
-        let state = row_state.lock().expect("panel state poisoned");
+        let state = row_state.lock();
         render_row(index, &state, &row_style, &row_list, &callbacks)
     }).size_full()
       // `min_w_0` so a wide child (a markdown table, a long command line)

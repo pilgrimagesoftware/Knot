@@ -32,14 +32,14 @@ impl WorkspaceWindow {
         };
         let context_usage =
             self.panel_sessions.get(&id).and_then(|slot| {
-                                            let slot = slot.lock().ok()?;
+                                            let slot = slot.lock();
                                             let panel_session::PanelSessionSlot::Ready(handle) =
                                                 &*slot
                                             else {
                                                 return None;
                                             };
                                             let state = handle.state();
-                                            state.lock().ok()?.context_usage
+                                            state.lock().context_usage
                                         });
         v_flex()
             .flex_shrink_0()
@@ -441,10 +441,11 @@ impl WorkspaceWindow {
                                     // Persist first: the selection is durable
                                     // whether or not a session is live to
                                     // apply it to.
-                                    view.remember_session_config(id, config_id.clone(), value_id.clone());
-                                    if let Ok(slot) = session_arc.lock()
-                                        && let panel_session::PanelSessionSlot::Ready(handle) =
-                                            &*slot
+                                    view.remember_session_config(id,
+                                                                 config_id.clone(),
+                                                                 value_id.clone());
+                                    if let panel_session::PanelSessionSlot::Ready(handle) =
+                                        &*session_arc.lock()
                                     {
                                         let future = handle.set_config_option(config_id, value_id);
                                         let _guard = view.runtime.enter();

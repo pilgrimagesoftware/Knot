@@ -12,7 +12,7 @@ mod repos;
 mod responses;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use knot_activity::{EventSink, Tracker, TrackerConfig, tracking_for};
@@ -25,6 +25,7 @@ use knot_mcp::{
     ToolDefinition, ToolInputSchema, claude_status, codex_turn_complete, extract_metadata,
 };
 use knot_messaging::{DeliveryNotifier, MessageStore};
+use parking_lot::Mutex;
 use tokio::sync::watch;
 use uuid::Uuid;
 
@@ -69,7 +70,7 @@ impl McpToolCatalog {
     }
 
     pub fn with_awaiting_input_queue(self, queue: AwaitingInputQueue) -> Self {
-        *self.awaiting_input.lock().unwrap() = Some(queue);
+        *self.awaiting_input.lock() = Some(queue);
         self
     }
 
@@ -78,23 +79,23 @@ impl McpToolCatalog {
     /// the caller (`crates/knot`) pushes updates in whenever settings
     /// change.
     pub fn set_bench_agents(&self, bench_agents: Vec<BenchAgent>) {
-        *self.bench_agents.lock().unwrap() = bench_agents;
+        *self.bench_agents.lock() = bench_agents;
     }
 
     /// A clone of the current agent list, for `McpServer`'s
     /// `AgentsSnapshotFn` (the `GET /api/v1/agent/status` endpoint).
     pub fn agents_snapshot(&self) -> Vec<knot_agents::Agent> {
-        self.agents.lock().unwrap().agents().to_vec()
+        self.agents.lock().agents().to_vec()
     }
 
     pub fn with_settings(self, settings: Settings) -> Self {
-        *self.settings.lock().unwrap() = Some(settings);
+        *self.settings.lock() = Some(settings);
         self
     }
 
     fn persist_agent_state(&self) -> Result<(), String> {
-        let agents = self.agents.lock().unwrap();
-        let mut settings = self.settings.lock().unwrap();
+        let agents = self.agents.lock();
+        let mut settings = self.settings.lock();
         let Some(settings) = settings.as_mut()
         else {
             return Ok(());
@@ -108,7 +109,7 @@ impl McpToolCatalog {
         if !matches!(agent_type, "claude" | "codex") {
             return false;
         }
-        let mut trackers = self.trackers.lock().unwrap();
+        let mut trackers = self.trackers.lock();
         if trackers.contains_key(&id) {
             return true;
         }
@@ -117,15 +118,14 @@ impl McpToolCatalog {
         }
 
         let agents = Arc::clone(&self.agents);
-        let awaiting_input = self.awaiting_input.lock().unwrap().clone();
+        let awaiting_input = self.awaiting_input.lock().clone();
         let sink = EventSink { on_status: Some(Box::new(move |event| {
-                                                   agents.lock()
-                                                         .unwrap()
-                                                         .set_state(id, event.status);
+                                                   agents.lock().set_state(id, event.status);
                                                })),
                                on_awaiting_input: awaiting_input.map(|queue| {
                                                                     Box::new(move |message| {
-                    if let Ok(mut queue) = queue.lock() {
+                    {
+                        let mut queue = queue.lock();
                         queue.push((id, message));
                     }
                 }) as Box<dyn FnMut(Option<String>) + Send>
@@ -159,7 +159,7 @@ impl AgentHookHandler for McpToolCatalog {
             return Err(knot_mcp::HookError::UnknownAgent(request.agent.clone()));
         }
         let id = request.agent_id()?;
-        let mut agents = self.agents.lock().unwrap();
+        let mut agents = self.agents.lock();
         let Some(agent) = agents.agent(id)
         else {
             return Err(knot_mcp::HookError::InvalidPayload("Agent not found".to_string()));
@@ -195,12 +195,11 @@ impl AgentHookHandler for McpToolCatalog {
 
     fn status(&self, request: &HookRequest) -> Result<serde_json::Value, knot_mcp::HookError> {
         let id = request.agent_id()?;
-        if self.agents.lock().unwrap().agent(id).is_none() {
+        if self.agents.lock().agent(id).is_none() {
             return Err(knot_mcp::HookError::InvalidPayload("Agent not found".to_string()));
         }
         self.agents
             .lock()
-            .unwrap()
             .update_metadata(id, extract_metadata(&request.agent, &request.payload));
         let status = match request.agent.as_str() {
             "claude" => claude_status(
@@ -212,7 +211,7 @@ impl AgentHookHandler for McpToolCatalog {
             "codex" => {
                 let thread_id = codex_turn_complete(&request.payload)?;
                 if let Some(thread_id) = thread_id {
-                    self.agents.lock().unwrap().set_session_id(id, thread_id);
+                    self.agents.lock().set_session_id(id, thread_id);
                 }
                 HookStatus::Idle
             }
@@ -231,13 +230,12 @@ impl AgentHookHandler for McpToolCatalog {
         if self.tracker_for(id, &request.agent) {
             self.trackers
                 .lock()
-                .unwrap()
                 .get(&id)
                 .expect("tracker inserted above")
                 .apply_hook_status(state, input_message);
         }
         else {
-            self.agents.lock().unwrap().set_state(id, state);
+            self.agents.lock().set_state(id, state);
         }
         Ok(serde_json::json!({"success": true}))
     }
@@ -369,41 +367,33 @@ impl ToolCatalog for McpToolCatalog {
 
     async fn call(&self, name: &str, arguments: serde_json::Value) -> ToolCallResult {
         let result = match name {
-            consts::REGISTER_AGENT => {
-                agents::register_agent(&mut self.agents.lock().unwrap(), &arguments)
-            }
-            consts::LIST_AGENTS => agents::list_agents(&self.agents.lock().unwrap(), &arguments),
-            consts::SEND_MESSAGE => messaging::send_message(&self.agents.lock().unwrap(),
-                                                            &mut self.messages.lock().unwrap(),
+            consts::REGISTER_AGENT => agents::register_agent(&mut self.agents.lock(), &arguments),
+            consts::LIST_AGENTS => agents::list_agents(&self.agents.lock(), &arguments),
+            consts::SEND_MESSAGE => messaging::send_message(&self.agents.lock(),
+                                                            &mut self.messages.lock(),
                                                             self.notifier.as_ref(),
                                                             &arguments),
-            consts::CHECK_MESSAGES => messaging::check_messages(&self.agents.lock().unwrap(),
-                                                                &mut self.messages.lock().unwrap(),
+            consts::CHECK_MESSAGES => messaging::check_messages(&self.agents.lock(),
+                                                                &mut self.messages.lock(),
                                                                 &arguments),
-            consts::BROADCAST_MESSAGE => {
-                messaging::broadcast_message(&self.agents.lock().unwrap(),
-                                             &mut self.messages.lock().unwrap(),
-                                             self.notifier.as_ref(),
-                                             &arguments)
-            }
+            consts::BROADCAST_MESSAGE => messaging::broadcast_message(&self.agents.lock(),
+                                                                      &mut self.messages.lock(),
+                                                                      self.notifier.as_ref(),
+                                                                      &arguments),
             consts::LIST_REPOS => repos::list_repos(&self.repos.borrow()),
             consts::LIST_WORKTREES => repos::list_worktrees(&self.repos.borrow(), &arguments),
             consts::CREATE_AGENT => {
-                let mut bench_agents = self.bench_agents.lock().unwrap();
+                let mut bench_agents = self.bench_agents.lock();
                 bench_agents.retain(|bench| std::path::Path::new(&bench.folder).is_dir());
-                agents::create_agent(&mut self.agents.lock().unwrap(), &arguments, &bench_agents)
+                agents::create_agent(&mut self.agents.lock(), &arguments, &bench_agents)
             }
-            consts::CLOSE_AGENT => {
-                agents::close_agent(&mut self.agents.lock().unwrap(), &arguments)
-            }
+            consts::CLOSE_AGENT => agents::close_agent(&mut self.agents.lock(), &arguments),
             consts::CREATE_WORKTREE => repos::create_worktree(&arguments),
-            consts::SET_STATUS => agents::set_status(&mut self.agents.lock().unwrap(), &arguments),
+            consts::SET_STATUS => agents::set_status(&mut self.agents.lock(), &arguments),
             consts::DISPLAY_MARKDOWN => {
-                panels::display_markdown(&mut self.agents.lock().unwrap(), &arguments)
+                panels::display_markdown(&mut self.agents.lock(), &arguments)
             }
-            consts::VIEW_MERMAID => {
-                panels::view_mermaid(&mut self.agents.lock().unwrap(), &arguments)
-            }
+            consts::VIEW_MERMAID => panels::view_mermaid(&mut self.agents.lock(), &arguments),
             other => ToolCallResult::error(format!("unknown tool: {other}")),
         };
         if result.is_error.is_none()
@@ -470,7 +460,6 @@ mod tests {
         let cat = catalog();
         let id = cat.agents
                     .lock()
-                    .unwrap()
                     .create("/tmp/a", knot_agents::CreateOptions::default());
 
         let result = cat.call(consts::REGISTER_AGENT,
@@ -478,7 +467,7 @@ mod tests {
                         .await;
 
         assert_eq!(result.is_error, None);
-        assert!(cat.agents.lock().unwrap().agent(id).unwrap().is_registered);
+        assert!(cat.agents.lock().agent(id).unwrap().is_registered);
     }
 
     #[tokio::test]
@@ -488,7 +477,6 @@ mod tests {
         let cat = catalog().with_settings(knot_core::Settings::with_store_path(&path));
         let id = cat.agents
                     .lock()
-                    .unwrap()
                     .create("/tmp/persisted", knot_agents::CreateOptions::default());
 
         let result = cat.call(consts::REGISTER_AGENT,
@@ -508,7 +496,6 @@ mod tests {
         let cat = catalog();
         let id = cat.agents
                     .lock()
-                    .unwrap()
                     .create("/tmp/a", knot_agents::CreateOptions::default());
         let request: HookRequest =
             serde_json::from_value(serde_json::json!({
@@ -518,7 +505,7 @@ mod tests {
                                    })).unwrap();
 
         cat.register(&request).unwrap();
-        let agent = cat.agents.lock().unwrap().agent(id).unwrap().clone();
+        let agent = cat.agents.lock().agent(id).unwrap().clone();
         assert!(agent.is_registered);
         assert_eq!(agent.session_id.as_deref(), Some("session-1"));
         assert_eq!(agent.metadata.get("model"),
@@ -530,7 +517,6 @@ mod tests {
         let cat = catalog();
         let id = cat.agents
                     .lock()
-                    .unwrap()
                     .create("/tmp/a", knot_agents::CreateOptions::default());
         let request: HookRequest = serde_json::from_value(serde_json::json!({
             "agent_id": id,
@@ -541,7 +527,7 @@ mod tests {
 
         cat.status(&request).unwrap();
         tokio::task::yield_now().await;
-        let agent = cat.agents.lock().unwrap().agent(id).unwrap().clone();
+        let agent = cat.agents.lock().agent(id).unwrap().clone();
         assert_eq!(agent.state, AgentState::Idle);
         assert_eq!(agent.session_id.as_deref(), Some("thread-1"));
     }
@@ -551,7 +537,6 @@ mod tests {
         let cat = catalog();
         let id = cat.agents
                     .lock()
-                    .unwrap()
                     .create("/tmp/a", knot_agents::CreateOptions::default());
         let request: HookRequest = serde_json::from_value(serde_json::json!({
                                                               "agent_id": id,
@@ -561,7 +546,7 @@ mod tests {
 
         cat.status(&request).unwrap();
         tokio::task::yield_now().await;
-        assert_eq!(cat.agents.lock().unwrap().agent(id).unwrap().state,
+        assert_eq!(cat.agents.lock().agent(id).unwrap().state,
                    AgentState::Input);
     }
 
@@ -574,15 +559,12 @@ mod tests {
         let b = McpToolCatalog::new(Arc::clone(&shared), rx_b, Arc::new(NoopNotifier));
 
         let id = shared.lock()
-                       .unwrap()
                        .create("/tmp/one", knot_agents::CreateOptions::default());
 
         assert_eq!(a.agents_snapshot().len(), 1);
         assert_eq!(b.agents_snapshot().len(), 1);
 
-        shared.lock()
-              .unwrap()
-              .set_status_text(id, "planning".to_string());
+        shared.lock().set_status_text(id, "planning".to_string());
         assert_eq!(a.agents_snapshot()[0].status_text, "planning");
         assert_eq!(b.agents_snapshot()[0].status_text, "planning");
     }

@@ -2,7 +2,8 @@
 //! refresh / invalidate and delete-then-backfill.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+
+use parking_lot::Mutex;
 
 use crate::provider::{SessionSummary, provider};
 
@@ -26,12 +27,7 @@ impl HistoryCache {
     /// touches disk.
     pub fn get(&self, agent_type: &str, folder: &str) -> Vec<SessionSummary> {
         let key = Self::key(agent_type, folder);
-        self.entries
-            .lock()
-            .unwrap()
-            .get(&key)
-            .cloned()
-            .unwrap_or_default()
+        self.entries.lock().get(&key).cloned().unwrap_or_default()
     }
 
     /// Reload from disk and replace the entry. No-op for an unsupported
@@ -43,13 +39,13 @@ impl HistoryCache {
         };
         let sessions = p.load_sessions(folder);
         let key = Self::key(agent_type, folder);
-        self.entries.lock().unwrap().insert(key, sessions);
+        self.entries.lock().insert(key, sessions);
     }
 
     /// Drop the entry without reloading.
     pub fn invalidate(&self, agent_type: &str, folder: &str) {
         let key = Self::key(agent_type, folder);
-        self.entries.lock().unwrap().remove(&key);
+        self.entries.lock().remove(&key);
     }
 
     /// Delete a session via its provider, then refresh the entry so the
@@ -81,12 +77,10 @@ mod tests {
         // isolation.
         cache.entries
              .lock()
-             .unwrap()
              .insert(("claude".to_owned(), "/proj".to_owned()), vec![]);
         cache.invalidate("claude", "/proj");
         assert!(!cache.entries
                       .lock()
-                      .unwrap()
                       .contains_key(&("claude".to_owned(), "/proj".to_owned())));
     }
 

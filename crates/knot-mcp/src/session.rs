@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::consts;
@@ -50,7 +51,7 @@ impl McpSessionManager {
     /// other still-registering agent's session, since they'd all share the
     /// nil key.
     pub fn create_session(&self, agent_id: Uuid) -> McpSession {
-        let mut table = self.table.lock().unwrap();
+        let mut table = self.table.lock();
         let session = McpSession::new(agent_id);
         if agent_id != Uuid::nil() {
             if let Some(old_id) = table.agent_to_session.remove(&agent_id) {
@@ -63,30 +64,30 @@ impl McpSessionManager {
     }
 
     pub fn session(&self, id: &str) -> Option<McpSession> {
-        self.table.lock().unwrap().sessions.get(id).cloned()
+        self.table.lock().sessions.get(id).cloned()
     }
 
     pub fn session_for_agent(&self, agent_id: Uuid) -> Option<McpSession> {
-        let table = self.table.lock().unwrap();
+        let table = self.table.lock();
         let id = table.agent_to_session.get(&agent_id)?;
         table.sessions.get(id).cloned()
     }
 
     pub fn touch(&self, id: &str) {
-        if let Some(session) = self.table.lock().unwrap().sessions.get_mut(id) {
+        if let Some(session) = self.table.lock().sessions.get_mut(id) {
             session.last_activity = Instant::now();
         }
     }
 
     pub fn remove(&self, id: &str) {
-        let mut table = self.table.lock().unwrap();
+        let mut table = self.table.lock();
         if let Some(session) = table.sessions.remove(id) {
             table.agent_to_session.remove(&session.agent_id);
         }
     }
 
     pub fn remove_for_agent(&self, agent_id: Uuid) {
-        let mut table = self.table.lock().unwrap();
+        let mut table = self.table.lock();
         if let Some(id) = table.agent_to_session.remove(&agent_id) {
             table.sessions.remove(&id);
         }
@@ -99,7 +100,7 @@ impl McpSessionManager {
 
     /// Removes sessions whose `last_activity` is older than `timeout`.
     pub fn cleanup_stale(&self, timeout: Duration) {
-        let mut table = self.table.lock().unwrap();
+        let mut table = self.table.lock();
         let stale: Vec<String> = table.sessions
                                       .values()
                                       .filter(|s| s.last_activity.elapsed() > timeout)
