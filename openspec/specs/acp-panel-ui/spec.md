@@ -219,12 +219,32 @@ scroll to the top of the conversation history.
 
 ### Requirement: Track response toggle
 
-The response action bar SHALL include a track toggle. While enabled for a
-given response, the panel's virtualized list SHALL keep following the streamed
-output for that response, auto-scrolling so the newest output stays visible.
-Manually scrolling the history away from the tail SHALL disable following.
-Disabling the toggle SHALL stop following even while the list is at the tail,
-so following is only ever resumed by enabling the toggle or jumping to latest.
+The response still being streamed SHALL carry a track toggle in place of the
+response action bar, and SHALL show the action bar instead once its turn
+ends. The two SHALL NOT appear together: tracking only means something while
+output is still arriving, and the action bar's items - copy, jump to the
+prompt, jump to the top - only mean something once there is a finished
+response to act on.
+
+While the toggle is enabled for a given response, the panel's virtualized
+list SHALL keep following the streamed output for that response,
+auto-scrolling so the newest output stays visible. Manually scrolling the
+history away from the tail SHALL disable following. Disabling the toggle
+SHALL stop following even while the list is at the tail, so following is only
+ever resumed by enabling the toggle or jumping to latest.
+
+#### Scenario: The toggle gives way to the action bar
+
+- **WHEN** the last response is still streaming
+- **THEN** it shows the track toggle and not the response action bar
+- **WHEN** that turn ends
+- **THEN** it shows the response action bar and not the track toggle
+
+#### Scenario: An earlier response never shows the toggle
+
+- **WHEN** a response that is not the last one is rendered
+- **THEN** it shows the response action bar, whether or not a later turn is
+  active
 
 #### Scenario: Tracking follows streamed output
 
@@ -607,3 +627,19 @@ counts. The indicator SHALL be absent until the agent reports usable values.
 #### Scenario: No usage update is available
 - **WHEN** the ACP agent does not report context-window usage
 - **THEN** the bottom bar does not show a context indicator
+
+### Requirement: Retry uses the icon-button convention
+
+The retry action SHALL render as an icon button rather than a text button. The icon SHALL have a localized accessible label and tooltip describing retry, and activating it SHALL preserve the existing retry behavior.
+
+#### Scenario: Retry renders as an icon
+- **WHEN** a response exposes a retry action
+- **THEN** the action is shown as an icon button with no visible text label
+
+#### Scenario: Retry tooltip identifies the action
+- **WHEN** the user points to or focuses the retry icon
+- **THEN** a localized tooltip and accessible label identify it as retry
+
+#### Scenario: Retry behavior is unchanged
+- **WHEN** the user activates the retry icon
+- **THEN** the same message is retried using the existing retry flow

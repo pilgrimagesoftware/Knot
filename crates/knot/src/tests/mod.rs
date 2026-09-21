@@ -982,3 +982,29 @@ fn removing_an_agent_also_drops_its_companions_from_the_snapshot() {
 
     assert!(build_agent_store(&settings).agents().is_empty());
 }
+
+/// The queued-row controls carry no visible text of their own, so their
+/// tooltips and accessibility labels are the only thing naming them - a
+/// missing key would ship the key string itself as the button's name.
+#[test]
+fn queued_message_control_labels_resolve() {
+    for key in ["panel.queued",
+                "panel.failed",
+                "panel.retry",
+                "panel.retry_queued",
+                "panel.delete_queued",
+                "panel.retry_connect"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
+#[test]
+fn the_queued_status_label_follows_the_failed_mark() {
+    assert_eq!(workspace_window::prompt_queue::queued_status_label(false),
+               knot_core::l10n::t("panel.queued"));
+    assert_eq!(workspace_window::prompt_queue::queued_status_label(true),
+               knot_core::l10n::t("panel.failed"));
+}
