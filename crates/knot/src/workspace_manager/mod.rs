@@ -1,4 +1,15 @@
 use super::*;
+
+/// Whether a typed workspace name counts as nothing at all.
+///
+/// The confirm button's disabled state and the Return key both read this,
+/// so a name the button refuses is a name Return refuses, by construction
+/// rather than by two guards kept in step by hand. Judged on the trimmed
+/// form, which is also the form `save_name` stores.
+pub(crate) fn workspace_name_is_blank(name: &str) -> bool {
+    name.trim().is_empty()
+}
+
 pub(crate) struct WorkspaceManager {
     pub(crate) store:                 Arc<Mutex<knot_agents::AgentStore>>,
     pub(crate) messages:              Arc<Mutex<knot_messaging::MessageStore>>,
@@ -9,6 +20,11 @@ pub(crate) struct WorkspaceManager {
     pub(crate) show_workspace_dialog: bool,
     pub(crate) delete_workspace_id:   Option<Uuid>,
     pub(crate) error:                 Option<String>,
+    /// Keeps the confirm button's disabled state honest while the user
+    /// types: without it the button only re-reads the name on the next
+    /// unrelated re-render, so an empty field could stay greyed after the
+    /// first character.
+    pub(crate) _name_subscription:    Subscription,
     pub(crate) _mcp_stop:             Option<tokio::sync::oneshot::Sender<()>>,
 }
 
@@ -79,8 +95,8 @@ impl WorkspaceManager {
         cx.notify();
     }
 
-    fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>, window: &mut Window,
-                             cx: &mut Context<Self>) {
+    pub(crate) fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>,
+                                        window: &mut Window, cx: &mut Context<Self>) {
         let name =
             editing_id.and_then(|id| {
                           self.store.lock().ok().and_then(|store| {
@@ -187,6 +203,7 @@ impl Render for WorkspaceManager {
                                                   .find(|workspace| workspace.id == id)
                                                   .map(|workspace| workspace.name.clone())
                                     });
+        let name_is_blank = workspace_name_is_blank(&self.name_input.read(cx).value());
         let rows = workspaces.into_iter().map(|workspace| {
                                              let id = workspace.id;
                                              let agent_count = workspace.agent_ids.len();
@@ -342,6 +359,37 @@ impl Render for WorkspaceManager {
                             .items_center()
                             .justify_center()
                             .bg(cx.theme().overlay)
+                            // The keys ride on the overlay's own bubble-phase
+                            // `on_key_down` rather than the gpui action route
+                            // design.md holds in reserve, because the focused
+                            // `Input` lets both through: its `Enter` handler
+                            // calls `cx.propagate()` on a single-line field,
+                            // and its `Escape` handler does the same unless
+                            // `clean_on_escape` is set, which this input does
+                            // not set. The listener lives here, not on the
+                            // window, so it exists only in frames where the
+                            // dialog is open.
+                            .on_key_down(cx.listener(
+                                move |manager, event: &gpui_kit::KeyDownEvent, window, cx| {
+                                    match event.keystroke.key.as_str() {
+                                        "enter" => {
+                                            // Inert on a blank name, matching
+                                            // the disabled confirm button
+                                            // rather than raising the error
+                                            // `save_name` would.
+                                            if !name_is_blank {
+                                                manager.confirm_workspace_dialog(window, cx);
+                                            }
+                                            cx.stop_propagation();
+                                        },
+                                        "escape" => {
+                                            manager.cancel_workspace_dialog(window, cx);
+                                            cx.stop_propagation();
+                                        },
+                                        _ => {},
+                                    }
+                                },
+                            ))
                             .child(
                                 v_flex()
                                     .w(px(360.))
@@ -382,6 +430,7 @@ impl Render for WorkspaceManager {
                                                         "Create"
                                                     })
                                                     .primary()
+                                                    .disabled(name_is_blank)
                                                     .on_click(cx.listener(
                                                         |manager, _: &ClickEvent, window, cx| {
                                                             manager.confirm_workspace_dialog(
