@@ -70,8 +70,12 @@ actions!(knot_app,
           PanelPermissionDeny,
           PanelOpenPermissionSelector]);
 
+/// Every user-facing quit path lands here - the application menu's Quit
+/// Knot item and the `cmd-q` binding both dispatch `Quit` - so the guard
+/// only has to be applied once. See `quit_guard` for why the check cannot
+/// live in `on_app_quit` instead.
 pub(crate) fn quit(_: &Quit, cx: &mut App) {
-    cx.quit();
+    quit_guard::request_quit(cx);
 }
 
 /// Quits on Ctrl-C (or `kill`) from the launching terminal.
@@ -209,6 +213,11 @@ pub(crate) fn run() {
                                Theme::change(cx.window_appearance(), None, cx);
                                apply_visual_identity(&settings, cx);
 
+                               // Before `on_action(quit)`: the guard reads
+                               // the store through this global, and a quit
+                               // arriving without it would be waved
+                               // through unguarded.
+                               cx.set_global(quit_guard::QuitGuard::new(Arc::clone(&store)));
                                cx.on_action(quit);
                                // Holds its own window handle; see
                                // `about_window::register_about_action`.

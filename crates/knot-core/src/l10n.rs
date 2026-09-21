@@ -11,6 +11,24 @@ pub fn t(key: &str) -> String {
     rust_i18n::t!(key).to_string()
 }
 
+/// [`t`] with `%{name}` placeholders replaced by the matching `args` value.
+///
+/// A sentence that embeds a value has to stay one catalog entry: the word
+/// order around the value is the translator's to choose, so the call site
+/// must not assemble it from fragments. `rust_i18n::t!`'s own argument
+/// form needs the names as literals at the macro call, which this crate's
+/// function boundary cannot pass through - hence the substitution here. A
+/// placeholder with no matching arg is left as written, so a missing value
+/// shows up in the copy instead of silently emptying it.
+#[must_use]
+pub fn t_with(key: &str, args: &[(&str, &str)]) -> String {
+    let mut text = t(key);
+    for (name, value) in args {
+        text = text.replace(&format!("%{{{name}}}"), value);
+    }
+    text
+}
+
 /// Formats `count` with the correctly localized noun form.
 ///
 /// `singular_key` and `plural_key` are translation keys (e.g. `"count.file"`
@@ -50,6 +68,20 @@ mod tests {
     #[test]
     fn unknown_key_falls_back_to_key_string() {
         assert_eq!(t("does.not.exist"), "does.not.exist");
+    }
+
+    #[test]
+    fn t_with_substitutes_a_named_placeholder() {
+        assert_eq!(t_with("quit.working_message_many", &[("count", "3")]),
+                   "3 agents are still working. Quitting now ends their sessions, and any work in \
+                    progress is lost.");
+    }
+
+    #[test]
+    fn t_with_leaves_an_unmatched_placeholder_visible() {
+        // Better a literal `%{count}` in the copy than a sentence that
+        // silently lost its number.
+        assert!(t_with("quit.working_message_many", &[]).contains("%{count}"));
     }
 
     #[test]
