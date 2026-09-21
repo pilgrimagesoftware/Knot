@@ -2808,7 +2808,10 @@ fn with_agents_menu_actions(el: gpui_kit::Div, selected: Option<&SelectedAgentMe
     // covers a whole submenu; registering it only when the parent entry
     // applies is what disables the leaves - and with them the parent item,
     // which AppKit enables only when a child is enabled.
-    let el = if selected.snapshot.entries.contains(&AgentMenuEntry::MoveToWorkspace) {
+    let el = if selected.snapshot
+                        .entries
+                        .contains(&AgentMenuEntry::MoveToWorkspace)
+    {
         let targets = selected.targets.clone();
         el.on_action(move |action: &AgentMenuMoveToWorkspaceTarget, _window, app| {
                          move_agent_to_workspace(&targets, action.workspace_id, app);
@@ -2826,7 +2829,10 @@ fn with_agents_menu_actions(el: gpui_kit::Div, selected: Option<&SelectedAgentMe
     else {
         el
     };
-    if selected.snapshot.entries.contains(&AgentMenuEntry::MarkdownFiles) {
+    if selected.snapshot
+               .entries
+               .contains(&AgentMenuEntry::MarkdownFiles)
+    {
         let targets = selected.targets.clone();
         el.on_action(move |action: &AgentMenuShowMarkdownFile, _window, app| {
               show_agent_markdown_file(&targets, &action.path, app);
