@@ -12,6 +12,8 @@ dashboard:
     status: "Status"
 
 count:
+  agent: "agent"
+  agents: "agents"
   file: "file"
   files: "files"
 

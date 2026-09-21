@@ -11,6 +11,9 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
     }
     let options = settings_window_options(cx);
     match cx.open_window(options, move |window, cx| {
+                // Every window tracks the OS appearance, so a light/dark flip
+                // re-resolves the system palette and repaints.
+                observe_system_appearance(window);
                 let selected_agent_type = "claude".to_string();
                 let initial_options = settings.agent_options
                                               .get(&selected_agent_type)
@@ -121,7 +124,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                       })
                       .detach();
                 }
-                cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                cx.new(|cx| Root::new(view, window, cx))
             }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),
         Err(error) => eprintln!("failed to open settings window: {error}"),
@@ -1424,6 +1427,9 @@ pub(crate) fn open_persona_editor(parent: WeakEntity<SettingsWindow>,
                               .unwrap_or_default();
     let options = persona_editor_window_options(title, cx);
     let _ = cx.open_window(options, move |window, cx| {
+                  // Every window tracks the OS appearance, so a light/dark flip
+                  // re-resolves the system palette and repaints.
+                  observe_system_appearance(window);
                   let name_input = cx.new(|cx| {
                                          InputState::new(window, cx).placeholder("Persona name")
                                                                     .default_value(name)
@@ -1439,7 +1445,7 @@ pub(crate) fn open_persona_editor(parent: WeakEntity<SettingsWindow>,
                                                         name_input,
                                                         instructions_input,
                                                         error: None });
-                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                  cx.new(|cx| Root::new(view, window, cx))
               });
 }
 

@@ -55,6 +55,20 @@ pub(crate) fn agent_window_options(title: &str, cx: &App) -> WindowOptions {
                     ..WindowOptions::default() }
 }
 
+/// The broadcast sheet: a utility dialog, so its purpose goes in the OS
+/// titlebar rather than an in-body heading (`knot-ui-conventions`). Shorter
+/// than the agent editor - it holds one field and two buttons.
+pub(crate) fn broadcast_window_options(cx: &App) -> WindowOptions {
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title:
+                                                                   Some("Broadcast to All \
+                                                                           Agents"
+                                                                                  .into()),
+                                                               ..Default::default() }),
+                    window_bounds: Some(WindowBounds::centered(size(px(480.), px(280.)), cx)),
+                    window_min_size: Some(size(px(360.), px(220.))),
+                    ..WindowOptions::default() }
+}
+
 /// The About window's fixed size. It is not resizable and not minimizable:
 /// its content neither reflows usefully nor is worth keeping in the Dock, per
 /// `openspec/specs/about-ui`.

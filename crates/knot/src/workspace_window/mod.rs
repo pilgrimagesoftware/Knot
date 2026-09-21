@@ -434,6 +434,9 @@ impl WorkspaceWindow {
         let options = workspace_window_options(saved_bounds, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
+                  // Every window tracks the OS appearance, so a light/dark flip
+                  // re-resolves the system palette and repaints.
+                  observe_system_appearance(window);
                   // The OS window title (Mission Control, Cmd+`, Window menu)
                   // is separate from the TitleBar row we draw
                   // ourselves - without this it falls back to
@@ -634,7 +637,7 @@ impl WorkspaceWindow {
                                 });
                           view.window_bounds_subscription = Some(subscription);
                       });
-                  cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                  cx.new(|cx| Root::new(view, window, cx))
               })
         {
             eprintln!("failed to open workspace window: {error}");
@@ -992,6 +995,16 @@ impl WorkspaceWindow {
     /// persist), which is what "Remove Agent does nothing" looked like.
     /// Every other agent mutation (create, edit) already persists this way.
     fn remove_agent(&mut self, id: Uuid) {
+        self.remove_agent_unpersisted(id);
+        self.persist_agents();
+    }
+
+    /// The removal itself, without writing settings back out.
+    ///
+    /// Split so a bulk close can remove every agent and persist once at the
+    /// end rather than rewriting `saved_agents` per agent, without a second
+    /// copy of the teardown cascade going out of step with this one.
+    fn remove_agent_unpersisted(&mut self, id: Uuid) {
         let removed = match self.store.lock() {
             Ok(mut store) => store.remove(id),
             Err(_) => return,
@@ -1002,7 +1015,6 @@ impl WorkspaceWindow {
                 self.selected_agent = None;
             }
         }
-        self.persist_agents();
     }
 
     /// Tears `id`'s session and every piece of per-agent view state down,
@@ -1066,6 +1078,78 @@ impl WorkspaceWindow {
             self.settings.saved_workspaces = store.saved_workspaces();
         }
         let _ = self.settings.persist();
+    }
+
+    /// Every agent id in this window's workspace, snapshotted.
+    fn workspace_agent_ids(&self) -> Vec<Uuid> {
+        self.store
+            .lock()
+            .map(|store| workspace_agent_ids(&store, self.workspace_id))
+            .unwrap_or_default()
+    }
+
+    /// Restarts every agent in the workspace, per `agent-list-ui`'s "Restart
+    /// All" requirement - the row menu's Restart Agent applied once per
+    /// agent, with a single persist at the end.
+    fn restart_all_agents(&mut self) {
+        for id in self.workspace_agent_ids() {
+            if let Ok(mut store) = self.store.lock() {
+                let _ = store.restart(id);
+            }
+            self.remove_session(id);
+            self.panel_states.remove(&id);
+        }
+        // `restart` clears the persisted session ids; write them out so a
+        // relaunch doesn't resume the sessions just dropped.
+        self.persist_agents();
+    }
+
+    /// Removes every agent in the workspace, and every companion those
+    /// agents own, per `agent-list-ui`'s "Close All" requirement.
+    fn close_all_agents(&mut self) {
+        for id in self.workspace_agent_ids() {
+            // A companion is removed with its owner, so by the time the
+            // loop reaches one it may already be gone - removing an id the
+            // store no longer holds removes nothing.
+            self.remove_agent_unpersisted(id);
+        }
+        self.persist_agents();
+    }
+
+    /// Deactivates every running agent in the workspace. An agent that is
+    /// not running is left alone rather than treated as a failure, per
+    /// `agent-list-ui`'s "Deactivate All" requirement.
+    fn deactivate_all_agents(&mut self) {
+        for id in self.workspace_agent_ids() {
+            let running = self.store
+                              .lock()
+                              .ok()
+                              .and_then(|store| store.agent(id).map(|agent| agent.activated))
+                              .unwrap_or(false);
+            if running {
+                self.deactivate_agent(id);
+            }
+        }
+    }
+
+    /// Delivers `text` to every agent in the workspace the way the user
+    /// typing it into that agent's own composer would: a prompt to an agent
+    /// driven by an ACP panel session, injected text to one running in a
+    /// terminal.
+    ///
+    /// An agent with neither is skipped quietly - one unreachable agent is
+    /// not a reason to withhold the message from the rest.
+    fn broadcast_to_agents(&mut self, text: &str) {
+        for id in self.workspace_agent_ids() {
+            if self.deliver_panel_prompt(id, text.to_string()) {
+                continue;
+            }
+            if let Some(session) = self.sessions.get(&id)
+               && let Ok(mut session) = session.lock()
+            {
+                let _ = session.send_text(text);
+            }
+        }
     }
 
     /// Starts a Panel-mode ACP connection for `id` if one isn't already
@@ -1486,7 +1570,10 @@ impl WorkspaceWindow {
                                              ui_font_family: theme.font_family.clone(),
                                              danger_color: theme.danger,
                                              info_color: theme.info,
-                                             border_color: theme.border };
+                                             border_color: theme.border,
+                                             card_color: theme.secondary,
+                                             prompt_color: theme.primary,
+                                             prompt_foreground: theme.primary_foreground };
                 drop(state);
                 drop(slot_guard);
                 // Reconcile the virtualized list with the folded state:
@@ -2308,10 +2395,8 @@ impl WorkspaceWindow {
         cx.notify();
     }
 
-    /// Reads and clears `id`'s prompt input, then sends it through the
-    /// live ACP session (if any and not blocked on a pending permission),
-    /// per `acp-panel-ui`'s "blocking further prompt submission until
-    /// answered" requirement.
+    /// Reads and clears `id`'s prompt input, then hands it to
+    /// [`Self::deliver_panel_prompt`].
     fn send_panel_prompt(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
         let Some(input) = self.panel_prompt_inputs.get(&id).cloned()
         else {
@@ -2330,9 +2415,32 @@ impl WorkspaceWindow {
             text.push_str("\n\nAttached: ");
             text.push_str(&path.to_string_lossy());
         }
+        if !self.deliver_panel_prompt(id, text) {
+            return;
+        }
+        cx.update_entity(&input, |state, cx| {
+              state.set_value("", window, cx);
+          });
+        cx.notify();
+    }
+
+    /// Sends `text` through `id`'s live ACP session, or queues it when that
+    /// session is mid-turn or blocked on a pending permission, per
+    /// `acp-panel-ui`'s "blocking further prompt submission until answered"
+    /// requirement.
+    ///
+    /// Split out of [`Self::send_panel_prompt`] so a broadcast reaches an
+    /// agent by exactly the path the agent's own composer uses: the
+    /// queueing, the recording of the user's message in the conversation
+    /// and the error reporting are one implementation rather than two that
+    /// can drift.
+    ///
+    /// Returns whether `id` has a panel session at all. An agent with none
+    /// is skipped, and its composer is left untouched.
+    fn deliver_panel_prompt(&mut self, id: Uuid, text: String) -> bool {
         let Some(slot) = self.panel_sessions.get(&id)
         else {
-            return;
+            return false;
         };
         let session = {
             let guard = slot.lock().unwrap();
@@ -2356,15 +2464,8 @@ impl WorkspaceWindow {
                 .entry(id)
                 .or_default()
                 .push(QueuedPanelPrompt::new(text));
-            cx.update_entity(&input, |state, cx| {
-                  state.set_value("", window, cx);
-              });
-            cx.notify();
-            return;
+            return true;
         };
-        cx.update_entity(&input, |state, cx| {
-              state.set_value("", window, cx);
-          });
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
                         if let Err(error) = session.prompt(&text).await {
@@ -2377,7 +2478,7 @@ impl WorkspaceWindow {
                             eprintln!("failed to send panel prompt: {error}");
                         }
                     });
-        cx.notify();
+        true
     }
 
     fn stop_panel_prompt(&mut self, id: Uuid, cx: &mut Context<Self>) {
@@ -2663,7 +2764,7 @@ impl WorkspaceWindow {
         true
     }
 
-    fn open_new_agent_dialog(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn open_new_agent_dialog(&mut self, cx: &mut Context<Self>) {
         open_agent_editor(Arc::clone(&self.store),
                           self.settings.clone(),
                           AgentEditorRequest { workspace_id: self.workspace_id,
@@ -3488,6 +3589,9 @@ impl Render for WorkspaceWindow {
             }
         };
         let selected_menu = self.selected_agent_menu(cx);
+        let background_targets = SidebarMenuTargets { store:         Arc::clone(&self.store),
+                                                      window_entity: cx.entity(),
+                                                      workspace_id:  self.workspace_id, };
         h_flex()
             .size_full()
             .map(|el| with_agents_menu_actions(el, selected_menu.as_ref()))
@@ -3542,10 +3646,33 @@ impl Render for WorkspaceWindow {
                             .flex_1()
                             .min_h_0()
                             .overflow_y_scroll()
-                            .child(v_flex().gap_1()
+                            .child(v_flex().min_h_full()
+                                           .gap_1()
                                            .p_4()
                                            .child(dashboard_row)
-                                           .children(agent_rows)),
+                                           .children(agent_rows)
+                                           // The background menu hangs off a
+                                           // filler below the rows rather
+                                           // than off the scroll container:
+                                           // in GPUI every hitbox under the
+                                           // pointer counts as hovered, not
+                                           // just the innermost, so a
+                                           // container-level context menu
+                                           // would open on top of the row's
+                                           // own - which `agent-list-ui`
+                                           // forbids. A sibling that claims
+                                           // the leftover space is reached
+                                           // only by a right-click that
+                                           // missed every row.
+                                           .child(div().id("workspace-agent-list-background")
+                                                       .flex_1()
+                                                       .min_h(px(32.))
+                                                       .context_menu(move |menu, _, _| {
+                                                           sidebar_background_context_menu(
+                                        &background_targets,
+                                        menu,
+                                    )
+                                                       }))),
                     )
                     .children(
                         self.error
@@ -3568,8 +3695,8 @@ impl Render for WorkspaceWindow {
                                     .label("New agent")
                                     .ghost()
                                     .on_click(cx.listener(
-                                        |view, _: &ClickEvent, window, cx| {
-                                            view.open_new_agent_dialog(window, cx);
+                                        |view, _: &ClickEvent, _window, cx| {
+                                            view.open_new_agent_dialog(cx);
                                         },
                                     )),
                             )
@@ -3810,6 +3937,178 @@ pub(crate) struct AgentMenuTargets {
     id:            Uuid,
     name:          String,
     folder:        String,
+}
+
+/// What the sidebar's background context menu acts on. The workspace, not
+/// any one agent: every item here is scoped to the workspace the sidebar is
+/// showing, as the reference's `currentWorkspaceAgents` is.
+#[derive(Clone)]
+pub(crate) struct SidebarMenuTargets {
+    store:         Arc<Mutex<knot_agents::AgentStore>>,
+    window_entity: Entity<WorkspaceWindow>,
+    workspace_id:  Uuid,
+}
+
+/// Every agent id in `workspace_id`, copied out of the store.
+///
+/// A snapshot rather than a live borrow, and the reason each bulk action
+/// takes one before it starts: `AgentStore::remove` mutates the workspace's
+/// agent list - and takes each removed agent's companions with it - so a
+/// loop reading that list as it shrinks skips agents, which is how half a
+/// workspace survives a Close All. The Swift reference copies first for the
+/// same reason (`SidebarView.swift`'s `agentsToClose`).
+pub(crate) fn workspace_agent_ids(store: &knot_agents::AgentStore, workspace_id: Uuid)
+                                  -> Vec<Uuid> {
+    store.workspaces()
+         .iter()
+         .find(|workspace| workspace.id == workspace_id)
+         .map(|workspace| workspace.agent_ids.clone())
+         .unwrap_or_default()
+}
+
+/// Reads the workspace's agent counts for the sidebar's background menu.
+///
+/// Pure over the store, like [`agent_menu_facts`], so the enablement rules
+/// are testable without a window, and read when the menu opens rather than
+/// when the sidebar renders, so the item set reflects the store's current
+/// state. "Running" is `activated` - the same signal the row menu's
+/// Deactivate is gated on.
+pub(crate) fn sidebar_menu_facts(store: &knot_agents::AgentStore, workspace_id: Uuid)
+                                 -> SidebarMenuFacts {
+    let Some(workspace) = store.workspaces()
+                               .iter()
+                               .find(|workspace| workspace.id == workspace_id)
+    else {
+        return SidebarMenuFacts::default();
+    };
+    let agents = workspace.agent_ids
+                          .iter()
+                          .filter_map(|id| store.agent(*id))
+                          .collect::<Vec<_>>();
+    SidebarMenuFacts { agent_count:   agents.len(),
+                       running_count: agents.iter().filter(|agent| agent.activated).count(), }
+}
+
+/// Builds the sidebar's background context menu: every entry
+/// [`sidebar_background_menu_entries`] returns, with the ones that do not
+/// apply rendered disabled rather than omitted.
+pub(crate) fn sidebar_background_context_menu(targets: &SidebarMenuTargets, menu: PopupMenu)
+                                              -> PopupMenu {
+    let facts = match targets.store.lock() {
+        Ok(store) => sidebar_menu_facts(&store, targets.workspace_id),
+        Err(_) => SidebarMenuFacts::default(),
+    };
+    let mut menu = menu;
+    for item in sidebar_background_menu_entries(facts) {
+        menu = match item.entry.label() {
+            None => menu.separator(),
+            Some(label) => {
+                let targets = targets.clone();
+                let entry = item.entry;
+                menu.item(PopupMenuItem::new(label).disabled(!item.enabled)
+                                                   .on_click(move |_, window, app| {
+                                                       run_sidebar_menu_action(entry, &targets,
+                                                                               window, app);
+                                                   }))
+            }
+        };
+    }
+    menu
+}
+
+/// Runs one item of the sidebar's background menu.
+///
+/// The two confirming items open through `window.defer` for the same reason
+/// the row menu's do: a `PopupMenu` dismisses itself after running a handler
+/// and takes an inline dialog down with it.
+fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMenuTargets,
+                           window: &mut Window, app: &mut App) {
+    match entry {
+        AgentListBackgroundEntry::NewAgent => {
+            targets.window_entity.update(app, |view, cx| {
+                                     view.open_new_agent_dialog(cx);
+                                 });
+        }
+        AgentListBackgroundEntry::RestartAll => {
+            let targets = targets.clone();
+            window.defer(app, move |window, app| {
+                      window.open_alert_dialog(app, move |alert, _, _| {
+                                let targets = targets.clone();
+                                let count = workspace_agent_count(&targets);
+                                alert.title("Restart All")
+                                     .description(format!("Restart {count} {}? Every session is \
+                                                           cleared and cannot be recovered.",
+                                                          agent_noun(count)))
+                                     .confirm()
+                                     .on_ok(move |_, _, app| {
+                                         targets.window_entity.update(app, |view, cx| {
+                                                                  view.restart_all_agents();
+                                                                  cx.notify();
+                                                              });
+                                         true
+                                     })
+                            });
+                  });
+        }
+        AgentListBackgroundEntry::CloseAll => {
+            let targets = targets.clone();
+            window.defer(app, move |window, app| {
+                      window.open_alert_dialog(app, move |alert, _, _| {
+                                let targets = targets.clone();
+                                let count = workspace_agent_count(&targets);
+                                alert.title("Close All")
+                                     .description(format!("Close {count} {}? This closes every \
+                                                           session and cannot be undone.",
+                                                          agent_noun(count)))
+                                     .confirm()
+                                     .on_ok(move |_, _, app| {
+                                         targets.window_entity.update(app, |view, cx| {
+                                                                  view.close_all_agents();
+                                                                  cx.notify();
+                                                              });
+                                         true
+                                     })
+                            });
+                  });
+        }
+        AgentListBackgroundEntry::DeactivateAll => {
+            // No confirmation, matching the row menu's Deactivate: every
+            // agent it stops comes back by being selected, which is the
+            // test Restart All and Close All fail.
+            targets.window_entity.update(app, |view, cx| {
+                                     view.deactivate_all_agents();
+                                     cx.notify();
+                                 });
+        }
+        AgentListBackgroundEntry::Broadcast => {
+            let targets = targets.clone();
+            window.defer(app, move |_window, app| {
+                      let window_entity = targets.window_entity.clone();
+                      open_broadcast_sheet(move |text, _window, app| {
+                                               window_entity.update(app, |view, cx| {
+                                                                view.broadcast_to_agents(&text);
+                                                                cx.notify();
+                                                            });
+                                           },
+                                           app);
+                  });
+        }
+        AgentListBackgroundEntry::Separator => {}
+    }
+}
+
+/// How many agents the workspace holds right now, for a confirmation that
+/// names the count.
+fn workspace_agent_count(targets: &SidebarMenuTargets) -> usize {
+    targets.store
+           .lock()
+           .map(|store| sidebar_menu_facts(&store, targets.workspace_id).agent_count)
+           .unwrap_or(0)
+}
+
+/// "agent" or "agents", so a confirmation naming one agent reads as English.
+fn agent_noun(count: usize) -> String {
+    knot_core::l10n::plural_noun(count as u64, "count.agent", "count.agents")
 }
 
 /// Reads an agent's menu facts, the workspaces it could move to, and its

@@ -142,9 +142,9 @@ pub(crate) fn shorten_path(path: &str) -> String {
 
 /// Registers the embedded font families and sets Adamina as the app-wide
 /// default font (Manrope stays registered for the workspace header/cell
-/// text that applies it explicitly), plus a distinct accent color, so the
-/// app doesn't rely on the platform's generic UI font and neutral-gray
-/// default theme.
+/// text that applies it explicitly), then lays the platform palette over
+/// the theme, so the app doesn't rely on the platform's generic UI font and
+/// neutral-gray default theme.
 pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App) {
     if let Err(error) = cx.text_system()
                           .add_fonts(vec![std::borrow::Cow::Borrowed(ADAMINA_REGULAR),
@@ -167,20 +167,51 @@ pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App
     theme.font_family = settings.title_font_name.clone().into();
     theme.mono_font_family = "JetBrains Mono".into();
     theme.font_size = px(settings.title_font_size as f32);
-    let accent: gpui_kit::Hsla = rgb(0x3B82F6).into();
-    let accent_hover: gpui_kit::Hsla = rgb(0x2563EB).into();
-    let accent_active: gpui_kit::Hsla = rgb(0x1D4ED8).into();
-    let white = gpui_kit::white();
-    theme.colors.primary = accent;
-    theme.colors.primary_hover = accent_hover;
-    theme.colors.primary_active = accent_active;
-    theme.colors.primary_foreground = white;
-    theme.colors.button_primary = accent;
-    theme.colors.button_primary_hover = accent_hover;
-    theme.colors.button_primary_active = accent_active;
-    theme.colors.button_primary_foreground = white;
-    theme.colors.ring = accent;
-    theme.colors.selection = accent.opacity(0.25);
+
+    apply_system_palette(cx);
+}
+
+/// Lays the platform palette (see [`crate::macos::system_color`]) over the
+/// theme: the accent family drives every tinted surface, the system's
+/// dynamic neutrals drive the untinted ones.
+///
+/// Semantic colors are deliberately left alone - `danger`, `info` and the
+/// agent-state colors carry meaning, and must read the same whatever tint
+/// the user has chosen.
+///
+/// Safe to call again at any time: it reads the palette afresh and rewrites
+/// only the colors it owns, which is how an appearance flip repaints (see
+/// [`observe_system_appearance`]).
+pub(crate) fn apply_system_palette(cx: &mut App) {
+    let palette = crate::macos::system_color::resolve();
+    let theme = cx.global_mut::<Theme>();
+
+    theme.colors.primary = palette.accent;
+    theme.colors.primary_hover = palette.accent_hover;
+    theme.colors.primary_active = palette.accent_active;
+    theme.colors.primary_foreground = palette.accent_foreground;
+    theme.colors.button_primary = palette.accent;
+    theme.colors.button_primary_hover = palette.accent_hover;
+    theme.colors.button_primary_active = palette.accent_active;
+    theme.colors.button_primary_foreground = palette.accent_foreground;
+    // Focus reaches every control through `ring`, so one assignment tints
+    // every focused border rather than each widget naming a color.
+    theme.colors.ring = palette.accent;
+    theme.colors.selection = palette.accent.opacity(0.25);
+
+    // Absent off macOS, where the theme keeps the neutrals it ships with.
+    if let Some(neutrals) = palette.neutrals {
+        theme.colors.background = neutrals.window_background;
+        theme.colors.title_bar = neutrals.window_background;
+        // `secondary` is the theme's raised neutral surface - what the
+        // panel's tool-call cards and message bubbles sit on - and `input`
+        // is the field surface; both are controls, so both take
+        // `controlBackgroundColor`.
+        theme.colors.secondary = neutrals.control_background;
+        theme.colors.input = neutrals.control_background;
+        theme.colors.border = neutrals.separator;
+        theme.colors.title_bar_border = neutrals.separator;
+    }
 
     // `tokens` is a legacy snapshot of `colors` taken at construction time,
     // not re-derived on mutation (that's what Button/Switch actually read
@@ -190,6 +221,23 @@ pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App
     // Radius/scrollbar/typography reach rendering through a separately
     // mirrored Base layer that only `Theme::sync_base` re-derives.
     Theme::sync_base(cx);
+}
+
+/// Re-resolves the theme whenever the OS appearance changes under `window`,
+/// so a light/dark flip repaints without a settings round-trip or a restart.
+///
+/// `Theme::change` reloads the light or dark config wholesale, which wipes
+/// the palette laid over it - hence the re-ingestion straight after, in that
+/// order. Every window registers this: the palette is global, so a second
+/// window re-resolving it is harmless, and the app must keep tracking the
+/// appearance after any one window closes.
+pub(crate) fn observe_system_appearance(window: &Window) {
+    window.observe_window_appearance(|window, cx| {
+              Theme::change(cx.window_appearance(), Some(window), cx);
+              apply_system_palette(cx);
+              window.refresh();
+          })
+          .detach();
 }
 
 /// The overlay layers `gpui_component::Root` does not draw for you.
