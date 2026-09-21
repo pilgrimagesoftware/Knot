@@ -225,6 +225,85 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
     entries
 }
 
+/// One entry in the sidebar's background context menu - the menu that opens
+/// on the agent list's empty space rather than on a row, scoped to the
+/// workspace rather than to any one agent.
+///
+/// A separate enum from [`AgentMenuEntry`] rather than an extension of it:
+/// the two menus share no item, and this one disables what does not apply
+/// where the row's menu omits it, so nothing is gained by forcing both
+/// through one type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentListBackgroundEntry {
+    Separator,
+    NewAgent,
+    RestartAll,
+    CloseAll,
+    DeactivateAll,
+    Broadcast,
+}
+
+impl AgentListBackgroundEntry {
+    /// The user-visible label, or `None` for a separator. Matches the Swift
+    /// reference's strings (`Skwad/Views/Sidebar/SidebarView.swift`), except
+    /// Deactivate All, which the reference has no counterpart for.
+    pub(crate) fn label(self) -> Option<&'static str> {
+        match self {
+            Self::Separator => None,
+            Self::NewAgent => Some("New Agent"),
+            Self::RestartAll => Some("Restart All"),
+            Self::CloseAll => Some("Close All"),
+            Self::DeactivateAll => Some("Deactivate All"),
+            Self::Broadcast => Some("Broadcast to All Agents…"),
+        }
+    }
+}
+
+/// What the sidebar's background menu needs to know about the workspace it
+/// opened over. Counts rather than the agents themselves: enablement is the
+/// only decision this menu makes, and it turns on nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct SidebarMenuFacts {
+    /// Agents in the workspace the sidebar is showing.
+    pub(crate) agent_count:   usize,
+    /// How many of those are running, i.e. have a session to stop.
+    pub(crate) running_count: usize,
+}
+
+/// One item of the sidebar's background menu: the entry and whether it
+/// applies to this workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SidebarMenuItem {
+    pub(crate) entry:   AgentListBackgroundEntry,
+    /// Meaningless for [`AgentListBackgroundEntry::Separator`], which the
+    /// renderer matches before it ever reads this.
+    pub(crate) enabled: bool,
+}
+
+/// The sidebar background menu's entries, in order, with its one divider.
+///
+/// Unlike [`agent_context_menu_entries`], this returns every entry every
+/// time and marks the ones that do not apply disabled. The row menu opens on
+/// a different row each time and is read top to bottom; this one opens on the
+/// same empty space every time and is learned by position, which an item set
+/// that changes shape defeats (`agent-list-ui`).
+pub(crate) fn sidebar_background_menu_entries(facts: SidebarMenuFacts) -> Vec<SidebarMenuItem> {
+    use AgentListBackgroundEntry::*;
+
+    let has_agents = facts.agent_count > 0;
+    // Deactivate All needs a *running* agent, not merely an existing one:
+    // Restart All and Close All apply to a stopped agent, stopping does not.
+    let has_running = facts.running_count > 0;
+    [(NewAgent, true),
+     (RestartAll, has_agents),
+     (CloseAll, has_agents),
+     (DeactivateAll, has_running),
+     (Separator, false),
+     (Broadcast, has_agents)].into_iter()
+                             .map(|(entry, enabled)| SidebarMenuItem { entry, enabled })
+                             .collect()
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct LayoutModel {
     pub(crate) workspace_rows:      Vec<WorkspaceRow>,

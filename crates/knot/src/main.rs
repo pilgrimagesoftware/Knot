@@ -5,6 +5,7 @@ mod agent_menu;
 mod app_bootstrap;
 mod app_state;
 mod app_support;
+mod broadcast_sheet;
 mod command_center;
 mod dashboard;
 mod open_in;
@@ -32,11 +33,14 @@ use agent_editor::*;
 use agent_menu::*;
 use app_state::*;
 use app_support::*;
+use broadcast_sheet::*;
 use command_center::*;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
-use gpui_kit::component::input::{Input, InputEvent, InputState, Paste, Textarea, TextareaState};
+use gpui_kit::component::input::{
+    Escape, Input, InputEvent, InputState, Paste, Textarea, TextareaState,
+};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::switch::Switch;
