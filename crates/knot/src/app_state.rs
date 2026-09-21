@@ -99,6 +99,27 @@ pub(crate) enum AgentMenuEntry {
 }
 
 impl AgentMenuEntry {
+    /// Every variant, in the order they appear in a full menu.
+    ///
+    /// The menu bar's Agents menu pairs each labelled entry with an action,
+    /// and `tests::every_agent_menu_entry_is_in_all` walks this list against
+    /// an exhaustive match, so a variant added here without an action - or
+    /// added to the enum without reaching this list - fails the build.
+    pub(crate) const ALL: [Self; 14] = [Self::Separator,
+                                        Self::NewCompanion,
+                                        Self::NewShellCompanion,
+                                        Self::EditAgent,
+                                        Self::ForkAgent,
+                                        Self::DuplicateAgent,
+                                        Self::MoveToWorkspace,
+                                        Self::SaveToBench,
+                                        Self::OpenIn,
+                                        Self::MarkdownFiles,
+                                        Self::RegisterAgent,
+                                        Self::Deactivate,
+                                        Self::RestartAgent,
+                                        Self::RemoveAgent];
+
     /// The user-visible label, or `None` for a separator. Matches the Swift
     /// reference's strings (`Skwad/Views/Components/AgentContextMenu.swift`),
     /// except that the port keeps "Remove Agent" where the reference says
@@ -141,6 +162,21 @@ pub(crate) struct AgentMenuFacts {
     /// is absent rather than disabled when it is not, matching how this
     /// menu hides every other item that does not apply.
     pub(crate) is_running:           bool,
+}
+
+impl AgentMenuFacts {
+    /// The facts of an agent every item applies to.
+    ///
+    /// The menu bar's Agents menu is built from these, because it shows the
+    /// full item set and disables what the selection cannot do rather than
+    /// omitting it (`app-menu`). Reading the shape from
+    /// [`agent_context_menu_entries`] rather than listing it again is what
+    /// keeps the two menus in the same order and grouping.
+    pub(crate) const EVERY_ITEM: Self = Self { is_companion:         false,
+                                               is_shell:             false,
+                                               has_move_targets:     true,
+                                               has_markdown_history: true,
+                                               is_running:           true, };
 }
 
 /// The agent-row context menu's entries, in order, with dividers.

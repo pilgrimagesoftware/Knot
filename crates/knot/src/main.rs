@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod agent_editor;
+mod agent_menu;
 mod app_bootstrap;
 mod app_state;
 mod app_support;
@@ -28,6 +29,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_editor::*;
+use agent_menu::*;
 use app_state::*;
 use app_support::*;
 use command_center::*;

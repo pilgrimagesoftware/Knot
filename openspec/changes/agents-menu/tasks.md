@@ -1,6 +1,6 @@
 ## 1. The item set, shared
 
-- [ ] 1.1 Add one unit action per `AgentMenuEntry` that has a label, and a
+- [x] 1.1 Add one unit action per `AgentMenuEntry` that has a label, and a
       total mapping between the two. Verify with a test that every entry
       with a label has an action and every action maps back to exactly one
       entry - so an item added to the context menu cannot silently skip the
@@ -8,7 +8,7 @@
 
 ## 2. The menu
 
-- [ ] 2.1 Build the Agents menu from `agent_context_menu_entries` with the
+- [x] 2.1 Build the Agents menu from `agent_context_menu_entries` with the
       facts of the selected agent, showing every item and marking those that
       do not apply as disabled, and insert it into the menu bar after View.
       Verify with a test that the menu's item order and grouping match the
@@ -39,7 +39,7 @@
 
 ## 5. Verification
 
-- [ ] 5.1 `make rust` passes clean.
+- [x] 5.1 `make rust` passes clean.
 - [ ] 5.2 Confirm a dialog opened from the menu bar appears: the handler runs
       inside the active window's update, so an undeferred `open_alert_dialog`
       fails with "window not found" and the item looks dead - the About Knot

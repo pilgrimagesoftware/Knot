@@ -8,6 +8,14 @@ rather than assumed:
   every menu item. So an `.on_action` handler attached conditionally during
   render decides whether macOS draws that item enabled - no menu rebuild
   needed, and it updates on the next frame.
+  **The window must hold focus somewhere for this to work at all.**
+  `dispatch_path` collects the *ancestors of the focused node*, and gpui
+  resolves "nothing focused" to the dispatch tree's root - which is above the
+  element the handlers are on, so none of them is found. The workspace window
+  claimed focus nowhere until the user clicked a pane, which is why the first
+  build drew every item disabled with an agent plainly selected. Its root
+  element now tracks a focus handle and takes focus when nothing else has it;
+  once a pane takes over, the root is still that pane's ancestor.
 - `App::is_action_available` ORs the window's answer with "is there a global
   listener for this action". An action registered globally is therefore
   *always* enabled, which is why these actions must be window-level only.
@@ -82,6 +90,24 @@ the ones last built.
 
 Everything else - which items exist, whether they are enabled - is handled by
 the availability mechanism above and needs no rebuild.
+
+**Except the submenus' own parent items**, which the availability mechanism
+cannot reach. AppKit only sends `validateMenuItem:` to items that carry an
+action, and a submenu's parent carries none, so it draws enabled however
+unavailable its leaves are - checked against the running app, where all three
+read enabled with nothing selected while every plain item read disabled. Their
+state therefore comes from the snapshot too: it carries the selected agent's
+entry list alongside the submenu contents, and a submenu whose entry is absent
+is built `.disabled(true)`.
+
+That in turn is why the rebuild has to follow the *active* window rather than
+just any window whose selection changed. A disabled-by-availability item stops
+being available the moment focus leaves the window that registered it; a
+statically disabled submenu does not. So the window that put its selection on
+the menu bar records that it did, in an `AgentsMenuState` global, and hands the
+menu back when it is no longer active - which is what disables the submenus
+again behind the workspace manager, and what stops two open workspace windows
+overwriting each other on alternating polls.
 
 ### Dialogs must be deferred, for a second reason
 

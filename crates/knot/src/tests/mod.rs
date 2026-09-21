@@ -1,4 +1,5 @@
 mod about_dialog;
+mod agents_menu;
 
 use knot_core::Workspace;
 

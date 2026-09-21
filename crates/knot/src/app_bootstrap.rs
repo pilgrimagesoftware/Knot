@@ -162,7 +162,14 @@ pub(crate) fn about_knot(_: &AboutKnot, cx: &mut App) {
       });
 }
 
-pub(crate) fn set_app_menus(cx: &mut App) {
+/// Installs the menu bar.
+///
+/// Called again whenever `snapshot` changes, because a `Menu` is a static
+/// snapshot: the Agents menu's Move to Workspace and Markdown Files
+/// submenus cannot re-read the store on their own (`app-menu`). Everything
+/// else in the bar is rebuilt identically, which is cheap and keeps the
+/// whole bar described in one place.
+pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
     cx.set_menus([
         Menu::new("Knot").items([
             MenuItem::action("About Knot", AboutKnot),
@@ -192,6 +199,7 @@ pub(crate) fn set_app_menus(cx: &mut App) {
         ]),
         Menu::new("View")
             .items([MenuItem::action("Enter Full Screen", gpui_kit::NoAction).disabled(true)]),
+        agents_menu(snapshot),
         Menu::new("Window").items([
             MenuItem::action("Minimize", gpui_kit::NoAction).disabled(true),
             MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
@@ -269,7 +277,11 @@ pub(crate) fn run() {
                                                               cx);
                                      });
                                }
-                               set_app_menus(cx);
+                               // The Agents menu starts with nothing
+                               // selected, and so disabled; a workspace
+                               // window claims it once one is.
+                               cx.set_global(AgentsMenuState::default());
+                               set_app_menus(&AgentMenuSnapshot::default(), cx);
 
                                cx.on_system_notification_response(|response, cx| {
                                      if notification_response_agent_id(&response).is_some() {

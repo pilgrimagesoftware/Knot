@@ -36,3 +36,6 @@ panel:
   delete_queued: "Delete this queued message"
   retry_connect: "Try again"
   context_usage: "Context usage"
+
+menu:
+  agents: "Agents"
