@@ -40,7 +40,7 @@
 ## 4. Verification
 
 - [x] 4.1 `make rust` passes clean (fmt, clippy, tests, build).
-- [ ] 4.2 Manual macOS verification: (a) change the system accent - the
+- [x] 4.2 Manual macOS verification: (a) change the system accent - the
       prompt bubble, primary buttons and focus tint follow it and the prompt
       text stays readable; (b) flip light/dark - neutral surfaces and window
       background repaint live; (c) a focused input shows the accent border;
