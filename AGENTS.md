@@ -72,12 +72,26 @@ squash.
 git-flow. `develop` is the integration branch; `main` is release-only.
 
 Always do code changes in a dedicated `git worktree` on its own feature
-branch, no exceptions - never commit directly in the primary checkout at
-`/Users/paulyhedral/Projects/Code/Knot/App` (it stays on `develop`/`main` for
-syncing and reference) and never commit straight to `develop` or `main`. Use
-the `project-start-change` skill to create the worktree; convention is
-`/Users/paulyhedral/Projects/Code/Knot/Worktrees/<issue>-<change>` on branch
-`<issue>-<change>`.
+branch, no exceptions - never commit directly in the primary checkout (it
+stays on `develop`/`main` for syncing and reference) and never commit
+straight to `develop` or `main`. Use the `project-start-change` skill to
+create the worktree.
+
+Worktrees go in a peer directory beside the checkout, `<checkout>-Worktrees`,
+one subdirectory per branch, named `<issue>-<change>` to match the branch. So
+a checkout at `~/Code/ThirdParty/Knot` keeps them in
+`~/Code/ThirdParty/Knot-Worktrees/<issue>-<change>`. Derive the root rather
+than assuming a path - the checkout moves between machines, the convention
+does not:
+
+```bash
+REPO=$(git rev-parse --show-toplevel)
+git worktree add "$REPO-Worktrees/<issue>-<change>" -b <issue>-<change> origin/develop
+```
+
+A peer directory, never one inside the checkout, so worktree files don't show
+up as untracked noise in the primary checkout. `git worktree list` is
+authoritative for finding the existing ones.
 
 1. Branch from `develop`: `feature/<change>` (or `release/x.y.z`, `hotfix/x.y.z`).
 2. Implement against the OpenSpec change / spec contract.

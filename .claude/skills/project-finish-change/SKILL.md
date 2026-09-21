@@ -12,9 +12,10 @@ Resolve `owner/repo` from `git remote -v` - referred to below as `<owner>/<repo>
 
 ### 1. Identify the change and its worktree
 
-Ask which change to finish, unless clear from context. Find its worktree: `git worktree list`,
-or the fixed path convention
-`/Users/paulyhedral/Projects/Code/Knot/Worktrees/<branch-slug>`. All remaining work
+Ask which change to finish, unless clear from context. Find its worktree with
+`git worktree list` - that is authoritative. Failing that, the convention is a peer directory
+beside the checkout, `<checkout>-Worktrees/<branch-slug>`, so a checkout at
+`~/Code/ThirdParty/Knot` keeps them in `~/Code/ThirdParty/Knot-Worktrees/`. All remaining work
 happens inside that worktree, not the main working tree.
 
 ### 2. Verify the work before declaring anything done
@@ -105,10 +106,17 @@ git pull
 
 ### 11. Remove the feature worktree
 
+Run these from the primary checkout, not from inside the worktree being removed:
+
 ```
-git worktree remove /Users/paulyhedral/Projects/Code/Knot/Worktrees/<branch-slug>
+REPO=$(git rev-parse --show-toplevel)
+git worktree remove "$REPO-Worktrees/<branch-slug>"
 git branch -D <branch-name>
 ```
+
+If the session was switched into that worktree with `EnterWorktree`, leave it first
+(`ExitWorktree` with `keep`) - a session pinned inside a worktree cannot remove it, and once
+the directory is gone every git command in that session is refused until the pin is released.
 
 ### 12. Report back
 
