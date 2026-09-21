@@ -297,17 +297,28 @@ pub(crate) fn run() {
                 window.set_window_title(&knot_core::l10n::t("workspace.manager"));
                 let name_input =
                     cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
-                let view = cx.new(|_| WorkspaceManager {
-                    store: Arc::clone(&store),
-                    messages: Arc::clone(&messages),
-                    settings: settings.clone(),
-                    name_input,
-                    editing_id: None,
-                    workspace_dialog_id: None,
-                    show_workspace_dialog: false,
-                    delete_workspace_id: None,
-                    error: None,
-                    _mcp_stop: Some(mcp_stop),
+                let view = cx.new(|cx| {
+                    let name_subscription = cx.subscribe(
+                        &name_input,
+                        |_: &mut WorkspaceManager, _, event, cx| {
+                            if matches!(event, InputEvent::Change) {
+                                cx.notify();
+                            }
+                        },
+                    );
+                    WorkspaceManager {
+                        store: Arc::clone(&store),
+                        messages: Arc::clone(&messages),
+                        settings: settings.clone(),
+                        name_input,
+                        editing_id: None,
+                        workspace_dialog_id: None,
+                        show_workspace_dialog: false,
+                        delete_workspace_id: None,
+                        error: None,
+                        _name_subscription: name_subscription,
+                        _mcp_stop: Some(mcp_stop),
+                    }
                 });
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             })
