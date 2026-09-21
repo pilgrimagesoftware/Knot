@@ -12,6 +12,7 @@ use gpui_kit::{
 };
 use uuid::Uuid;
 
+use crate::consts;
 use crate::{state_color, state_label};
 
 pub(crate) const CARD_WIDTH: f32 = 280.;
@@ -161,7 +162,7 @@ fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
                                           .gap_0p5()
                                           .child(div().font_semibold().child(name))
                                           .child(div().text_sm()
-                                                      .text_color(rgb(0x888888))
+                                                      .text_color(rgb(consts::COLOR_CARD_MUTED))
                                                       .overflow_hidden()
                                                       .whitespace_nowrap()
                                                       .text_ellipsis()
@@ -237,7 +238,7 @@ pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
     let color: gpui_kit::Hsla =
         gpui_kit::Rgba::try_from(workspace.color_hex.as_str()).map(Into::into)
                                                               .unwrap_or_else(|_| {
-                                                                  rgb(0x1B4FB2).into()
+                                                                  consts::workspace_default_color().into()
                                                               });
 
     let title: gpui_kit::AnyElement = if is_global {
@@ -266,7 +267,7 @@ pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
             .child(if workspace.agents.is_empty() {
                        div().pl_3()
                             .text_sm()
-                            .text_color(rgb(0x888888))
+                            .text_color(rgb(consts::COLOR_CARD_MUTED))
                             .child(knot_core::l10n::t("dashboard.no_agents"))
                             .into_any_element()
                    }

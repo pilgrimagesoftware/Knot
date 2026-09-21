@@ -160,7 +160,7 @@ impl WorkspaceWindow {
                   cx.spawn(async move |cx| {
                         loop {
                             cx.background_executor()
-                              .timer(std::time::Duration::from_millis(33))
+                              .timer(consts::REPAINT_POLL_INTERVAL)
                               .await;
                             let texts =
                                 clipboard_writes.lock()

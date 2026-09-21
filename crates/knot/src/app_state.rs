@@ -1,4 +1,8 @@
 use super::*;
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub(crate) struct WorkspaceRow {
     pub(crate) id:       Uuid,
@@ -6,6 +10,10 @@ pub(crate) struct WorkspaceRow {
     pub(crate) selected: bool,
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub(crate) struct AgentRow {
     pub(crate) id:           Uuid,
@@ -37,9 +45,9 @@ pub(crate) fn state_label(state: knot_agents::AgentState) -> &'static str {
 /// additions green, deletions red, the changed-file count blue. Only the
 /// numbers take these - the words around them stay muted, so the figures
 /// are what the eye lands on.
-pub(crate) const DIFF_ADDED_COLOR: u32 = 0x22C55E;
-pub(crate) const DIFF_REMOVED_COLOR: u32 = 0xEF4444;
-pub(crate) const DIFF_FILES_COLOR: u32 = 0x3B82F6;
+pub(crate) const DIFF_ADDED_COLOR: u32 = consts::COLOR_IDLE;
+pub(crate) const DIFF_REMOVED_COLOR: u32 = consts::COLOR_ERROR;
+pub(crate) const DIFF_FILES_COLOR: u32 = consts::COLOR_INPUT;
 
 /// A diff stat with only its figures colored - additions green, deletions
 /// red, the changed-file count blue - and the words and brackets muted, so
@@ -70,10 +78,10 @@ pub(crate) fn diff_stats_row(stats: &knot_git::DiffStats, muted: gpui_kit::Hsla)
 
 pub(crate) fn state_color(state: knot_agents::AgentState) -> gpui_kit::Hsla {
     match state {
-        knot_agents::AgentState::Idle => rgb(0x22C55E).into(),
-        knot_agents::AgentState::Running => rgb(0xF97316).into(),
-        knot_agents::AgentState::Input => rgb(0x3B82F6).into(),
-        knot_agents::AgentState::Error => rgb(0xEF4444).into(),
+        knot_agents::AgentState::Idle => rgb(consts::COLOR_IDLE).into(),
+        knot_agents::AgentState::Running => rgb(consts::COLOR_RUNNING).into(),
+        knot_agents::AgentState::Input => rgb(consts::COLOR_INPUT).into(),
+        knot_agents::AgentState::Error => rgb(consts::COLOR_ERROR).into(),
     }
 }
 
@@ -99,6 +107,9 @@ pub(crate) enum AgentMenuEntry {
 }
 
 impl AgentMenuEntry {
+    // Exhaustiveness fixture: `tests::agent_context_menu` walks this to
+    // prove every variant has a label and an ordering.
+    #[allow(dead_code)]
     /// Every variant, in the order they appear in a full menu.
     ///
     /// The menu bar's Agents menu pairs each labelled entry with an action,
@@ -304,12 +315,20 @@ pub(crate) fn sidebar_background_menu_entries(facts: SidebarMenuFacts) -> Vec<Si
                              .collect()
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub(crate) struct LayoutModel {
     pub(crate) workspace_rows:      Vec<WorkspaceRow>,
     pub(crate) selected_agent_rows: Vec<AgentRow>,
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn layout_model(store: &knot_agents::AgentStore, agent_selection: Option<Uuid>,
                            attached_ids: &[Uuid], unread_counts: &BTreeMap<Uuid, usize>)
                            -> LayoutModel {
@@ -349,11 +368,19 @@ pub(crate) fn layout_model(store: &knot_agents::AgentStore, agent_selection: Opt
                   selected_agent_rows }
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn command_to_send(input: &str) -> Option<&str> {
     let command = input.trim();
     (!command.is_empty()).then_some(command)
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn stale_session_ids(session_ids: &[Uuid], live_ids: &BTreeSet<Uuid>) -> Vec<Uuid> {
     session_ids.iter()
                .copied()
@@ -407,11 +434,19 @@ pub(crate) fn agent_selection_for_workspace(store: &knot_agents::AgentStore, wor
              .copied()
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn initial_agent_selection(store: &knot_agents::AgentStore) -> Option<Uuid> {
     store.current_workspace_id()
          .and_then(|id| agent_selection_for_workspace(store, id))
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 /// The slice of an agent the shell paints. [`agent_status_snapshot`] diffs
 /// these so the poller only wakes the UI on visible changes, not on every
 /// buffer append.
@@ -423,18 +458,29 @@ pub(crate) struct AgentStatusKey {
     pub(crate) is_registered: bool,
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeliveryNotice {
     pub(crate) recipient_name: String,
     pub(crate) count:          usize,
 }
 
+// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
+// `show_system_notification`, so this is reached only from tests.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AwaitingNotice {
     agent_name: String,
     message:    String,
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn delivery_notice(events: &[DeliveryEvent], agents: &[knot_agents::Agent])
                               -> Option<DeliveryNotice> {
     let event = events.last()?;
@@ -446,6 +492,10 @@ pub(crate) fn delivery_notice(events: &[DeliveryEvent], agents: &[knot_agents::A
                           count })
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn agent_status_snapshot(store: &knot_agents::AgentStore) -> Vec<AgentStatusKey> {
     store.agents()
          .iter()
@@ -456,6 +506,10 @@ pub(crate) fn agent_status_snapshot(store: &knot_agents::AgentStore) -> Vec<Agen
          .collect()
 }
 
+// UNWIRED: ported from the Swift reference, no view reads it yet.
+// Reached only from tests; kept as the port's staging area rather than
+// deleted, so the behaviour it encodes is not lost.
+#[allow(dead_code)]
 pub(crate) fn unread_counts_snapshot(messages: &knot_messaging::MessageStore, agent_ids: &[Uuid])
                                      -> BTreeMap<Uuid, usize> {
     agent_ids.iter()
@@ -490,6 +544,9 @@ pub(crate) struct NudgeCheck<'a> {
     pub(crate) can_receive:    bool,
 }
 
+// The bool form of `inbox_prompt_message_id`, kept because the spec's
+// conditions read as a predicate and the tests assert them that way.
+#[allow(dead_code)]
 /// Whether to send `agent` the "check your inbox" prompt.
 ///
 /// Every condition here is one the spec names: MCP off means no messaging at
@@ -511,13 +568,20 @@ pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
 /// repaint poll the moment a condition above changes without the caller
 /// changing with it.
 pub(crate) fn inbox_prompt_message_id(check: NudgeCheck<'_>) -> Option<Uuid> {
-    if !(check.mcp_enabled && check.agent_type != "shell" && check.idle && check.can_receive) {
+    if !(check.mcp_enabled
+         && check.agent_type != consts::SHELL_AGENT_TYPE
+         && check.idle
+         && check.can_receive)
+    {
         return None;
     }
     check.latest_message
          .filter(|message_id| Some(*message_id) != check.last_nudged)
 }
 
+// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
+// `show_system_notification`, so this is reached only from tests.
+#[allow(dead_code)]
 pub(crate) fn should_show_awaiting_notice(selected_agent: Option<Uuid>, agent_id: Uuid,
                                           message: &str, last_message: Option<&String>)
                                           -> bool {
@@ -526,8 +590,14 @@ pub(crate) fn should_show_awaiting_notice(selected_agent: Option<Uuid>, agent_id
     && last_message.is_none_or(|last| last != message)
 }
 
+// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
+// `show_system_notification`, so this is reached only from tests.
+#[allow(dead_code)]
 pub(crate) const AWAITING_INPUT_DEFAULT_BODY: &str = "Needs your attention";
 
+// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
+// `show_system_notification`, so this is reached only from tests.
+#[allow(dead_code)]
 /// Whether a desktop notification should be raised for an agent entering
 /// Awaiting input, gating the same "is this a fresh prompt for an agent the
 /// user isn't already looking at" signal `should_show_awaiting_notice`
@@ -538,6 +608,9 @@ pub(crate) fn should_notify(desktop_notifications_enabled: bool, show_awaiting_n
     desktop_notifications_enabled && show_awaiting_notice
 }
 
+// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
+// `show_system_notification`, so this is reached only from tests.
+#[allow(dead_code)]
 /// The notification body: the hook-supplied message when non-empty,
 /// otherwise a default.
 pub(crate) fn notification_body(message: &str) -> &str {

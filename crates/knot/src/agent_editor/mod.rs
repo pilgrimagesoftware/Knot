@@ -114,7 +114,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                     .as_ref()
                     .map(|a| a.avatar.clone())
                     .or_else(|| prefill.avatar.clone())
-                    .unwrap_or_else(|| "🤖".to_string()),
+                    .unwrap_or_else(|| consts::DEFAULT_AGENT_AVATAR.to_string()),
             )
                                    });
               let view = cx.new(|cx| {

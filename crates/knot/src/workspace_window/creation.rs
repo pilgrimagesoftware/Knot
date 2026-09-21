@@ -10,6 +10,10 @@ pub(crate) struct SelectedAgentHeader {
     pub(crate) name:         String,
     pub(crate) folder:       String,
     pub(crate) header_title: String,
+    /// Snapshotted with the rest of the header but not drawn: the header
+    /// shows the agent's identity, and its type is already implied by the
+    /// avatar. Kept because the struct is the header's whole snapshot.
+    #[allow(dead_code)]
     pub(crate) agent_type:   String,
     /// The agent's state and its diff stat *lookup*: the outer `Option`
     /// is whether the first refresh has finished, the inner one whether
@@ -36,6 +40,10 @@ impl WorkspaceWindow {
                       })
     }
 
+    // SUPERSEDED: the inline new-agent form this submits was replaced by the
+    // agent editor (`open_new_agent_dialog`). Kept with its sibling fields
+    // until the form itself is removed - see the PR that added this note.
+    #[allow(dead_code)]
     pub(super) fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let folder = self.new_agent_folder_input
                          .read(cx)

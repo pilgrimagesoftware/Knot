@@ -99,7 +99,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                     cx.spawn(async move |cx| {
                           loop {
                               cx.background_executor()
-                                .timer(Duration::from_millis(300))
+                                .timer(consts::FONT_PANEL_POLL_INTERVAL)
                                 .await;
                               if let Some((target, family, size)) =
                                   native_font_panel::poll_selection()

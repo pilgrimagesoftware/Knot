@@ -53,7 +53,7 @@ pub(crate) fn detail_line(icon: gpui_kit::assets::IconName, text: String, size: 
 /// agent whose process exits is removed, an ACP agent whose adapter exits
 /// is not.
 pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
-    agent_type == "shell"
+    agent_type == consts::SHELL_AGENT_TYPE
 }
 
 /// A stable GPUI element key for a [`Uuid`]-identified row.

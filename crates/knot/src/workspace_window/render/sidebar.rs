@@ -42,7 +42,10 @@ impl WorkspaceWindow {
                        // than one character;
                        // clamp to a single grapheme so it can't
                        // overflow the tile.
-                       let avatar = avatar.graphemes(true).next().unwrap_or("🤖").to_string();
+                       let avatar = avatar.graphemes(true)
+                                          .next()
+                                          .unwrap_or(consts::DEFAULT_AGENT_AVATAR)
+                                          .to_string();
                        let selected = self.selected_agent == Some(id);
                        // A plain clickable div, not `Button` -
                        // `Button`'s default

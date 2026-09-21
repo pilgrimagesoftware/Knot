@@ -73,7 +73,7 @@ impl WorkspaceManager {
             let id = Uuid::new_v4();
             store.add_workspace(knot_core::Workspace { id,
                                                        name,
-                                                       color_hex: "#1B4FB2".to_string(),
+                                                       color_hex: consts::COLOR_WORKSPACE_DEFAULT_HEX.to_string(),
                                                        agent_ids: Vec::new(),
                                                        layout_mode: "single".to_string(),
                                                        active_agent_ids: Vec::new(),

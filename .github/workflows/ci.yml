@@ -48,6 +48,13 @@ jobs:
       - name: Format
         run: make rust-fmt-check
 
+      # A file nobody can hold in their head stops being reviewed properly,
+      # and the only reliable moment to split one is before it gets large.
+      # This limit was applied once by hand and then regressed, because
+      # nothing enforced it.
+      - name: File size
+        run: make rust-size
+
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |
           git --version

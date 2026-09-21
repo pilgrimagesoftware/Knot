@@ -116,6 +116,7 @@ make rust          # fmt + clippy + test + build, whole workspace
 
 make rust-fmt        # reformat with the pinned nightly
 make rust-fmt-check  # verify formatting (what CI runs)
+make rust-size     # fail on any .rs file over 700 lines
 make rust-lint     # cargo clippy --workspace --all-targets -- -D warnings
 make rust-test     # cargo test --workspace
 make rust-build    # cargo build --workspace
@@ -156,9 +157,23 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 
 ## Conventions
 
+- **No `.rs` file over 700 lines.** Enforced by `make rust-size` in CI. Split
+  by concern, not by line count; move colocated tests to a sibling `tests.rs`
+  first. Do not raise the limit to make a change fit.
+- **No crate-wide `allow`.** Allow on the item, with a comment saying why.
+  `UNWIRED` marks ported-but-unconnected code, `SUPERSEDED` marks code a newer
+  path replaced - both greppable.
 - Constants live in a single `consts.rs` per crate.
 - Errors: `thiserror` enums per crate (`GitError`, `DiscoveryError`, core
   `Error`), re-exported with a crate `Result` alias.
-- User-facing text goes through `knot_core::l10n::t`.
+- User-facing text goes through `knot_core::l10n::t`; tests assert the key
+  resolves, never the English copy.
 - Keep functions to <= 5-6 args; group related args in a struct.
+- Closed vocabularies are enums with `Display`/`FromStr`, not `String` matched
+  with a `_ => default` arm.
+- No I/O on the render path - GPUI re-renders per keystroke.
 - No statement-hugging brace style; format with nightly `rustfmt`.
+
+`.claude/rules/rust-structure.md` has the reasoning behind each of these, with
+the defect that produced it. Read it before a refactor; every rule names the
+cost of breaking it, so you can tell when it genuinely does not apply.

@@ -153,7 +153,7 @@ impl WorkspaceWindow {
     pub(super) fn refresh_diff_stats(&mut self, id: Uuid, folder: &str) {
         let fresh = self.diff_stats_requested
                         .get(&id)
-                        .is_some_and(|at| at.elapsed() < Self::DIFF_STATS_MAX_AGE);
+                        .is_some_and(|at| at.elapsed() < consts::DIFF_STATS_MAX_AGE);
         if fresh {
             return;
         }
