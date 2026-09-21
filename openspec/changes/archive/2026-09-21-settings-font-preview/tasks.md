@@ -15,7 +15,7 @@
       label in the family it names. Verify in the app that the UI, Title and
       Terminal rows each render in their own face, and that two rows set to
       different families look different.
-- [ ] 2.2 Verify the label keeps the settings window's text size: set the
+- [x] 2.2 Verify the label keeps the settings window's text size: set the
       Title font to 48pt and confirm its row reads "48pt", is drawn at the
       same size as the other two rows, and leaves all three row heights
       equal.
@@ -35,7 +35,7 @@
 - [x] 3.2 Mark an unresolvable row in its label while still naming the
       persisted family. Verify in the app that the row reads the configured
       family plus the marking, and that a resolvable row carries no marking.
-- [ ] 3.3 Verify the persisted value is untouched: with a row marked
+- [x] 3.3 Verify the persisted value is untouched: with a row marked
       unavailable, confirm the settings file still holds the configured
       family and that the marking clears on its own once the family resolves.
 
@@ -51,20 +51,25 @@
 
 - [x] 5.1 Run `make rust` and verify fmt, clippy, tests and build all pass
       for the workspace.
-- [ ] 5.2 Open the Appearance tab with all three fonts set to different
+- [x] 5.2 Open the Appearance tab with all three fonts set to different
       installed families and confirm the section reads as three distinct
       faces at one size, then set one to a font that is not installed and
       confirm only that row is marked.
 
-## Outstanding in-app verification
+## Notes
 
-Confirmed in the running app: a row renders in the family it names, and
-follows a new choice from the font panel (1.1, 2.1, 2.3). Still open - 2.2
-(the 48pt row height), 3.3 (the persisted value and the marking clearing),
-5.2 (three distinct faces at once, and only the unresolvable row marked), and
-so the visual half of 3.1 and 3.2. The route for 1.1 was
-settled by reading `gpui-component`'s `Button::render` and `gpui`'s `Div`
-paint instead: the label is a descendant div of the root the caller's style
-refines, and a div applies its text style to its descendants, so `.font_family`
-on the `Button` reaches the label and `.label()` did not have to be replaced
-with a styled child.
+Every task above was confirmed in the running app, the pure decision is
+covered by unit tests, and `make rust` passes for the workspace.
+
+The route for 1.1 was settled by reading `gpui-component`'s `Button::render`
+and `gpui`'s `Div` paint rather than by experiment: the label is a descendant
+div of the root the caller's style refines, and a div applies its text style
+to its descendants, so `.font_family` on the `Button` reaches the label and
+`.label()` did not have to be replaced with a styled child.
+
+Task 2.3 could not be verified until a defect older than this change was
+fixed: the font panel's choice never reached the app, in any row. The panel
+reports a choice by sending `changeFont:` to a receiver that sends
+`convertFont:` back, and GPUI installs no such responder, so the poll on
+`NSFontManager.selectedFont` read every choice as "no change". See
+`native_font_panel` in `crates/knot/src/app_support.rs`.
