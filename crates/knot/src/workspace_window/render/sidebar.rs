@@ -1,0 +1,261 @@
+//! The sidebar column: the dashboard row that sits above the list, and the
+//! agent rows themselves.
+//!
+//! An agent row is built from an [`AgentRow`] snapshot rather than from the
+//! store directly, so the store lock is released before any element is
+//! built - see [`super`]'s `render`.
+
+use super::super::*;
+
+impl WorkspaceWindow {
+    /// One element per agent in this workspace, in sidebar order.
+    ///
+    /// Collected rather than returned lazily because the closures borrow
+    /// `cx`, which the caller needs back to build the rest of the tree.
+    pub(super) fn agent_rows(&mut self, agents: Vec<AgentRow>, ui_font_name: String,
+                             ui_font_size: gpui_kit::Pixels, cx: &mut Context<Self>)
+                             -> Vec<gpui_kit::AnyElement> {
+        let store_for_menu = Arc::clone(&self.store);
+        let settings_for_menu = self.settings.clone();
+        let workspace_id = self.workspace_id;
+        let window_entity = cx.entity();
+
+        agents.into_iter()
+              .map(|AgentRow { id,
+                               avatar,
+                               name,
+                               folder,
+                               state,
+                               is_shell,
+                               is_companion,
+                               header_title,
+                               persona_name,
+                               agent_type,
+                               is_running, }| {
+                       let menu_name = name.clone();
+                       let menu_folder = folder.clone();
+                       let folder_name =
+                           PathBuf::from(&folder).file_name()
+                                                 .map(|name| name.to_string_lossy().into_owned())
+                                                 .unwrap_or(folder);
+                       // Legacy/imported data may carry more
+                       // than one character;
+                       // clamp to a single grapheme so it can't
+                       // overflow the tile.
+                       let avatar = avatar.graphemes(true).next().unwrap_or("🤖").to_string();
+                       let selected = self.selected_agent == Some(id);
+                       // A plain clickable div, not `Button` -
+                       // `Button`'s default
+                       // sizing forces a fixed height
+                       // regardless of content,
+                       // clipping this row's up to 4 lines
+                       // (name/persona/status/
+                       // folder). Same fix as the dashboard
+                       // cards in
+                       // `dashboard.rs`.
+                       div()
+                    .id(gpui_kit::ElementId::from(format!("workspace-agent-{id}")))
+                    .cursor_pointer()
+                    .rounded(cx.theme().radius)
+                    .p_2()
+                    // A companion belongs to the agent above it, so it reads
+                    // as nested: indented, with a rule down its left edge.
+                    .when(is_companion, |row| {
+                        row.ml_4().border_l_2().border_color(cx.theme().border)
+                    })
+                    .bg(if selected {
+                        cx.theme().muted
+                    } else {
+                        cx.theme().transparent
+                    })
+                    // A stopped agent's row is dimmed as a whole, so a
+                    // workspace of mixed agents reads at a glance. The
+                    // state dot cannot carry this: its four values say what
+                    // a *running* agent is doing, and none of them means
+                    // "not running at all". Selection still highlights the
+                    // row underneath, so the selected-but-stopped agent
+                    // whose pane shows the stopped placeholder is still
+                    // visibly the selected one.
+                    .when(!is_running, |row| row.opacity(0.45))
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_3()
+                            .items_start()
+                            .child(
+                                div()
+                                    .w(px(40.))
+                                    .h(px(40.))
+                                    .flex_shrink_0()
+                                    .overflow_hidden()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_2xl()
+                                    .child(avatar),
+                            )
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap_0p5()
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .whitespace_nowrap()
+                                            .text_ellipsis()
+                                            .font_semibold()
+                                            .child(name),
+                                    )
+                                    // A companion says so where a primary
+                                    // agent names its type - it has no
+                                    // coding-agent type of its own, and an
+                                    // unlabelled row gave no clue what it was.
+                                    .children(is_companion.then(|| {
+                                        detail_line(
+                                            gpui_kit::assets::IconName::CornerDownRight,
+                                            knot_core::l10n::t("agent.companion"),
+                                            DetailLineSize::Small,
+                                            ui_font_name.clone(),
+                                            ui_font_size,
+                                            cx,
+                                        )
+                                    }))
+                                    // The agent type reads as one of the
+                                    // row's detail lines, directly under the
+                                    // name and above the persona - not
+                                    // right-aligned opposite it, where it
+                                    // floated away from the name it
+                                    // describes and crowded the state dot.
+                                    .children((!is_shell).then(|| {
+                                        detail_line(
+                                            SettingsWindow::agent_type_icon(&agent_type),
+                                            SettingsWindow::agent_type_label(&agent_type)
+                                                .to_string(),
+                                            DetailLineSize::Small,
+                                            ui_font_name.clone(),
+                                            ui_font_size,
+                                            cx,
+                                        )
+                                    }))
+                                    .children(persona_name.map(|persona_name| {
+                                        // A drawn icon, not the `👤` this line
+                                        // used to carry inside its text: an
+                                        // emoji keeps its own colour and size,
+                                        // so it was the one thing in the
+                                        // column that did not line up.
+                                        detail_line(
+                                            gpui_kit::assets::IconName::User,
+                                            persona_name,
+                                            DetailLineSize::Small,
+                                            ui_font_name.clone(),
+                                            ui_font_size,
+                                            cx,
+                                        )
+                                    }))
+                                    .child(detail_line(
+                                        gpui_kit::assets::IconName::Activity,
+                                        header_title,
+                                        DetailLineSize::Body,
+                                        ui_font_name.clone(),
+                                        ui_font_size,
+                                        cx,
+                                    ))
+                                    .child(detail_line(
+                                        gpui_kit::assets::IconName::Folder,
+                                        folder_name,
+                                        DetailLineSize::Body,
+                                        ui_font_name.clone(),
+                                        ui_font_size,
+                                        cx,
+                                    )),
+                            )
+                            // The state dot alone. The working indicator is
+                            // deliberately not here: beside the dot it says
+                            // the same thing twice, and the row already
+                            // carries the one thing the dot cannot - a
+                            // stopped agent's row is dimmed as a whole
+                            // (see `agent-list-ui`).
+                            .children((!is_shell).then(|| {
+                                div()
+                                    .flex_shrink_0()
+                                    .w(px(8.))
+                                    .h(px(8.))
+                                    .mt_1()
+                                    .rounded_full()
+                                    .bg(state_color(state))
+                            })),
+                    )
+                    .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
+                        view.select_agent(id);
+                        // Leave the dashboard, the same way tapping an
+                        // agent card does - selecting a row while the
+                        // dashboard was open used to change the selection
+                        // without ever showing the session.
+                        view.view_mode = WorkspaceViewMode::Terminal;
+                        view.ensure_session(id);
+                        view.ensure_panel_session(id);
+                        cx.notify();
+                    }))
+                    .context_menu({
+                        let targets = AgentMenuTargets {
+                            store: Arc::clone(&store_for_menu),
+                            settings: settings_for_menu.clone(),
+                            window_entity: window_entity.clone(),
+                            workspace_id,
+                            id,
+                            name: menu_name.clone(),
+                            folder: menu_folder.clone(),
+                        };
+                        move |menu, window, cx| agent_row_context_menu(&targets, menu, window, cx)
+                    })
+                   })
+              .map(gpui_kit::IntoElement::into_any_element)
+              .collect()
+    }
+
+    /// The workspace overview row, pinned above the agent list.
+    pub(super) fn dashboard_row(&self, is_dashboard: bool, cx: &mut Context<Self>)
+                                -> gpui_kit::AnyElement {
+        // The dashboard sits at the top of the agent list, the way the
+        // Swift reference's `overviewRow` does (`SidebarView.swift`), and
+        // not as an icon in the bottom bar: it is the workspace's overview
+        // of every agent, so it belongs above them, shaped like the rows it
+        // summarises. As a bare icon beside "New agent" it read as a minor
+        // control and went unnoticed.
+        div().id("workspace-dashboard-row")
+             .cursor_pointer()
+             .rounded(cx.theme().radius)
+             .p_2()
+             .bg(if is_dashboard {
+                 cx.theme().muted
+             }
+             else {
+                 cx.theme().transparent
+             })
+             .child(h_flex().w_full()
+                            .gap_3()
+                            .items_center()
+                            .child(div().w(px(40.))
+                                        .h(px(40.))
+                                        .flex_shrink_0()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(Icon::default().path("icons/layout-dashboard.svg")))
+                            .child(div().flex_1()
+                                        .min_w_0()
+                                        .font_semibold()
+                                        .child(knot_core::l10n::t("dashboard.title"))))
+             .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                             view.view_mode = match view.view_mode {
+                                 WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,
+                                 _ => WorkspaceViewMode::Dashboard,
+                             };
+                             cx.notify();
+                         }))
+             .into_any_element()
+    }
+}
