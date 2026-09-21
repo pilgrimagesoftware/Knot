@@ -8,6 +8,7 @@ mod app_support;
 mod broadcast_sheet;
 mod command_center;
 mod dashboard;
+mod macos;
 mod open_in;
 mod panel_session;
 mod panel_state;

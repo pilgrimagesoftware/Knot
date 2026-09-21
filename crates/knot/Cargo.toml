@@ -31,6 +31,8 @@ unicode-segmentation = "1.13"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-app-kit = { version = "0.3", features = [
+    "NSColor",
+    "NSColorSpace",
     "NSFont",
     "NSFontManager",
     "NSFontPanel",

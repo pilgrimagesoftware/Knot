@@ -300,6 +300,9 @@ pub(crate) fn run() {
 
                                let options = manager_window_options(cx);
                                cx.open_window(options, |window, cx| {
+// Every window tracks the OS appearance, so a light/dark flip
+// re-resolves the system palette and repaints.
+observe_system_appearance(window);
                 // macOS leaves untitled windows out of
                 // the Window menu, which is why only
                 // open workspaces were listed there.
@@ -329,7 +332,7 @@ pub(crate) fn run() {
                         _mcp_stop: Some(mcp_stop),
                     }
                 });
-                cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                cx.new(|cx| Root::new(view, window, cx))
             })
             .expect("failed to open workspace manager");
                                // macOS launches a non-bundled binary without
