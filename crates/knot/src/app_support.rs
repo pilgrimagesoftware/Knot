@@ -160,12 +160,15 @@ pub(crate) mod native_character_picker {
 /// Embedded fonts (all SIL OFL licensed; see the matching `*-LICENSE.txt`
 /// under `assets/fonts/`), so the app looks the same regardless of what's
 /// installed on the system:
-/// - Adamina: the app-wide default font (dialogs, buttons, settings labels, and
-///   "title" text like agent names) - the renderer synthesizes bold for
+/// - Adamina: the UI font's default (`ui_font_name`), which is the app-wide
+///   default family - dialogs, buttons, settings labels, agent names, and
+///   Markdown body text - the renderer synthesizes bold for
 ///   `font_semibold`/`font_bold` text set in it.
-/// - Manrope: applied explicitly, only to the workspace header and agent
+/// - Manrope: the title font's default (`title_font_name`), applied explicitly
+///   at the sites that draw titles and headers: the workspace header, the agent
 ///   sidebar cell text that isn't the agent's name (persona, status, folder,
-///   git stats).
+///   git stats), the About window's credit lines, the panel input's send hint,
+///   and Markdown headers.
 /// - JetBrains Mono: the default terminal font (`terminal_font_name`'s
 ///   default), a real monospace coding font rather than a mono variant of the
 ///   UI font, reliably resolvable regardless of what's installed on the system.
