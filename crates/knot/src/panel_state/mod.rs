@@ -78,6 +78,9 @@ impl ToolCallCard {
 /// message and permission-prompt requirements.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PanelState {
+    /// The agent-reported context-window token usage, if the ACP adapter
+    /// supports `usage_update` notifications.
+    pub context_usage: Option<(u64, u64)>,
     pub messages: Vec<PanelMessage>,
     /// Set by a `session/request_permission` event; sending further
     /// prompts SHALL be blocked while this is set (enforced by the caller
@@ -213,6 +216,10 @@ impl PanelState {
 
     fn apply_update(&mut self, update: SessionUpdate) {
         match update {
+            SessionUpdate::Usage { used, size } if size > 0 => {
+                self.context_usage = Some((used, size));
+            }
+            SessionUpdate::Usage { .. } => {}
             SessionUpdate::TextDelta { text } => self.append_text(text),
             SessionUpdate::ToolCallStart {
                 tool_call_id,

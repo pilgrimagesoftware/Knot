@@ -148,33 +148,98 @@ const PERMISSION_SELECTOR_ID: &str = "panel-permission-mode-selector";
 /// simply getting taller.
 const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
 const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
-const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"];
 
-fn is_image_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            IMAGE_EXTENSIONS
-                .iter()
-                .any(|candidate| extension.eq_ignore_ascii_case(candidate))
-        })
-}
+fn format_token_count(tokens: u64) -> String {
+    let digits = tokens.to_string();
+    let first_group = digits.len() % 3;
+    let mut formatted = String::with_capacity(digits.len() + digits.len() / 3);
 
-fn pending_context_counts(paths: &[PathBuf]) -> (usize, usize) {
-    let images = paths.iter().filter(|path| is_image_path(path)).count();
-    (paths.len() - images, images)
-}
-
-fn pending_context_summary(paths: &[PathBuf]) -> String {
-    let (file_count, image_count) = pending_context_counts(paths);
-    if paths.is_empty() {
-        return knot_core::l10n::t("panel.no_context");
+    for (index, digit) in digits.bytes().enumerate() {
+        if index > 0 && (index - first_group).is_multiple_of(3) {
+            formatted.push(',');
+        }
+        formatted.push(char::from(digit));
     }
+
+    formatted
+}
+
+fn context_usage_tooltip(used: u64, size: u64) -> String {
     format!(
-        "{} \u{00b7} {}",
-        knot_core::l10n::pluralize(file_count as u64, "count.file", "count.files"),
-        knot_core::l10n::pluralize(image_count as u64, "count.image", "count.images")
+        "{}: {} / {} tokens",
+        knot_core::l10n::t("panel.context_usage"),
+        format_token_count(used),
+        format_token_count(size),
     )
+}
+
+#[cfg(test)]
+mod context_usage_tests {
+    use super::*;
+
+    #[test]
+    fn formats_token_counts_with_grouping() {
+        assert_eq!(format_token_count(1_234_567), "1,234,567");
+    }
+}
+
+fn context_usage_indicator(used: u64, size: u64, cx: &App) -> impl IntoElement {
+    let progress = (used as f64 / size as f64).clamp(0., 1.) as f32;
+    let foreground = cx.theme().accent;
+    let background = cx.theme().muted_foreground.opacity(0.35);
+    let tooltip = context_usage_tooltip(used, size);
+
+    div()
+        .id("panel-context-indicator")
+        .size(px(16.))
+        .flex_shrink_0()
+        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+        .child(canvas(
+            move |bounds, _, _| {
+                let center = bounds.center();
+                let radius = (f32::from(bounds.size.width)
+                    .min(f32::from(bounds.size.height))
+                    / 2.
+                    - 1.)
+                .max(0.);
+                let center_x = f32::from(center.x);
+                let center_y = f32::from(center.y);
+                let start = point(px(center_x), px(center_y - radius));
+                let radii = point(px(radius), px(radius));
+
+                let mut track = PathBuilder::stroke(px(2.));
+                track.move_to(start);
+                track.arc_to(radii, px(0.), false, true, point(px(center_x), px(center_y + radius)));
+                track.arc_to(radii, px(0.), false, true, start);
+
+                let progress_path = (progress > 0.).then(|| {
+                    let mut path = PathBuilder::stroke(px(2.));
+                    path.move_to(start);
+                    if progress >= 1. {
+                        path.arc_to(radii, px(0.), false, true, point(px(center_x), px(center_y + radius)));
+                        path.arc_to(radii, px(0.), false, true, start);
+                    } else {
+                        let angle = std::f32::consts::TAU * progress - std::f32::consts::FRAC_PI_2;
+                        let end = point(
+                            px(center_x + radius * angle.cos()),
+                            px(center_y + radius * angle.sin()),
+                        );
+                        path.arc_to(radii, px(0.), progress > 0.5, true, end);
+                    }
+                    path.build().ok()
+                }).flatten();
+
+                (track.build().ok(), progress_path)
+            },
+            move |_, (track, progress_path), window, _| {
+                if let Some(track) = track {
+                    window.paint_path(track, background);
+                }
+                if let Some(progress_path) = progress_path {
+                    window.paint_path(progress_path, foreground);
+                }
+            },
+        ))
 }
 
 /// One sidebar agent row's render inputs, snapshotted out of the store
@@ -1467,21 +1532,15 @@ impl WorkspaceWindow {
         } else {
             "Send (Enter)"
         };
-        let has_context = !pending_context.is_empty();
-        let context_summary = pending_context_summary(pending_context);
-        let context_tooltip = if has_context {
-            pending_context
-                .iter()
-                .map(|path| {
-                    path.file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| path.to_string_lossy().into_owned())
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            knot_core::l10n::t("panel.no_context")
-        };
+        let context_usage = self.panel_sessions.get(&id).and_then(|slot| {
+                                let slot = slot.lock().ok()?;
+                                let panel_session::PanelSessionSlot::Ready(handle) = &*slot
+                                else {
+                                    return None;
+                                };
+                                let state = handle.state();
+                                state.lock().ok()?.context_usage
+                            });
         v_flex()
             .flex_shrink_0()
             .gap_2()
@@ -1671,39 +1730,9 @@ impl WorkspaceWindow {
                         h_flex()
                             .gap_2()
                             .items_center()
-                            .child(
-                                h_flex()
-                                    .gap_1()
-                                    .items_center()
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_md()
-                                    .bg(cx.theme().secondary)
-                                    .child(
-                                        Button::new("panel-context-indicator")
-                                            .icon(gpui_kit::component::Icon::new(
-                                                gpui_kit::assets::IconName::Paperclip,
-                                            ))
-                                            .label(context_summary)
-                                            .tooltip(context_tooltip)
-                                            .ghost()
-                                            .xsmall(),
-                                    )
-                                    .child(
-                                        Button::new("panel-clear-context")
-                                            .icon(IconName::CircleX)
-                                            .tooltip(knot_core::l10n::t("panel.clear_context"))
-                                            .ghost()
-                                            .xsmall()
-                                            .disabled(!has_context)
-                                            .on_click(cx.listener(
-                                                move |view, _: &ClickEvent, _, cx| {
-                                                    view.clear_panel_context(id);
-                                                    cx.notify();
-                                                },
-                                            )),
-                                    ),
-                            )
+                            .children(context_usage.map(|(used, size)| {
+                                context_usage_indicator(used, size, cx)
+                            }))
                             .child(
                                 div()
                                     .flex_shrink_0()
@@ -1994,10 +2023,6 @@ impl WorkspaceWindow {
         {
             paths.remove(index);
         }
-    }
-
-    fn clear_panel_context(&mut self, id: Uuid) {
-        self.panel_pending_context.remove(&id);
     }
 
     /// Toggles `id`'s input area between its default and expanded
@@ -3840,45 +3865,5 @@ fn run_agent_menu_action(
         | AgentMenuEntry::MoveToWorkspace
         | AgentMenuEntry::OpenIn
         | AgentMenuEntry::MarkdownFiles => {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn image_paths_use_the_supported_extensions_case_insensitively() {
-        for extension in IMAGE_EXTENSIONS {
-            assert!(is_image_path(Path::new(&format!("screenshot.{extension}"))));
-        }
-        assert!(!is_image_path(Path::new("notes.txt")));
-        assert!(!is_image_path(Path::new("README")));
-    }
-
-    #[test]
-    fn pending_context_counts_separates_files_and_images() {
-        assert_eq!(pending_context_counts(&[]), (0, 0));
-        assert_eq!(
-            pending_context_counts(&[PathBuf::from("notes.txt"), PathBuf::from("todo.md")]),
-            (2, 0)
-        );
-        assert_eq!(
-            pending_context_counts(&[PathBuf::from("one.png"), PathBuf::from("two.JPG")]),
-            (0, 2)
-        );
-        assert_eq!(
-            pending_context_counts(&[PathBuf::from("notes.txt"), PathBuf::from("one.png")]),
-            (1, 1)
-        );
-    }
-
-    #[test]
-    fn pending_context_summary_uses_localized_counts_and_zero_state() {
-        assert_eq!(pending_context_summary(&[]), "no context");
-        assert_eq!(
-            pending_context_summary(&[PathBuf::from("notes.txt"), PathBuf::from("one.png")]),
-            "1 file \u{00b7} 1 image"
-        );
     }
 }

@@ -14,8 +14,6 @@ dashboard:
 count:
   file: "file"
   files: "files"
-  image: "image"
-  images: "images"
 
 git:
   stats_pending: "Getting stats…"
@@ -28,5 +26,4 @@ agent:
 
 panel:
   queued: "Queued"
-  no_context: "no context"
-  clear_context: "Clear attached context"
+  context_usage: "Context usage"

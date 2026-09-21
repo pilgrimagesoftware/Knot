@@ -168,6 +168,10 @@ impl ToolCallContent {
 /// distinguished, not flattened into one opaque payload.
 #[derive(Debug, Clone)]
 pub enum SessionUpdate {
+    Usage {
+        used: u64,
+        size: u64,
+    },
     TextDelta {
         text: String,
     },
@@ -227,6 +231,10 @@ impl SessionUpdate {
             .unwrap_or_else(|| params.clone());
         let kind = update.get("sessionUpdate").and_then(Value::as_str);
         match kind {
+            Some("usage_update") => SessionUpdate::Usage {
+                used: update.get("used").and_then(Value::as_u64).unwrap_or_default(),
+                size: update.get("size").and_then(Value::as_u64).unwrap_or_default(),
+            },
             Some("agent_message_chunk") | Some("text_delta") => SessionUpdate::TextDelta {
                 text: text_content(&update),
             },
