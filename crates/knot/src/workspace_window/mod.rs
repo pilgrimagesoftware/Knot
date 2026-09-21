@@ -1442,6 +1442,8 @@ impl WorkspaceWindow {
                 v_flex().gap_1().children(queued_prompts.iter().enumerate().map(
                     |(index, prompt)| {
                         h_flex()
+                            .w_full()
+                            .min_w_0()
                             .gap_1()
                             .items_center()
                             .child(
@@ -1456,18 +1458,34 @@ impl WorkspaceWindow {
                                     .child(prompt.text.clone()),
                             )
                             .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .text_xs()
-                                    .font_family(self.settings.ui_font_name.clone())
-                                    .when(prompt.failed, |element| {
-                                        element.text_color(cx.theme().danger)
+                                Button::new(("panel-queued-prompt-status", index as u64))
+                                    .child(Icon::new(if prompt.failed {
+                                        gpui_kit::assets::IconName::CircleX
+                                    } else {
+                                        gpui_kit::assets::IconName::Clock4
+                                    }))
+                                    .tooltip(if prompt.failed { "Failed" } else { "Queued" })
+                                    .text_color(if prompt.failed {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
                                     })
-                                    .child(if prompt.failed { "failed" } else { "queued" }),
+                                    .ghost()
+                                    .xsmall()
                             )
                             .child(
                                 Button::new(("panel-queued-prompt-action", index as u64))
-                                    .label(if prompt.failed { "Retry" } else { "Remove" })
+                                    .icon(if prompt.failed {
+                                        IconName::RotateCw
+                                    } else {
+                                        IconName::CircleX
+                                    })
+                                    .tooltip(if prompt.failed { "Retry" } else { "Remove" })
+                                    .text_color(if prompt.failed {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
