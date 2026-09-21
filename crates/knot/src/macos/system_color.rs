@@ -10,7 +10,11 @@
 //! and callers never need a `cfg` of their own - [`resolve`] hands back the
 //! fixed palette everywhere AppKit is not available.
 
-use gpui_kit::{Hsla, Rgba, rgb};
+// Only `relative_luminance` converts to `Rgba`, and it is gated the same way
+// - see the comment above `accent_states`.
+#[cfg(any(target_os = "macos", test))]
+use gpui_kit::Rgba;
+use gpui_kit::{Hsla, rgb};
 
 /// The fixed accent family the app painted before it read the system: the
 /// Tailwind blue 500/600/700 triple. Still what non-macOS targets get, so
