@@ -8,6 +8,7 @@ rust-version.workspace = true
 default-run = "knot"
 
 [dependencies]
+parking_lot.workspace = true
 knot-acp = { path = "../knot-acp" }
 knot-agent-launch = { path = "../knot-agent-launch" }
 knot-core = { path = "../knot-core" }

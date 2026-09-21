@@ -23,4 +23,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 time = { version = "0.3.55", features = ["parsing", "formatting", "macros"] }
 axum = "0.8.9"
 async-trait = "0.1.92"
+# No lock poisoning: `lock()` hands back the guard, so there is no `unwrap()`
+# to forget and no two-policy split between panicking and silently skipping.
+parking_lot = "0.12.5"
 rust-i18n = "4.2.2"

@@ -118,10 +118,7 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        if self.store
-               .lock()
-               .ok()
-               .and_then(|store| store.agent(id).map(|agent| agent.view_mode))
+        if self.store.lock().agent(id).map(|agent| agent.view_mode)
            != Some(knot_core::ViewMode::Panel)
         {
             return;
@@ -130,18 +127,12 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let Ok(slot) = slot.lock()
-        else {
-            return;
-        };
+        let slot = slot.lock();
         let panel_session::PanelSessionSlot::Ready(handle) = &*slot
         else {
             return;
         };
-        let request = handle.state()
-                            .lock()
-                            .ok()
-                            .and_then(|state| state.pending_permission.clone());
+        let request = handle.state().lock().pending_permission.clone();
         if let Some(request) = request {
             handle.answer_permission(&request, decision);
         }
@@ -315,11 +306,11 @@ impl WorkspaceWindow {
             return false;
         };
         let session = {
-            let guard = slot.lock().unwrap();
+            let guard = slot.lock();
             match &*guard {
                 panel_session::PanelSessionSlot::Ready(handle) => {
                     let state = handle.state();
-                    let state = state.lock().unwrap();
+                    let state = state.lock();
                     let ready = state.pending_permission.is_none() && !state.turn_active;
                     drop(state);
                     ready.then(|| {
@@ -363,12 +354,13 @@ impl WorkspaceWindow {
             self.panel_stopping.remove(&id);
             return;
         };
-        let session = slot.lock().ok().and_then(|guard| match &*guard {
-                                          panel_session::PanelSessionSlot::Ready(handle) => {
-                                              Some(handle.session())
-                                          }
-                                          _ => None,
-                                      });
+        let session = {
+            let guard = slot.lock();
+            match &*guard {
+                panel_session::PanelSessionSlot::Ready(handle) => Some(handle.session()),
+                _ => None,
+            }
+        };
         let Some(session) = session
         else {
             self.panel_stopping.remove(&id);
@@ -387,13 +379,13 @@ impl WorkspaceWindow {
             return;
         };
         let mut candidate = || -> Option<_> {
-            let guard = slot.lock().ok()?;
+            let guard = slot.lock();
             let panel_session::PanelSessionSlot::Ready(handle) = &*guard
             else {
                 return None;
             };
             let state = handle.state();
-            let state = state.lock().ok()?;
+            let state = state.lock();
             if state.pending_permission.is_some() || state.turn_active {
                 return None;
             }
@@ -419,7 +411,8 @@ impl WorkspaceWindow {
                         if let Err(error) = &result {
                             recorder.error(format!("The agent could not answer: {error}"));
                         }
-                        if let Ok(mut results) = results.lock() {
+                        {
+                            let mut results = results.lock();
                             results.push((id, prompt_id, result));
                         }
                     });

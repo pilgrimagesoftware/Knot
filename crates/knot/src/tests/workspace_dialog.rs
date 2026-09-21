@@ -88,7 +88,7 @@ fn a_blank_workspace_name_is_one_with_nothing_but_whitespace_in_it() {
 fn escape_closes_the_workspace_dialog_and_creates_nothing(cx: &mut TestAppContext) {
     let (store, mut cx, manager) = manager(cx);
 
-    let before = store.lock().unwrap().workspaces().len();
+    let before = store.lock().workspaces().len();
     manager.update_in(&mut cx, |manager, window, cx| {
                manager.open_workspace_dialog(None, window, cx);
                manager.name_input.update(cx, |input, cx| {
@@ -102,7 +102,7 @@ fn escape_closes_the_workspace_dialog_and_creates_nothing(cx: &mut TestAppContex
 
     assert!(!manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
             "escape left the workspace dialog open");
-    assert_eq!(store.lock().unwrap().workspaces().len(),
+    assert_eq!(store.lock().workspaces().len(),
                before,
                "escape created a workspace");
 }
@@ -125,7 +125,6 @@ fn return_creates_the_workspace_the_dialog_was_naming(cx: &mut TestAppContext) {
     assert!(!manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
             "return left the workspace dialog open");
     let names: Vec<String> = store.lock()
-                                  .unwrap()
                                   .workspaces()
                                   .iter()
                                   .map(|workspace| workspace.name.clone())
@@ -138,7 +137,7 @@ fn return_creates_the_workspace_the_dialog_was_naming(cx: &mut TestAppContext) {
 fn return_on_a_blank_name_does_nothing_at_all(cx: &mut TestAppContext) {
     let (store, mut cx, manager) = manager(cx);
 
-    let before = store.lock().unwrap().workspaces().len();
+    let before = store.lock().workspaces().len();
     manager.update_in(&mut cx, |manager, window, cx| {
                manager.open_workspace_dialog(None, window, cx);
                manager.name_input.update(cx, |input, cx| {
@@ -152,7 +151,7 @@ fn return_on_a_blank_name_does_nothing_at_all(cx: &mut TestAppContext) {
 
     assert!(manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
             "return on a blank name closed the dialog");
-    assert_eq!(store.lock().unwrap().workspaces().len(),
+    assert_eq!(store.lock().workspaces().len(),
                before,
                "return on a blank name created a workspace");
     assert!(manager.read_with(&cx, |manager, _| manager.error.is_none()),
@@ -165,7 +164,7 @@ fn the_same_two_keys_work_when_the_dialog_is_renaming(cx: &mut TestAppContext) {
 
     let existing = workspace("Before");
     let id = existing.id;
-    store.lock().unwrap().add_workspace(existing);
+    store.lock().add_workspace(existing);
 
     // Escape first: the rename is discarded and the old name stands.
     manager.update_in(&mut cx, |manager, window, cx| {
@@ -200,7 +199,6 @@ fn the_same_two_keys_work_when_the_dialog_is_renaming(cx: &mut TestAppContext) {
 
 fn workspace_name(store: &Arc<Mutex<knot_agents::AgentStore>>, id: Uuid) -> Option<String> {
     store.lock()
-         .unwrap()
          .workspaces()
          .iter()
          .find(|workspace| workspace.id == id)

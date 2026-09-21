@@ -85,10 +85,8 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
 pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu,
                                      window: &mut Window, cx: &mut Context<PopupMenu>)
                                      -> PopupMenu {
-    let (facts, move_targets, markdown_history) = match targets.store.lock() {
-        Ok(store) => agent_menu_facts(&store, targets.id),
-        Err(_) => (AgentMenuFacts::default(), Vec::new(), Vec::new()),
-    };
+    let (facts, move_targets, markdown_history) =
+        agent_menu_facts(&targets.store.lock(), targets.id);
     let mut menu = menu;
     for entry in agent_context_menu_entries(facts) {
         menu = match entry {
@@ -173,7 +171,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
 /// either surface, and the way to guarantee that is one body.
 pub(super) fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: Uuid,
                                       app: &mut App) {
-    if let Ok(mut store) = targets.store.lock() {
+    {
+        let mut store = targets.store.lock();
         store.move_to_workspace(targets.id, workspace_id);
     }
     targets.window_entity.update(app, |view, cx| {
@@ -191,7 +190,8 @@ pub(super) fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: 
 /// Shows `file` in `targets`' agent's markdown pane. Shared by both menus,
 /// as [`move_agent_to_workspace`] is.
 pub(super) fn show_agent_markdown_file(targets: &AgentMenuTargets, file: &Path, app: &mut App) {
-    if let Ok(mut store) = targets.store.lock() {
+    {
+        let mut store = targets.store.lock();
         let _ = store.set_markdown_panel(targets.id, file.to_path_buf(), false);
     }
     targets.window_entity.update(app, |_, cx| cx.notify());
@@ -230,8 +230,8 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         AgentMenuEntry::NewShellCompanion => {
             let created = targets.store
                                  .lock()
-                                 .map(|mut store| store.create_shell_companion(targets.id).is_ok())
-                                 .unwrap_or(false);
+                                 .create_shell_companion(targets.id)
+                                 .is_ok();
             if created {
                 targets.window_entity.update(app, |view, cx| {
                                          view.persist_agents();
@@ -242,10 +242,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         // A fork carries the source's session so it picks the conversation
         // up; a duplicate deliberately does not.
         AgentMenuEntry::ForkAgent => {
-            let source = targets.store
-                                .lock()
-                                .ok()
-                                .and_then(|store| store.agent(targets.id).cloned());
+            let source = targets.store.lock().agent(targets.id).cloned();
             let Some(source) = source
             else {
                 return;
@@ -262,10 +259,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         }
         AgentMenuEntry::DuplicateAgent => {
             let created = {
-                let Ok(mut store) = targets.store.lock()
-                else {
-                    return;
-                };
+                let mut store = targets.store.lock();
                 let Some(source) = store.agent(targets.id).cloned()
                 else {
                     return;
@@ -292,10 +286,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         // is edited from the settings window too, and persisting a stale
         // copy would drop whatever was added there since.
         AgentMenuEntry::SaveToBench => {
-            let source = targets.store
-                                .lock()
-                                .ok()
-                                .and_then(|store| store.agent(targets.id).cloned());
+            let source = targets.store.lock().agent(targets.id).cloned();
             let Some(source) = source
             else {
                 return;
@@ -330,7 +321,8 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                                           targets.name))
                                      .confirm()
                                      .on_ok(move |_, _, app| {
-                                         if let Ok(mut store) = targets.store.lock() {
+                                         {
+                                             let mut store = targets.store.lock();
                                              let _ = store.restart(targets.id);
                                          }
                                          targets.window_entity.update(app, |view, cx| {

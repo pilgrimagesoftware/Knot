@@ -4,7 +4,9 @@
 //! PTY transport can implement [`TerminalTransport`] without changing session
 //! lifecycle behavior.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 mod acp_session;
 mod grid;
@@ -83,33 +85,31 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
         let grid = Arc::new(Mutex::new(Grid::new(DEFAULT_GRID_SIZE)));
         let output_grid = Arc::clone(&grid);
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        let transport = PtyTransport::spawn(&config.agent.folder,
-                                            shell,
-                                            move |bytes| {
-                                                if let Ok(tracker) = output_tracker.lock()
-                                                   && let Some(tracker) = tracker.as_ref()
-                                                {
-                                                    tracker.on_terminal_activity();
-                                                }
-                                                if let Ok(mut grid) = output_grid.lock() {
-                                                    grid.feed(bytes);
-                                                    for event in grid.drain_events() {
-                                                        on_grid_event(event);
-                                                    }
-                                                }
-                                                on_output(bytes);
-                                            },
-                                            move |status| {
-                                                if let Ok(tracker) = exit_tracker.lock()
-                                                   && let Some(tracker) = tracker.as_ref()
-                                                {
-                                                    tracker.on_process_exit(status);
-                                                }
-                                                on_exit(status);
-                                            })?;
+        let transport =
+            PtyTransport::spawn(&config.agent.folder,
+                                shell,
+                                move |bytes| {
+                                    if let Some(tracker) = output_tracker.lock().as_ref() {
+                                        tracker.on_terminal_activity();
+                                    }
+                                    {
+                                        let mut grid = output_grid.lock();
+                                        grid.feed(bytes);
+                                        for event in grid.drain_events() {
+                                            on_grid_event(event);
+                                        }
+                                    }
+                                    on_output(bytes);
+                                },
+                                move |status| {
+                                    if let Some(tracker) = exit_tracker.lock().as_ref() {
+                                        tracker.on_process_exit(status);
+                                    }
+                                    on_exit(status);
+                                })?;
         let transport = Arc::new(Mutex::new(transport));
         let tracker = make_tracker(config, Arc::clone(&transport), sink);
-        *tracker_slot.lock().unwrap() = Some(Arc::clone(&tracker));
+        *tracker_slot.lock() = Some(Arc::clone(&tracker));
         Ok(TerminalSession { transport,
                              tracker,
                              grid: Some(grid),
@@ -118,27 +118,18 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
 
     pub fn start(&mut self, plan: &SessionPlan) -> Result<()> {
         self.send_text(&plan.initialization_command)?;
-        self.transport
-            .lock()
-            .map_err(|_| TerminalError::Transport("transport lock poisoned".to_string()))?
-            .send_return()?;
+        self.transport.lock().send_return()?;
         self.started = true;
         Ok(())
     }
 
     pub fn send_text(&mut self, text: &str) -> Result<()> {
-        self.transport
-            .lock()
-            .map_err(|_| TerminalError::Transport("transport lock poisoned".to_string()))?
-            .send_text(text)
+        self.transport.lock().send_text(text)
     }
 
     pub fn send_command(&mut self, text: &str) -> Result<()> {
         self.send_text(text)?;
-        self.transport
-            .lock()
-            .map_err(|_| TerminalError::Transport("transport lock poisoned".to_string()))?
-            .send_return()
+        self.transport.lock().send_return()
     }
 
     pub fn on_terminal_output(&self) {
@@ -156,23 +147,17 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
     /// Resizes the session's grid and, if it has one, the underlying PTY
     /// device to match.
     pub fn resize(&mut self, size: GridSize) -> Result<()> {
-        if let Some(grid) = &self.grid
-           && let Ok(mut grid) = grid.lock()
-        {
-            grid.resize(size);
+        if let Some(grid) = &self.grid {
+            grid.lock().resize(size);
         }
         self.transport
             .lock()
-            .map_err(|_| TerminalError::Transport("transport lock poisoned".to_string()))?
             .resize(size.rows as u16, size.columns as u16)
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
         self.tracker.shutdown();
-        self.transport
-            .lock()
-            .map_err(|_| TerminalError::Transport("transport lock poisoned".to_string()))?
-            .terminate()?;
+        self.transport.lock().terminate()?;
         self.started = false;
         Ok(())
     }
@@ -187,7 +172,8 @@ fn make_tracker<T: TerminalTransport + 'static>(config: &SessionConfig<'_>,
                                                 -> Arc<Tracker> {
     let mut caller_inject = sink.on_inject_registration.take();
     sink.on_inject_registration = Some(Box::new(move |prompt| {
-                                           if let Ok(mut transport) = transport.lock() {
+                                           {
+                                               let mut transport = transport.lock();
                                                let _ = transport.send_text(&prompt);
                                                let _ = transport.send_return();
                                            }
@@ -218,10 +204,11 @@ fn make_tracker<T: TerminalTransport + 'static>(config: &SessionConfig<'_>,
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     use knot_activity::ActivitySource;
     use knot_agents::{AgentState, AgentStore, CreateOptions};
+    use parking_lot::Mutex;
 
     use super::*;
 
@@ -308,7 +295,6 @@ mod tests {
         let status_log = Arc::clone(&statuses);
         let sink = EventSink { on_status: Some(Box::new(move |event| {
                                                    status_log.lock()
-                                                             .unwrap()
                                                              .push((event.status, event.source));
                                                })),
                                ..Default::default() };
@@ -321,7 +307,7 @@ mod tests {
         tokio::task::yield_now().await;
         session.shutdown().unwrap();
 
-        let statuses = statuses.lock().unwrap();
+        let statuses = statuses.lock();
         assert!(statuses.iter()
                         .any(|(state, source)| {
                             *state == AgentState::Running && *source == ActivitySource::Terminal
@@ -395,8 +381,8 @@ mod tests {
 
         let deadline = std::time::Instant::now() + PTY_TIMEOUT;
         loop {
-            if grid.lock().unwrap().row_text(0).contains("ready")
-               || (1..24).any(|row| grid.lock().unwrap().row_text(row).contains("ready"))
+            if grid.lock().row_text(0).contains("ready")
+               || (1..24).any(|row| grid.lock().row_text(row).contains("ready"))
             {
                 break;
             }
@@ -425,7 +411,7 @@ mod tests {
                                   rows:    40, })
                .unwrap();
 
-        assert_eq!(grid.lock().unwrap().size(),
+        assert_eq!(grid.lock().size(),
                    GridSize { columns: 100,
                               rows:    40, });
 
@@ -435,8 +421,7 @@ mod tests {
 
         let deadline = std::time::Instant::now() + PTY_TIMEOUT;
         loop {
-            let rows: Vec<String> = (0..20).map(|row| grid.lock().unwrap().row_text(row))
-                                           .collect();
+            let rows: Vec<String> = (0..20).map(|row| grid.lock().row_text(row)).collect();
             if rows.iter().any(|row| row.contains("40 100")) {
                 break;
             }

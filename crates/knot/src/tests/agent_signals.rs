@@ -85,7 +85,7 @@ fn terminal_status_updates_the_shared_agent_store() {
 
     apply_terminal_status(&shared, id, knot_agents::AgentState::Running);
 
-    assert_eq!(shared.lock().unwrap().agent(id).unwrap().state,
+    assert_eq!(shared.lock().agent(id).unwrap().state,
                knot_agents::AgentState::Running);
 }
 

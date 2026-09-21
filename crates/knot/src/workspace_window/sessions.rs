@@ -32,7 +32,7 @@ impl WorkspaceWindow {
             return;
         }
         let agent = {
-            let store = self.store.lock().unwrap();
+            let store = self.store.lock();
             store.agent(id).cloned()
         };
         let Some(agent) = agent
@@ -70,21 +70,24 @@ impl WorkspaceWindow {
             &config,
             status_sink,
             move |_| {
-                if let Ok(mut last_output) = on_output_activity.lock() {
+                {
+                    let mut last_output = on_output_activity.lock();
                     *last_output = Some(std::time::Instant::now());
                 }
             },
             {
                 let exited = Arc::clone(&self.exited_sessions);
                 move |_status| {
-                    if let Ok(mut exited) = exited.lock() {
+                    {
+                        let mut exited = exited.lock();
                         exited.push(id);
                     }
                 }
             },
             move |event| match event {
                 knot_terminal::GridEvent::Title(title) => {
-                    if let Ok(mut store) = title_store.lock() {
+                    {
+                        let mut store = title_store.lock();
                         store.set_terminal_title(id, title);
                     }
                 }
@@ -92,7 +95,8 @@ impl WorkspaceWindow {
                     knot_terminal::ClipboardType::Clipboard,
                     text,
                 ) => {
-                    if let Ok(mut queue) = clipboard_writes.lock() {
+                    {
+                        let mut queue = clipboard_writes.lock();
                         queue.push(text);
                     }
                 }
@@ -120,20 +124,15 @@ impl WorkspaceWindow {
                 std::thread::spawn(move || {
                     let start = std::time::Instant::now();
                     loop {
-                        let quiet = last_output.lock().is_ok_and(|last_output| {
-                                                          last_output.is_some_and(|last_output| {
-                                                                         last_output.elapsed()
-                                                                         >= QUIET_PERIOD
-                                                                     })
+                        let quiet = last_output.lock().is_some_and(|last_output| {
+                                                          last_output.elapsed() >= QUIET_PERIOD
                                                       });
                         if quiet || start.elapsed() >= MAX_WAIT {
                             break;
                         }
                         std::thread::sleep(POLL_INTERVAL);
                     }
-                    if let Ok(mut session) = session.lock()
-                       && let Err(error) = session.start(&plan)
-                    {
+                    if let Err(error) = session.lock().start(&plan) {
                         eprintln!("failed to start terminal session: {error}");
                     }
                 });
@@ -165,9 +164,7 @@ impl WorkspaceWindow {
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn_blocking(move || {
                         let stats = Repository::open(&folder).diff_stats().ok();
-                        if let Ok(mut cache) = cache.lock()
-                           && cache.insert(id, stats) != Some(stats)
-                        {
+                        if cache.lock().insert(id, stats) != Some(stats) {
                             dirty.store(true, std::sync::atomic::Ordering::SeqCst);
                         }
                     });
@@ -182,20 +179,20 @@ impl WorkspaceWindow {
     /// for why that ran the UI at the speed of `git`. Companions get no
     /// card, so they are skipped here too.
     pub(super) fn refresh_dashboard_diff_stats(&mut self) {
-        let folders = match self.store.lock() {
-            Ok(store) => store.workspaces()
+        let folders = {
+            let store = self.store.lock();
+            store.workspaces()
+                 .iter()
+                 .find(|workspace| workspace.id == self.workspace_id)
+                 .map(|workspace| {
+                     workspace.agent_ids
                               .iter()
-                              .find(|workspace| workspace.id == self.workspace_id)
-                              .map(|workspace| {
-                                  workspace.agent_ids
-                                           .iter()
-                                           .filter_map(|id| store.agent(*id))
-                                           .filter(|agent| !agent.is_companion)
-                                           .map(|agent| (agent.id, agent.folder.clone()))
-                                           .collect::<Vec<_>>()
-                              })
-                              .unwrap_or_default(),
-            Err(_) => return,
+                              .filter_map(|id| store.agent(*id))
+                              .filter(|agent| !agent.is_companion)
+                              .map(|agent| (agent.id, agent.folder.clone()))
+                              .collect::<Vec<_>>()
+                 })
+                 .unwrap_or_default()
         };
         for (id, folder) in folders {
             self.refresh_diff_stats(id, &folder);
@@ -205,10 +202,7 @@ impl WorkspaceWindow {
     /// The cached diff stat per agent, copied out so a render can read it
     /// without holding the cache lock across the element tree it builds.
     pub(super) fn diff_stats_snapshot(&self) -> BTreeMap<Uuid, Option<knot_git::DiffStats>> {
-        self.diff_stats
-            .lock()
-            .map(|cache| cache.clone())
-            .unwrap_or_default()
+        self.diff_stats.lock().clone()
     }
 
     /// Tears down a session (e.g. its agent was removed or restarted).
@@ -217,9 +211,8 @@ impl WorkspaceWindow {
     /// agent has no `sessions` entry at all, so without the panel half
     /// removing it left its adapter subprocess running.
     pub(super) fn remove_session(&mut self, id: Uuid) {
-        if let Some(session) = self.sessions.remove(&id)
-           && let Ok(mut session) = session.lock()
-        {
+        if let Some(session) = self.sessions.remove(&id) {
+            let mut session = session.lock();
             let _ = session.shutdown();
         }
         self.panel_phases.remove(&id);
@@ -230,7 +223,7 @@ impl WorkspaceWindow {
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         if let Some(slot) = self.panel_sessions.remove(&id) {
-            let handle = match std::mem::replace(&mut *slot.lock().unwrap(),
+            let handle = match std::mem::replace(&mut *slot.lock(),
                                                  panel_session::PanelSessionSlot::connecting().0)
             {
                 panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
@@ -271,7 +264,8 @@ impl WorkspaceWindow {
         // for the window's whole life - including agents that no longer
         // exist. A stale nudge marker is not just memory: an id reused by a
         // recreated agent would inherit it and skip its first inbox prompt.
-        if let Ok(mut cache) = self.diff_stats.lock() {
+        {
+            let mut cache = self.diff_stats.lock();
             cache.remove(&id);
         }
         self.diff_stats_requested.remove(&id);

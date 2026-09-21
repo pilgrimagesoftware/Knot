@@ -41,11 +41,7 @@ impl Render for WorkspaceDragPreview {
 
 impl WorkspaceManager {
     fn persist(&mut self) {
-        let Ok(store) = self.store.lock()
-        else {
-            self.error = Some("Agent store is unavailable.".to_string());
-            return;
-        };
+        let store = self.store.lock();
         self.settings.saved_agents =
             store.saved_agents(self.settings.restore_conversation_on_launch);
         self.settings.saved_workspaces = store.saved_workspaces();
@@ -61,7 +57,7 @@ impl WorkspaceManager {
             cx.notify();
             return;
         }
-        let mut store = self.store.lock().unwrap();
+        let mut store = self.store.lock();
         if let Some(id) = editing_id {
             if !store.rename_workspace(id, name) {
                 self.error = Some("Workspace no longer exists.".to_string());
@@ -97,16 +93,14 @@ impl WorkspaceManager {
 
     pub(crate) fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>,
                                         window: &mut Window, cx: &mut Context<Self>) {
-        let name =
-            editing_id.and_then(|id| {
-                          self.store.lock().ok().and_then(|store| {
-                                                    store.workspaces()
-                                                         .iter()
-                                                         .find(|workspace| workspace.id == id)
-                                                         .map(|workspace| workspace.name.clone())
-                                                })
-                      })
-                      .unwrap_or_default();
+        let name = editing_id.and_then(|id| {
+                                 let store = self.store.lock();
+                                 store.workspaces()
+                                      .iter()
+                                      .find(|workspace| workspace.id == id)
+                                      .map(|workspace| workspace.name.clone())
+                             })
+                             .unwrap_or_default();
         self.workspace_dialog_id = editing_id;
         self.show_workspace_dialog = true;
         self.error = None;
@@ -139,7 +133,7 @@ impl WorkspaceManager {
     }
 
     fn delete(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        if !self.store.lock().unwrap().remove_workspace(id) {
+        if !self.store.lock().remove_workspace(id) {
             self.error = Some("At least one workspace must remain.".to_string());
         }
         else {
@@ -169,18 +163,14 @@ impl WorkspaceManager {
     }
 
     fn move_before(&mut self, id: Uuid, target_id: Uuid, cx: &mut Context<Self>) {
-        if self.store
-               .lock()
-               .unwrap()
-               .move_workspace_before(id, target_id)
-        {
+        if self.store.lock().move_workspace_before(id, target_id) {
             self.persist();
             cx.notify();
         }
     }
 
     fn select(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        self.store.lock().unwrap().set_current_workspace(id);
+        self.store.lock().set_current_workspace(id);
         cx.notify();
     }
 
@@ -196,7 +186,7 @@ impl WorkspaceManager {
 
 impl Render for WorkspaceManager {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let workspaces = self.store.lock().unwrap().workspaces().to_vec();
+        let workspaces = self.store.lock().workspaces().to_vec();
         let delete_name =
             self.delete_workspace_id.and_then(|id| {
                                         workspaces.iter()
@@ -208,7 +198,7 @@ impl Render for WorkspaceManager {
                                              let id = workspace.id;
                                              let agent_count = workspace.agent_ids.len();
                                              let selected =
-                                                 self.store.lock().unwrap().current_workspace_id()
+                                                 self.store.lock().current_workspace_id()
                                                  == Some(id);
                                              h_flex()
                 .id(format!("workspace-row-{id}"))

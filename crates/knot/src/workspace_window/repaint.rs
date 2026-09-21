@@ -23,23 +23,20 @@ impl WorkspaceWindow {
     /// while an agent works, instead of thirty, and not at all while none
     /// does.
     pub(super) fn spinner_repaint_due(&mut self) -> bool {
-        let any_working =
-            self.store
-                .lock()
-                .ok()
-                .and_then(|store| {
-                    let workspace = store.workspaces()
-                                         .iter()
-                                         .find(|workspace| workspace.id == self.workspace_id)?;
-                    Some(workspace.agent_ids
-                                  .iter()
-                                  .filter_map(|id| store.agent(*id))
-                                  .any(|agent| {
-                                      agent.activated
-                                      && agent.state == knot_agents::AgentState::Running
-                                  }))
-                })
-                .unwrap_or(false);
+        let any_working = {
+            let store = self.store.lock();
+            store.workspaces()
+                 .iter()
+                 .find(|workspace| workspace.id == self.workspace_id)
+                 .is_some_and(|workspace| {
+                     workspace.agent_ids
+                              .iter()
+                              .filter_map(|id| store.agent(*id))
+                              .any(|agent| {
+                                  agent.activated && agent.state == knot_agents::AgentState::Running
+                              })
+                 })
+        };
         if !any_working {
             return false;
         }
@@ -59,10 +56,7 @@ impl WorkspaceWindow {
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
     pub(super) fn panel_needs_repaint(&mut self) -> bool {
-        let prompt_results = self.panel_prompt_results
-                                 .lock()
-                                 .map(|mut results| std::mem::take(&mut *results))
-                                 .unwrap_or_default();
+        let prompt_results = std::mem::take(&mut *self.panel_prompt_results.lock());
         let prompt_results_changed = !prompt_results.is_empty();
         for (id, prompt_id, result) in prompt_results {
             if let Some(queue) = self.panel_prompt_queues.get_mut(&id) {
@@ -76,13 +70,13 @@ impl WorkspaceWindow {
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
-                                   let slot = slot.lock().ok()?;
+                                   let slot = slot.lock();
                                    let panel_session::PanelSessionSlot::Ready(handle) = &*slot
                                    else {
                                        return None;
                                    };
                                    let state_arc = handle.state();
-                                   let state = state_arc.lock().ok()?;
+                                   let state = state_arc.lock();
                                    let agent_state = if state.pending_permission.is_some() {
                                        knot_agents::AgentState::Input
                                    }
@@ -95,7 +89,8 @@ impl WorkspaceWindow {
                                    Some((*id, agent_state))
                                })
                                .collect::<Vec<_>>();
-        if let Ok(mut store) = self.store.lock() {
+        {
+            let mut store = self.store.lock();
             for (id, state) in panel_states {
                 store.set_state(id, state);
             }
@@ -109,17 +104,12 @@ impl WorkspaceWindow {
             return false;
         };
         let (phase, events_arrived, turn_active) = {
-            let slot = slot.lock().unwrap();
+            let slot = slot.lock();
             let events_arrived = matches!(&*slot,
                                           panel_session::PanelSessionSlot::Ready(handle)
                                           if handle.take_dirty());
             let turn_active = match &*slot {
-                panel_session::PanelSessionSlot::Ready(handle) => {
-                    handle.state()
-                          .lock()
-                          .map(|state| state.turn_active)
-                          .unwrap_or(false)
-                }
+                panel_session::PanelSessionSlot::Ready(handle) => handle.state().lock().turn_active,
                 _ => false,
             };
             (slot.phase(), events_arrived, turn_active)
