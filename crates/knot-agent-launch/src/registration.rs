@@ -16,11 +16,14 @@ pub fn registration_user_prompt() -> &'static str {
 
 /// The knot system instructions, with `agent_id` embedded.
 ///
-/// The collaboration paragraph is concrete on purpose. "Engage with them"
-/// alone told an agent nothing it could act on, and the tools it would
-/// need went unnamed, so agents worked alone in parallel - which is what a
-/// knot exists not to be. Naming each tool and the moment to reach for it
-/// is the difference between a sentiment and an instruction.
+/// Every sentence is paid for on every launch, in the context window of
+/// every agent, so each one has to be something an agent can act on.
+/// Restating what a knot is, or that an agent working alone "is just
+/// another process", is flattery and simile that change no behavior; the
+/// tool names and the moment to reach for each one are the instruction.
+/// An earlier version said only "engage with them", named no tools, and
+/// produced agents working alone in parallel - which is what a knot
+/// exists not to be.
 ///
 /// It pushes outward, not inward: an agent already knows who its knot is,
 /// so what it needs telling is to *use* them - hand work to whoever owns
@@ -35,8 +38,12 @@ pub fn registration_user_prompt() -> &'static str {
 /// knot and calls the other, which answers "Agent ID ... not found" for
 /// an id it has never seen. Naming the server is what makes that
 /// unambiguous, since the tool names alone are not.
+///
+/// It stays on one line. The shell-agent path types this prompt into a
+/// terminal and then sends Return, so an embedded newline would submit it
+/// half-written.
 pub fn knot_instructions(agent_id: Uuid) -> String {
-    format!("You are part of a team of agents called a knot. A knot is made of high-performing agents who collaborate to achieve complex goals, so work with your knot rather than beside it. Your knot agent ID: {agent_id}. You already know who your teammates are - use them. Check list-agents before you start something substantial: if it belongs to a project a teammate owns, hand it to them with send-message rather than working in their code yourself, and prefer asking them a question over reverse-engineering an answer. Tell the knot with broadcast-message when you change something others build on. When a teammate asks you for something, take it on and reply. Reach for your knot first and your own effort second: an agent that does everything alone is not a teammate, just another process. Your knot's tools come from the MCP server named `{MCP_SERVER_NAME}` (tools such as `{MCP_SERVER_NAME}`'s set-status, list-agents, register-agent). Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. Only ever use the `{MCP_SERVER_NAME}` server's tools. CRITICAL RULE: Before you start working on anything, your FIRST action must be calling set-status with what you are about to do. When you finish, call set-status again. When you change direction, call set-status. Other agents depend on your status to coordinate — if you do not update it, the team cannot function. This is not optional.")
+    format!("You are part of a team of agents called a knot. Your knot agent ID: {agent_id}. Reach for your knot first and your own effort second. Check list-agents before you start anything substantial: if the work belongs to a teammate's project, hand it to them with send-message rather than working in their code, and ask them rather than reverse-engineer an answer. Use broadcast-message when you change something others build on, and take on what a teammate asks of you. Knot tools come only from the MCP server named `{MCP_SERVER_NAME}` - set-status, list-agents, register-agent and the rest. Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. CRITICAL: call set-status before you start anything, whenever you change direction, and when you finish. Your teammates coordinate off your status, so this is not optional.")
 }
 
 /// The combined registration prompt for the deferred (non-inline)
@@ -127,6 +134,28 @@ mod tests {
         let prompt = knot_instructions(id());
         assert!(prompt.contains("hand it to them"));
         assert!(prompt.contains("Reach for your knot first"));
+    }
+
+    /// The shell-agent path types the prompt into a terminal and then
+    /// sends Return, so a newline anywhere in it submits a half-written
+    /// prompt and leaves the rest as stray input.
+    #[test]
+    fn every_registration_prompt_is_a_single_line() {
+        assert!(!knot_instructions(id()).contains('\n'));
+        assert!(!registration_prompt(id()).contains('\n'));
+        assert!(!registration_user_prompt().contains('\n'));
+        assert!(!acp_registration_prompt(id(), false, None).unwrap()
+                                                           .contains('\n'));
+    }
+
+    /// Every launched agent pays for this text in its context window, so
+    /// growth is a cost, not a detail. The ceiling is a little above the
+    /// current length: adding an instruction is fine, padding it back out
+    /// with restatement is what this catches.
+    #[test]
+    fn instructions_stay_within_their_token_budget() {
+        let len = knot_instructions(id()).chars().count();
+        assert!(len <= 1_000, "the knot instructions grew to {len} chars");
     }
 
     #[test]

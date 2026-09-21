@@ -13,8 +13,13 @@ pub const TITLE_TRUNCATE_LEN: usize = 77;
 
 /// Substrings that mark a message as a Knot-injected registration prompt,
 /// never a real session title.
+///
+/// Retired wordings stay in the list: sessions recorded before a prompt was
+/// reworded are still on disk, and a title is only suppressed by the text
+/// that session actually carries.
 pub const REGISTRATION_PROMPT_NEEDLES: &[&str] = &["you are part of a team of agents",
                                                    "register with the knot",
+                                                   "list the other agents and their projects",
                                                    "list other agents names and project",
                                                    "check your inbox for messages"];
 
