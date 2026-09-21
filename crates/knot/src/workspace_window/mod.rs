@@ -790,28 +790,18 @@ impl WorkspaceWindow {
                     });
     }
 
-    /// Whether the selected agent's panel needs a repaint: either its live
-    /// session has new events, or its slot changed lifecycle phase since
-    /// the last poll.
+    /// Whether the dashboard's working indicators need a repaint now: an
+    /// agent in this workspace is Working, and the spinner has moved on
+    /// since they were last drawn.
     ///
-    /// The phase half matters because `ensure_panel_session` fills the slot
-    /// from a background tokio task. `Ready` carries its own dirty flag,
-    /// but `Failed` carries nothing - so before this check, a connection
-    /// that failed (a missing API key, a refused handshake) left the pane
-    /// showing "Connecting to agent…" indefinitely, making the connect
-    /// timeout look like it had never fired when in fact the error was
-    /// sitting in the slot, undrawn.
-    /// Whether the sidebar's and the dashboard's working indicators need a
-    /// repaint now: an agent in this workspace is Working, and the spinner
-    /// has moved on since they were last drawn.
-    ///
-    /// `working_indicator::render` reads the clock when it renders, so on
-    /// these two surfaces - which, unlike the panel, redraw only when
-    /// something happens - the spinner would otherwise sit frozen on
-    /// whatever frame the last unrelated event left it, which reads as an
-    /// agent that has hung. Gating on the frame count rather than simply
-    /// notifying every poll repaints about five times a second while an
-    /// agent works, instead of thirty, and not at all while none does.
+    /// `working_indicator::render` reads the clock when it renders, and the
+    /// dashboard - unlike the panel, which redraws as it streams - redraws
+    /// only when something happens. Without this the spinner would sit
+    /// frozen on whatever frame the last unrelated event left it, which
+    /// reads as an agent that has hung. Gating on the frame count rather
+    /// than simply notifying every poll repaints about five times a second
+    /// while an agent works, instead of thirty, and not at all while none
+    /// does.
     fn spinner_repaint_due(&mut self) -> bool {
         let any_working =
             self.store
@@ -837,6 +827,17 @@ impl WorkspaceWindow {
         std::mem::replace(&mut self.last_spinner_frame, frame) != frame
     }
 
+    /// Whether the selected agent's panel needs a repaint: either its live
+    /// session has new events, or its slot changed lifecycle phase since
+    /// the last poll.
+    ///
+    /// The phase half matters because `ensure_panel_session` fills the slot
+    /// from a background tokio task. `Ready` carries its own dirty flag,
+    /// but `Failed` carries nothing - so before this check, a connection
+    /// that failed (a missing API key, a refused handshake) left the pane
+    /// showing "Connecting to agent…" indefinitely, making the connect
+    /// timeout look like it had never fired when in fact the error was
+    /// sitting in the slot, undrawn.
     fn panel_needs_repaint(&mut self) -> bool {
         let prompt_results = self.panel_prompt_results
                                  .lock()
@@ -2859,32 +2860,21 @@ impl Render for WorkspaceWindow {
                                         cx,
                                     )),
                             )
-                            // The working indicator and the state dot share
-                            // one trailing column, indicator first. They
-                            // are not redundant: the dot's colours say what
-                            // a *running* agent is doing, while the
-                            // indicator animates while the agent works and
-                            // goes blank when it is not running at all. A
-                            // shell agent gets the indicator but no dot -
-                            // it has no coding-agent state for the dot to
-                            // report, which is why the dot is already
-                            // hidden for it.
-                            .child(
-                                h_flex()
+                            // The state dot alone. The working indicator is
+                            // deliberately not here: beside the dot it says
+                            // the same thing twice, and the row already
+                            // carries the one thing the dot cannot - a
+                            // stopped agent's row is dimmed as a whole
+                            // (see `agent-list-ui`).
+                            .children((!is_shell).then(|| {
+                                div()
                                     .flex_shrink_0()
-                                    .gap_1()
-                                    .items_start()
-                                    .child(working_indicator::render(state, is_running))
-                                    .children((!is_shell).then(|| {
-                                        div()
-                                            .flex_shrink_0()
-                                            .w(px(8.))
-                                            .h(px(8.))
-                                            .mt_1()
-                                            .rounded_full()
-                                            .bg(state_color(state))
-                                    })),
-                            ),
+                                    .w(px(8.))
+                                    .h(px(8.))
+                                    .mt_1()
+                                    .rounded_full()
+                                    .bg(state_color(state))
+                            })),
                     )
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.select_agent(id);

@@ -3,7 +3,7 @@
 ## Purpose
 Provides a single glanceable working/thinking visual mark per agent that
 reflects the agent's live Working / Idle / Awaiting input / Error status —
-consuming the status `activity-detection` already emits — so a bench of agents
+consuming the status `activity-detection` already emits — so a grid of agents
 can be read at a glance without reading a status string, and so a not-running
 agent stays visually distinct from a running-but-idle one.
 
@@ -12,20 +12,24 @@ agent stays visually distinct from a running-but-idle one.
 ### Requirement: Glanceable working indicator
 
 The system SHALL render a glanceable working/thinking indicator for each agent
-wherever that agent's status is already shown — the workspace sidebar's agent
-row and the dashboard's agent card — driven by a single shared implementation
-so the two surfaces SHALL NOT drift.
+on the dashboard's agent card, driven by one shared implementation so every
+surface that adopts it SHALL NOT drift from the others.
 
 The indicator SHALL reflect the agent's live status emitted by
 `activity-detection` — Working, Idle, Awaiting input, or Error — updating in
 real time as that status changes, so the user can tell at a glance what an
-agent is doing without opening its row.
+agent is doing without opening its card.
 
-The indicator SHALL be visually distinct from the existing per-agent status
-dot: the dot reports what a *running* agent is doing, while the indicator
-SHALL additionally convey whether the agent is running at all, so an agent
-that is not running SHALL read as "not running" rather than as
+The indicator SHALL additionally convey whether the agent is running at all,
+so an agent that is not running reads as "not running" rather than as
 "running-and-idle".
+
+The indicator SHALL NOT be rendered on the workspace sidebar's agent row.
+Beside that row's status dot it says the same thing twice, and the one thing
+the dot cannot carry — whether the agent is running at all — the row already
+carries by dimming as a whole, per `agent-list-ui`'s requirement that a
+stopped agent is distinguishable in the sidebar. The card has no such dimming
+and no status dot, which is why it takes the indicator and the row does not.
 
 #### Scenario: Agent is actively working
 - **WHEN** `activity-detection` reports the agent as Working
@@ -50,6 +54,10 @@ that is not running SHALL read as "not running" rather than as
 - **WHEN** the agent is not running (never started or deactivated)
 - **THEN** the indicator shows the agent as not running, visually distinct
   from a running-but-idle agent
+
+#### Scenario: The sidebar row carries no indicator
+- **WHEN** a workspace sidebar agent row renders, whatever the agent's state
+- **THEN** it shows its status dot and no working indicator
 
 ### Requirement: Animated state change
 
