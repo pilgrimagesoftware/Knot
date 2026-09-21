@@ -203,14 +203,19 @@ check-changelog:
 # Rust workspace (the port). Additive to the Swift targets above.
 rust: rust-fmt-check rust-lint rust-test rust-build
 
+# Pinned to match the rustfmt check in .github/workflows/rust.yml. rustfmt.toml
+# enables unstable options, so formatting is only reproducible against one exact
+# nightly. Change both places together and commit the reformat with the bump.
+RUSTFMT_NIGHTLY ?= nightly-2026-09-21
+
 rust-fmt:
 	# --all to match rust-fmt-check; run twice because rustfmt is not
 	# idempotent in one pass under indent_style = "Visual".
-	rustup run nightly cargo fmt --all
-	rustup run nightly cargo fmt --all
+	rustup run $(RUSTFMT_NIGHTLY) cargo fmt --all
+	rustup run $(RUSTFMT_NIGHTLY) cargo fmt --all
 
 rust-fmt-check:
-	rustup run nightly cargo fmt --all --check
+	rustup run $(RUSTFMT_NIGHTLY) cargo fmt --all --check
 
 rust-lint:
 	cargo clippy --workspace --all-targets -- -D warnings

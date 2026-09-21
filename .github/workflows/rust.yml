@@ -35,7 +35,20 @@ jobs:
           components: clippy
           cache-key: ${{ matrix.os }}
 
-      # TODO: Restore a pinned rustfmt check once the repository's formatting baseline is aligned.
+      # rustfmt lives on a pinned nightly: this repo's rustfmt.toml enables
+      # unstable options (indent_style, group_imports, wrap_comments, ...), so
+      # formatting is only reproducible against one exact toolchain. Bumping
+      # this pin is a deliberate change -- run `make rust-fmt` with the new
+      # nightly and commit the reformat in the same PR.
+      - name: rustfmt toolchain (pinned)
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          toolchain: nightly-2026-09-21
+          components: rustfmt
+          cache-key: ${{ matrix.os }}-rustfmt
+
+      - name: Format
+        run: cargo +nightly-2026-09-21 fmt --all --check
 
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |
