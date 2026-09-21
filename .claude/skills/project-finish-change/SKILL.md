@@ -47,8 +47,11 @@ Use the `openspec-archive-change` skill to archive the change.
 pointed at the right base and not marked draft. If no PR exists yet, create one now:
 
 ```
-gh pr create --repo <owner>/<repo> --base main --title "<issue title, no Conventional Commits prefix>" --body "Closes #<issue-number>"
+gh pr create --repo <owner>/<repo> --base develop --title "<issue title, no Conventional Commits prefix>" --body "Closes #<issue-number>"
 ```
+
+`develop` is the integration branch under this repo's git-flow; use `--base main` only for a
+`release/x.y.z` or `hotfix/x.y.z` branch.
 
 The `Closes #<n>` (or `Fixes #<n>`) line is what links the PR to the issue and auto-closes it
 on merge - confirm it's present in the PR body even if the PR already existed.
@@ -62,14 +65,23 @@ clear; otherwise hand back to the user.
 ### 8. Merge
 
 Confirm with the user before merging, unless they've already authorized auto-merge for this
-task - merging is a shared, visible action. Default to squash merge, or ask if the repo's
-convention differs:
+task - merging is a shared, visible action. Merge with a merge commit, never a squash: the
+Conventional Commits prefixes have to survive in history, and the branch rulesets on `develop`
+and `main` allow only `merge` and `rebase`.
 
 ```
-gh pr merge <n> --squash --delete-branch
+gh pr merge <n> --merge --delete-branch
 ```
 
 `--delete-branch` removes the remote branch; it does not touch the local worktree.
+
+Two things that bite when arming auto-merge with `--auto`:
+
+- Those rulesets set `strict_required_status_checks_policy`, so a PR showing
+  `mergeStateStatus=BEHIND` will never merge no matter how green it is. Run
+  `gh pr update-branch <n>` first, then let the re-triggered checks finish.
+- `--delete-branch` does not take effect on an `--auto` merge. Remove the branch afterwards
+  with `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch-name>`.
 
 ### 9. Close out the Issue
 
@@ -87,7 +99,7 @@ Then set the end date if the project tracks one, and move the issue's project st
 In the repo's main working tree (not the feature worktree):
 
 ```
-git checkout main
+git checkout develop
 git pull
 ```
 
