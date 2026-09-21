@@ -27,6 +27,11 @@ serde_json.workspace = true
 gpui-kit = "0.6"
 unicode-segmentation = "1.13"
 
+# Only for `build.rs`, which stamps the build date into the binary; the
+# `time` pin is the workspace's.
+[build-dependencies]
+time.workspace = true
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"

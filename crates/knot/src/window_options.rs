@@ -69,6 +69,24 @@ pub(crate) fn broadcast_window_options(cx: &App) -> WindowOptions {
                     ..WindowOptions::default() }
 }
 
+/// The About window's fixed size. It is not resizable and not minimizable:
+/// its content neither reflows usefully nor is worth keeping in the Dock, per
+/// `openspec/specs/about-ui`.
+///
+/// The titlebar carries no text on macOS: the system's own About panel has
+/// none, and the window already names the app in its body - two titles for
+/// one window is what `knot-ui-conventions` rules out. Elsewhere a titled
+/// window is the expectation, so the title is shown.
+pub(crate) fn about_window_options(cx: &App) -> WindowOptions {
+    let title = (!cfg!(target_os = "macos")).then(|| knot_core::l10n::t("about.title").into());
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title,
+                                                               ..Default::default() }),
+                    window_bounds: Some(WindowBounds::centered(size(px(360.), px(560.)), cx)),
+                    is_resizable: false,
+                    is_minimizable: false,
+                    ..WindowOptions::default() }
+}
+
 /// Fixed width for the settings window; only height varies per pane.
 pub(crate) const SETTINGS_WINDOW_WIDTH: gpui_kit::Pixels = px(620.);
 

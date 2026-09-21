@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod about_window;
 mod agent_editor;
 mod agent_menu;
 mod app_bootstrap;
@@ -31,6 +32,7 @@ use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
 use std::time::Duration;
 
+use about_window::*;
 use agent_editor::*;
 use agent_menu::*;
 use app_state::*;

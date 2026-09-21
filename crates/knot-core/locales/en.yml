@@ -54,3 +54,20 @@ quit:
   working_message_many: "%{count} agents are still working. Quitting now ends their sessions, and any work in progress is lost."
   working_confirm: "Quit Anyway"
   working_cancel: "Keep Working"
+
+about:
+  title: "About Knot"
+  version_label: "Version"
+  build_label: "Build"
+  commit_unknown: "commit unknown"
+  copy_details: "Click to copy the version and build"
+  close: "Close"
+  copyright: "Copyright © 2026 Pilgrimage Software"
+  derived_from: "Derived from Skwad by Kochava Studios"
+  credits:
+    author: "Created by Paul Schifferer"
+    license: "Released under the GNU Affero General Public License v3.0"
+    built_with: "Built with"
+    toolkit: "gpui-kit — Apache-2.0"
+    terminal: "Alacritty terminal — Apache-2.0"
+    fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"
