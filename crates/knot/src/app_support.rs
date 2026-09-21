@@ -13,27 +13,91 @@ pub(crate) enum FontPanelTarget {
     Terminal,
 }
 
-/// Drives the real macOS font panel (`NSFontPanel`) for the terminal font
-/// picker, since the user wants the system chooser rather than an in-app
-/// dropdown. `NSFontManager.selectedFont` updates live as the user clicks
-/// around the panel, so we just poll it from GPUI (see [`poll_selection`])
-/// instead of relying on the `changeFont:` target/action message - AppKit's
-/// own responder chain (e.g. text views taking first responder) can steal
-/// that target, but the property read is unaffected either way.
+/// Drives the real macOS font panel (`NSFontPanel`) for the font pickers,
+/// since the user wants the system chooser rather than an in-app dropdown.
+///
+/// The panel has no OK button by design: it reports a choice by sending the
+/// font manager's action (`changeFont:`) to a receiver, which is expected to
+/// send `convertFont:` straight back. Only after that round trip does the
+/// manager record a new selected font. GPUI installs nothing in the responder
+/// chain that answers `changeFont:`, so with no target set the action was
+/// dropped and `NSFontManager.selectedFont` stayed at whatever [`open`] had
+/// set - which is why polling that property observed every choice as "no
+/// change". [`FontPanelReceiver`] is that missing receiver; the poll
+/// ([`poll_selection`]) now just drains what it recorded, so the choice still
+/// reaches GPUI on its own frame rather than inside an AppKit callback.
 #[cfg(target_os = "macos")]
 pub(crate) mod native_font_panel {
+    use std::cell::OnceCell;
     use std::sync::Mutex;
 
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::NSFontManager;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, NSObject};
+    use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send};
+    use objc2_app_kit::{NSFont, NSFontManager};
     use objc2_foundation::NSString;
 
     pub(crate) use super::FontPanelTarget as Target;
 
-    static LAST_SEEN: Mutex<Option<(Target, String, i64)>> = Mutex::new(None);
+    /// The row that opened the panel and the font it was opened on - the base
+    /// `convertFont:` converts from, and the target a choice belongs to.
+    static SESSION: Mutex<Option<(Target, String, i64)>> = Mutex::new(None);
+    /// What the user chose, recorded by `changeFont:` and taken by
+    /// [`poll_selection`].
+    static CHOSEN: Mutex<Option<(String, f64)>> = Mutex::new(None);
+
+    thread_local! {
+        /// Owns the receiver for the process's lifetime: the font manager's
+        /// target is a weak reference, so dropping this would leave it
+        /// dangling. Main-thread-only, like the object itself.
+        static RECEIVER: OnceCell<Retained<FontPanelReceiver>> = const { OnceCell::new() };
+    }
 
     fn size_key(size: f64) -> i64 {
         (size * 100.0).round() as i64
+    }
+
+    define_class!(
+        // SAFETY:
+        // - `NSObject` has no subclassing requirements.
+        // - `FontPanelReceiver` does not implement `Drop`.
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "KnotFontPanelReceiver"]
+        struct FontPanelReceiver;
+
+        impl FontPanelReceiver {
+            /// The font manager's action, sent when the user changes anything
+            /// in the panel. Converting the session's font is what tells the
+            /// manager the change was honored; reading `selectedFont` here
+            /// instead is explicitly discouraged by AppKit, and returns
+            /// nothing useful until after this returns.
+            #[unsafe(method(changeFont:))]
+            fn change_font(&self, sender: &NSFontManager) {
+                let Some((_, family, size)) = SESSION.lock().unwrap().clone()
+                else {
+                    return;
+                };
+                let size = size as f64 / 100.0;
+                // A family AppKit cannot resolve still has to convert from
+                // something real, or `convertFont:` has nothing to apply the
+                // user's choice to.
+                let base = NSFont::fontWithName_size(&NSString::from_str(&family), size)
+                    .unwrap_or_else(|| NSFont::systemFontOfSize(size));
+                let converted = sender.convertFont(&base);
+                let Some(family) = converted.familyName()
+                else {
+                    return;
+                };
+                *CHOSEN.lock().unwrap() = Some((family.to_string(), converted.pointSize()));
+            }
+        }
+    );
+
+    impl FontPanelReceiver {
+        fn new(mtm: MainThreadMarker) -> Retained<Self> {
+            unsafe { msg_send![Self::alloc(mtm), init] }
+        }
     }
 
     /// Opens the system font panel pre-selected to `current_family` at
@@ -43,12 +107,18 @@ pub(crate) mod native_font_panel {
         else {
             return;
         };
-        *LAST_SEEN.lock().unwrap() =
+        *SESSION.lock().unwrap() =
             Some((target, current_family.to_string(), size_key(current_size)));
+        *CHOSEN.lock().unwrap() = None;
         let manager = NSFontManager::sharedFontManager(mtm);
+        RECEIVER.with(|receiver| {
+                    let receiver = receiver.get_or_init(|| FontPanelReceiver::new(mtm));
+                    // SAFETY: the receiver outlives the process, so the
+                    // manager's unowned reference to it stays valid.
+                    unsafe { manager.setTarget(Some(receiver as &AnyObject)) };
+                });
         if let Some(font) =
-            objc2_app_kit::NSFont::fontWithName_size(&NSString::from_str(current_family),
-                                                     current_size)
+            NSFont::fontWithName_size(&NSString::from_str(current_family), current_size)
         {
             manager.setSelectedFont_isMultiple(&font, false);
         }
@@ -57,22 +127,13 @@ pub(crate) mod native_font_panel {
         }
     }
 
-    /// Returns the newly chosen `(target, family, size)` if it differs from
-    /// the last value seen (by `open` or a prior poll). No-op off the main
-    /// thread or before any target has opened the panel.
+    /// Takes the choice `changeFont:` last recorded, as
+    /// `(target, family, size)`, leaving it as the base the next conversion
+    /// starts from. `None` until the user changes something in the panel.
     pub fn poll_selection() -> Option<(Target, String, f64)> {
-        let mtm = MainThreadMarker::new()?;
-        let manager = NSFontManager::sharedFontManager(mtm);
-        let selected = manager.selectedFont()?;
-        let converted = manager.convertFont(&selected);
-        let family = converted.familyName()?.to_string();
-        let size = converted.pointSize();
-        let mut last_seen = LAST_SEEN.lock().unwrap();
-        let (target, _, _) = last_seen.clone()?;
-        if *last_seen == Some((target, family.clone(), size_key(size))) {
-            return None;
-        }
-        *last_seen = Some((target, family.clone(), size_key(size)));
+        let (target, ..) = SESSION.lock().unwrap().clone()?;
+        let (family, size) = CHOSEN.lock().unwrap().take()?;
+        *SESSION.lock().unwrap() = Some((target, family.clone(), size_key(size)));
         Some((target, family, size))
     }
 }
@@ -140,6 +201,49 @@ pub(crate) fn shorten_path(path: &str) -> String {
                          .unwrap_or_else(|| path.to_string())
 }
 
+/// Registers the embedded faces with CoreText as well as with GPUI's text
+/// system, for the process only.
+///
+/// GPUI's registration is private to GPUI, so AppKit resolves none of these
+/// families by name: `NSFont::fontWithName_size("JetBrains Mono", _)` returns
+/// `None`, and the font panel opens with nothing selected because
+/// `setSelectedFont:` never gets a font to record. Registering here is what
+/// lets the panel open on the font the row actually names.
+///
+/// Process scope deliberately: these faces ship with the app and have no
+/// business outliving it in the user's font book.
+#[cfg(target_os = "macos")]
+fn register_embedded_fonts_with_core_text() {
+    use objc2_core_foundation::CFData;
+    use objc2_core_text::{
+        CTFontManagerCreateFontDescriptorsFromData, CTFontManagerRegisterFontDescriptors,
+        CTFontManagerScope,
+    };
+
+    for face in [ADAMINA_REGULAR,
+                 MANROPE_REGULAR,
+                 MANROPE_MEDIUM,
+                 MANROPE_SEMIBOLD,
+                 MANROPE_BOLD,
+                 JETBRAINS_MONO_REGULAR,
+                 JETBRAINS_MONO_BOLD]
+    {
+        let data = CFData::from_bytes(face);
+        // SAFETY: `data` holds well-formed font data (the bytes are embedded
+        // at build time), and the descriptors are used only for this call.
+        let descriptors = unsafe { CTFontManagerCreateFontDescriptorsFromData(&data) };
+        // SAFETY: the array holds `CTFontDescriptor`s, as the call above
+        // returns. A `None` handler means failures are reported nowhere,
+        // which is what a face already registered should do - nothing.
+        unsafe {
+            CTFontManagerRegisterFontDescriptors(&descriptors,
+                                                 CTFontManagerScope::Process,
+                                                 true,
+                                                 None);
+        }
+    }
+}
+
 /// Registers the embedded font families and sets Adamina as the app-wide
 /// default font (Manrope stays registered for the workspace header/cell
 /// text that applies it explicitly), plus a distinct accent color, so the
@@ -157,6 +261,8 @@ pub(crate) fn apply_visual_identity(settings: &knot_core::Settings, cx: &mut App
     {
         eprintln!("failed to register embedded fonts: {error}");
     }
+    #[cfg(target_os = "macos")]
+    register_embedded_fonts_with_core_text();
 
     // The app-wide default stays the "title" font (Adamina) - Manrope
     // (`ui_font_name`) is applied explicitly only to the workspace header

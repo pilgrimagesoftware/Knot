@@ -37,6 +37,11 @@ objc2-app-kit = { version = "0.3", features = [
     "NSApplication",
     "objc2-core-foundation",
 ] }
+# The embedded faces are registered with GPUI's text system, which AppKit
+# cannot see - the font panel resolves families through CoreText. Registering
+# them here too is what lets the panel open on the current font.
+objc2-core-text = { version = "0.3", features = ["CTFontManager", "block2"] }
+objc2-core-foundation = { version = "0.3", features = ["CFArray", "CFData"] }
 
 [dev-dependencies]
 # `test-support` brings in GPUI's headless test platform and the

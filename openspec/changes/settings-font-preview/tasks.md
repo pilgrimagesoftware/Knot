@@ -19,9 +19,11 @@
       Title font to 48pt and confirm its row reads "48pt", is drawn at the
       same size as the other two rows, and leaves all three row heights
       equal.
-- [ ] 2.3 Verify the preview follows a new choice: pick a family in the font
+- [x] 2.3 Verify the preview follows a new choice: pick a family in the font
       panel and confirm the row redraws in it without reopening the settings
-      window.
+      window. Verified in the app, but only after fixing a defect this task
+      uncovered: the panel's choice never reached the app at all, in any row,
+      since before this change - see `app_support.rs`'s `native_font_panel`.
 
 ## 3. Unresolvable fonts
 
@@ -56,9 +58,11 @@
 
 ## Outstanding in-app verification
 
-The checked tasks above are implemented and covered by `make rust`; the
-confirmations that need the running app - 2.2, 2.3, 3.3 and 5.2, and the
-visual half of 1.1, 2.1, 3.1 and 3.2 - are still open. The route for 1.1 was
+Confirmed in the running app: a row renders in the family it names, and
+follows a new choice from the font panel (1.1, 2.1, 2.3). Still open - 2.2
+(the 48pt row height), 3.3 (the persisted value and the marking clearing),
+5.2 (three distinct faces at once, and only the unresolvable row marked), and
+so the visual half of 3.1 and 3.2. The route for 1.1 was
 settled by reading `gpui-component`'s `Button::render` and `gpui`'s `Div`
 paint instead: the label is a descendant div of the root the caller's style
 refines, and a div applies its text style to its descendants, so `.font_family`
