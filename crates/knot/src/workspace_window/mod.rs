@@ -31,14 +31,15 @@ pub(crate) enum DetailLineSize {
     Body,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct QueuedPanelPrompt {
-    text:      String,
-    failed:    bool,
-    in_flight: bool,
-}
+pub(crate) mod prompt_queue;
 
-type PanelPromptResult = (Uuid, String, Result<(), String>);
+use prompt_queue::{QueuedPanelPrompt, queued_status_label};
+
+/// A delivery result on its way back from the runtime: the agent whose
+/// queue it belongs to, the queue entry it answers, and how the prompt
+/// fared. The entry is named by id rather than by its text so two prompts
+/// that read the same do not collect each other's results.
+type PanelPromptResult = (Uuid, Uuid, Result<(), String>);
 
 /// One labelled detail line on an agent row: a leading icon saying what the
 /// line is, then the text.
@@ -844,17 +845,11 @@ impl WorkspaceWindow {
                                  .map(|mut results| std::mem::take(&mut *results))
                                  .unwrap_or_default();
         let prompt_results_changed = !prompt_results.is_empty();
-        for (id, text, result) in prompt_results {
-            if let Some(queue) = self.panel_prompt_queues.get_mut(&id)
-               && let Some(index) = queue.iter().position(|prompt| prompt.text == text)
-            {
-                if result.is_ok() {
-                    queue.remove(index);
-                }
-                else if let Some(prompt) = queue.get_mut(index) {
-                    prompt.in_flight = false;
-                    prompt.failed = true;
-                }
+        for (id, prompt_id, result) in prompt_results {
+            if let Some(queue) = self.panel_prompt_queues.get_mut(&id) {
+                // A prompt the user deleted while it was in flight is
+                // simply not there any more; `complete` ignores it.
+                prompt_queue::complete(queue, prompt_id, result.is_ok());
             }
         }
         let stats_changed = self.diff_stats_dirty
@@ -1393,11 +1388,16 @@ impl WorkspaceWindow {
                             .child(format!("Failed to connect: {message}")),
                     )
                     .child(
+                        // An icon with a tooltip, like every other panel
+                        // control - the failure text above it already says
+                        // what went wrong, so the button does not have to
+                        // repeat the offer in words.
                         Button::new("panel-retry-connect")
-                            .label("Try again")
                             .icon(gpui_kit::component::Icon::new(
                                 gpui_kit::assets::IconName::RefreshCw,
                             ))
+                            .tooltip(knot_core::l10n::t("panel.retry_connect"))
+                            .accessibility_label(knot_core::l10n::t("panel.retry_connect"))
                             .primary()
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
                                 view.retry_panel_session(id);
@@ -1608,6 +1608,11 @@ impl WorkspaceWindow {
                 v_flex()
                     .gap_1()
                     .children(queued_prompts.iter().enumerate().map(|(index, prompt)| {
+                        // Both row actions name their entry by id: a
+                        // delivery landing between this frame and the
+                        // click shifts every index behind it, and two
+                        // prompts reading the same text are ordinary.
+                        let prompt_id = prompt.id;
                         h_flex()
                             .w_full()
                             .min_w_0()
@@ -1631,7 +1636,8 @@ impl WorkspaceWindow {
                                     } else {
                                         gpui_kit::assets::IconName::Clock4
                                     }))
-                                    .tooltip(if prompt.failed { "Failed" } else { "Queued" })
+                                    .tooltip(queued_status_label(prompt.failed))
+                                    .accessibility_label(queued_status_label(prompt.failed))
                                     .text_color(if prompt.failed {
                                         cx.theme().danger
                                     } else {
@@ -1640,34 +1646,49 @@ impl WorkspaceWindow {
                                     .ghost()
                                     .xsmall(),
                             )
-                            .child(
-                                Button::new(("panel-queued-prompt-action", index as u64))
-                                    .icon(if prompt.failed {
-                                        IconName::RotateCw
-                                    } else {
-                                        IconName::CircleX
-                                    })
-                                    .tooltip(if prompt.failed { "Retry" } else { "Remove" })
-                                    .text_color(if prompt.failed {
-                                        cx.theme().danger
-                                    } else {
-                                        cx.theme().muted_foreground
-                                    })
+                            // Retry and delete are separate controls, so a
+                            // failed prompt can be dismissed rather than
+                            // only re-sent - one row action cannot be both.
+                            .children(prompt.failed.then(|| {
+                                Button::new(("panel-queued-prompt-retry", index as u64))
+                                    .icon(IconName::RotateCw)
+                                    .tooltip(knot_core::l10n::t("panel.retry"))
+                                    .accessibility_label(knot_core::l10n::t("panel.retry_queued"))
+                                    // Not tinted red: the failure is the
+                                    // state, retry is the way out of it,
+                                    // and red is reserved for the
+                                    // destructive control beside it.
+                                    .text_color(cx.theme().muted_foreground)
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
                                         if let Some(queue) = view.panel_prompt_queues.get_mut(&id)
-                                            && index < queue.len()
+                                            && prompt_queue::retry(queue, prompt_id)
                                         {
-                                            if queue[index].failed {
-                                                queue[index].failed = false;
-                                            } else {
-                                                queue.remove(index);
-                                            }
                                             cx.notify();
                                         }
-                                    })),
-                            )
+                                    }))
+                            }))
+                            .children(prompt.is_deletable().then(|| {
+                                Button::new(("panel-queued-prompt-delete", index as u64))
+                                    .icon(gpui_kit::assets::IconName::Trash)
+                                    .tooltip(knot_core::l10n::t("panel.delete_queued"))
+                                    .accessibility_label(knot_core::l10n::t("panel.delete_queued"))
+                                    // Red icon on a ghost button, per the
+                                    // project's destructive-action
+                                    // convention - `.danger()` would
+                                    // replace `.ghost()` outright.
+                                    .text_color(cx.theme().danger)
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                                        if let Some(queue) = view.panel_prompt_queues.get_mut(&id)
+                                            && prompt_queue::remove(queue, prompt_id)
+                                        {
+                                            cx.notify();
+                                        }
+                                    }))
+                            }))
                     }))
             }))
             // Files and images dragged from Finder attach the same way the
@@ -2243,9 +2264,7 @@ impl WorkspaceWindow {
             self.panel_prompt_queues
                 .entry(id)
                 .or_default()
-                .push(QueuedPanelPrompt { text,
-                                          failed: false,
-                                          in_flight: false });
+                .push(QueuedPanelPrompt::new(text));
             cx.update_entity(&input, |state, cx| {
                   state.set_value("", window, cx);
               });
@@ -2321,9 +2340,9 @@ impl WorkspaceWindow {
             }
             prompt.in_flight = true;
             handle.record_user_message(prompt.text.clone());
-            Some((handle.session(), handle.recorder(), prompt.text.clone()))
+            Some((handle.session(), handle.recorder(), prompt.text.clone(), prompt.id))
         };
-        let Some((session, recorder, text)) = candidate()
+        let Some((session, recorder, text, prompt_id)) = candidate()
         else {
             return;
         };
@@ -2336,7 +2355,7 @@ impl WorkspaceWindow {
                             recorder.error(format!("The agent could not answer: {error}"));
                         }
                         if let Ok(mut results) = results.lock() {
-                            results.push((id, text, result));
+                            results.push((id, prompt_id, result));
                         }
                     });
     }
