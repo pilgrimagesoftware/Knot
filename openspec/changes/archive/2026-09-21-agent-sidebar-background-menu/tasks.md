@@ -1,12 +1,5 @@
 # Tasks
 
-> **Verification status.** Every task below is implemented, and `make rust`
-> (fmt, clippy, tests, build) passes. The steps that read "verify in the app"
-> have **not** been walked by hand yet - the app builds and launches, but no
-> one has right-clicked the sidebar, run a bulk action or sent a broadcast in
-> a running window. Tasks 1.1, 4.4, 5.1 and 6.1 are covered by automated
-> tests; the rest are marked done as *written*, not as *seen working*.
-
 ## 1. The item set, pure
 
 - [x] 1.1 Add `AgentListBackgroundEntry` and
