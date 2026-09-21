@@ -116,7 +116,7 @@ make rust          # fmt + clippy + test + build, whole workspace
 
 make rust-fmt        # reformat with the pinned nightly
 make rust-fmt-check  # verify formatting (what CI runs)
-make rust-size     # fail on any .rs file over 700 lines
+make rust-size-check # fail on any .rs file over 700 lines
 make rust-lint     # cargo clippy --workspace --all-targets -- -D warnings
 make rust-test     # cargo test --workspace
 make rust-build    # cargo build --workspace
@@ -157,7 +157,7 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 
 ## Conventions
 
-- **No `.rs` file over 700 lines.** Enforced by `make rust-size` in CI. Split
+- **No `.rs` file over 700 lines.** Enforced by `make rust-size-check` in CI. Split
   by concern, not by line count; move colocated tests to a sibling `tests.rs`
   first. Do not raise the limit to make a change fit.
 - **No crate-wide `allow`.** Allow on the item, with a comment saying why.

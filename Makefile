@@ -1,4 +1,4 @@
-.PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog rust rust-fmt rust-fmt-check rust-lint rust-test rust-build rust-package print-rustfmt-nightly
+.PHONY: help build test clean archive export notarize dmg release install increment-build appcast get-version get-build set-version prerelease latest check-changelog rust rust-fmt rust-fmt-check rust-size-check rust-lint rust-test rust-build rust-package print-rustfmt-nightly
 
 # Load .env file if it exists
 -include .env
@@ -201,13 +201,13 @@ check-changelog:
 	@./scripts/check-changelog.sh
 
 # Rust workspace (the port). Additive to the Swift targets above.
-rust: rust-fmt-check rust-size rust-lint rust-test rust-build
+rust: rust-fmt-check rust-size-check rust-lint rust-test rust-build
 
 # The largest a Rust source file may get before it has to be split. See
 # scripts/check-file-size.sh for why this is enforced rather than advised.
 RUST_FILE_LINE_LIMIT ?= 700
 
-rust-size:
+rust-size-check:
 	@./scripts/check-file-size.sh $(RUST_FILE_LINE_LIMIT)
 
 # The single source of truth for the rustfmt toolchain. rustfmt.toml enables

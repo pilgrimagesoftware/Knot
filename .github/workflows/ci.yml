@@ -53,7 +53,7 @@ jobs:
       # This limit was applied once by hand and then regressed, because
       # nothing enforced it.
       - name: File size
-        run: make rust-size
+        run: make rust-size-check
 
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |

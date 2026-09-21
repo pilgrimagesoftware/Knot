@@ -10,7 +10,7 @@ named so you can tell when the rule genuinely does not apply.
 
 ## File size: 700 lines, enforced
 
-`make rust-size` fails the build above 700 lines per `.rs` file, and CI runs
+`make rust-size-check` fails the build above 700 lines per `.rs` file, and CI runs
 it. Do not raise `RUST_FILE_LINE_LIMIT` to make a change fit.
 
 This was applied once by hand and then regressed: `workspace_window/mod.rs`
