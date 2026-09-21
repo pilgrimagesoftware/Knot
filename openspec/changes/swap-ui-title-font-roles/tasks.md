@@ -34,4 +34,4 @@
 
 - [ ] 5.1 Confirm the rendered result against `specs/acp-panel-ui/spec.md` scenario by scenario - header plus paragraph, list/table/quote, code, level sizes, a marked header, the Markdown pane, and changing the UI font with a response on screen.
 - [ ] 5.2 Change the UI font and then the Title font from the Appearance tab and verify each row governs the text its label names, per `specs/settings-ui/spec.md`.
-- [ ] 5.3 Run `make` (fmt, clippy, test, build) and verify the whole workspace is clean.
+- [x] 5.3 Run `make` (fmt, clippy, test, build) and verify the whole workspace is clean.
