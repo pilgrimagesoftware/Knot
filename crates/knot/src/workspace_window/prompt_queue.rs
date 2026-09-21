@@ -61,6 +61,20 @@ pub(crate) fn remove(queue: &mut Vec<QueuedPanelPrompt>, id: Uuid) -> bool {
     true
 }
 
+/// Removes the entry `id` names and returns its text, for editing.
+///
+/// Editability is the test deletion uses: a prompt the agent already has
+/// cannot be taken back. `None` means the entry is gone or is in flight,
+/// and the caller leaves the composer as it found it. The entry does not
+/// hold its place - edited text is sent as a new prompt, at the back.
+pub(crate) fn take(queue: &mut Vec<QueuedPanelPrompt>, id: Uuid) -> Option<String> {
+    let index = position(queue, id)?;
+    if !queue[index].is_deletable() {
+        return None;
+    }
+    Some(queue.remove(index).text)
+}
+
 /// Clears the failed mark on `id` so the pump offers the entry again.
 ///
 /// The prompt keeps its place and its identity; retry re-delivers the same
@@ -95,6 +109,15 @@ pub(crate) fn complete(queue: &mut Vec<QueuedPanelPrompt>, id: Uuid, delivered: 
 
 fn position(queue: &[QueuedPanelPrompt], id: Uuid) -> Option<usize> {
     queue.iter().position(|prompt| prompt.id == id)
+}
+
+/// Whether loading a queued message into the composer would destroy work,
+/// and so has to be confirmed first.
+///
+/// Whitespace alone is not work: a stray newline in an untouched composer
+/// should not make every edit ask.
+pub(crate) fn needs_replace_confirmation(composer: &str) -> bool {
+    !composer.trim().is_empty()
 }
 
 /// The localized name of a queued entry's state, for the row's status icon.
@@ -188,6 +211,115 @@ mod tests {
         assert!(remove(&mut queue, failed));
 
         assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn taking_an_entry_returns_its_text_and_keeps_the_rest_in_order() {
+        let mut queue = queue(&["first", "second", "third"]);
+        let second = queue[1].id;
+
+        assert_eq!(take(&mut queue, second).as_deref(), Some("second"));
+
+        assert_eq!(texts(&queue), ["first", "third"]);
+    }
+
+    #[test]
+    fn taking_picks_the_named_entry_among_identical_text() {
+        let mut queue = queue(&["same", "same", "same"]);
+        let middle = queue[1].id;
+        let (first, last) = (queue[0].id, queue[2].id);
+
+        assert_eq!(take(&mut queue, middle).as_deref(), Some("same"));
+
+        assert_eq!(queue.iter().map(|prompt| prompt.id).collect::<Vec<_>>(),
+                   [first, last]);
+    }
+
+    #[test]
+    fn taking_an_in_flight_entry_is_refused() {
+        let mut queue = queue(&["running", "waiting"]);
+        queue[0].in_flight = true;
+        let running = queue[0].id;
+
+        assert_eq!(take(&mut queue, running), None);
+
+        assert_eq!(texts(&queue), ["running", "waiting"]);
+    }
+
+    #[test]
+    fn taking_while_a_turn_runs_leaves_the_running_entry_alone() {
+        let mut queue = queue(&["running", "waiting"]);
+        queue[0].in_flight = true;
+        let waiting = queue[1].id;
+
+        assert_eq!(take(&mut queue, waiting).as_deref(), Some("waiting"));
+
+        assert_eq!(texts(&queue), ["running"]);
+        assert!(queue[0].in_flight);
+    }
+
+    #[test]
+    fn taking_an_absent_id_is_refused() {
+        let mut queue = queue(&["first"]);
+
+        assert_eq!(take(&mut queue, Uuid::new_v4()), None);
+
+        assert_eq!(texts(&queue), ["first"]);
+    }
+
+    #[test]
+    fn a_failed_entry_can_be_taken_for_editing() {
+        let mut queue = queue(&["failed"]);
+        queue[0].failed = true;
+        let failed = queue[0].id;
+
+        assert_eq!(take(&mut queue, failed).as_deref(), Some("failed"));
+
+        assert!(queue.is_empty());
+    }
+
+    /// Edited text is a new prompt: it goes behind whatever is still
+    /// waiting rather than reclaiming the place it was taken from.
+    #[test]
+    fn re_enqueuing_edited_text_puts_it_at_the_back() {
+        let mut queue = queue(&["first", "second", "third"]);
+        let first = queue[0].id;
+
+        let text = take(&mut queue, first).expect("first should be editable");
+        queue.push(QueuedPanelPrompt::new(format!("{text} (edited)")));
+
+        assert_eq!(texts(&queue), ["second", "third", "first (edited)"]);
+    }
+
+    #[test]
+    fn an_empty_composer_is_replaced_without_asking() {
+        assert!(!needs_replace_confirmation(""));
+    }
+
+    #[test]
+    fn a_whitespace_only_composer_is_not_work_worth_keeping() {
+        assert!(!needs_replace_confirmation("  \n\t "));
+    }
+
+    #[test]
+    fn typed_composer_text_has_to_be_confirmed_before_replacing() {
+        assert!(needs_replace_confirmation("half a thought"));
+        assert!(needs_replace_confirmation("  padded  "));
+    }
+
+    /// Declining the confirmation runs no queue operation at all, so the
+    /// entry that was about to be edited is still queued and still first.
+    #[test]
+    fn declining_leaves_the_entry_queued() {
+        let mut queue = queue(&["first", "second"]);
+        let first = queue[0].id;
+
+        if !needs_replace_confirmation("typed") {
+            let _ = take(&mut queue, first);
+        }
+
+        assert_eq!(texts(&queue), ["first", "second"]);
+        assert_eq!(queue[0].id, first);
     }
 
     #[test]

@@ -994,6 +994,9 @@ fn queued_message_control_labels_resolve() {
                 "panel.retry",
                 "panel.retry_queued",
                 "panel.delete_queued",
+                "panel.edit_queued",
+                "panel.replace_composer_title",
+                "panel.replace_composer_body",
                 "panel.retry_connect"]
     {
         assert_ne!(knot_core::l10n::t(key),
