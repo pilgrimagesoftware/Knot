@@ -12,9 +12,10 @@ Resolve `owner/repo` from `git remote -v` - referred to below as `<owner>/<repo>
 
 ### 1. Identify the change and its worktree
 
-Ask which change to finish, unless clear from context. Find its worktree: `git worktree list`,
-or the fixed path convention
-`/Users/paulyhedral/Projects/Code/knot-rust-worktrees/<branch-slug>`. All remaining work
+Ask which change to finish, unless clear from context. Find its worktree with
+`git worktree list` - that is authoritative. Failing that, the convention is a peer directory
+beside the checkout, `<checkout>-Worktrees/<branch-slug>`, so a checkout at
+`~/Code/ThirdParty/Knot` keeps them in `~/Code/ThirdParty/Knot-Worktrees/`. All remaining work
 happens inside that worktree, not the main working tree.
 
 ### 2. Verify the work before declaring anything done
@@ -47,8 +48,11 @@ Use the `openspec-archive-change` skill to archive the change.
 pointed at the right base and not marked draft. If no PR exists yet, create one now:
 
 ```
-gh pr create --repo <owner>/<repo> --base main --title "<issue title, no Conventional Commits prefix>" --body "Closes #<issue-number>"
+gh pr create --repo <owner>/<repo> --base develop --title "<issue title, no Conventional Commits prefix>" --body "Closes #<issue-number>"
 ```
+
+`develop` is the integration branch under this repo's git-flow; use `--base main` only for a
+`release/x.y.z` or `hotfix/x.y.z` branch.
 
 The `Closes #<n>` (or `Fixes #<n>`) line is what links the PR to the issue and auto-closes it
 on merge - confirm it's present in the PR body even if the PR already existed.
@@ -62,14 +66,23 @@ clear; otherwise hand back to the user.
 ### 8. Merge
 
 Confirm with the user before merging, unless they've already authorized auto-merge for this
-task - merging is a shared, visible action. Default to squash merge, or ask if the repo's
-convention differs:
+task - merging is a shared, visible action. Merge with a merge commit, never a squash: the
+Conventional Commits prefixes have to survive in history, and the branch rulesets on `develop`
+and `main` allow only `merge` and `rebase`.
 
 ```
-gh pr merge <n> --squash --delete-branch
+gh pr merge <n> --merge --delete-branch
 ```
 
 `--delete-branch` removes the remote branch; it does not touch the local worktree.
+
+Two things that bite when arming auto-merge with `--auto`:
+
+- Those rulesets set `strict_required_status_checks_policy`, so a PR showing
+  `mergeStateStatus=BEHIND` will never merge no matter how green it is. Run
+  `gh pr update-branch <n>` first, then let the re-triggered checks finish.
+- `--delete-branch` does not take effect on an `--auto` merge. Remove the branch afterwards
+  with `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch-name>`.
 
 ### 9. Close out the Issue
 
@@ -87,16 +100,23 @@ Then set the end date if the project tracks one, and move the issue's project st
 In the repo's main working tree (not the feature worktree):
 
 ```
-git checkout main
+git checkout develop
 git pull
 ```
 
 ### 11. Remove the feature worktree
 
+Run these from the primary checkout, not from inside the worktree being removed:
+
 ```
-git worktree remove /Users/paulyhedral/Projects/Code/knot-rust-worktrees/<branch-slug>
+REPO=$(git rev-parse --show-toplevel)
+git worktree remove "$REPO-Worktrees/<branch-slug>"
 git branch -D <branch-name>
 ```
+
+If the session was switched into that worktree with `EnterWorktree`, leave it first
+(`ExitWorktree` with `keep`) - a session pinned inside a worktree cannot remove it, and once
+the directory is gone every git command in that session is refused until the pin is released.
 
 ### 12. Report back
 
