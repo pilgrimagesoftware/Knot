@@ -33,18 +33,19 @@ git-flow. `develop` is the integration branch; `main` is release-only.
 ## Running checks locally
 
 ```bash
-make rust          # fmt + clippy + test + build for the whole workspace
+make             # fmt + size + clippy + test + build for the whole workspace
 
 # or individually
-make rust-fmt        # reformat with the pinned nightly
-make rust-fmt-check  # verify formatting
-make rust-lint
-make rust-test
-make rust-build
+make fmt         # reformat with the pinned nightly
+make fmt-check   # verify formatting
+make size-check  # fail on any .rs file over 700 lines
+make lint
+make test
+make build
 ```
 
-`make rust-fmt` reformats with the pinned nightly; `make rust-fmt-check` is the
-read-only check CI runs. Run `make rust-fmt` before committing.
+`make fmt` reformats with the pinned nightly; `make fmt-check` is the read-only
+check CI runs. Run `make fmt` before committing.
 
 ## Commit messages
 
@@ -106,7 +107,7 @@ macOS on Apple Silicon is the only target: the app links AppKit through
 `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`, which cargo-packager reads from
 the environment and cannot take from the manifest. Without them it packages
 unsigned, which runs locally but is not distributable. Locally:
-`make rust-package`, after `cargo install cargo-packager --locked`.
+`make package`, after `cargo install cargo-packager --locked`.
 
 ## License
 

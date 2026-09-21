@@ -46,14 +46,14 @@ jobs:
         run: rustup toolchain install "$(make -s print-rustfmt-nightly)" --profile minimal --component rustfmt
 
       - name: Format
-        run: make rust-fmt-check
+        run: make fmt-check
 
       # A file nobody can hold in their head stops being reviewed properly,
       # and the only reliable moment to split one is before it gets large.
       # This limit was applied once by hand and then regressed, because
       # nothing enforced it.
       - name: File size
-        run: make rust-size-check
+        run: make size-check
 
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |
@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Clippy
-        run: make rust-lint
+        run: make lint
 
       # Split per-crate (rather than one `cargo test --workspace`) so a hang or
       # failure names the crate directly in the job summary instead of a
@@ -82,4 +82,4 @@ jobs:
         run: cargo test -p knot
 
       - name: Build
-        run: make rust-build
+        run: make build

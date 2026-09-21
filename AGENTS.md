@@ -112,33 +112,34 @@ authoritative for finding the existing ones.
 ## Running Checks Locally
 
 ```bash
-make rust          # fmt + clippy + test + build, whole workspace
+make             # the whole gate, in the order CI runs it
 
-make rust-fmt        # reformat with the pinned nightly
-make rust-fmt-check  # verify formatting (what CI runs)
-make rust-size-check # fail on any .rs file over 700 lines
-make rust-lint     # cargo clippy --workspace --all-targets -- -D warnings
-make rust-test     # cargo test --workspace
-make rust-build    # cargo build --workspace
+make fmt         # reformat with the pinned nightly
+make fmt-check   # verify formatting (what CI runs)
+make size-check  # fail on any .rs file over 700 lines
+make lint        # cargo clippy --workspace --all-targets -- -D warnings
+make test        # cargo test --workspace
+make build       # cargo build --workspace
 ```
 
 ```bash
-make rust-package  # Knot.app + DMG via cargo-packager (macOS only)
+make package     # Knot.app + DMG via cargo-packager (macOS only)
 ```
 
 Packaging is configured in `crates/knot/Cargo.toml` under
 `[package.metadata.packager]` and needs `cargo install cargo-packager --locked`.
 CI runs the same command from `.github/workflows/package.yml`.
 
-Run `make rust-fmt` before committing. `rustfmt.toml` uses unstable options, so
+Run `make fmt` before committing. `rustfmt.toml` uses unstable options, so
 formatting is only reproducible on one exact nightly, pinned as
 `RUSTFMT_NIGHTLY` in the `Makefile` and installed with `rustup toolchain install
 $(make -s print-rustfmt-nightly)`. CI installs that same pin and runs these same
 targets. `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
 
-The Swift app has its own targets in the same `Makefile` (`make build`,
-`make test`, `make notarize`) and its own CI (`tests.yml`, `build.yml`); those
-are unrelated to port work.
+The `Makefile` drives the Rust workspace only. It used to carry the Swift
+app's xcodebuild targets as well - which is why the Rust ones were all prefixed
+`rust-` - but those were removed along with the Swift release workflow they
+fed. Build or test the Swift reference through `Skwad.xcodeproj` in Xcode.
 
 ## Releases
 
@@ -157,7 +158,7 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 
 ## Conventions
 
-- **No `.rs` file over 700 lines.** Enforced by `make rust-size-check` in CI. Split
+- **No `.rs` file over 700 lines.** Enforced by `make size-check` in CI. Split
   by concern, not by line count; move colocated tests to a sibling `tests.rs`
   first. Do not raise the limit to make a change fit.
 - **No crate-wide `allow`.** Allow on the item, with a comment saying why.

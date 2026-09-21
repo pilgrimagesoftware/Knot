@@ -2,8 +2,8 @@
 
 ## 1. The helper
 
-- [ ] 1.1 Add `single_line(text: &str) -> String` to `crates/knot/src/app_support.rs` beside `shorten_path`, collapsing every run of whitespace to one space and trimming, with a doc comment recording why the style flags are not enough - `gpui::text_system::shape_text` splits on `\n` before any wrapping or truncation decision, so `whitespace_nowrap` cannot make multi-line text one line; verify `make rust-lint` is clean.
-- [ ] 1.2 Add unit tests for it: a single-line string passes through unchanged, a string with `\n` joins with a single space, indentation and tabs collapse rather than surviving, runs of spaces collapse, leading and trailing whitespace go, an empty string and a whitespace-only string both come back empty; verify `make rust-test` runs them.
+- [ ] 1.1 Add `single_line(text: &str) -> String` to `crates/knot/src/app_support.rs` beside `shorten_path`, collapsing every run of whitespace to one space and trimming, with a doc comment recording why the style flags are not enough - `gpui::text_system::shape_text` splits on `\n` before any wrapping or truncation decision, so `whitespace_nowrap` cannot make multi-line text one line; verify `make lint` is clean.
+- [ ] 1.2 Add unit tests for it: a single-line string passes through unchanged, a string with `\n` joins with a single space, indentation and tabs collapse rather than surviving, runs of spaces collapse, leading and trailing whitespace go, an empty string and a whitespace-only string both come back empty; verify `make test` runs them.
 
 ## 2. The reported defect
 
@@ -22,4 +22,4 @@
 ## 4. Verification
 
 - [ ] 4.1 Walk the changed and added scenarios in `specs/acp-panel-ui/spec.md` against the running app: the long-title ellipsis, the indicator on the line, an expanded card unchanged, the multi-line command collapsed, the expanded card keeping line breaks, the short joined title with no ellipsis, the queued multi-line prompt's single row, the delivered prompt, and the same prompt in the conversation.
-- [ ] 4.2 Run `make rust` and `make rust-size-check` and verify the whole workspace is clean.
+- [ ] 4.2 Run `make` and `make size-check` and verify the whole workspace is clean.
