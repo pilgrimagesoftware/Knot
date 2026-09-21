@@ -87,7 +87,8 @@ impl Render for CommandCenterWindow {
                                                                   header_title:
                                                                       agent.header_title()
                                                                            .to_string(),
-                                                                  git_stats }
+                                                                  git_stats,
+                                                                  is_running: agent.activated }
                                                 })
                                                 .collect::<Vec<_>>();
                      dashboard::DashboardWorkspace { id:        workspace.id,

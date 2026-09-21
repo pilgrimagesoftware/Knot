@@ -334,6 +334,9 @@ pub(crate) struct WorkspaceWindow {
     /// repaint poll looked, so a slot moving between phases repaints - see
     /// `panel_needs_repaint`.
     panel_phases:                     BTreeMap<Uuid, panel_session::PanelPhase>,
+    /// Which spinner frame the working indicators were last repainted on -
+    /// see `spinner_repaint_due`.
+    last_spinner_frame:               u128,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
@@ -459,6 +462,7 @@ impl WorkspaceWindow {
                     terminal_focus: cx.focus_handle(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
+                    last_spinner_frame: 0,
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
@@ -567,7 +571,8 @@ impl WorkspaceWindow {
                                                              grid.lock().unwrap().take_dirty()
                                                          });
                                                  let panel_dirty = view.panel_needs_repaint();
-                                                 if grid_dirty || panel_dirty {
+                                                 let spinner_dirty = view.spinner_repaint_due();
+                                                 if grid_dirty || panel_dirty || spinner_dirty {
                                                      cx.notify();
                                                  }
                                              });
@@ -796,6 +801,42 @@ impl WorkspaceWindow {
     /// showing "Connecting to agent…" indefinitely, making the connect
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
+    /// Whether the sidebar's and the dashboard's working indicators need a
+    /// repaint now: an agent in this workspace is Working, and the spinner
+    /// has moved on since they were last drawn.
+    ///
+    /// `working_indicator::render` reads the clock when it renders, so on
+    /// these two surfaces - which, unlike the panel, redraw only when
+    /// something happens - the spinner would otherwise sit frozen on
+    /// whatever frame the last unrelated event left it, which reads as an
+    /// agent that has hung. Gating on the frame count rather than simply
+    /// notifying every poll repaints about five times a second while an
+    /// agent works, instead of thirty, and not at all while none does.
+    fn spinner_repaint_due(&mut self) -> bool {
+        let any_working =
+            self.store
+                .lock()
+                .ok()
+                .and_then(|store| {
+                    let workspace = store.workspaces()
+                                         .iter()
+                                         .find(|workspace| workspace.id == self.workspace_id)?;
+                    Some(workspace.agent_ids
+                                  .iter()
+                                  .filter_map(|id| store.agent(*id))
+                                  .any(|agent| {
+                                      agent.activated
+                                      && agent.state == knot_agents::AgentState::Running
+                                  }))
+                })
+                .unwrap_or(false);
+        if !any_working {
+            return false;
+        }
+        let frame = working_indicator::spinner_frame();
+        std::mem::replace(&mut self.last_spinner_frame, frame) != frame
+    }
+
     fn panel_needs_repaint(&mut self) -> bool {
         let prompt_results = self.panel_prompt_results
                                  .lock()
@@ -2818,15 +2859,32 @@ impl Render for WorkspaceWindow {
                                         cx,
                                     )),
                             )
-                            .children((!is_shell).then(|| {
-                                div()
+                            // The working indicator and the state dot share
+                            // one trailing column, indicator first. They
+                            // are not redundant: the dot's colours say what
+                            // a *running* agent is doing, while the
+                            // indicator animates while the agent works and
+                            // goes blank when it is not running at all. A
+                            // shell agent gets the indicator but no dot -
+                            // it has no coding-agent state for the dot to
+                            // report, which is why the dot is already
+                            // hidden for it.
+                            .child(
+                                h_flex()
                                     .flex_shrink_0()
-                                    .w(px(8.))
-                                    .h(px(8.))
-                                    .mt_1()
-                                    .rounded_full()
-                                    .bg(state_color(state))
-                            })),
+                                    .gap_1()
+                                    .items_start()
+                                    .child(working_indicator::render(state, is_running))
+                                    .children((!is_shell).then(|| {
+                                        div()
+                                            .flex_shrink_0()
+                                            .w(px(8.))
+                                            .h(px(8.))
+                                            .mt_1()
+                                            .rounded_full()
+                                            .bg(state_color(state))
+                                    })),
+                            ),
                     )
                     .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                         view.select_agent(id);
@@ -2937,6 +2995,7 @@ impl Render for WorkspaceWindow {
                                 is_shell: agent.is_shell(),
                                 header_title: agent.header_title().to_string(),
                                 git_stats,
+                                is_running: agent.activated,
                             }
                         })
                         .collect::<Vec<_>>();
