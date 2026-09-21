@@ -11,6 +11,7 @@ mod open_in;
 mod panel_session;
 mod panel_state;
 mod panel_view;
+mod quit_guard;
 mod settings_window;
 mod terminal_view;
 #[cfg(test)]
