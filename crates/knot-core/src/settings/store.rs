@@ -27,12 +27,12 @@ use serde_json::Value;
 use uuid::Uuid;
 
 pub use super::records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, Workspace};
+use super::vocabulary::{AiProvider, AppearanceMode, AutopilotAction, UnknownVariant};
 use crate::consts::{
-    AI_PROVIDER_DEFAULT, APP_NAME, APPEARANCE_MODE_DEFAULT, AUTOPILOT_ACTION_DEFAULT,
-    DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT, MERMAID_THEME_DEFAULT,
-    ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE, SETTINGS_TEMP_EXTENSION,
-    SETTINGS_VERSION_CURRENT, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN,
-    SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT,
+    APP_NAME, DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT,
+    MERMAID_THEME_DEFAULT, ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE,
+    SETTINGS_TEMP_EXTENSION, SETTINGS_VERSION_CURRENT, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX,
+    SIDEBAR_WIDTH_MIN, SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT,
     TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT,
     VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
 };
@@ -54,7 +54,7 @@ pub struct Settings {
     /// migrated.
     #[serde(default = "de_legacy_settings_version")]
     pub settings_version:               u32,
-    pub appearance_mode:                String,
+    pub appearance_mode:                AppearanceMode,
     pub restore_layout_on_launch:       bool,
     pub restore_conversation_on_launch: bool,
     pub keep_in_menu_bar:               bool,
@@ -81,9 +81,9 @@ pub struct Settings {
     /// `openspec/specs/agent-list-ui/spec.md`.
     pub sidebar_width:                  f64,
     pub autopilot_enabled:              bool,
-    pub ai_provider:                    String,
+    pub ai_provider:                    AiProvider,
     pub ai_api_key:                     String,
-    pub autopilot_action:               String,
+    pub autopilot_action:               AutopilotAction,
     pub autopilot_custom_prompt:        String,
     pub voice_enabled:                  bool,
     pub voice_engine:                   String,
@@ -116,7 +116,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self { settings_version:               SETTINGS_VERSION_CURRENT,
-               appearance_mode:                APPEARANCE_MODE_DEFAULT.to_string(),
+               appearance_mode:                AppearanceMode::default(),
                restore_layout_on_launch:       true,
                restore_conversation_on_launch: false,
                keep_in_menu_bar:               false,
@@ -138,9 +138,9 @@ impl Default for Settings {
                title_font_size:                TITLE_FONT_SIZE_DEFAULT,
                sidebar_width:                  SIDEBAR_WIDTH_DEFAULT,
                autopilot_enabled:              false,
-               ai_provider:                    AI_PROVIDER_DEFAULT.to_string(),
+               ai_provider:                    AiProvider::default(),
                ai_api_key:                     String::new(),
-               autopilot_action:               AUTOPILOT_ACTION_DEFAULT.to_string(),
+               autopilot_action:               AutopilotAction::default(),
                autopilot_custom_prompt:        String::new(),
                voice_enabled:                  false,
                voice_engine:                   VOICE_ENGINE_DEFAULT.to_string(),
@@ -197,6 +197,7 @@ impl Settings {
         };
 
         migrate_font_roles(&mut value);
+        report_unreadable_vocabularies(&value);
 
         let mut settings: Self = serde_json::from_value(value).unwrap_or_default();
         settings.store_path = store;
@@ -456,6 +457,37 @@ fn de_legacy_settings_version() -> u32 {
 /// Gated on `settingsVersion`, so it runs exactly once. The migrated value is
 /// not written eagerly; the next persist records it, the same as the
 /// `"SF Mono"` upgrade.
+/// Says so, once, when a stored vocabulary value could not be read.
+///
+/// Deserialization is deliberately tolerant - one bad field must not take the
+/// whole document down - so without this the substitution is invisible and a
+/// corrupt value behaves exactly like the real default. That
+/// indistinguishability is what issue #224 was about.
+fn report_unreadable_vocabularies(value: &Value) {
+    fn check<T: std::str::FromStr<Err = UnknownVariant> + Default + std::fmt::Display>(value: &Value,
+                                                                                       field: &str)
+    {
+        let Some(stored) = value.get(field).and_then(Value::as_str)
+        else {
+            return;
+        };
+        if let (_, Some(unknown)) = {
+            let parsed = stored.parse::<T>();
+            match parsed {
+                Ok(v) => (v, None),
+                Err(e) => (T::default(), Some(e)),
+            }
+        } {
+            eprintln!("knot-core: settings field `{field}`: {unknown}; using {}",
+                      T::default());
+        }
+    }
+
+    check::<AppearanceMode>(value, "appearanceMode");
+    check::<AiProvider>(value, "aiProvider");
+    check::<AutopilotAction>(value, "autopilotAction");
+}
+
 fn migrate_font_roles(document: &mut Value) {
     let Some(object) = document.as_object_mut()
     else {

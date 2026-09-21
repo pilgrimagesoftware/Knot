@@ -8,16 +8,19 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
+use knot_core::AppearanceMode;
 
 use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
-    pub(crate) fn appearance_label(mode: &str) -> &'static str {
+    /// Exhaustive: adding a variant to [`AppearanceMode`] fails to compile
+    /// here rather than silently rendering as "Auto".
+    pub(crate) fn appearance_label(mode: AppearanceMode) -> &'static str {
         match mode {
-            "system" => "System",
-            "light" => "Light",
-            "dark" => "Dark",
-            _ => "Auto",
+            AppearanceMode::Auto => "Auto",
+            AppearanceMode::System => "System",
+            AppearanceMode::Light => "Light",
+            AppearanceMode::Dark => "Dark",
         }
     }
 
@@ -35,7 +38,7 @@ impl SettingsWindow {
         let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
         let agent_panel_shift_enter_sends = self.settings.agent_panel_shift_enter_sends;
         let agent_panel_compact_tool_calls = self.settings.agent_panel_compact_tool_calls;
-        let appearance_label = Self::appearance_label(&self.settings.appearance_mode);
+        let appearance_label = Self::appearance_label(self.settings.appearance_mode);
         // Bound here rather than inline: `row`/`hint` borrow their text,
         // so a `t(..)` temporary in the call would not outlive it.
         let compact_tool_calls_label = knot_core::l10n::t("settings.compact_tool_calls");
@@ -53,19 +56,17 @@ impl SettingsWindow {
                             .dropdown_menu({
                                 let settings_window = settings_window.clone();
                                 move |menu, _, _| {
+                                    // Driven off `AppearanceMode::ALL`, so a
+                                    // new variant appears in the picker
+                                    // without anyone remembering to add it.
                                     let mut menu = menu;
-                                    for (label, value) in [
-                                        ("Auto", "auto"),
-                                        ("System", "system"),
-                                        ("Light", "light"),
-                                        ("Dark", "dark"),
-                                    ] {
+                                    for mode in AppearanceMode::ALL.iter().copied() {
+                                        let label = Self::appearance_label(mode);
                                         menu = menu.item(PopupMenuItem::new(label).on_click({
                                             let settings_window = settings_window.clone();
                                             move |_, _, app| {
                                                 settings_window.update(app, |view, _| {
-                                                    view.settings.appearance_mode =
-                                                        value.to_string();
+                                                    view.settings.appearance_mode = mode;
                                                     view.persist();
                                                 })
                                             }
