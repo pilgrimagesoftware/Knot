@@ -160,7 +160,8 @@ pub(crate) fn agents_menu(snapshot: &AgentMenuSnapshot) -> Menu {
 fn agent_menu_item(entry: AgentMenuEntry, snapshot: &AgentMenuSnapshot) -> Option<MenuItem> {
     Some(match entry {
              AgentMenuEntry::Separator => MenuItem::separator(),
-             AgentMenuEntry::MoveToWorkspace | AgentMenuEntry::OpenIn
+             AgentMenuEntry::MoveToWorkspace
+             | AgentMenuEntry::OpenIn
              | AgentMenuEntry::MarkdownFiles => {
                  agent_menu_submenu(entry, snapshot)?.disabled(!snapshot.entries.contains(&entry))
              }
