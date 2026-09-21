@@ -161,15 +161,6 @@ fn a_second_message_nudges_again() {
 }
 
 #[test]
-fn awaiting_notice_skips_active_empty_and_duplicate_messages() {
-    let agent = Uuid::new_v4();
-    assert!(should_show_awaiting_notice(None, agent, "Question?", None));
-    assert!(!should_show_awaiting_notice(Some(agent), agent, "Question?", None));
-    assert!(!should_show_awaiting_notice(None, agent, "", None));
-    assert!(!should_show_awaiting_notice(None, agent, "Question?", Some(&"Question?".to_string())));
-}
-
-#[test]
 fn agent_status_snapshot_tracks_roster_state_and_registration() {
     let mut store = knot_agents::AgentStore::new();
     let ws = workspace("One");

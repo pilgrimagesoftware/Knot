@@ -2,6 +2,19 @@ use super::*;
 pub(crate) const CHECK_INBOX_PROMPT: &str = "Check your inbox for questions or instructions from other agents. Update your status and immediately execute what is being asked without confirmation.";
 pub(crate) type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
+/// The awaiting-input queue, reachable from any window.
+///
+/// The MCP tool catalog pushes an entry whenever an agent's hook or ACP
+/// session reports Awaiting input; the workspace window that owns the agent
+/// drains it and raises the desktop notification
+/// `openspec/specs/desktop-notifications/spec.md` asks for. A global rather
+/// than a constructor argument because every workspace window needs it and
+/// `WorkspaceWindow::open` is already at the crate's argument ceiling.
+#[derive(Clone)]
+pub(crate) struct AwaitingInput(pub(crate) AwaitingInputQueue);
+
+impl gpui_kit::Global for AwaitingInput {}
+
 /// Which setting a font panel session is editing. Plain data, referenced
 /// from platform-independent UI code (button labels/handlers); only the
 /// panel-driving logic that reads/writes it is macOS-only, in

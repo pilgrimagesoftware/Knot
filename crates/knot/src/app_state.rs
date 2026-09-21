@@ -468,15 +468,6 @@ pub(crate) struct DeliveryNotice {
     pub(crate) count:          usize,
 }
 
-// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
-// `show_system_notification`, so this is reached only from tests.
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct AwaitingNotice {
-    agent_name: String,
-    message:    String,
-}
-
 // UNWIRED: ported from the Swift reference, no view reads it yet.
 // Reached only from tests; kept as the port's staging area rather than
 // deleted, so the behaviour it encodes is not lost.
@@ -580,25 +571,26 @@ pub(crate) fn inbox_prompt_message_id(check: NudgeCheck<'_>) -> Option<Uuid> {
          .filter(|message_id| Some(*message_id) != check.last_nudged)
 }
 
-// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
-// `show_system_notification`, so this is reached only from tests.
-#[allow(dead_code)]
+/// Whether an agent entering Awaiting input should raise a notice.
+///
+/// Two suppressions, both named by
+/// `openspec/specs/desktop-notifications/spec.md`: the agent the user is
+/// already looking at does not need announcing, and a second hook event for
+/// a prompt already announced is a repeat, not news.
+///
+/// An absent message does *not* suppress. The spec's "default body without a
+/// message" scenario is explicit that an agent needing attention is worth
+/// raising whether or not the hook supplied text - that is what
+/// [`AWAITING_INPUT_DEFAULT_BODY`] is for. The ported predicate used to
+/// return `false` here, which is why that scenario had never been met.
 pub(crate) fn should_show_awaiting_notice(selected_agent: Option<Uuid>, agent_id: Uuid,
                                           message: &str, last_message: Option<&String>)
                                           -> bool {
-    selected_agent != Some(agent_id)
-    && !message.is_empty()
-    && last_message.is_none_or(|last| last != message)
+    selected_agent != Some(agent_id) && last_message.is_none_or(|last| last != message)
 }
 
-// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
-// `show_system_notification`, so this is reached only from tests.
-#[allow(dead_code)]
 pub(crate) const AWAITING_INPUT_DEFAULT_BODY: &str = "Needs your attention";
 
-// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
-// `show_system_notification`, so this is reached only from tests.
-#[allow(dead_code)]
 /// Whether a desktop notification should be raised for an agent entering
 /// Awaiting input, gating the same "is this a fresh prompt for an agent the
 /// user isn't already looking at" signal `should_show_awaiting_notice`
@@ -609,9 +601,6 @@ pub(crate) fn should_notify(desktop_notifications_enabled: bool, show_awaiting_n
     desktop_notifications_enabled && show_awaiting_notice
 }
 
-// UNWIRED(#222): desktop-notifications' decision layer. Nothing calls
-// `show_system_notification`, so this is reached only from tests.
-#[allow(dead_code)]
 /// The notification body: the hook-supplied message when non-empty,
 /// otherwise a default.
 pub(crate) fn notification_body(message: &str) -> &str {

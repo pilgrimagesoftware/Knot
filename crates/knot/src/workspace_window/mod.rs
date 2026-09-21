@@ -7,6 +7,7 @@ mod agents;
 mod chrome;
 mod creation;
 mod menus;
+mod notifications;
 mod open;
 mod panel;
 mod render;
@@ -126,6 +127,13 @@ pub(crate) struct WorkspaceWindow {
     /// The last message each agent has been nudged about, so an unread
     /// inbox produces one prompt rather than one per idle poll.
     nudged_messages:                  BTreeMap<Uuid, Uuid>,
+    /// The last awaiting-input message each agent was notified about.
+    ///
+    /// `Effect::AwaitingInput` fires on every status event reporting Input,
+    /// not only on the transition into it, so a prompt the user has not
+    /// answered keeps arriving. This is what makes the second one a repeat
+    /// rather than news, per `desktop-notifications`' suppression rule.
+    notified_awaiting:                BTreeMap<Uuid, String>,
     settings:                         knot_core::Settings,
     workspace_id:                     Uuid,
     selected_agent:                   Option<Uuid>,
