@@ -89,7 +89,7 @@ impl WorkspaceWindow {
     pub(in crate::workspace_window) fn selected_agent_menu(&self, cx: &Context<Self>)
                                                            -> Option<SelectedAgentMenu> {
         let id = self.selected_agent?;
-        let store = self.store.lock().ok()?;
+        let store = self.store.lock();
         let (name, folder) = {
             let agent = store.agent(id)?;
             (agent.name.clone(), agent.folder.clone())
@@ -111,12 +111,9 @@ impl WorkspaceWindow {
 
     pub(in crate::workspace_window) fn selected_agent_header(&self) -> Option<SelectedAgentHeader> {
         let id = self.selected_agent?;
-        let store = self.store.lock().ok()?;
+        let store = self.store.lock();
         let agent = store.agent(id)?;
-        let stats = self.diff_stats
-                        .lock()
-                        .ok()
-                        .and_then(|stats| stats.get(&id).copied());
+        let stats = self.diff_stats.lock().get(&id).copied();
         let state = (!agent.is_shell()).then_some((agent.state, stats));
         Some(SelectedAgentHeader { avatar: agent.avatar.clone(),
                                    name: agent.name.clone(),

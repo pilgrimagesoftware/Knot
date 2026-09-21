@@ -520,7 +520,8 @@ pub(crate) fn unread_counts_snapshot(messages: &knot_messaging::MessageStore, ag
 
 pub(crate) fn apply_terminal_status(store: &Arc<Mutex<knot_agents::AgentStore>>, agent_id: Uuid,
                                     state: knot_agents::AgentState) {
-    if let Ok(mut store) = store.lock() {
+    {
+        let mut store = store.lock();
         store.set_state(agent_id, state);
     }
 }

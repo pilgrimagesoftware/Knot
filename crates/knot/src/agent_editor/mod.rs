@@ -84,7 +84,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
     // persona field. Falls back to the caller's snapshot if the file
     // can't be read.
     let settings = knot_core::Settings::load().unwrap_or(settings);
-    let editing = edit_target.and_then(|id| store.lock().unwrap().agent(id).cloned());
+    let editing = edit_target.and_then(|id| store.lock().agent(id).cloned());
     let title = if editing.is_some() {
         "Edit Agent"
     }
@@ -234,7 +234,7 @@ impl AgentEditor {
         let agent_type = created_agent_type(self.creating_a_companion(), &self.agent_type);
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
         let created_id = {
-            let mut store = self.store.lock().unwrap();
+            let mut store = self.store.lock();
             store.set_current_workspace(self.workspace_id);
             let id = store.create(
                 folder,
@@ -292,7 +292,7 @@ impl AgentEditor {
         let agent_type = self.agent_type.clone();
         let persona_changed = self.persona_id != self.original_persona_id;
         {
-            let mut store = self.store.lock().unwrap();
+            let mut store = self.store.lock();
             let result = store.edit(
                 id,
                 knot_agents::EditRequest {

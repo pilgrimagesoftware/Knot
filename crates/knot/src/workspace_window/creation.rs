@@ -61,13 +61,14 @@ impl WorkspaceWindow {
                        .trim()
                        .to_string();
         let id = {
-            let mut store = self.store.lock().unwrap();
+            let mut store = self.store.lock();
             store.set_current_workspace(self.workspace_id);
             store.create(folder,
                          knot_agents::CreateOptions { name: (!name.is_empty()).then_some(name),
                                                       ..Default::default() })
         };
-        if let Ok(store) = self.store.lock() {
+        {
+            let store = self.store.lock();
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();

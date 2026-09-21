@@ -30,10 +30,7 @@ impl SettingsWindow {
     /// `Settings` snapshot is from the moment it opened and misses agents
     /// created since.
     fn live_personas_in_use(&self) -> BTreeMap<Uuid, usize> {
-        match self.store.lock() {
-            Ok(store) => Self::personas_in_use(store.agents()),
-            Err(_) => BTreeMap::new(),
-        }
+        Self::personas_in_use(self.store.lock().agents())
     }
 
     /// The delete button's tooltip, which doubles as the reason it is

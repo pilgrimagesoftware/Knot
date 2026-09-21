@@ -4,12 +4,13 @@
 //! knows when to repaint - mirrors `Grid::take_dirty`'s pattern for the
 //! terminal view.
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 use knot_acp::{PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent};
 use knot_agent_launch::AdapterConfig;
 use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
+use parking_lot::Mutex;
 
 use crate::panel_state::PanelState;
 
@@ -39,7 +40,8 @@ impl PanelSessionHandle {
         tokio::spawn(async move {
             while let Some(event) = events.recv().await {
                 let ended = matches!(event, SessionEvent::Ended(_));
-                if let Ok(mut state) = drain_state.lock() {
+                {
+                    let mut state = drain_state.lock();
                     state.apply(event);
                 }
                 drain_dirty.store(true, Ordering::SeqCst);
@@ -78,7 +80,8 @@ impl PanelSessionHandle {
     /// ACP stream itself never echoes it back, so the caller must add it
     /// explicitly before (or independent of) actually sending it.
     pub fn record_user_message(&self, text: String) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.push_user_message(text);
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -103,7 +106,8 @@ impl PanelSessionHandle {
 
     pub fn answer_permission(&self, request: &PermissionRequest, decision: PermissionDecision) {
         self.session.answer_permission(request, decision);
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.resolve_permission();
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -112,7 +116,8 @@ impl PanelSessionHandle {
     /// Turns off auto-scroll for the in-flight response, per the track
     /// toggle's "user scrolls away" scenario.
     pub fn clear_tracking(&self) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.clear_tracking();
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -120,7 +125,8 @@ impl PanelSessionHandle {
 
     /// Toggles auto-scroll for the in-flight response.
     pub fn toggle_tracking(&self) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.toggle_tracking();
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -130,7 +136,8 @@ impl PanelSessionHandle {
     /// `acp-panel-ui`'s "The user's choice outlives the automatic one"
     /// requirement.
     pub fn toggle_tool_call(&self, id: &str) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.toggle_tool_call(id);
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -138,7 +145,8 @@ impl PanelSessionHandle {
 
     /// Sets auto-scroll directly, for the scroll-to-latest control.
     pub fn set_tracking(&self, tracking: bool) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.set_tracking(tracking);
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -158,7 +166,8 @@ impl PanelSessionHandle {
         let dirty = Arc::clone(&self.dirty);
         async move {
             if let Ok(config_options) = session.set_config_option(&config_id, &value).await {
-                if let Ok(mut state) = state.lock() {
+                {
+                    let mut state = state.lock();
                     state.config_options = config_options;
                 }
                 dirty.store(true, Ordering::SeqCst);
@@ -189,7 +198,8 @@ pub struct PanelRecorder {
 impl PanelRecorder {
     /// Shows `text` in the conversation as a failed turn.
     pub fn error(&self, text: String) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = self.state.lock();
             state.push_error(text);
         }
         self.dirty.store(true, Ordering::SeqCst);
@@ -230,13 +240,7 @@ impl PanelSessionSlot {
     /// the progress line live without a second dirty channel.
     pub fn phase(&self) -> PanelPhase {
         match self {
-            Self::Connecting(progress) => {
-                PanelPhase::Connecting(progress.lock().map(|step| *step).unwrap_or(
-                    ConnectStep::Starting {
-                        program: "the agent",
-                    },
-                ))
-            }
+            Self::Connecting(progress) => PanelPhase::Connecting(*progress.lock()),
             Self::Ready(_) => PanelPhase::Ready,
             Self::Failed(_) => PanelPhase::Failed,
         }
@@ -276,7 +280,7 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     {
         Ok(handle) => handle,
         Err(error) => {
-            *slot.lock().unwrap() = PanelSessionSlot::Failed(error.to_string());
+            *slot.lock() = PanelSessionSlot::Failed(error.to_string());
             return;
         }
     };
@@ -295,7 +299,7 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     if let Some(prompt) = &request.registration_prompt {
         handle.record_user_message(prompt.clone());
     }
-    *slot.lock().unwrap() = PanelSessionSlot::Ready(handle);
+    *slot.lock() = PanelSessionSlot::Ready(handle);
 
     if let Some(prompt) = request.registration_prompt
        && let Err(error) = session.prompt(&prompt).await
@@ -355,7 +359,7 @@ mod tests {
         let watched = Arc::clone(&slot);
         let became_ready = async move {
             for _ in 0..200 {
-                let phase = watched.lock().unwrap().phase();
+                let phase = watched.lock().phase();
                 if phase == PanelPhase::Ready {
                     return true;
                 }

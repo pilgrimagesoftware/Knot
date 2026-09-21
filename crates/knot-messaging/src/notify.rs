@@ -1,5 +1,4 @@
-use std::sync::Mutex;
-
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 /// Called by [`crate::routing::send`]/[`crate::routing::broadcast`] once per
@@ -28,14 +27,14 @@ impl QueuedNotifier {
     }
 
     pub fn drain(&self) -> Vec<DeliveryEvent> {
-        std::mem::take(&mut *self.events.lock().unwrap())
+        std::mem::take(&mut *self.events.lock())
     }
 }
 
 impl DeliveryNotifier for QueuedNotifier {
     fn notify(&self, agent_id: Uuid, message_id: Uuid) {
-        self.events.lock().unwrap().push(DeliveryEvent { agent_id,
-                                                         message_id });
+        self.events.lock().push(DeliveryEvent { agent_id,
+                                                message_id });
     }
 }
 
@@ -51,13 +50,13 @@ impl RecordingNotifier {
     }
 
     pub fn calls(&self) -> Vec<(Uuid, Uuid)> {
-        self.calls.lock().unwrap().clone()
+        self.calls.lock().clone()
     }
 }
 
 impl DeliveryNotifier for RecordingNotifier {
     fn notify(&self, agent_id: Uuid, message_id: Uuid) {
-        self.calls.lock().unwrap().push((agent_id, message_id));
+        self.calls.lock().push((agent_id, message_id));
     }
 }
 

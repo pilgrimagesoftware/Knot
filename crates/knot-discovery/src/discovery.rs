@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, recommended_watcher};
+use parking_lot::Mutex;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
@@ -44,7 +44,7 @@ impl Discovery {
     /// starts no watch. Otherwise the folder is scanned once, the result
     /// published, and a debounced watch started.
     pub fn set_source_folder(&self, path: Option<PathBuf>) -> Result<()> {
-        if let Some(old) = self.active.lock().unwrap().take() {
+        if let Some(old) = self.active.lock().take() {
             old.task.abort();
             drop(old.watcher);
         }
@@ -69,7 +69,7 @@ impl Discovery {
         watcher.watch(&base, RecursiveMode::NonRecursive)?;
 
         let task = tokio::spawn(watch_loop(evt_rx, base, self.tx.clone()));
-        *self.active.lock().unwrap() = Some(ActiveWatch { watcher, task });
+        *self.active.lock() = Some(ActiveWatch { watcher, task });
         Ok(())
     }
 }

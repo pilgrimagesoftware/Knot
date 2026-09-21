@@ -219,7 +219,8 @@ impl Drop for WorkspaceWindow {
     /// documents for a single agent, applied to the whole window.
     fn drop(&mut self) {
         for session in self.sessions.values() {
-            if let Ok(mut session) = session.lock() {
+            {
+                let mut session = session.lock();
                 let _ = session.shutdown();
             }
         }
@@ -230,16 +231,11 @@ impl Drop for WorkspaceWindow {
         // this runtime is itself dropped moments later, so a task that has
         // not started may never run. Nothing depends on it having.
         for slot in std::mem::take(&mut self.panel_sessions).into_values() {
-            let handle = match slot.lock() {
-                Ok(mut slot) => {
-                    match std::mem::replace(&mut *slot,
-                                            panel_session::PanelSessionSlot::connecting().0)
-                    {
-                        panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
-                        _ => None,
-                    }
-                }
-                Err(_) => None,
+            let handle = match std::mem::replace(&mut *slot.lock(),
+                                                 panel_session::PanelSessionSlot::connecting().0)
+            {
+                panel_session::PanelSessionSlot::Ready(handle) => Some(handle),
+                _ => None,
             };
             if let Some(handle) = handle {
                 let _runtime_guard = self.runtime.enter();

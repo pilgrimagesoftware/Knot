@@ -63,10 +63,7 @@ pub(crate) fn sidebar_menu_facts(store: &knot_agents::AgentStore, workspace_id: 
 /// apply rendered disabled rather than omitted.
 pub(crate) fn sidebar_background_context_menu(targets: &SidebarMenuTargets, menu: PopupMenu)
                                               -> PopupMenu {
-    let facts = match targets.store.lock() {
-        Ok(store) => sidebar_menu_facts(&store, targets.workspace_id),
-        Err(_) => SidebarMenuFacts::default(),
-    };
+    let facts = sidebar_menu_facts(&targets.store.lock(), targets.workspace_id);
     let mut menu = menu;
     for item in sidebar_background_menu_entries(facts) {
         menu = match item.entry.label() {
@@ -169,10 +166,7 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
 /// How many agents the workspace holds right now, for a confirmation that
 /// names the count.
 fn workspace_agent_count(targets: &SidebarMenuTargets) -> usize {
-    targets.store
-           .lock()
-           .map(|store| sidebar_menu_facts(&store, targets.workspace_id).agent_count)
-           .unwrap_or(0)
+    sidebar_menu_facts(&targets.store.lock(), targets.workspace_id).agent_count
 }
 
 /// "agent" or "agents", so a confirmation naming one agent reads as English.

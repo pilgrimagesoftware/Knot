@@ -12,11 +12,12 @@ pub mod consts;
 pub mod error;
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub use error::{Result, WatchError};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher as _, recommended_watcher};
+use parking_lot::Mutex;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
@@ -65,7 +66,7 @@ impl Watch {
 
     /// Start watching. A no-op if already running.
     pub fn start(&self) -> Result<()> {
-        let mut guard = self.active.lock().unwrap();
+        let mut guard = self.active.lock();
         if guard.is_some() {
             return Ok(());
         }
@@ -92,7 +93,7 @@ impl Watch {
 
     /// Stop watching, cancelling any pending debounced callback.
     pub fn stop(&self) {
-        if let Some(active) = self.active.lock().unwrap().take() {
+        if let Some(active) = self.active.lock().take() {
             active.task.abort();
             drop(active.watcher);
         }
@@ -101,8 +102,8 @@ impl Watch {
     /// Suppress events until [`Self::resume`] is called. A no-op if not
     /// running.
     pub fn pause(&self) {
-        if let Some(active) = self.active.lock().unwrap().as_ref() {
-            let mut state = active.pause.lock().unwrap();
+        if let Some(active) = self.active.lock().as_ref() {
+            let mut state = active.pause.lock();
             state.paused = true;
             state.resume_at = None;
         }
@@ -112,8 +113,8 @@ impl Watch {
     /// call are still dropped, so writes still landing on disk from before the
     /// resume don't self-trigger the callback. A no-op if not running.
     pub fn resume(&self) {
-        if let Some(active) = self.active.lock().unwrap().as_ref() {
-            let mut state = active.pause.lock().unwrap();
+        if let Some(active) = self.active.lock().as_ref() {
+            let mut state = active.pause.lock();
             state.paused = false;
             state.resume_at = Some(Instant::now() + consts::RESUME_SETTLE);
         }
@@ -150,7 +151,7 @@ async fn watch_loop(mut events: mpsc::UnboundedReceiver<notify::Event>, debounce
 /// Whether an event should be considered at all: not paused, and past any
 /// post-resume settle window.
 fn is_honored(pause: &Arc<Mutex<PauseState>>) -> bool {
-    let mut state = pause.lock().unwrap();
+    let mut state = pause.lock();
     if state.paused {
         return false;
     }
@@ -205,9 +206,9 @@ mod tests {
         let watch = Watch::new(dir.path(), StdDuration::from_millis(50), |_| true, cb);
 
         watch.start().unwrap();
-        let first_pause = Arc::as_ptr(&watch.active.lock().unwrap().as_ref().unwrap().pause);
+        let first_pause = Arc::as_ptr(&watch.active.lock().as_ref().unwrap().pause);
         watch.start().unwrap();
-        let second_pause = Arc::as_ptr(&watch.active.lock().unwrap().as_ref().unwrap().pause);
+        let second_pause = Arc::as_ptr(&watch.active.lock().as_ref().unwrap().pause);
 
         assert_eq!(first_pause, second_pause,
                    "second start() replaced the running watch");
@@ -279,13 +280,13 @@ mod tests {
     fn is_honored_drops_paused_and_settling_events() {
         let pause = Arc::new(Mutex::new(PauseState::default()));
         {
-            let mut state = pause.lock().unwrap();
+            let mut state = pause.lock();
             state.paused = true;
         }
         assert!(!is_honored(&pause), "events while paused must be dropped");
 
         {
-            let mut state = pause.lock().unwrap();
+            let mut state = pause.lock();
             state.paused = false;
             state.resume_at = Some(Instant::now() + StdDuration::from_secs(60));
         }
