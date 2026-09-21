@@ -33,8 +33,9 @@ pub(crate) enum DetailLineSize {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct QueuedPanelPrompt {
-    text:   String,
-    failed: bool,
+    text:      String,
+    failed:    bool,
+    in_flight: bool,
 }
 
 type PanelPromptResult = (Uuid, String, Result<(), String>);
@@ -698,6 +699,7 @@ impl WorkspaceWindow {
                     queue.remove(index);
                 }
                 else if let Some(prompt) = queue.get_mut(index) {
+                    prompt.in_flight = false;
                     prompt.failed = true;
                 }
             }
@@ -2070,7 +2072,8 @@ impl WorkspaceWindow {
                 .entry(id)
                 .or_default()
                 .push(QueuedPanelPrompt { text,
-                                          failed: false });
+                                          failed: false,
+                                          in_flight: false });
             cx.update_entity(&input, |state, cx| {
                   state.set_value("", window, cx);
               });
@@ -2138,10 +2141,11 @@ impl WorkspaceWindow {
             }
             let queue = self.panel_prompt_queues.get_mut(&id)?;
             let prompt = queue.first_mut()?;
-            if prompt.failed {
+            if prompt.failed || prompt.in_flight {
                 return None;
             }
-            prompt.failed = true;
+            prompt.in_flight = true;
+            handle.record_user_message(prompt.text.clone());
             Some((handle.session(), handle.recorder(), prompt.text.clone()))
         };
         let Some((session, recorder, text)) = candidate()
