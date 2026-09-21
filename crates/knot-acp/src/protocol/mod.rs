@@ -545,4 +545,20 @@ mod tests {
 
         assert!(matches!(update, SessionUpdate::Unknown { raw } if raw == params));
     }
+
+    #[test]
+    fn usage_update_parses_context_window_tokens() {
+        let params = serde_json::json!({
+            "update": {
+                "sessionUpdate": "usage_update",
+                "used": 53_000,
+                "size": 200_000
+            }
+        });
+
+        assert!(matches!(
+            SessionUpdate::from_params(params),
+            SessionUpdate::Usage { used: 53_000, size: 200_000 }
+        ));
+    }
 }

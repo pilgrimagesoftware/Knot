@@ -43,6 +43,11 @@ mod tests {
     }
 
     #[test]
+    fn context_usage_key_resolves() {
+        assert_eq!(t("panel.context_usage"), "Context usage");
+    }
+
+    #[test]
     fn unknown_key_falls_back_to_key_string() {
         assert_eq!(t("does.not.exist"), "does.not.exist");
     }

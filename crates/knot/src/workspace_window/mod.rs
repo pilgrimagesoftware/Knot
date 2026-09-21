@@ -155,7 +155,10 @@ fn format_token_count(tokens: u64) -> String {
     let mut formatted = String::with_capacity(digits.len() + digits.len() / 3);
 
     for (index, digit) in digits.bytes().enumerate() {
-        if index > 0 && (index - first_group).is_multiple_of(3) {
+        if index > 0
+            && index >= first_group
+            && (index - first_group).is_multiple_of(3)
+        {
             formatted.push(',');
         }
         formatted.push(char::from(digit));
@@ -180,6 +183,9 @@ mod context_usage_tests {
     #[test]
     fn formats_token_counts_with_grouping() {
         assert_eq!(format_token_count(1_234_567), "1,234,567");
+        assert_eq!(format_token_count(123), "123");
+        assert_eq!(format_token_count(12), "12");
+        assert_eq!(format_token_count(0), "0");
     }
 }
 
@@ -239,7 +245,7 @@ fn context_usage_indicator(used: u64, size: u64, cx: &App) -> impl IntoElement {
                     window.paint_path(progress_path, foreground);
                 }
             },
-        ))
+        ).size(px(16.)))
 }
 
 /// One sidebar agent row's render inputs, snapshotted out of the store

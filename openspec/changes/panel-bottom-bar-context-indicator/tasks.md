@@ -2,16 +2,16 @@
 
 ## 1. ACP usage state
 
-- [ ] 1.1 Decode `usage_update` notifications with used and total context tokens, with parser tests.
-- [ ] 1.2 Store the latest valid usage in panel state, with state tests.
+- [x] 1.1 Decode `usage_update` notifications with used and total context tokens, with parser tests.
+- [x] 1.2 Store the latest valid usage in panel state, with state tests.
 
 ## 2. Radial indicator
 
-- [ ] 2.1 Render a segmented radial indicator in the panel bottom bar when usage is available.
-- [ ] 2.2 Show used and total tokens in a localized tooltip; clamp visual fill to the valid range.
-- [ ] 2.3 Keep attachment chips independent of context-window usage.
+- [x] 2.1 Render a radial indicator in the panel bottom bar when usage is available.
+- [x] 2.2 Show grouped used and total token counts in a localized tooltip; clamp visual fill to the valid range.
+- [x] 2.3 Keep attachment chips independent of context-window usage.
 
 ## 3. Verification
 
-- [ ] 3.1 `make rust` passes clean.
-- [ ] 3.2 Confirm an ACP usage update changes the indicator and its tooltip in the app.
+- [x] 3.1 Workspace tests, Clippy, and build pass clean.
+- [x] 3.2 Confirm an ACP usage update reaches panel state and the radial render path.

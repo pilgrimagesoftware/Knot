@@ -775,6 +775,18 @@ mod tests {
         assert_eq!(state.config_options, vec![option]);
     }
 
+    #[test]
+    fn usage_update_stores_valid_context_window_size() {
+        let mut state = PanelState::new();
+
+        state.apply(SessionEvent::Update(SessionUpdate::Usage {
+            used: 53_000,
+            size: 200_000,
+        }));
+
+        assert_eq!(state.context_usage, Some((53_000, 200_000)));
+    }
+
     fn permission(tool_call_id: &str, title: Option<&str>) -> PermissionRequest {
         PermissionRequest {
             rpc_id: json!(1),
