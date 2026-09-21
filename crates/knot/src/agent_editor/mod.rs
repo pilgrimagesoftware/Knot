@@ -41,6 +41,17 @@ pub(crate) fn created_agent_type(creating_a_companion: bool, chosen: &str) -> St
     }
 }
 
+/// The personas the editor's picker offers.
+///
+/// `Settings::personas` is the *stored* list, which keeps soft-deleted
+/// system personas so persistence can tell "deleted" from "never
+/// installed". Selection reads the active list instead, per
+/// `openspec/specs/personas/spec.md` - "Active versus stored personas" -
+/// which drops deleted entries and sorts by name.
+pub(crate) fn persona_choices(settings: &knot_core::Settings) -> Vec<knot_core::Persona> {
+    settings.active_personas().into_iter().cloned().collect()
+}
+
 pub(crate) struct AgentEditorRequest {
     pub(crate) workspace_id: Uuid,
     /// What the new agent starts from. Ignored when `edit_target` is set.
@@ -408,7 +419,7 @@ impl AgentEditor {
 impl Render for AgentEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let editor = cx.entity();
-        let personas = self.settings.personas.clone();
+        let personas = persona_choices(&self.settings);
         let is_shell = self.agent_type == "shell";
 
         let identity_rows = vec![
@@ -513,7 +524,15 @@ impl Render for AgentEditor {
                         .dropdown_caret(true)
                         .dropdown_menu({
                             let editor = editor.clone();
-                            move |mut menu, _, _| {
+                            move |menu, _, _| {
+                                // The persona list is user-grown and has no
+                                // ceiling, while this dialog's window is 500px
+                                // tall. Without this the menu lays out at its
+                                // full content height, and everything past the
+                                // window edge is clipped and unreachable -
+                                // `PopupMenu` only caps its height and scrolls
+                                // when told to.
+                                let mut menu = menu.scrollable(true);
                                 menu = menu.item(PopupMenuItem::new("None").on_click({
                                     let editor = editor.clone();
                                     move |_, _, app| editor.update(app, |e, _| e.persona_id = None)

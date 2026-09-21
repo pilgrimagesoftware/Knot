@@ -139,6 +139,38 @@ fn a_companion_is_always_created_as_a_shell_agent() {
     assert_eq!(created_agent_type(false, "claude"), "claude");
 }
 
+/// The editor's persona picker offers the *active* list, not the stored
+/// one: `openspec/specs/personas/spec.md` - "Active versus stored
+/// personas" - reserves the stored list for persistence and requires the
+/// active list for selection, so a soft-deleted system persona must not be
+/// assignable here. The active list is also the sorted one, which is the
+/// order the picker should read in.
+#[test]
+fn the_persona_picker_offers_active_personas_only_in_sorted_order() {
+    let mut settings = knot_core::Settings::default();
+    settings.personas = vec![knot_core::Persona { id:           Uuid::new_v4(),
+                                                  name:         "beta".to_string(),
+                                                  instructions: String::new(),
+                                                  persona_type: knot_core::PersonaType::User,
+                                                  state:        knot_core::PersonaState::Enabled, },
+                             knot_core::Persona { id:           Uuid::new_v4(),
+                                                  name:         "Alpha".to_string(),
+                                                  instructions: String::new(),
+                                                  persona_type: knot_core::PersonaType::User,
+                                                  state:        knot_core::PersonaState::Enabled, },
+                             knot_core::Persona { id:           Uuid::new_v4(),
+                                                  name:         "Gone".to_string(),
+                                                  instructions: String::new(),
+                                                  persona_type: knot_core::PersonaType::System,
+                                                  state:        knot_core::PersonaState::Deleted, },];
+
+    let names: Vec<String> = persona_choices(&settings).into_iter()
+                                                       .map(|persona| persona.name)
+                                                       .collect();
+
+    assert_eq!(names, vec!["Alpha".to_string(), "beta".to_string()]);
+}
+
 /// 3.3: Deactivate is there only while there is a session to stop, and it
 /// sits immediately above Restart Agent when it is.
 #[test]
