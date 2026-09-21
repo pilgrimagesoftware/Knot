@@ -27,7 +27,7 @@ See `proposal.md` - Why. The state that shapes the approach:
   record, through a `set_workspace_window_bounds` that returns whether anything
   actually changed so a drag does not write per frame.
 - `render/sidebar.rs` is 264 lines and the repo caps a `.rs` file at 700
-  (`make rust-size-check`).
+  (`make size-check`).
 
 ## Goals / Non-Goals
 

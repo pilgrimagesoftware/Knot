@@ -2,9 +2,9 @@
 
 ## 1. The stored width (`knot-core`)
 
-- [ ] 1.1 Add `SIDEBAR_WIDTH_DEFAULT` (250.0), `SIDEBAR_WIDTH_MIN` (120.0), `SIDEBAR_WIDTH_MAX` (400.0) and `SIDEBAR_COMPACT_BREAKPOINT` (160.0) to `crates/knot-core/src/consts.rs`, the minimum's doc comment deriving 120 from the 80px the title bar reserves for the traffic lights; verify `make rust-lint` reports no unused constant once 1.2 and 3.x reference them.
+- [ ] 1.1 Add `SIDEBAR_WIDTH_DEFAULT` (250.0), `SIDEBAR_WIDTH_MIN` (120.0), `SIDEBAR_WIDTH_MAX` (400.0) and `SIDEBAR_COMPACT_BREAKPOINT` (160.0) to `crates/knot-core/src/consts.rs`, the minimum's doc comment deriving 120 from the 80px the title bar reserves for the traffic lights; verify `make lint` reports no unused constant once 1.2 and 3.x reference them.
 - [ ] 1.2 Add `sidebar_width: f64` to `Settings` defaulting to `SIDEBAR_WIDTH_DEFAULT`, and clamp it into `SIDEBAR_WIDTH_MIN..=SIDEBAR_WIDTH_MAX` in `Settings::load_at` beside the existing `"SF Mono"` upgrade; verify with tests for a fresh store, a document without the key, an in-range value, a value of `40`, a value of `5000`, and a non-numeric value, per the scenarios in `specs/settings-persistence/spec.md`.
-- [ ] 1.3 Add a write-then-reload test in `crates/knot-core/tests/settings.rs` covering the last scenario (set `180.0`, persist, reload, read back `180.0`); verify `make rust-test` passes.
+- [ ] 1.3 Add a write-then-reload test in `crates/knot-core/tests/settings.rs` covering the last scenario (set `180.0`, persist, reload, read back `180.0`); verify `make test` passes.
 
 ## 2. The divider (`knot`)
 
@@ -24,7 +24,7 @@
 ## 4. The compact layout
 
 - [ ] 4.1 Add the compact predicate (current sidebar width against `SIDEBAR_COMPACT_BREAKPOINT`), evaluated once in `render/mod.rs` from the resize state and threaded to the sidebar surfaces as a `bool`; verify it is the only place the breakpoint is read.
-- [ ] 4.2 Add `crates/knot/src/workspace_window/render/sidebar_compact.rs` rendering the compact agent row - avatar centered, state dot overlaid on the avatar's bottom-trailing corner (and absent for a shell agent), name as the row's tooltip, no detail lines - reusing the full-width row's selection background, not-running dimming, companion indent, click handler and context menu; verify `make rust-size-check` stays green and both `sidebar.rs` and the new module are under 700 lines.
+- [ ] 4.2 Add `crates/knot/src/workspace_window/render/sidebar_compact.rs` rendering the compact agent row - avatar centered, state dot overlaid on the avatar's bottom-trailing corner (and absent for a shell agent), name as the row's tooltip, no detail lines - reusing the full-width row's selection background, not-running dimming, companion indent, click handler and context menu; verify `make size-check` stays green and both `sidebar.rs` and the new module are under 700 lines.
 - [ ] 4.3 Branch `agent_rows` in `render/sidebar.rs` between the full and compact row on the predicate, without duplicating the click, selection or menu wiring; verify a right-click on a compact row opens the same menu as at full width and clicking one selects that agent.
 - [ ] 4.4 Make the dashboard row icon-only when compact in `render/sidebar.rs`'s `dashboard_row`, keeping its selected background and click behavior; verify toggling the dashboard still works from a compact sidebar.
 - [ ] 4.5 Hide the app-name label in the sidebar column's `TitleBar` when compact, keeping the app icon, and make the footer "New agent" button icon-only with its meaning as a tooltip; verify at 120px that the traffic lights, the icon and the button are all visible and the button still opens the new-agent dialog.
@@ -32,6 +32,6 @@
 
 ## 5. Tests and checks
 
-- [ ] 5.1 Add a unit test for the compact predicate covering below, at and above the breakpoint, registered in `crates/knot/src/tests/mod.rs`; verify `make rust-test` runs it.
+- [ ] 5.1 Add a unit test for the compact predicate covering below, at and above the breakpoint, registered in `crates/knot/src/tests/mod.rs`; verify `make test` runs it.
 - [ ] 5.2 Walk `specs/agent-list-ui/spec.md` scenario by scenario against the running app - widen, narrow, cursor, both bounds, header alignment, reopen, second window, open-window independence, concurrent settings edit, the breakpoint both ways, tooltip, state dot, stopped dimming, context menu, selection.
-- [ ] 5.3 Run `make rust` and `make rust-size-check` and verify the whole workspace is clean.
+- [ ] 5.3 Run `make` and `make size-check` and verify the whole workspace is clean.

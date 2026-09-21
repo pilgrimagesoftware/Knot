@@ -63,7 +63,7 @@ failure this change's design section refuses.
 
 ## 5. Verification
 
-- [ ] 5.1 `make rust` passes clean.
+- [ ] 5.1 `make` passes clean.
 - [ ] 5.2 Confirm every import is additive: with a Knot holding personas,
       agents and workspaces, run both imports and verify nothing pre-existing
       changed name, contents or ordering.

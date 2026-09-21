@@ -48,7 +48,7 @@
 
 ## 5. Verification
 
-- [ ] 5.1 `make rust` passes clean (fmt, clippy, tests, build).
+- [ ] 5.1 `make` passes clean (fmt, clippy, tests, build).
 - [ ] 5.2 Exercise the full flow in the app: open the lookup, filter to one
       entry, insert, send, and confirm the agent receives the completed token
       as a prompt.
