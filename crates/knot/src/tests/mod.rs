@@ -1,6 +1,7 @@
 mod about_window;
 mod agents_menu;
 mod quit_warning;
+mod workspace_dialog;
 
 use knot_core::Workspace;
 
