@@ -23,7 +23,12 @@ impl SettingsWindow {
         let keep_in_menu_bar = self.settings.keep_in_menu_bar;
         let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
         let agent_panel_shift_enter_sends = self.settings.agent_panel_shift_enter_sends;
+        let agent_panel_compact_tool_calls = self.settings.agent_panel_compact_tool_calls;
         let appearance_label = Self::appearance_label(&self.settings.appearance_mode);
+        // Bound here rather than inline: `row`/`hint` borrow their text,
+        // so a `t(..)` temporary in the call would not outlive it.
+        let compact_tool_calls_label = knot_core::l10n::t("settings.compact_tool_calls");
+        let compact_tool_calls_hint = knot_core::l10n::t("settings.compact_tool_calls_hint");
 
         v_flex()
             .gap_3()
@@ -152,6 +157,28 @@ impl SettingsWindow {
                     .child(Self::hint(
                         cx,
                         "When off, Enter sends the message and Shift+Enter adds a newline.",
+                    ))
+                    // New copy goes through the catalogue, per
+                    // `.claude/rules/rust-structure.md` - this pane's older
+                    // literals are the pattern not to follow.
+                    .child(Self::row(
+                        compact_tool_calls_label,
+                        Switch::new("agent-panel-compact-tool-calls")
+                            .checked(agent_panel_compact_tool_calls)
+                            .on_click({
+                                let settings_window = settings_window.clone();
+                                move |checked, _, app| {
+                                    let checked = *checked;
+                                    settings_window.update(app, |view, _| {
+                                        view.settings.agent_panel_compact_tool_calls = checked;
+                                        view.persist();
+                                    })
+                                }
+                            }),
+                    ))
+                    .child(Self::hint(
+                        cx,
+                        compact_tool_calls_hint,
                     )),
             )
     }

@@ -41,9 +41,25 @@ panel:
   replace_composer_body: "What you typed will be replaced by the queued message you are editing."
   retry_connect: "Try again"
   context_usage: "Context usage"
+  summary:
+    calls_one: "%{count} tool call"
+    calls_other: "%{count} tool calls"
+    files_edited_one: "%{count} file edited"
+    files_edited_other: "%{count} files edited"
+    files_read_one: "%{count} file read"
+    files_read_other: "%{count} files read"
+    commands_run_one: "%{count} command run"
+    commands_run_other: "%{count} commands run"
+    failures_one: "%{count} failed"
+    failures_other: "%{count} failed"
+    separator: " · "
+    running_suffix: "…"
+    expand: "Show these tool calls"
 
 settings:
   font_unavailable: "unavailable"
+  compact_tool_calls: "Collapse tool calls"
+  compact_tool_calls_hint: "Show a turn's tool calls as one summary line instead of a card each."
 
 menu:
   agents: "Agents"

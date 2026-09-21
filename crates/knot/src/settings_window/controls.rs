@@ -18,33 +18,36 @@ impl SettingsWindow {
     /// A label + control row with the label right-aligned in a fixed-width
     /// column, matching the alignment convention already used by
     /// `AgentEditor`/`PersonaEditor`.
-    pub(crate) fn row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
+    pub(crate) fn row(label: impl Into<gpui_kit::SharedString>, control: impl IntoElement)
+                      -> impl IntoElement {
         h_flex().gap_3()
                 .items_center()
                 .child(div().w(px(Self::LABEL_WIDTH))
                             .flex_shrink_0()
                             .text_right()
-                            .child(label))
+                            .child(label.into()))
                 .child(control)
     }
 
     /// Like `row`, but baseline-aligned instead of center-aligned - for rows
     /// whose control is itself text (a read-only value, not a switch/button/
     /// input), so the value's text baseline lines up with the label's.
-    pub(crate) fn text_row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
+    pub(crate) fn text_row(label: impl Into<gpui_kit::SharedString>, control: impl IntoElement)
+                           -> impl IntoElement {
         h_flex().gap_3()
                 .items_baseline()
                 .child(div().w(px(Self::LABEL_WIDTH))
                             .flex_shrink_0()
                             .text_right()
-                            .child(label))
+                            .child(label.into()))
                 .child(control)
     }
 
     /// Muted description text lined up under a row's *control* column,
     /// not spanning the full card width - it explains the control above
     /// it, not the section as a whole.
-    pub(crate) fn hint(cx: &Context<Self>, text: &'static str) -> impl IntoElement {
+    pub(crate) fn hint(cx: &Context<Self>, text: impl Into<gpui_kit::SharedString>)
+                       -> impl IntoElement {
         h_flex().gap_3()
                 .child(div().w(px(Self::LABEL_WIDTH)).flex_shrink_0())
                 .child(div().flex_1()
@@ -52,7 +55,7 @@ impl SettingsWindow {
                             .text_sm()
                             .whitespace_normal()
                             .text_color(cx.theme().muted_foreground)
-                            .child(text))
+                            .child(text.into()))
     }
 
     /// Renders `text` in the theme's monospace font, for values that are

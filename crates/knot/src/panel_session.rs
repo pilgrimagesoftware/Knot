@@ -4,6 +4,7 @@
 //! knows when to repaint - mirrors `Grid::take_dirty`'s pattern for the
 //! terminal view.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -143,6 +144,12 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Opens or closes one compact summary's run of tool calls.
+    pub fn toggle_tool_run(&self, head_id: String) {
+        self.state.lock().toggle_tool_run(head_id);
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// Sets auto-scroll directly, for the scroll-to-latest control.
     pub fn set_tracking(&self, tracking: bool) {
         {
@@ -265,6 +272,12 @@ pub struct ConnectRequest<'a> {
     /// The registration prompt for a fresh session, or `None` when
     /// resuming (a resumed agent is already registered).
     pub registration_prompt: Option<String>,
+    /// The agent's persisted session setup - config-option id -> value -
+    /// replayed onto the new session before its first turn. Empty for an
+    /// agent that has never had one chosen, which leaves the adapter's own
+    /// defaults in place. See
+    /// `openspec/specs/session-setup-persistence/spec.md`.
+    pub session_config:      BTreeMap<String, String>,
 }
 
 /// Connects `request`'s adapter and drives `slot` through the connection
@@ -285,6 +298,21 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
         }
     };
     on_session_id(handle.session_id());
+
+    // Replay the persisted setup before the first turn, so the turn runs
+    // with the model, permission mode and effort the user last chose. An
+    // option the adapter no longer declares is rejected by it and skipped
+    // here rather than failing the connection - adapters add and drop
+    // config options between versions.
+    let mut restored_options = None;
+    for (config_id, value) in &request.session_config {
+        if let Ok(options) = handle.session().set_config_option(config_id, value).await {
+            restored_options = Some(options);
+        }
+    }
+    if let Some(options) = restored_options {
+        handle.state().lock().config_options = options;
+    }
 
     // Publish the handle *before* sending the registration prompt.
     // `session/prompt` resolves only when the whole turn ends, and an
@@ -354,7 +382,8 @@ mod tests {
                                        cwd:                 "/tmp/project",
                                        prior_session_id:    None,
                                        mcp_url:             None,
-                                       registration_prompt: Some("register".to_string()), };
+                                       registration_prompt: Some("register".to_string()),
+                                       session_config:      BTreeMap::new(), };
 
         let watched = Arc::clone(&slot);
         let became_ready = async move {

@@ -4,6 +4,8 @@
 //! round-trips. `#[serde(default)]` on the later-added fields is the
 //! decode-tolerant migration path.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -108,6 +110,19 @@ pub struct SavedAgent {
     /// `Passive` from `CreateOptions` instead.
     #[serde(default = "default_activation_mode")]
     pub activation_mode: ActivationMode,
+    /// The session setup last chosen in the Panel - model, permission mode
+    /// and reasoning effort - keyed by the ACP config-option id the adapter
+    /// declared, holding that option's selected value.
+    ///
+    /// Not an enum per closed-vocabulary convention, and not three named
+    /// fields: the ids and their legal values are declared by the adapter at
+    /// runtime (`ConfigOption`), not fixed by Knot, and they differ between
+    /// agent types. Storing the adapter's own id/value pairs is what lets the
+    /// selection be replayed verbatim on reopen. Absent for records written
+    /// before this field existed, which restore the adapter's own defaults.
+    /// See `openspec/specs/session-setup-persistence/spec.md`.
+    #[serde(default)]
+    pub session_config:  BTreeMap<String, String>,
 }
 
 impl SavedAgent {
@@ -131,7 +146,8 @@ impl SavedAgent {
                session_id: None,
                view_mode: ViewMode::default(),
                acp_session_id: None,
-               activation_mode: default_activation_mode() }
+               activation_mode: default_activation_mode(),
+               session_config: BTreeMap::new() }
     }
 }
 
@@ -281,6 +297,24 @@ mod tests {
         assert!(!agent.is_companion);
         assert_eq!(agent.persona_id, None);
         assert_eq!(agent.session_id, None);
+        assert!(agent.session_config.is_empty());
+    }
+
+    #[test]
+    fn saved_agent_session_config_round_trips() {
+        let mut agent = SavedAgent::new(id(), "A", None, "/tmp");
+        agent.session_config
+             .insert("model".to_string(), "sonnet".to_string());
+        agent.session_config
+             .insert("permission_mode".to_string(), "plan".to_string());
+        agent.session_config
+             .insert("reasoning-effort".to_string(), "high".to_string());
+
+        let json = serde_json::to_string(&agent).unwrap();
+        assert!(json.contains("sessionConfig"), "camelCase key: {json}");
+
+        let decoded: SavedAgent = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.session_config, agent.session_config);
     }
 
     #[test]

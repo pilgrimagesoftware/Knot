@@ -1,6 +1,6 @@
 //! The only place durable/runtime `Agent` fields cross: `from_saved` builds
 //! a fresh `Agent` with runtime fields at their documented defaults,
-//! `to_saved` reads only the eight durable fields back out.
+//! `to_saved` reads only the durable fields back out.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +26,7 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
             persona_id:      saved.persona_id,
             view_mode:       view_mode_for(&saved.agent_type),
             activation_mode: saved.activation_mode,
+            session_config:  saved.session_config.clone(),
 
             activated:          false,
             state:              AgentState::Idle,
@@ -47,6 +48,8 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
 }
 
 /// Extract the durable subset of a runtime agent for persistence.
+/// `session_config` is ungated - the session setup is a preference that
+/// outlives any one conversation.
 /// `remember_conversation` gates session id and ACP session id: only
 /// carried into the saved record when true (`restore-conversation-on-launch`
 /// enabled), otherwise always persisted as `None` regardless of the agent's
@@ -63,6 +66,7 @@ pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
                  persona_id:      agent.persona_id,
                  view_mode:       agent.view_mode,
                  activation_mode: agent.activation_mode,
+                 session_config:  agent.session_config.clone(),
                  session_id:      remember_conversation.then(|| agent.session_id.clone())
                                                        .flatten(),
                  acp_session_id:  remember_conversation.then(|| agent.acp_session_id.clone())
@@ -115,6 +119,23 @@ mod tests {
 
         assert_eq!(to_saved(&agent, true).session_id, Some("s7".to_string()));
         assert_eq!(to_saved(&agent, false).session_id, None);
+    }
+
+    #[test]
+    fn session_config_survives_the_round_trip_whether_or_not_remembering() {
+        let mut saved = saved_agent();
+        saved.session_config
+             .insert("model".to_string(), "opus".to_string());
+        saved.session_config
+             .insert("permission_mode".to_string(), "acceptEdits".to_string());
+
+        let agent = from_saved(&saved);
+        assert_eq!(agent.session_config, saved.session_config);
+
+        // Ungated, unlike `session_id`: the setup is a preference, not
+        // conversation content.
+        assert_eq!(to_saved(&agent, false).session_config, saved.session_config);
+        assert_eq!(to_saved(&agent, true).session_config, saved.session_config);
     }
 
     #[test]

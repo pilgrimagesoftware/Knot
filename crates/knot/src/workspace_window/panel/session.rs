@@ -51,6 +51,7 @@ impl WorkspaceWindow {
             knot_agent_launch::acp_registration_prompt(agent.id,
                                                        prior_session_id.is_some(),
                                                        self.settings.persona(id));
+        let session_config = agent.session_config.clone();
         let store = Arc::clone(&self.store);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
@@ -60,12 +61,32 @@ impl WorkspaceWindow {
                                                             prior_session_id:
                                                                 prior_session_id.as_deref(),
                                                             mcp_url: mcp_url.as_deref(),
-                                                            registration_prompt };
+                                                            registration_prompt,
+                                                            session_config };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {
                             let mut store = store.lock();
                             store.set_acp_session_id(id, session_id.to_string());
                         }).await;
                     });
+    }
+
+    /// Records one Panel session-setup selection for `id` and writes the
+    /// roster out, per `session-setup-persistence`'s "Session setup
+    /// persists per agent" requirement.
+    ///
+    /// Persisting is separate from applying: the live session is updated by
+    /// the caller through `set_config_option`, and a session that isn't
+    /// running yet picks this up when `ensure_panel_session` replays it.
+    pub(in crate::workspace_window) fn remember_session_config(&mut self, id: Uuid,
+                                                               config_id: String, value: String)
+    {
+        let recorded = self.store
+                           .lock()
+                           .set_session_config_option(id, config_id, value)
+                           .is_ok();
+        if recorded {
+            self.persist_agents();
+        }
     }
 
     /// Delivers the "check your inbox" prompt to any agent in this

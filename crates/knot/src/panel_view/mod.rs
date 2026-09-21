@@ -28,6 +28,7 @@ use crate::working_indicator;
 
 mod message;
 mod rows;
+mod summary_row;
 mod tool_call;
 
 // `rows` is re-exported: `workspace_window` drives the virtualized list
@@ -35,6 +36,7 @@ mod tool_call;
 // this module, and a sibling's `use super::*` picks them up from here.
 use message::*;
 pub(crate) use rows::*;
+use summary_row::*;
 use tool_call::*;
 
 /// How much extra space above and below the viewport the list lays out and
@@ -84,6 +86,10 @@ pub(crate) struct PanelStyle {
     /// either appearance and under any accent the user has chosen.
     pub(crate) prompt_color:       Hsla,
     pub(crate) prompt_foreground:  Hsla,
+    /// Draw a turn's contiguous tool calls as one summary line instead of
+    /// a card each, from `Settings`' `agent_panel_compact_tool_calls`.
+    /// Off by default; a run the user has opened still draws its cards.
+    pub(crate) compact_tool_calls: bool,
 }
 
 impl PanelStyle {
@@ -107,6 +113,9 @@ pub(crate) struct PanelCallbacks {
     pub(crate) on_permission_decision: Rc<dyn Fn(PermissionDecision)>,
     pub(crate) on_toggle_track:        Rc<dyn Fn()>,
     pub(crate) on_toggle_tool_call:    Rc<dyn Fn(String)>,
+    /// Opens or closes one compact summary's run, keyed by the id of its
+    /// first tool call.
+    pub(crate) on_toggle_tool_run:     Rc<dyn Fn(String)>,
     pub(crate) on_manual_scroll:       Rc<dyn Fn()>,
 }
 
@@ -114,11 +123,13 @@ impl PanelCallbacks {
     pub(crate) fn new(on_permission_decision: impl Fn(PermissionDecision) + 'static,
                       on_toggle_track: impl Fn() + 'static,
                       on_toggle_tool_call: impl Fn(String) + 'static,
+                      on_toggle_tool_run: impl Fn(String) + 'static,
                       on_manual_scroll: impl Fn() + 'static)
                       -> Self {
         Self { on_permission_decision: Rc::new(on_permission_decision),
                on_toggle_track:        Rc::new(on_toggle_track),
                on_toggle_tool_call:    Rc::new(on_toggle_tool_call),
+               on_toggle_tool_run:     Rc::new(on_toggle_tool_run),
                on_manual_scroll:       Rc::new(on_manual_scroll), }
     }
 }
@@ -234,15 +245,32 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
               -> gpui_kit::AnyElement {
     let row = match row_at(state, index) {
         Some(PanelRow::Message(message_index)) => {
-            let last_index = state.messages.len().checked_sub(1);
-            let message = &state.messages[message_index];
-            render_message(Message { state,
-                                     index: message_index,
-                                     is_last: Some(message_index) == last_index,
-                                     style,
-                                     list },
-                           message,
-                           callbacks)
+            match compact_row(message_index, state, style.compact_tool_calls) {
+                // A tool call the run ahead of it already summarizes: it
+                // draws nothing at all, not an empty padded row, so a run
+                // reads as the single line it is meant to be.
+                CompactRow::Covered => return div().into_any_element(),
+                CompactRow::Summary => {
+                    let head = state.tool_run_head(message_index)
+                                    .unwrap_or_default()
+                                    .to_owned();
+                    render_tool_run_summary(state.tool_run_summary(message_index),
+                                            head,
+                                            style,
+                                            callbacks.on_toggle_tool_run.clone()).into_any_element()
+                }
+                CompactRow::Message => {
+                    let last_index = state.messages.len().checked_sub(1);
+                    let message = &state.messages[message_index];
+                    render_message(Message { state,
+                                             index: message_index,
+                                             is_last: Some(message_index) == last_index,
+                                             style,
+                                             list },
+                                   message,
+                                   callbacks)
+                }
+            }
         }
         Some(PanelRow::Permission) => {
             let request = state.pending_permission
