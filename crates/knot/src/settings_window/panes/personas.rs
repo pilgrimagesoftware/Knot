@@ -114,7 +114,7 @@ impl SettingsWindow {
                                     .flex_shrink_0()
                                     .gap_1()
                                     .child(
-                                        Self::icon_button(
+                                        crate::controls::icon_button(
                                             ("persona-edit", index),
                                             "icons/pencil.svg",
                                             knot_core::l10n::t("settings.personas.edit"),
@@ -137,7 +137,7 @@ impl SettingsWindow {
                                         // agents still reference it, with the
                                         // count as the tooltip so the button
                                         // says why it won't work.
-                                        Self::icon_button(
+                                        crate::controls::icon_button(
                                             ("persona-delete", index),
                                             "icons/trash.svg",
                                             Self::persona_delete_tooltip(in_use),
@@ -212,12 +212,12 @@ impl SettingsWindow {
                         .child(list);
 
         v_flex().gap_3().child(
-            Self::group(knot_core::l10n::t("settings.personas.personas"))
+            crate::controls::group(knot_core::l10n::t("settings.personas.personas"))
                 .child(
                     h_flex()
                         .justify_between()
                         .child(
-                            Self::icon_button(
+                            crate::controls::icon_button(
                                 "personas-add",
                                 "icons/plus.svg",
                                 knot_core::l10n::t("settings.personas.add"),
@@ -231,7 +231,7 @@ impl SettingsWindow {
                             }),
                         )
                         .child(
-                            Self::icon_button(
+                            crate::controls::icon_button(
                                 "personas-restore-defaults",
                                 "icons/rotate-ccw.svg",
                                 knot_core::l10n::t("settings.personas.restore_defaults"),

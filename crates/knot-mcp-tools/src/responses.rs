@@ -4,14 +4,79 @@
 
 use serde::Serialize;
 
+/// One agent (or deployable template) as a caller sees it.
+///
+/// Carries the registry fields alongside the identity ones so a listing is
+/// self-sufficient: everything needed to choose a candidate, without a
+/// second call to interpret it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInfo {
     pub id:            String,
     pub name:          String,
     pub folder:        String,
+    /// The automatic state for a live agent; `template` for a bench entry,
+    /// which has no session and so no state to report.
     pub status:        String,
     pub is_registered: bool,
+    pub description:   String,
+    pub capabilities:  Vec<String>,
+    pub tools:         Vec<String>,
+    pub cost_tier:     String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DescribeAgentsResponse {
+    pub candidates: Vec<AgentInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskInfo {
+    pub id:            String,
+    pub goal:          String,
+    pub state:         String,
+    /// The agent this task names, or the capability tags standing in for
+    /// one until dispatch resolves them. Absent when the plan recorded the
+    /// work without deciding who does it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee:      Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub capabilities:  Vec<String>,
+    pub depends_on:    Vec<String>,
+    /// The agent a dispatch actually went to, once one has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatched_to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlanTasksResponse {
+    pub tasks: Vec<TaskInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TaskStatusResponse {
+    pub tasks: Vec<TaskInfo>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchTaskResponse {
+    pub success:      bool,
+    pub task_id:      String,
+    pub recipient_id: String,
+    pub message:      String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompleteTaskResponse {
+    pub success:     bool,
+    pub task_id:     String,
+    pub state:       String,
+    /// Tasks this outcome made dispatchable, and tasks it stopped.
+    pub now_ready:   Vec<String>,
+    pub now_blocked: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

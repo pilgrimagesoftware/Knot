@@ -18,21 +18,24 @@ Two sources are sitting on disk right now:
 
 ## What Changes
 
-- Add an **Import** tab to the settings window, the single place both imports
-  live.
+- Add an **Import window**, opened from File ▸ Import…, the single place both
+  imports live. It is a window rather than a settings pane: an import is an
+  action the user runs once, not a preference Knot keeps.
 - **Import personas from subagent definitions.** A provider per coding-agent
   tool finds that tool's subagent definitions and offers them; the user picks
   which to import, and each becomes a `user` persona.
   - **Claude Code's provider ships with this change.** Its format is
     confirmed against real files.
-  - **Codex, OpenCode and Gemini providers are part of this change but their
-    formats are not yet confirmed.** Nothing on this machine has subagent
-    definitions for any of the three: Codex has `~/.codex/config.toml` and a
-    `skills/` directory with no agents, OpenCode's `opencode.jsonc` holds
-    only a `$schema` key, and `~/.gemini/` has skills and plugins but no
-    agents. Each provider's requirement is written once its format has been
-    read from a real installation, not inferred - inferring a format is the
-    mistake that produced four silent failures on the last branch.
+  - **Codex, OpenCode and Gemini are deferred to a follow-up change.**
+    Nothing on this machine has subagent definitions for any of the three:
+    Codex has `~/.codex/config.toml` and a `skills/` directory with no
+    agents, OpenCode's `opencode.jsonc` holds only a `$schema` key, and
+    `~/.gemini/` has config, history and plugins but no agents. Each
+    provider's requirement is written once its format has been read from a
+    real installation, not inferred - inferring a format is the mistake that
+    produced four silent failures on the last branch. The registry knows all
+    four tools; the import tab lists only the ones with a reader, so an
+    unimplemented tool is absent rather than falsely empty.
 - **Import workspaces from Skwad.** Read Skwad's preferences, list its
   workspaces, and import the chosen ones along with the agents they hold, the
   personas those agents reference, and the bench templates.
@@ -47,8 +50,9 @@ Two sources are sitting on disk right now:
   already has - which sources are read, what each contributes, and the rules
   every import obeys (additive only, idempotent, partial failure tolerated).
 
-### Modified Capabilities
-- `settings-ui`: adds the Import tab and what it shows.
+### New Capabilities
+- `import-ui`: the Import window - where an import is run from, what it shows
+  before it writes anything, and what it reports afterwards.
 
 ## Impact
 
@@ -56,8 +60,11 @@ Two sources are sitting on disk right now:
   reader; both produce records the existing settings store already holds.
   Reading a `.plist` needs a plist parser - the first new third-party
   dependency this port has taken on for a feature.
-- `crates/knot`: the Import tab, its two panes, and the selection list each
-  import presents before it does anything.
+- `crates/knot`: the Import window, its two sections, and the selection list
+  each import presents before it does anything. The two control constructors
+  it shares with the settings window (`group`, `icon_button`) move out of
+  `SettingsWindow` into `crate::controls`, which the agent editor and
+  workspace manager were already reaching for by name.
 - No change to `knot-git`, `knot-discovery`, the MCP server, or how agents
   launch. Nothing here touches a running agent.
 - Skwad is read-only throughout. Import never writes to its preferences, so a

@@ -247,6 +247,9 @@ fn settings_tab_labels_are_distinct() {
     assert_eq!(labels.len(), SettingsTab::ALL.len());
 }
 
+/// The seven ported panes, in the Swift reference's order, and nothing else.
+/// Settings holds what the user configures; an import is something they run,
+/// and lives in its own window off the File menu - see `tests::import_window`.
 #[test]
 fn settings_tab_covers_every_swift_pane() {
     assert_eq!(SettingsTab::ALL.to_vec(),
@@ -257,4 +260,14 @@ fn settings_tab_covers_every_swift_pane() {
                     SettingsTab::Voice,
                     SettingsTab::Mcp,
                     SettingsTab::Terminal]);
+}
+
+/// Every tab needs a target height, or switching to it resizes the window to
+/// whatever the last tab wanted.
+#[test]
+fn every_tab_has_a_target_height() {
+    for tab in SettingsTab::ALL {
+        assert!(SettingsWindow::pane_target_height(tab) > gpui_kit::px(0.),
+                "{tab:?} has no target height");
+    }
 }

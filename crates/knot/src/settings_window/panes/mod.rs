@@ -2,7 +2,7 @@
 //!
 //! Each owns its `render_*` method plus the label lookups, defaults and
 //! setters only that tab uses - so a tab can be read, or changed, without
-//! the other six in view. The window's own state and its tab strip stay in
+//! the other seven in view. The window's own state and its tab strip stay in
 //! [`super`].
 
 pub(super) mod appearance;

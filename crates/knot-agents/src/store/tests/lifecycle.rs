@@ -169,3 +169,51 @@ fn deactivating_an_owner_cascades_without_removing_anything() {
     assert_eq!(store.agent(owner).unwrap().activation_mode,
                knot_core::ActivationMode::Active);
 }
+
+/// `agent-registry` - "Registry metadata survives the bench round trip".
+/// A template that records only a folder is not enough to choose from a
+/// registry, so deployment must restore the role too.
+#[test]
+fn deploying_a_bench_entry_restores_its_registry_metadata() {
+    let mut store = AgentStore::default();
+    let mut bench = knot_core::BenchAgent::new(Uuid::new_v4(), "Reviewer", None, "/repo");
+    bench.description = "Reviews Rust diffs".to_string();
+    bench.capabilities = ["rust", "code-review"].iter().collect();
+    bench.cost_tier = knot_core::CostTier::High;
+
+    let id = store.deploy_bench(&bench, |_| true).expect("folder exists");
+
+    let agent = store.agent(id).expect("deployed");
+    assert_eq!(agent.description, "Reviews Rust diffs");
+    assert!(agent.capabilities.contains("rust"));
+    assert!(agent.capabilities.contains("code-review"));
+    assert_eq!(agent.cost_tier, knot_core::CostTier::High);
+}
+
+/// `agent-lifecycle` - "Re-tagging a working agent does not interrupt it".
+#[test]
+fn editing_only_registry_metadata_does_not_restart() {
+    let mut store = AgentStore::default();
+    let id = store.create("/repo", CreateOptions::default());
+    store.agent_mut(id).unwrap().state = AgentState::Running;
+    let token = store.agent(id).unwrap().restart_token;
+    let agent = store.agent(id).unwrap();
+    let req = EditRequest { name: agent.name.clone(),
+                            avatar: agent.avatar.clone(),
+                            description: "Runs the test suite".to_string(),
+                            capabilities: ["testing"].iter().collect(),
+                            cost_tier: knot_core::CostTier::Low,
+                            ..Default::default() };
+
+    store.edit(id, req).expect("edit succeeds");
+
+    let agent = store.agent(id).unwrap();
+    assert_eq!(agent.restart_token, token,
+               "a re-tag must not recreate the session");
+    assert_eq!(agent.state,
+               AgentState::Running,
+               "and must not interrupt the work");
+    assert_eq!(agent.description, "Runs the test suite");
+    assert!(agent.capabilities.contains("testing"));
+    assert_eq!(agent.cost_tier, knot_core::CostTier::Low);
+}

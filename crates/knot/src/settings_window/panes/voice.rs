@@ -47,7 +47,7 @@ impl SettingsWindow {
                     ),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.voice.engine"))
+                crate::controls::group(knot_core::l10n::t("settings.voice.engine"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.voice.enable"),
                         Switch::new("voice-enabled")
@@ -75,7 +75,7 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.voice.input"))
+                crate::controls::group(knot_core::l10n::t("settings.voice.input"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.voice.push_to_talk"),
                         div()

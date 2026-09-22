@@ -77,7 +77,7 @@ impl AgentEditor {
                     .gap_2()
                     .child(Input::new(&self.avatar_input).w(px(48.)))
                     .child(
-                        SettingsWindow::icon_button(
+                        crate::controls::icon_button(
                             "agent-avatar-picker",
                             "icons/face-grinning.svg",
                             knot_core::l10n::t("agent_editor.choose_character"),
@@ -269,6 +269,57 @@ impl AgentEditor {
         ]
     }
 
+    /// Registry metadata: what this agent is for, what it can be asked to
+    /// do, and what asking costs. None of it affects how the agent
+    /// launches, so editing it never restarts a running agent.
+    fn registry_rows(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        let editor = cx.entity();
+        let cost_tier = self.cost_tier;
+        vec![
+            Self::dialog_row(
+                knot_core::l10n::t("agent_editor.description"),
+                Input::new(&self.description_input).w(px(260.)),
+            )
+            .into_any_element(),
+            Self::dialog_row(
+                knot_core::l10n::t("agent_editor.capabilities"),
+                Input::new(&self.capabilities_input).w(px(260.)),
+            )
+            .into_any_element(),
+            Self::dialog_hint(cx, knot_core::l10n::t("agent_editor.capabilities_hint"))
+                .into_any_element(),
+            Self::dialog_row(
+                knot_core::l10n::t("agent_editor.cost_tier"),
+                Button::new("agent-cost-tier-picker")
+                    .label(cost_tier_label(cost_tier))
+                    .dropdown_caret(true)
+                    .dropdown_menu({
+                        let editor = editor.clone();
+                        move |mut menu, _, _| {
+                            for tier in knot_core::CostTier::ALL {
+                                let tier = *tier;
+                                let editor = editor.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new(cost_tier_label(tier)).on_click(
+                                        move |_, _, app| {
+                                            editor.update(app, |e, cx| {
+                                                e.cost_tier = tier;
+                                                cx.notify();
+                                            })
+                                        },
+                                    ),
+                                );
+                            }
+                            menu
+                        }
+                    }),
+            )
+            .into_any_element(),
+            Self::dialog_hint(cx, knot_core::l10n::t("agent_editor.cost_tier_hint"))
+                .into_any_element(),
+        ]
+    }
+
     /// The folder row: the chosen path, or a prompt to choose one.
     fn folder_rows(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
         vec![
@@ -290,7 +341,7 @@ impl AgentEditor {
                             }),
                     )
                     .child(
-                        SettingsWindow::icon_button(
+                        crate::controls::icon_button(
                             "choose-agent-folder",
                             "icons/folder-open.svg",
                             knot_core::l10n::t("agent_editor.choose_folder"),
@@ -304,11 +355,21 @@ impl AgentEditor {
     }
 }
 
+/// The localized name of a cost tier.
+fn cost_tier_label(tier: knot_core::CostTier) -> gpui_kit::SharedString {
+    match tier {
+        knot_core::CostTier::Low => knot_core::l10n::t("agent_editor.cost_tier_low"),
+        knot_core::CostTier::Medium => knot_core::l10n::t("agent_editor.cost_tier_medium"),
+        knot_core::CostTier::High => knot_core::l10n::t("agent_editor.cost_tier_high"),
+    }.into()
+}
+
 impl Render for AgentEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let personas = persona_choices(&self.settings);
         let identity_rows = self.identity_rows(cx);
         let agent_rows = self.agent_rows(personas, cx);
+        let registry_rows = self.registry_rows(cx);
         let folder_rows = self.folder_rows(cx);
 
         v_flex()
@@ -331,6 +392,7 @@ impl Render for AgentEditor {
                             .gap_3()
                             .child(Self::dialog_section(cx, identity_rows))
                             .child(Self::dialog_section(cx, agent_rows))
+                            .child(Self::dialog_section(cx, registry_rows))
                             .child(Self::dialog_section(cx, folder_rows))
                             .children(self.error.as_ref().map(|error| {
                                 div()

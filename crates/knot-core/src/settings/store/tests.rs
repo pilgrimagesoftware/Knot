@@ -10,6 +10,7 @@ use tempfile::TempDir;
 use tempfile::tempdir;
 
 use super::*;
+use crate::CostTier;
 use crate::consts::{
     AGENTS_FILE, BENCH_FILE, DOCUMENT_TEMP_EXTENSION, PERSONAS_FILE, PREFERENCES_FILE,
     RECENT_REPOS_FILE, WORKSPACES_FILE,
@@ -400,9 +401,9 @@ fn default_personas_install_once() {
     let dir = tempdir().unwrap();
     let mut s = Settings::with_store_root(dir.path());
     s.install_default_personas().unwrap();
-    assert_eq!(s.personas.len(), 6);
+    assert_eq!(s.personas.len(), DEFAULT_PERSONAS.len());
     s.install_default_personas().unwrap();
-    assert_eq!(s.personas.len(), 6);
+    assert_eq!(s.personas.len(), DEFAULT_PERSONAS.len());
 }
 
 #[test]
@@ -467,7 +468,9 @@ fn restore_default_personas_reverts_edits_and_adds_missing() {
 
     s.restore_default_personas().unwrap();
 
-    assert_eq!(s.personas.len(), 7);
+    assert_eq!(s.personas.len(),
+               DEFAULT_PERSONAS.len() + 1,
+               "the defaults plus the user's own");
     let restored = s.personas.iter().find(|p| p.id == id).unwrap();
     assert_eq!(restored.name, name);
     assert_eq!(restored.instructions, instructions);
@@ -486,7 +489,7 @@ fn deleted_default_persona_not_reinstalled() {
                                 persona_type: PersonaType::System,
                                 state:        PersonaState::Deleted, }];
     s.install_default_personas().unwrap();
-    assert_eq!(s.personas.len(), 6);
+    assert_eq!(s.personas.len(), DEFAULT_PERSONAS.len());
     assert_eq!(s.personas
                 .iter()
                 .filter(|p| p.state == PersonaState::Deleted)
@@ -540,4 +543,92 @@ fn compact_tool_calls_round_trips_through_the_store() {
 
     let reloaded = Settings::load_from_root(dir.path()).unwrap();
     assert!(reloaded.agent_panel_compact_tool_calls);
+}
+
+/// The Orchestrator persona describes a *method*, never a team.
+///
+/// `agent-registry` - "A roster is obtained by query, never stored as
+/// text". A teammate named here is a copy of state that goes stale the
+/// first time an agent is added or removed, and nothing would catch it,
+/// which is the whole reason the registry exists. Checked rather than left
+/// to review, because prose drifts.
+#[test]
+fn the_orchestrator_persona_names_a_method_and_no_teammates() {
+    let (_, name, instructions) = DEFAULT_PERSONAS.iter()
+                                                  .find(|(_, name, _)| *name == "Orchestrator")
+                                                  .expect("the Orchestrator persona ships");
+    assert_eq!(*name, "Orchestrator");
+
+    // It has to point at the tools, or it describes nothing actionable.
+    for tool in ["describe-agents",
+                 "plan-tasks",
+                 "dispatch-task",
+                 "complete-task",
+                 "task-status",
+                 "send-message"]
+    {
+        assert!(instructions.contains(tool),
+                "the persona should name {tool}");
+    }
+
+    // And it must not name an agent, an agent type, or how many there are -
+    // every one of those goes stale without warning.
+    let lowered = instructions.to_lowercase();
+    for stale in ["claude", "codex", "opencode", "gemini", "copilot", "shell"] {
+        assert!(!lowered.contains(stale),
+                "the persona must not name the agent type {stale}");
+    }
+    for (_, other, _) in DEFAULT_PERSONAS.iter()
+                                         .filter(|(_, other, _)| *other != "Orchestrator")
+    {
+        assert!(!instructions.contains(other),
+                "the persona must not name {other}");
+    }
+}
+
+/// A shipped default is matched by id across installs, so two entries
+/// sharing one would overwrite each other on startup.
+#[test]
+fn every_shipped_persona_has_a_distinct_id() {
+    let mut ids: Vec<&str> = DEFAULT_PERSONAS.iter().map(|(id, _, _)| *id).collect();
+    ids.sort_unstable();
+    let count = ids.len();
+    ids.dedup();
+    assert_eq!(ids.len(), count, "two shipped personas share an id");
+}
+
+/// Task 10.3: records written before the agent registry existed carry no
+/// `description`, `capabilities` or `costTier`. They have to load without
+/// error and read back undescribed, untagged and mid-priced: the guarantee
+/// `openspec/specs/agent-registry/spec.md` makes about records that predate
+/// it.
+#[test]
+fn records_written_before_the_registry_load_with_the_registry_defaults() {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join(AGENTS_FILE),
+              r#"[{
+                   "id": "11111111-1111-4111-8111-111111111111",
+                   "name": "Old Agent",
+                   "folder": "/tmp/old"
+                 }]"#).unwrap();
+    fs::write(dir.path().join(BENCH_FILE),
+              r#"[{
+                   "id": "22222222-2222-4222-8222-222222222222",
+                   "name": "Old Template",
+                   "folder": "/tmp/bench"
+                 }]"#).unwrap();
+
+    let settings = Settings::load_from_root(dir.path()).unwrap();
+
+    let agent = &settings.saved_agents[0];
+    assert_eq!(agent.name, "Old Agent");
+    assert_eq!(agent.description, "");
+    assert!(agent.capabilities.is_empty());
+    assert_eq!(agent.cost_tier, CostTier::Medium);
+
+    let bench = &settings.bench_agents[0];
+    assert_eq!(bench.name, "Old Template");
+    assert_eq!(bench.description, "");
+    assert!(bench.capabilities.is_empty());
+    assert_eq!(bench.cost_tier, CostTier::Medium);
 }

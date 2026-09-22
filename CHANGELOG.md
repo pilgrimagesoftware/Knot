@@ -1,4 +1,71 @@
 
+## 1.13.0 - 2026-09-22
+
+### Added
+- Route the settings window's text through the catalog
+- Route the menus, tabs and settings title through the catalog
+- Route the dialogs' text through the catalog
+- Route the last of the app's text through the catalog
+- Add a copy button to rendered code blocks
+- Activate a deactivated agent on a direct message
+- Add the panel slash lookup registry
+- Complete slash commands in the panel prompt
+- Read subagent definitions and Skwad preferences
+- Add the Import tab to the settings window
+- Add registry fields to agents and bench templates
+- Project live agents and bench templates into a registry
+- Add the task graph, its state machine and dispatch gate
+- Widen list-agents and add describe-agents
+- Add plan-tasks, dispatch-task, complete-task, task-status
+- Add description, capabilities and cost controls to the agent editor
+- Draw the committed plan as a diagram in the agent panel
+- Ship an Orchestrator persona describing the method
+- Split the settings store into per-collection documents
+- Give the menu bar its platform key equivalents
+- Take the Agents menu's shortcuts from the Swift reference
+
+
+### Changed
+- Confirm workspace deletion through the shared alert dialog
+- Report the errors these actions were swallowing
+- One confirmation builder, one workspace lookup, one count type
+- Validate the agent editor's form in one place
+- Name the dashboard callbacks, the folder label and the sh fixture
+- Write the transcript scan once
+- One picker builder for the settings panes
+- Split the agent editor's render into its rows
+- Make the Open In… applications an enum
+- Split the workspace manager's render from its state
+- Split the personas pane's row out of its render
+- Split the last two long renders
+- One roster for the agent types, read from six crates
+- Give the repaint poll a name and split its side effects
+- Split the workspace window's render into its parts
+- Split the application's bootstrap into its three jobs
+- Move Import out of settings into its own window
+- Move the tool catalogue and dispatch to catalog.rs
+- Collapse the one-line setters through update()
+- Build every window from two shared builders
+- Parse provider entries with typed Deserialize
+
+
+### Documentation
+- Bring the structure rules back in line with the code
+
+
+### Fixed
+- Remember settings, associate agent with workspace
+- Repaint the panel when a queued prompt is picked up
+- Self-heal on unknown MCP session id
+- Render declared single-line rows as one line
+- Stop the command center running git on the render path
+- Refresh settings snapshot after agent editor closes
+- Put imports into the live store and always report the outcome
+- Redraw every window when an import completes
+- Move Fork Agent off cmd-f, leaving the find key free
+
+
+
 ## 1.12.0 - 2026-09-22
 
 ### Added

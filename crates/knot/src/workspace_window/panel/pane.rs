@@ -48,6 +48,82 @@ impl WorkspaceWindow {
     /// no UI ever read, so an agent calling the tool appeared to be
     /// ignored. Closing the pane clears the file but keeps the history, so
     /// the menu can bring it back.
+    /// The content pane for an agent's diagram: a committed task plan, or
+    /// anything else an agent showed with `view-mermaid`.
+    ///
+    /// Same chrome as the markdown pane, because it is the same kind of
+    /// thing - something an agent put in front of the user, which the user
+    /// closes when done with it.
+    pub(in crate::workspace_window) fn render_mermaid_pane(&self, id: Uuid, source: &str,
+                                                           title: Option<&str>,
+                                                           cx: &mut Context<Self>)
+                                                           -> gpui_kit::AnyElement {
+        let heading = title.map(str::to_string)
+                           .unwrap_or_else(|| knot_core::l10n::t("plan.title"));
+        // Nothing parseable is not an error: the agent showed something
+        // this build cannot draw, and saying so beats an empty pane, which
+        // reads as a bug.
+        let body = crate::plan_view::plan_diagram(source, cx).unwrap_or_else(|| {
+                                                                 div().text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(knot_core::l10n::t("plan.empty"))
+                            .into_any_element()
+                                                             });
+        v_flex()
+            .size_full()
+            .child(
+                h_flex()
+                    .w_full()
+                    .flex_shrink_0()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .font_semibold()
+                            .child(single_line(&heading)),
+                    )
+                    .child(
+                        Button::new("mermaid-pane-close")
+                            .icon(IconName::Close)
+                            .ghost()
+                            .small()
+                            .tooltip("Close")
+                            .on_click(cx.listener(move |view, _, _window, cx| {
+                                {
+                                    let mut store = view.store.lock();
+                                    if let Err(error) = store.clear_mermaid_panel(id) {
+                                        eprintln!("failed to close the diagram panel: \
+                                                   {error}");
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .id(("mermaid-pane", id.as_u128() as u64))
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .min_w_0()
+                    .overflow_scroll()
+                    .p_4()
+                    .child(body),
+            )
+            .into_any_element()
+    }
+
     pub(in crate::workspace_window) fn render_markdown_pane(&self, id: Uuid, file: &Path,
                                                             cx: &mut Context<Self>)
                                                             -> gpui_kit::AnyElement {

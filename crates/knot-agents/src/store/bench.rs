@@ -17,6 +17,9 @@ impl AgentStore {
                                          agent_type: Some(bench.agent_type.clone()),
                                          shell_command: bench.shell_command.clone(),
                                          persona_id: bench.persona_id,
+                                         description: bench.description.clone(),
+                                         capabilities: bench.capabilities.clone(),
+                                         cost_tier: bench.cost_tier,
                                          ..Default::default() }))
     }
 }

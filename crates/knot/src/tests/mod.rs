@@ -10,13 +10,17 @@ use crate::app_state::agent_context_menu_entries;
 
 mod about_window;
 mod agent_context_menu;
+mod agent_registry_fields;
 mod agent_signals;
 mod agents_menu;
+mod import_window;
 mod l10n_catalog;
 mod layout_model;
 mod markdown_view;
+mod menu_key_equivalents;
 mod notifications;
 mod panel_lookup;
+mod plan_diagram;
 mod quit_warning;
 mod settings_font_preview;
 mod settings_labels;
