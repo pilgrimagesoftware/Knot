@@ -4,9 +4,11 @@ use std::sync::Arc;
 use gpui_kit::App;
 use gpui_kit::AppContext;
 use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::h_flex;
@@ -335,11 +337,18 @@ impl Render for CommandCenterWindow {
                     })),
             )
             .child(
+                // The grid is the Command Center's whole purpose and grows
+                // with every workspace and agent, so it scrolls rather than
+                // being clipped. Its parent does not scroll, per
+                // knot-ui-conventions: a scroll region nested in another one
+                // steals the outer gesture.
                 v_flex()
+                    .id("command-center-grid")
                     .flex_1()
+                    .min_h_0()
                     .gap_6()
                     .p_6()
-                    .overflow_hidden()
+                    .overflow_y_scroll()
                     .children(sections),
             )
             .children(crate::app_support::root_overlays(window, cx))

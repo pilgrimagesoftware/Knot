@@ -94,7 +94,7 @@
 
 ## 6. Command Center scrolling
 
-- [ ] 6.1 Wrap the Command Center's workspace sections in a vertical scroll
+- [x] 6.1 Wrap the Command Center's workspace sections in a vertical scroll
       container in `command_center.rs`'s render; verify a Command Center with
       enough agents to overflow scrolls to the last card and that card is
       clickable
@@ -103,7 +103,7 @@
 
 ## 7. Gate
 
-- [ ] 7.1 Run `make` and verify the full gate passes - fmt, size-check, lint,
+- [x] 7.1 Run `make` and verify the full gate passes - fmt, size-check, lint,
       test, build
 - [ ] 7.2 Walk the scenarios in `specs/window-lifecycle/spec.md`,
       `specs/app-menu/spec.md` and `specs/dashboard/spec.md` against the running
