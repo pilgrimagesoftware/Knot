@@ -151,3 +151,19 @@ fn a_migrated_document_is_recorded_as_migrated() {
     assert_eq!(reloaded.title_font_name, migrated.title_font_name);
     assert_eq!(reloaded.title_font_size, migrated.title_font_size);
 }
+
+/// The divider's width is only durable if the write survives the round trip:
+/// the drag handler sets the field and persists, and the next window to open
+/// reads the document back.
+#[test]
+fn a_written_sidebar_width_survives_a_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+
+    let mut settings = Settings::with_store_path(&path);
+    settings.sidebar_width = 180.0;
+    settings.persist().unwrap();
+
+    let reloaded = Settings::load_from(&path).unwrap();
+    assert_eq!(reloaded.sidebar_width, 180.0);
+}

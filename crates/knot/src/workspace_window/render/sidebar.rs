@@ -6,14 +6,19 @@
 //! built - see [`super`]'s `render`.
 
 use super::super::*;
+use super::sidebar_compact::{CompactAgentRow, compact_agent_row_body};
 
 impl WorkspaceWindow {
     /// One element per agent in this workspace, in sidebar order.
     ///
     /// Collected rather than returned lazily because the closures borrow
     /// `cx`, which the caller needs back to build the rest of the tree.
+    /// `compact` swaps each row's *body* for the avatar-only one; everything
+    /// around the body - selection, dimming, the companion indent, the click
+    /// handler and the context menu - is wired once and applies either way.
     pub(super) fn agent_rows(&mut self, agents: Vec<AgentRow>, title_font_name: String,
-                             title_font_size: gpui_kit::Pixels, cx: &mut Context<Self>)
+                             title_font_size: gpui_kit::Pixels, compact: bool,
+                             cx: &mut Context<Self>)
                              -> Vec<gpui_kit::AnyElement> {
         let store_for_menu = Arc::clone(&self.store);
         let settings_for_menu = self.settings.clone();
@@ -33,6 +38,7 @@ impl WorkspaceWindow {
                                agent_type,
                                is_running, }| {
                        let menu_name = name.clone();
+                       let tooltip_name = name.clone();
                        let menu_folder = folder.clone();
                        let folder_name =
                            PathBuf::from(&folder).file_name()
@@ -56,32 +62,45 @@ impl WorkspaceWindow {
                        // folder). Same fix as the dashboard
                        // cards in
                        // `dashboard.rs`.
-                       div()
-                    .id(gpui_kit::ElementId::from(format!("workspace-agent-{id}")))
-                    .cursor_pointer()
-                    .rounded(cx.theme().radius)
-                    .p_2()
-                    // A companion belongs to the agent above it, so it reads
-                    // as nested: indented, with a rule down its left edge.
-                    .when(is_companion, |row| {
-                        row.ml_4().border_l_2().border_color(cx.theme().border)
-                    })
-                    .bg(if selected {
-                        cx.theme().muted
-                    } else {
-                        cx.theme().transparent
-                    })
-                    // A stopped agent's row is dimmed as a whole, so a
-                    // workspace of mixed agents reads at a glance. The
-                    // state dot cannot carry this: its four values say what
-                    // a *running* agent is doing, and none of them means
-                    // "not running at all". Selection still highlights the
-                    // row underneath, so the selected-but-stopped agent
-                    // whose pane shows the stopped placeholder is still
-                    // visibly the selected one.
-                    .when(!is_running, |row| row.opacity(0.45))
-                    .child(
-                        h_flex()
+                       div().id(gpui_kit::ElementId::from(format!("workspace-agent-{id}")))
+                            .cursor_pointer()
+                            .rounded(cx.theme().radius)
+                            .p_2()
+                            // A companion belongs to the agent above it, so it reads
+                            // as nested: indented, with a rule down its left edge.
+                            .when(is_companion, |row| {
+                                row.ml_4().border_l_2().border_color(cx.theme().border)
+                            })
+                            .bg(if selected {
+                                cx.theme().muted
+                            }
+                            else {
+                                cx.theme().transparent
+                            })
+                            // A stopped agent's row is dimmed as a whole, so a
+                            // workspace of mixed agents reads at a glance. The
+                            // state dot cannot carry this: its four values say what
+                            // a *running* agent is doing, and none of them means
+                            // "not running at all". Selection still highlights the
+                            // row underneath, so the selected-but-stopped agent
+                            // whose pane shows the stopped placeholder is still
+                            // visibly the selected one.
+                            .when(!is_running, |row| row.opacity(0.45))
+                            // The compact row hides the name, so the name becomes the
+                            // row's tooltip - otherwise an avatar is the only thing
+                            // left to tell two agents apart.
+                            .when(compact, |row| {
+                                row.tooltip(move |window, cx| {
+                                       Tooltip::new(tooltip_name.clone()).build(window, cx)
+                                   })
+                            })
+                            .child(if compact {
+                                compact_agent_row_body(CompactAgentRow { avatar,
+                                                                 state,
+                                                                 is_shell }).into_any_element()
+                            }
+                            else {
+                                h_flex()
                             .w_full()
                             .gap_3()
                             .items_start()
@@ -189,38 +208,46 @@ impl WorkspaceWindow {
                                     .mt_1()
                                     .rounded_full()
                                     .bg(state_color(state))
-                            })),
-                    )
-                    .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
-                        view.select_agent(id);
-                        // Leave the dashboard, the same way tapping an
-                        // agent card does - selecting a row while the
-                        // dashboard was open used to change the selection
-                        // without ever showing the session.
-                        view.view_mode = WorkspaceViewMode::Terminal;
-                        view.ensure_session(id);
-                        view.ensure_panel_session(id);
-                        cx.notify();
-                    }))
-                    .context_menu({
-                        let targets = AgentMenuTargets {
-                            store: Arc::clone(&store_for_menu),
-                            settings: settings_for_menu.clone(),
-                            window_entity: window_entity.clone(),
-                            workspace_id,
-                            id,
-                            name: menu_name.clone(),
-                            folder: menu_folder.clone(),
-                        };
-                        move |menu, window, cx| agent_row_context_menu(&targets, menu, window, cx)
-                    })
+                            }))
+                            .into_any_element()
+                            })
+                            .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
+                                            view.select_agent(id);
+                                            // Leave the dashboard, the same way
+                                            // tapping an
+                                            // agent card does - selecting a row
+                                            // while the
+                                            // dashboard was open used to change
+                                            // the selection
+                                            // without ever showing the session.
+                                            view.view_mode = WorkspaceViewMode::Terminal;
+                                            view.ensure_session(id);
+                                            view.ensure_panel_session(id);
+                                            cx.notify();
+                                        }))
+                            .context_menu({
+                                let targets =
+                                    AgentMenuTargets { store: Arc::clone(&store_for_menu),
+                                                       settings: settings_for_menu.clone(),
+                                                       window_entity: window_entity.clone(),
+                                                       workspace_id,
+                                                       id,
+                                                       name: menu_name.clone(),
+                                                       folder: menu_folder.clone() };
+                                move |menu, window, cx| {
+                                    agent_row_context_menu(&targets, menu, window, cx)
+                                }
+                            })
                    })
               .map(gpui_kit::IntoElement::into_any_element)
               .collect()
     }
 
     /// The workspace overview row, pinned above the agent list.
-    pub(super) fn dashboard_row(&self, is_dashboard: bool, cx: &mut Context<Self>)
+    ///
+    /// `compact` drops its label, leaving the icon - the same trade the agent
+    /// rows above it make at the same width.
+    pub(super) fn dashboard_row(&self, is_dashboard: bool, compact: bool, cx: &mut Context<Self>)
                                 -> gpui_kit::AnyElement {
         // The dashboard sits at the top of the agent list, the way the
         // Swift reference's `overviewRow` does (`SidebarView.swift`), and
@@ -241,6 +268,7 @@ impl WorkspaceWindow {
              .child(h_flex().w_full()
                             .gap_3()
                             .items_center()
+                            .when(compact, |row| row.justify_center())
                             .child(div().w(px(40.))
                                         .h(px(40.))
                                         .flex_shrink_0()
@@ -248,10 +276,12 @@ impl WorkspaceWindow {
                                         .items_center()
                                         .justify_center()
                                         .child(Icon::default().path("icons/layout-dashboard.svg")))
-                            .child(div().flex_1()
-                                        .min_w_0()
-                                        .font_semibold()
-                                        .child(knot_core::l10n::t("dashboard.title"))))
+                            .when(!compact, |row| {
+                                row.child(div().flex_1()
+                                               .min_w_0()
+                                               .font_semibold()
+                                               .child(knot_core::l10n::t("dashboard.title")))
+                            }))
              .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
                              view.view_mode = match view.view_mode {
                                  WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,

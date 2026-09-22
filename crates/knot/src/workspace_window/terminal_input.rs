@@ -19,7 +19,8 @@ impl WorkspaceWindow {
                                terminal_font_family(&self.settings, cx),
                                px(self.settings.terminal_font_size as f32));
         let viewport = window.viewport_size();
-        let pane_width = (f32::from(viewport.width) - TERMINAL_SIDEBAR_WIDTH).max(cell_width);
+        let pane_width =
+            (f32::from(viewport.width) - self.sidebar_width(cx) as f32).max(cell_width);
         let pane_height = (f32::from(viewport.height) - TERMINAL_HEADER_HEIGHT).max(cell_height);
         let size = knot_terminal::GridSize { columns: (pane_width / cell_width) as usize,
                                              rows:    (pane_height / cell_height) as usize, };
@@ -72,7 +73,7 @@ impl WorkspaceWindow {
             terminal_cell_size(cx,
                                terminal_font_family(&self.settings, cx),
                                px(self.settings.terminal_font_size as f32));
-        let x = (f32::from(position.x) - TERMINAL_SIDEBAR_WIDTH).max(0.);
+        let x = (f32::from(position.x) - self.sidebar_width(cx) as f32).max(0.);
         let y = (f32::from(position.y) - TERMINAL_HEADER_HEIGHT).max(0.);
         ((x / cell_width) as usize, (y / cell_height) as usize)
     }

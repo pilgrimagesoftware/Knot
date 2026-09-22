@@ -13,6 +13,7 @@ mod panel;
 mod render;
 mod repaint;
 mod sessions;
+mod sidebar_layout;
 mod terminal_input;
 
 // Re-exported so the rest of the crate keeps reaching these by
@@ -20,6 +21,7 @@ mod terminal_input;
 pub(crate) use chrome::*;
 pub(crate) use creation::SelectedAgentHeader;
 pub(crate) use menus::*;
+pub(crate) use sidebar_layout::sidebar_is_compact;
 /// Which peer view a `WorkspaceWindow` currently shows - the dashboard is a
 /// toggleable view of the same window's content, not a dialog or a
 /// separate window (see `openspec/changes/dashboard-view/design.md`).
@@ -32,7 +34,10 @@ pub(crate) enum WorkspaceViewMode {
 
 /// Terminal pane geometry - shared by resize and mouse-position translation
 /// so they agree on the same grid.
-pub(crate) const TERMINAL_SIDEBAR_WIDTH: f32 = 250.;
+///
+/// The pane's left edge is the sidebar's right edge, which the user drags, so
+/// that half of the geometry is [`WorkspaceWindow::sidebar_width`] rather than
+/// a constant.
 pub(crate) const TERMINAL_HEADER_HEIGHT: f32 = 64.;
 
 /// Which text size a detail line renders at, and therefore what size its
@@ -143,6 +148,13 @@ pub(crate) struct WorkspaceWindow {
     /// tracker; the UI thread has no tokio runtime of its own, so enter
     /// this one around each spawn (see `ensure_session`).
     runtime:                          tokio::runtime::Runtime,
+    /// Backs the divider between the sidebar and the content column.
+    ///
+    /// The window owns it rather than letting the group keep its own keyed
+    /// state inside the element tree: two things outside the group read the
+    /// sidebar's width - the compact predicate and the terminal pane's
+    /// geometry - and a window-held entity gives both the same source.
+    sidebar_resize:                   Entity<ResizableState>,
     /// Focus target for the window's root element.
     ///
     /// Nothing else in this window claims focus until the user clicks a

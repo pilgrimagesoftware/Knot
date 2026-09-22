@@ -31,9 +31,10 @@ use crate::consts::{
     AI_PROVIDER_DEFAULT, APP_NAME, APPEARANCE_MODE_DEFAULT, AUTOPILOT_ACTION_DEFAULT,
     DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT, MERMAID_THEME_DEFAULT,
     ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE, SETTINGS_TEMP_EXTENSION,
-    SETTINGS_VERSION_CURRENT, SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT,
-    TERMINAL_FONT_SIZE_DEFAULT, TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT,
-    UI_FONT_SIZE_DEFAULT, VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
+    SETTINGS_VERSION_CURRENT, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN,
+    SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT,
+    TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT,
+    VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
 };
 use crate::error::{Error, Result};
 
@@ -74,6 +75,11 @@ pub struct Settings {
     pub ui_font_size:                   f64,
     pub title_font_name:                String,
     pub title_font_size:                f64,
+    /// The workspace sidebar's width in pixels, shared by every workspace
+    /// window. Clamped into [`SIDEBAR_WIDTH_MIN`]..=[`SIDEBAR_WIDTH_MAX`] on
+    /// load, so a reader never has to clamp it again. See
+    /// `openspec/specs/agent-list-ui/spec.md`.
+    pub sidebar_width:                  f64,
     pub autopilot_enabled:              bool,
     pub ai_provider:                    String,
     pub ai_api_key:                     String,
@@ -130,6 +136,7 @@ impl Default for Settings {
                ui_font_size:                   UI_FONT_SIZE_DEFAULT,
                title_font_name:                TITLE_FONT_DEFAULT.to_string(),
                title_font_size:                TITLE_FONT_SIZE_DEFAULT,
+               sidebar_width:                  SIDEBAR_WIDTH_DEFAULT,
                autopilot_enabled:              false,
                ai_provider:                    AI_PROVIDER_DEFAULT.to_string(),
                ai_api_key:                     String::new(),
@@ -202,6 +209,13 @@ impl Settings {
         if settings.terminal_font_name == "SF Mono" {
             settings.terminal_font_name = TERMINAL_FONT_DEFAULT.to_string();
         }
+        // A hand-edited or future-written width outside the divider's range
+        // describes an intent the window cannot honour; the nearest legal
+        // width is closer to it than the default is. Clamping here rather
+        // than in the window keeps every reader of the setting free of the
+        // bound.
+        settings.sidebar_width = settings.sidebar_width
+                                         .clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
         Ok(settings)
     }
 

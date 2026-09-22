@@ -15,6 +15,7 @@ mod quit_warning;
 mod settings_font_preview;
 mod settings_labels;
 mod sidebar_menu;
+mod sidebar_width;
 mod startup;
 mod workspace_dialog;
 mod workspace_window_config;

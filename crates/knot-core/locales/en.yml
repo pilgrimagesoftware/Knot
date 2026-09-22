@@ -23,6 +23,9 @@ git:
 workspace:
   manager: "Workspaces"
 
+sidebar:
+  new_agent: "New agent"
+
 agent:
   companion: "Shell companion"
 
