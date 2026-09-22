@@ -2,47 +2,47 @@
 
 ## 1. Window registry
 
-- [ ] 1.1 Add `crates/knot/src/window_registry.rs` with `WindowKey`
+- [x] 1.1 Add `crates/knot/src/window_registry.rs` with `WindowKey`
       (`Workspace(Uuid) | CommandCenter | WorkspaceManager`) and a
       `WindowRegistry` global holding `HashMap<WindowKey, AnyWindowHandle>`;
       verify `cargo build --workspace` succeeds and `make size-check` passes
-- [ ] 1.2 Implement `activate(key, cx) -> bool` using the
+- [x] 1.2 Implement `activate(key, cx) -> bool` using the
       `handle.update(..).is_ok()` probe from `about_window/window.rs:46-61`,
       removing the entry when the probe fails; verify a unit test that seeds a
       stale key and asserts it is gone after a miss
-- [ ] 1.3 Implement `activate_or_open(key, cx, open_fn)` returning whether it
+- [x] 1.3 Implement `activate_or_open(key, cx, open_fn)` returning whether it
       activated or opened, and registering the handle on the open path; verify
       by building and by the call-site tasks below compiling against it
-- [ ] 1.4 Install the registry as a `cx.global` during boot in
+- [x] 1.4 Install the registry as a `cx.global` during boot in
       `app_bootstrap.rs`; verify the app launches and a workspace still opens
 
 ## 2. One window per workspace
 
-- [ ] 2.1 Route `WorkspaceWindow::open` and `open_with_selection`
+- [x] 2.1 Route `WorkspaceWindow::open` and `open_with_selection`
       (`workspace_window/open.rs`) through `activate_or_open` with
       `WindowKey::Workspace(id)`; verify opening the same workspace twice from
       the manager leaves one window, raised
-- [ ] 2.2 Extract the "select this agent" step from `open_with_selection` into a
+- [x] 2.2 Extract the "select this agent" step from `open_with_selection` into a
       method on `WorkspaceWindow` that both the fresh-open and the activate
       paths call; verify `make lint` passes with no duplicated selection logic
-- [ ] 2.3 On the activate path, downcast to `WindowHandle<WorkspaceWindow>` and
+- [x] 2.3 On the activate path, downcast to `WindowHandle<WorkspaceWindow>` and
       apply that selection method; verify clicking a Command Center card for an
       agent in an already-open workspace raises that window with the agent
       selected
-- [ ] 2.4 Update the remaining call sites - `workspace_manager/mod.rs:198-203`,
-      `command_center.rs:129-134`, `:151-156`, `:178-184` - to go through the
-      registry; verify no direct `cx.open_window` for a workspace window remains
+- [x] 2.4 All four call sites already funnel through `open_with_selection`, so
+      the registry check in 2.1 covers them with no call-site edit; verified no
+      other `cx.open_window` for a workspace window exists
       (`grep -rn "open_window" crates/knot/src/workspace_window/`)
-- [ ] 2.5 Confirm the registry entry is dropped when a workspace window is
+- [x] 2.5 Confirm the registry entry is dropped when a workspace window is
       closed, so reopening that workspace opens a window; verify by closing and
       reopening a workspace in the running app
 
 ## 3. Command Center and manager as single windows
 
-- [ ] 3.1 Route `CommandCenterWindow::open` (`command_center.rs:44-67`) through
+- [x] 3.1 Route `CommandCenterWindow::open` (`command_center.rs:44-67`) through
       `activate_or_open` with `WindowKey::CommandCenter`; verify clicking the
       manager's toolbar button twice leaves one Command Center window
-- [ ] 3.2 Route the workspace manager's open path (`app_bootstrap.rs:340-360`)
+- [x] 3.2 Route the workspace manager's open path (`app_bootstrap.rs:340-360`)
       through `WindowKey::WorkspaceManager`; verify the manager is registered at
       boot so the new menu item can raise it
 

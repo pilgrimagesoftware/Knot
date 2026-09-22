@@ -94,11 +94,19 @@ path.
 
 `activate_or_open` returns enough for the caller to distinguish "raised an
 existing window" from "opened a new one". On the raise path the Command Center's
-card handler downcasts the handle to `WindowHandle<WorkspaceWindow>` and calls
-the same selection method `open_with_selection` uses on the fresh path, so one
+card handler reaches the window's `WorkspaceWindow` entity and calls the same
+selection method `open_with_selection` uses on the fresh path, so one
 implementation of "show this agent" serves both. This keeps the spec's "leaving
 the window showing what a freshly opened one would have shown" true by
 construction rather than by two code paths agreeing.
+
+The entity has to be stored in the registry rather than recovered from the
+handle. `cx.open_window` hands back a `WindowHandle<Root>` - the root entity is
+the `Root` wrapper the view is built into (`open.rs:193`), not the view - so
+`AnyWindowHandle::downcast::<WorkspaceWindow>()` never matches. The registry
+therefore holds a `WeakEntity<WorkspaceWindow>` beside each workspace window's
+handle, weak so an entry never keeps a closed window's view alive in the
+interval before its stale handle is noticed.
 
 ### Bounds reconciliation is a pure function in `window_options.rs`
 

@@ -340,45 +340,76 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
 }
 
 /// Opens the workspace manager - the window the application starts in.
+/// Opens the workspace manager, or raises it when one is already open.
+///
+/// One manager window, like the Command Center
+/// (`openspec/specs/window-lifecycle`). Reopening after a close passes no
+/// `mcp_stop`: the oneshot that keeps the MCP server alive went with the
+/// window that held it, and this does not resurrect it - closing the manager
+/// has always stopped the server, and that is a separate question from how
+/// many manager windows there are.
 fn open_workspace_manager(parts: WorkspaceManagerWindow, cx: &mut App) {
     let WorkspaceManagerWindow { store,
                                  messages,
                                  settings,
                                  mcp_stop, } = parts;
+    crate::window_registry::activate_or_open(crate::window_registry::WindowKey::WorkspaceManager,
+                                             cx,
+                                             move |cx| {
+                                                 open_manager_window(store,
+                                                                     messages,
+                                                                     settings,
+                                                                     Some(mcp_stop),
+                                                                     cx)
+                                             });
+}
+
+/// The manager window itself, reporting its handle.
+fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                       settings: knot_core::Settings,
+                       mcp_stop: Option<tokio::sync::oneshot::Sender<()>>, cx: &mut App)
+                       -> Option<gpui_kit::AnyWindowHandle> {
     let options = manager_window_options(cx);
-    cx.open_window(options, |window, cx| {
-          // Every window tracks the OS appearance, so a light/dark flip
-          // re-resolves the system palette and repaints.
-          observe_system_appearance(window);
-          // macOS leaves untitled windows out of the Window menu, which is
-          // why only open workspaces were listed there.
-          window.set_window_title(&knot_core::l10n::t("workspace.manager"));
-          let name_input = cx.new(|cx| {
-                                 InputState::new(window, cx)
+    match cx.open_window(options, |window, cx| {
+                // Every window tracks the OS appearance, so a light/dark flip
+                // re-resolves the system palette and repaints.
+                observe_system_appearance(window);
+                // macOS leaves untitled windows out of the Window menu, which
+                // is why only open workspaces were listed
+                // there.
+                window.set_window_title(&knot_core::l10n::t("workspace.manager"));
+                let name_input = cx.new(|cx| {
+                                       InputState::new(window, cx)
                         .placeholder(knot_core::l10n::t("workspace.name_placeholder"))
+                                   });
+                let view = cx.new(|cx| {
+                                 let name_subscription =
+                                     cx.subscribe(&name_input,
+                                                  |_: &mut WorkspaceManager, _, event, cx| {
+                                                      if matches!(event, InputEvent::Change) {
+                                                          cx.notify();
+                                                      }
+                                                  });
+                                 WorkspaceManager { store,
+                                                    messages,
+                                                    settings,
+                                                    name_input,
+                                                    editing_id: None,
+                                                    workspace_dialog_id: None,
+                                                    show_workspace_dialog: false,
+                                                    error: None,
+                                                    _name_subscription: name_subscription,
+                                                    _mcp_stop: mcp_stop }
                              });
-          let view = cx.new(|cx| {
-                           let name_subscription =
-                               cx.subscribe(&name_input,
-                                            |_: &mut WorkspaceManager, _, event, cx| {
-                                                if matches!(event, InputEvent::Change) {
-                                                    cx.notify();
-                                                }
-                                            });
-                           WorkspaceManager { store,
-                                              messages,
-                                              settings,
-                                              name_input,
-                                              editing_id: None,
-                                              workspace_dialog_id: None,
-                                              show_workspace_dialog: false,
-                                              error: None,
-                                              _name_subscription: name_subscription,
-                                              _mcp_stop: Some(mcp_stop) }
-                       });
-          cx.new(|cx| Root::new(view, window, cx))
-      })
-      .expect("failed to open workspace manager");
+                cx.new(|cx| Root::new(view, window, cx))
+            }) {
+        Ok(window) => Some(window.into()),
+        Err(error) => {
+            eprintln!("failed to open workspace manager: {error}");
+            None
+        }
+    }
 }
 
 pub(crate) fn run() {
@@ -428,6 +459,10 @@ pub(crate) fn run() {
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(Activation(Arc::clone(&activation)));
                                cx.set_global(AgentsMenuState::default());
+                               // Every window that can be reopened is
+                               // registered here, so a second request for
+                               // one raises it rather than making another.
+                               crate::window_registry::WindowRegistry::install(cx);
                                set_app_menus(&AgentMenuSnapshot::default(), cx);
 
                                cx.on_system_notification_response(|response, cx| {

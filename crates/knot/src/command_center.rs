@@ -45,9 +45,15 @@ impl CommandCenterWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
                        messages: Arc<Mutex<knot_messaging::MessageStore>>,
                        settings: knot_core::Settings, cx: &mut App) {
-        let options = command_center_window_options(cx);
-        if let Err(error) =
-            cx.open_window(options, move |window, cx| {
+        // One Command Center: it shows every workspace, so a second copy shows
+        // exactly what the first does (`openspec/specs/window-lifecycle`).
+        crate::window_registry::activate_or_open(
+                                                 crate::window_registry::WindowKey::CommandCenter,
+                                                 cx,
+                                                 move |cx| {
+                                                     let options =
+                                                         command_center_window_options(cx);
+                                                     match cx.open_window(options, move |window, cx| {
                   // Every window tracks the OS appearance, so a light/dark flip
                   // re-resolves the system palette and repaints.
                   observe_system_appearance(window);
@@ -61,9 +67,15 @@ impl CommandCenterWindow {
                                                        diff_stats: DiffStatsCache::default() });
                   cx.new(|cx| Root::new(view, window, cx))
               })
-        {
-            eprintln!("failed to open command center window: {error}");
-        }
+            {
+                Ok(window) => Some(window.into()),
+                Err(error) => {
+                    eprintln!("failed to open command center window: {error}");
+                    None
+                },
+            }
+                                                 },
+        );
     }
 
     /// Asks for a fresh diff stat for every agent with a card, for the ones

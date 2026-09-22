@@ -23,6 +23,8 @@ use crate::app_state::agent_selection_for_workspace;
 use crate::app_support::observe_system_appearance;
 use crate::dashboard;
 use crate::window_options::workspace_window_options;
+use crate::window_registry::WindowKey;
+use crate::window_registry::WindowRegistry;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::repaint::spawn_repaint_poll;
@@ -42,6 +44,21 @@ impl WorkspaceWindow {
                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                       settings: knot_core::Settings, workspace_id: Uuid,
                                       select_agent: Option<Uuid>, cx: &mut App) {
+        // One window per workspace: a second request raises the first rather
+        // than opening another, and shows the agent it named if it named one
+        // (`openspec/specs/window-lifecycle`). Every route that opens a
+        // workspace - the manager, a Command Center card or heading, the agent
+        // editor's post-create jump - arrives here, so the check belongs here
+        // rather than at each of them.
+        let key = WindowKey::Workspace(workspace_id);
+        if WindowRegistry::activate(key, cx) {
+            if let Some(requested) = select_agent
+               && let Some(view) = WindowRegistry::workspace_view(key, cx)
+            {
+                view.update(cx, |view, cx| view.reveal_agent(requested, cx));
+            }
+            return;
+        }
         let workspace_name = {
                                  let store = store.lock();
                                  store.workspaces()
@@ -155,6 +172,10 @@ impl WorkspaceWindow {
                             }
                             window
                         });
+                  // Registered from inside the open closure because the
+                  // view is only in scope here: `cx.open_window` hands back a
+                  // handle to the `Root` wrapper, not to this.
+                  WindowRegistry::register(key, window.window_handle(), Some(view.downgrade()), cx);
                   spawn_repaint_poll(view.clone(),
                                      clipboard_writes,
                                      Arc::clone(&exited_sessions),
