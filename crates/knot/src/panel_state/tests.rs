@@ -1,5 +1,11 @@
 //! Unit tests for [`super`].
 
+use knot_acp::ConfigOption;
+use knot_acp::PermissionRequest;
+use knot_acp::SessionEndCause;
+use knot_acp::SessionEvent;
+use knot_acp::SessionUpdate;
+use knot_acp::ToolCallContent;
 use serde_json::json;
 
 use super::*;

@@ -6,7 +6,29 @@
 //! reading the row's facts out of the store, building the submenus, and
 //! running whichever entry the user picked.
 
-use super::super::*;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::Window;
+use gpui_kit::component::WindowExt;
+use gpui_kit::component::menu::PopupMenu;
+use gpui_kit::component::menu::PopupMenuItem;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::agent_editor::AgentEditorRequest;
+use crate::agent_editor::AgentPrefill;
+use crate::agent_editor::open_agent_editor;
+use crate::agent_menu::markdown_label;
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::AgentMenuFacts;
+use crate::app_state::agent_context_menu_entries;
+use crate::open_in;
+use crate::workspace_window::WorkspaceWindow;
 
 /// Everything the agent-row context menu's handlers need. Grouped so the
 /// builder takes one argument instead of seven, and so the row render can

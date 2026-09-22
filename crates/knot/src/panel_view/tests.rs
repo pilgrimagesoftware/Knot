@@ -1,5 +1,10 @@
 //! Unit tests for [`super`].
 
+use gpui_kit::ListState;
+use gpui_kit::assets::IconName;
+use gpui_kit::px;
+use knot_acp::PermissionRequest;
+
 use super::*;
 
 #[test]

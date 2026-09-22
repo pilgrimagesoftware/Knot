@@ -2,7 +2,27 @@
 //! delivery notices, unread counts, terminal status, and the rules behind
 //! the "check your inbox" nudge.
 
-use super::*;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
+use knot_messaging::DeliveryEvent;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_state::DeliveryNotice;
+use crate::app_state::NudgeCheck;
+use crate::app_state::agent_status_snapshot;
+use crate::app_state::apply_terminal_status;
+use crate::app_state::command_to_send;
+use crate::app_state::delivery_notice;
+use crate::app_state::inbox_prompt_message_id;
+use crate::app_state::layout_model;
+use crate::app_state::should_inject_inbox_prompt;
+use crate::app_state::stale_session_ids;
+use crate::app_state::unread_counts_snapshot;
+use crate::app_support;
+use crate::tests::workspace;
 
 #[test]
 fn command_to_send_trims_input_and_rejects_empty_commands() {

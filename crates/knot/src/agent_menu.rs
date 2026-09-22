@@ -29,9 +29,19 @@
 //! makes them follow the active window: see
 //! `WorkspaceWindow::refresh_agents_menu`.
 
-use gpui_kit::{Action, SharedString};
+use std::path::Path;
+use std::path::PathBuf;
 
-use super::*;
+use gpui_kit::Menu;
+use gpui_kit::MenuItem;
+use gpui_kit::actions;
+use gpui_kit::{Action, SharedString};
+use uuid::Uuid;
+
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::AgentMenuFacts;
+use crate::app_state::agent_context_menu_entries;
+use crate::open_in;
 
 actions!(knot_app,
          [AgentMenuNewCompanion,

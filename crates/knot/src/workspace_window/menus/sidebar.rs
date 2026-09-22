@@ -6,7 +6,22 @@
 //! tested; this is the wiring that reads the facts it needs out of the
 //! store and runs the action the user picked.
 
-use super::super::*;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::Entity;
+use gpui_kit::Window;
+use gpui_kit::component::WindowExt;
+use gpui_kit::component::menu::PopupMenu;
+use gpui_kit::component::menu::PopupMenuItem;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_state::AgentListBackgroundEntry;
+use crate::app_state::SidebarMenuFacts;
+use crate::app_state::sidebar_background_menu_entries;
+use crate::broadcast_sheet::open_broadcast_sheet;
+use crate::workspace_window::WorkspaceWindow;
 
 /// What the sidebar's background context menu acts on. The workspace, not
 /// any one agent: every item here is scoped to the workspace the sidebar is

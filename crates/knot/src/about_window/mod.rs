@@ -7,7 +7,32 @@
 //! instance, like the settings window - choosing About again raises the one
 //! that is open.
 
-use super::*;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use gpui_kit::AnyWindowHandle;
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::ClipboardItem;
+use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::base::StyledExt;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Root;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::px;
+
+use crate::window_options::about_window_options;
 
 /// The icon shown at the top of the window. `APP_ICON_PNG` is the 32px
 /// title-bar glyph, too small to read as the app's identity here, so this

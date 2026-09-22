@@ -1,7 +1,24 @@
 //! Creating an agent from this window, and the header facts a new or
 //! selected one contributes.
 
-use super::*;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::component::ActiveTheme;
+use uuid::Uuid;
+
+use crate::agent_editor::AgentEditorRequest;
+use crate::agent_editor::AgentPrefill;
+use crate::agent_editor::open_agent_editor;
+use crate::app_state;
+use crate::workspace_window::WorkspaceViewMode;
+use crate::workspace_window::WorkspaceWindow;
 
 /// Parameters for [`open_agent_editor`], grouped to keep the function's
 /// argument count in check.

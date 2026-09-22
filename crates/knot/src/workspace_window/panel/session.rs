@@ -5,7 +5,16 @@
 //! outlives a view-mode toggle, so nothing here is driven by which view is
 //! on screen.
 
-use super::super::*;
+use std::sync::Arc;
+
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_state;
+use crate::app_support;
+use crate::panel_session;
+use crate::workspace_window::PromptOrigin;
+use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceWindow {
     /// Starts a Panel-mode ACP connection for `id` if one isn't already

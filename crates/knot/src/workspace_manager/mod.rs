@@ -1,4 +1,38 @@
-use super::*;
+use std::sync::Arc;
+
+use gpui_kit::AppContext;
+use gpui_kit::ClickEvent;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::Subscription;
+use gpui_kit::Window;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::Disableable;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Icon;
+use gpui_kit::component::TitleBar;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::input::Input;
+use gpui_kit::component::input::InputState;
+use gpui_kit::div;
+use gpui_kit::px;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_support::app_titlebar_icon;
+use crate::command_center::CommandCenterWindow;
+use crate::consts;
+use crate::settings_window::SettingsWindow;
+use crate::workspace_window::WorkspaceWindow;
 
 /// Whether a typed workspace name counts as nothing at all.
 ///

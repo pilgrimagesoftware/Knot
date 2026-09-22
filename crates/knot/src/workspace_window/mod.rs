@@ -1,7 +1,26 @@
-use super::*;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui_kit::AnyWindowHandle;
+use gpui_kit::Entity;
+use gpui_kit::ListState;
+use gpui_kit::Subscription;
+use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::TextareaState;
+use gpui_kit::component::resizable::ResizableState;
+use knot_terminal::PtyTransport;
+use knot_terminal::TerminalSession;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
 use crate::app_bootstrap::{
     PanelOpenPermissionSelector, PanelPermissionAllow, PanelPermissionDeny,
 };
+use crate::dashboard;
+use crate::panel_session;
+use crate::panel_state;
 
 mod agents;
 mod chrome;
@@ -19,7 +38,6 @@ mod terminal_input;
 // Re-exported so the rest of the crate keeps reaching these by
 // `workspace_window::<name>`, as it did when they lived here.
 pub(crate) use chrome::*;
-pub(crate) use creation::SelectedAgentHeader;
 pub(crate) use menus::*;
 pub(crate) use sidebar_layout::sidebar_is_compact;
 /// Which peer view a `WorkspaceWindow` currently shows - the dashboard is a

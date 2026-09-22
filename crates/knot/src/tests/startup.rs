@@ -1,7 +1,11 @@
 //! Restoring the roster at launch: which agents come back, whether their
 //! conversations resume, and which one is selected.
 
-use super::*;
+use uuid::Uuid;
+
+use crate::app_state::build_agent_store;
+use crate::app_state::initial_agent_selection;
+use crate::tests::workspace;
 
 #[test]
 fn build_agent_store_restores_layout_when_enabled() {

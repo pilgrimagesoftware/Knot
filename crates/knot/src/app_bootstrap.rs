@@ -1,4 +1,40 @@
-use super::*;
+use std::cell::RefCell;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui_kit::AnyWindowHandle;
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::KeyBinding;
+use gpui_kit::Menu;
+use gpui_kit::MenuItem;
+use gpui_kit::SystemMenuType;
+use gpui_kit::actions;
+use gpui_kit::component::Root;
+use gpui_kit::component::Theme;
+use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::input::InputState;
+use knot_mcp::ToolCatalog;
+use knot_messaging::QueuedNotifier;
+use parking_lot::Mutex;
+
+use crate::about_window::register_about_action;
+use crate::agent_menu::AgentMenuSnapshot;
+use crate::agent_menu::AgentsMenuState;
+use crate::agent_menu::agents_menu;
+use crate::app_state::build_agent_store;
+use crate::app_state::notification_response_agent_id;
+use crate::app_support;
+use crate::app_support::AwaitingInput;
+use crate::app_support::AwaitingInputQueue;
+use crate::app_support::apply_visual_identity;
+use crate::app_support::observe_system_appearance;
+use crate::quit_guard;
+use crate::settings_window::open_settings_window;
+use crate::window_options::manager_window_options;
+use crate::workspace_manager::WorkspaceManager;
+
 pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::Settings, notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,

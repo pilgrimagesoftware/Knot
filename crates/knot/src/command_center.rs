@@ -1,4 +1,34 @@
-use super::*;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Root;
+use gpui_kit::component::TitleBar;
+use knot_git::Repository;
+use parking_lot::Mutex;
+use unicode_segmentation::UnicodeSegmentation;
+use uuid::Uuid;
+
+use crate::agent_editor::AgentEditorRequest;
+use crate::agent_editor::AgentPrefill;
+use crate::agent_editor::open_agent_editor;
+use crate::app_support::app_titlebar_icon;
+use crate::app_support::observe_system_appearance;
+use crate::consts;
+use crate::dashboard;
+use crate::window_options::command_center_window_options;
+use crate::workspace_window::WorkspaceWindow;
+
 pub(crate) struct CommandCenterWindow {
     store:          Arc<Mutex<knot_agents::AgentStore>>,
     messages:       Arc<Mutex<knot_messaging::MessageStore>>,

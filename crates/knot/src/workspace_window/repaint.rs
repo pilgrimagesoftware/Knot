@@ -7,7 +7,11 @@
 //! deliberately conservative: notifying every poll would repaint thirty
 //! times a second while an agent works.
 
-use super::*;
+use crate::consts;
+use crate::panel_session;
+use crate::working_indicator;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::prompt_queue;
 
 impl WorkspaceWindow {
     /// Whether the dashboard's working indicators need a repaint now: an

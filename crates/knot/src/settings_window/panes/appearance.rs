@@ -1,4 +1,11 @@
-use super::super::*;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::v_flex;
+
+use crate::app_support::FontPanelTarget;
+use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
     pub(crate) fn render_appearance(&self, cx: &mut Context<Self>) -> impl IntoElement {

@@ -1,4 +1,15 @@
-use super::super::*;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::Disableable;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::menu::DropdownMenu;
+use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::component::switch::Switch;
+
+use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
     pub(crate) fn appearance_label(mode: &str) -> &'static str {

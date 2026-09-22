@@ -2,7 +2,23 @@
 //! and diff stat on the right - or, on the dashboard, the dashboard's title
 //! and its sort picker.
 
-use super::super::*;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::StyledExt;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::px;
+
+use crate::app_state::state_color;
+use crate::app_state::state_label;
+use crate::dashboard;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::creation::SelectedAgentHeader;
 
 impl WorkspaceWindow {
     /// The header's leading half.

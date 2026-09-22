@@ -1,4 +1,15 @@
-use super::super::*;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::Disableable;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::switch::Switch;
+use gpui_kit::div;
+
+use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
     /// Display name for a modifier key code, ported from the Swift

@@ -4,7 +4,16 @@
 //! Each of these translates a GPUI event into the `knot-terminal` session's
 //! vocabulary and does nothing else; the session owns all the state.
 
-use super::*;
+use gpui_kit::App;
+use gpui_kit::ClipboardItem;
+use gpui_kit::Window;
+use gpui_kit::px;
+use uuid::Uuid;
+
+use crate::workspace_window::TERMINAL_HEADER_HEIGHT;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::terminal_cell_size;
+use crate::workspace_window::terminal_font_family;
 
 impl WorkspaceWindow {
     /// Resizes `id`'s session grid/PTY to match the content pane's current

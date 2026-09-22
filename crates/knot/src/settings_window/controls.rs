@@ -1,5 +1,28 @@
+use gpui_kit::App;
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::StyledExt;
+use gpui_kit::base::h_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Icon;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::group_box::GroupBox;
+use gpui_kit::component::group_box::GroupBoxVariants;
+use gpui_kit::div;
+use gpui_kit::px;
+use gpui_kit::rgb;
+
 use super::font::font_label;
-use super::*;
+use crate::app_support::FontPanelTarget;
+// macOS-only: the module it names is `cfg(target_os = "macos")`, and so
+// is every use of it here.
+#[cfg(target_os = "macos")]
+use crate::app_support::native_font_panel;
+use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
     /// Right-aligned label column width shared by every settings row, so

@@ -11,7 +11,47 @@
 //! entity; keeping them in one function meant a change to any region had
 //! to be read against all of them.
 
-use super::*;
+use std::sync::Arc;
+
+use gpui_kit::ClickEvent;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::Window;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::TitleBar;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::component::resizable::h_resizable;
+use gpui_kit::component::resizable::resizable_panel;
+use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::px;
+
+use crate::app_support;
+use crate::app_support::app_titlebar_icon;
+use crate::window_options;
+use crate::workspace_window::AgentRow;
+use crate::workspace_window::PERMISSION_SELECTOR_ID;
+use crate::workspace_window::PanelOpenPermissionSelector;
+use crate::workspace_window::PanelPermissionAllow;
+use crate::workspace_window::PanelPermissionDeny;
+use crate::workspace_window::SidebarMenuTargets;
+use crate::workspace_window::WorkspaceViewMode;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::sidebar_background_context_menu;
+use crate::workspace_window::sidebar_is_compact;
+use crate::workspace_window::with_agents_menu_actions;
 
 mod content;
 mod overview;

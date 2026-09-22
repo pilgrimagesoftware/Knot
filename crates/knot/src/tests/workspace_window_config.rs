@@ -4,7 +4,9 @@
 //! `AgentStore::remove` only mutates memory, so a removal that is not
 //! persisted is undone by the next launch.
 
-use super::*;
+use crate::app_state::build_agent_store;
+use crate::tests::workspace;
+use crate::workspace_window::WorkspaceWindow;
 
 fn config_option(id: &str, category: &str) -> knot_acp::ConfigOption {
     knot_acp::ConfigOption { id:            id.to_string(),

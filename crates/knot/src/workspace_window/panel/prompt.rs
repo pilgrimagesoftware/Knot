@@ -6,7 +6,28 @@
 //! the window side - which entity holds the text, when it may be sent, and
 //! what happens to a delivery result coming back off the runtime.
 
-use super::super::*;
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::ClipboardEntry;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::ImageFormat;
+use gpui_kit::PathPromptOptions;
+use gpui_kit::Window;
+use gpui_kit::component::WindowExt;
+use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::input::TextareaState;
+use uuid::Uuid;
+
+use crate::panel_session;
+use crate::workspace_window::PANEL_INPUT_ROWS_COLLAPSED;
+use crate::workspace_window::PANEL_INPUT_ROWS_EXPANDED;
+use crate::workspace_window::PromptOrigin;
+use crate::workspace_window::QueuedPanelPrompt;
+use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::prompt_queue;
 
 impl WorkspaceWindow {
     /// Opens the native file/image picker and attaches the chosen paths to

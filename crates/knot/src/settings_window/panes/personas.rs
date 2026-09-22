@@ -1,5 +1,22 @@
+use std::collections::BTreeMap;
+
+use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::base::Disableable;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::WindowExt;
+use gpui_kit::div;
+use gpui_kit::px;
+use uuid::Uuid;
+
 use super::super::persona_editor::open_persona_editor;
-use super::super::*;
+use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
     /// Truncates `instructions` to `max_chars`, appending an ellipsis when
