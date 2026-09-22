@@ -1,6 +1,6 @@
 //! The only place durable/runtime `Agent` fields cross: `from_saved` builds
 //! a fresh `Agent` with runtime fields at their documented defaults,
-//! `to_saved` reads only the eight durable fields back out.
+//! `to_saved` reads only the durable fields back out.
 
 use std::collections::BTreeMap;
 
@@ -15,64 +15,62 @@ use crate::agent::{Agent, AgentState, view_mode_for};
 /// verbatim, since a legacy/edited record could carry a mismatched value
 /// (see `view_mode_for`).
 pub fn from_saved(saved: &SavedAgent) -> Agent {
-    Agent {
-        id: saved.id,
-        name: saved.name.clone(),
-        avatar: saved.avatar.clone(),
-        folder: saved.folder.clone(),
-        agent_type: saved.agent_type.clone(),
-        created_by: saved.created_by,
-        is_companion: saved.is_companion,
-        shell_command: saved.shell_command.clone(),
-        persona_id: saved.persona_id,
-        view_mode: view_mode_for(&saved.agent_type),
-        activation_mode: saved.activation_mode,
+    Agent { id:              saved.id,
+            name:            saved.name.clone(),
+            avatar:          saved.avatar.clone(),
+            folder:          saved.folder.clone(),
+            agent_type:      saved.agent_type.clone(),
+            created_by:      saved.created_by,
+            is_companion:    saved.is_companion,
+            shell_command:   saved.shell_command.clone(),
+            persona_id:      saved.persona_id,
+            view_mode:       view_mode_for(&saved.agent_type),
+            activation_mode: saved.activation_mode,
+            session_config:  saved.session_config.clone(),
 
-        activated: false,
-        state: AgentState::Idle,
-        status_text: String::new(),
-        is_registered: false,
-        is_pending_start: false,
-        terminal_title: String::new(),
-        restart_token: Uuid::new_v4(),
-        session_id: None,
-        resume_session_id: None,
-        fork_session: false,
-        acp_session_id: None,
-        metadata: BTreeMap::new(),
-        markdown_file: None,
-        markdown_maximized: false,
-        markdown_history: Vec::new(),
-        mermaid_source: None,
-        mermaid_title: None,
-    }
+            activated:          false,
+            state:              AgentState::Idle,
+            status_text:        String::new(),
+            is_registered:      false,
+            is_pending_start:   false,
+            terminal_title:     String::new(),
+            restart_token:      Uuid::new_v4(),
+            session_id:         None,
+            resume_session_id:  None,
+            fork_session:       false,
+            acp_session_id:     None,
+            metadata:           BTreeMap::new(),
+            markdown_file:      None,
+            markdown_maximized: false,
+            markdown_history:   Vec::new(),
+            mermaid_source:     None,
+            mermaid_title:      None, }
 }
 
 /// Extract the durable subset of a runtime agent for persistence.
+/// `session_config` is ungated - the session setup is a preference that
+/// outlives any one conversation.
 /// `remember_conversation` gates session id and ACP session id: only
 /// carried into the saved record when true (`restore-conversation-on-launch`
 /// enabled), otherwise always persisted as `None` regardless of the agent's
 /// runtime values.
 pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
-    SavedAgent {
-        id: agent.id,
-        name: agent.name.clone(),
-        avatar: agent.avatar.clone(),
-        folder: agent.folder.clone(),
-        agent_type: agent.agent_type.clone(),
-        created_by: agent.created_by,
-        is_companion: agent.is_companion,
-        shell_command: agent.shell_command.clone(),
-        persona_id: agent.persona_id,
-        view_mode: agent.view_mode,
-        activation_mode: agent.activation_mode,
-        session_id: remember_conversation
-            .then(|| agent.session_id.clone())
-            .flatten(),
-        acp_session_id: remember_conversation
-            .then(|| agent.acp_session_id.clone())
-            .flatten(),
-    }
+    SavedAgent { id:              agent.id,
+                 name:            agent.name.clone(),
+                 avatar:          agent.avatar.clone(),
+                 folder:          agent.folder.clone(),
+                 agent_type:      agent.agent_type.clone(),
+                 created_by:      agent.created_by,
+                 is_companion:    agent.is_companion,
+                 shell_command:   agent.shell_command.clone(),
+                 persona_id:      agent.persona_id,
+                 view_mode:       agent.view_mode,
+                 activation_mode: agent.activation_mode,
+                 session_config:  agent.session_config.clone(),
+                 session_id:      remember_conversation.then(|| agent.session_id.clone())
+                                                       .flatten(),
+                 acp_session_id:  remember_conversation.then(|| agent.acp_session_id.clone())
+                                                       .flatten(), }
 }
 
 #[cfg(test)]
@@ -124,16 +122,31 @@ mod tests {
     }
 
     #[test]
+    fn session_config_survives_the_round_trip_whether_or_not_remembering() {
+        let mut saved = saved_agent();
+        saved.session_config
+             .insert("model".to_string(), "opus".to_string());
+        saved.session_config
+             .insert("permission_mode".to_string(), "acceptEdits".to_string());
+
+        let agent = from_saved(&saved);
+        assert_eq!(agent.session_config, saved.session_config);
+
+        // Ungated, unlike `session_id`: the setup is a preference, not
+        // conversation content.
+        assert_eq!(to_saved(&agent, false).session_config, saved.session_config);
+        assert_eq!(to_saved(&agent, true).session_config, saved.session_config);
+    }
+
+    #[test]
     fn view_mode_round_trips_through_save_and_load() {
         let saved = saved_agent();
 
         let agent = from_saved(&saved);
 
         assert_eq!(agent.view_mode, knot_core::ViewMode::Panel);
-        assert_eq!(
-            to_saved(&agent, false).view_mode,
-            knot_core::ViewMode::Panel
-        );
+        assert_eq!(to_saved(&agent, false).view_mode,
+                   knot_core::ViewMode::Panel);
     }
 
     #[test]
@@ -170,10 +183,8 @@ mod tests {
         assert_eq!(agent.acp_session_id, None);
 
         agent.acp_session_id = Some("acp-2".to_string());
-        assert_eq!(
-            to_saved(&agent, true).acp_session_id,
-            Some("acp-2".to_string())
-        );
+        assert_eq!(to_saved(&agent, true).acp_session_id,
+                   Some("acp-2".to_string()));
         assert_eq!(to_saved(&agent, false).acp_session_id, None);
     }
 
@@ -193,10 +204,8 @@ mod tests {
 
     #[test]
     fn legacy_record_without_companion_fields_loads_with_defaults() {
-        let json = format!(
-            r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
-            Uuid::new_v4()
-        );
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           Uuid::new_v4());
         let saved: SavedAgent = serde_json::from_str(&json).unwrap();
 
         let agent = from_saved(&saved);

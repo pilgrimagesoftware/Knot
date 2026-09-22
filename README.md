@@ -60,14 +60,15 @@ The port is in progress. The Rust UI and backend are usable for the implemented 
 git clone https://github.com/pilgrimagesoftware/Knot.git
 cd knot-rust
 
-# Run formatting, linting, tests, and the workspace build.
-make rust
+# Run formatting, the file-size gate, linting, tests, and the workspace build.
+make
 
 # Run individual checks.
-make rust-fmt
-make rust-lint
-make rust-test
-make rust-build
+make fmt
+make size-check
+make lint
+make test
+make build
 ```
 
 To run the Rust desktop application directly:
@@ -88,4 +89,4 @@ See [AGENTS.md](AGENTS.md) for development conventions and crate dependencies.
 
 AGPL-3.0, see [LICENSE](LICENSE) for details.
 
-Copyright &copy; 2026 Kochava Studios
+Copyright &copy; 2026 Pilgrimage Software

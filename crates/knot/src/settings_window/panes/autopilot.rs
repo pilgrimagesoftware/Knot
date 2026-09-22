@@ -1,0 +1,200 @@
+use gpui_kit::Context;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Styled;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::input::Input;
+use gpui_kit::component::menu::DropdownMenu;
+use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::component::switch::Switch;
+use knot_core::AiProvider;
+use knot_core::AutopilotAction;
+
+use crate::settings_window::SettingsWindow;
+
+impl SettingsWindow {
+    pub(crate) fn ai_provider_label(provider: AiProvider) -> &'static str {
+        match provider {
+            AiProvider::OpenAi => "OpenAI",
+            AiProvider::Anthropic => "Anthropic",
+            AiProvider::Google => "Google",
+        }
+    }
+
+    /// Hardcoded model for each AI provider (cheapest/fastest options),
+    /// matching the Swift reference's `AppSettings.aiModel(for:)`.
+    pub(crate) fn ai_model_for(provider: AiProvider) -> &'static str {
+        match provider {
+            AiProvider::OpenAi => "gpt-5-mini",
+            AiProvider::Anthropic => "claude-haiku-4-5",
+            AiProvider::Google => "gemini-flash-lite-latest",
+        }
+    }
+
+    pub(crate) fn autopilot_action_label(action: AutopilotAction) -> &'static str {
+        match action {
+            AutopilotAction::Mark => "Mark conversation",
+            AutopilotAction::Ask => "Ask me",
+            AutopilotAction::Continue => "Auto-continue",
+            AutopilotAction::Custom => "Custom",
+        }
+    }
+
+    pub(crate) fn autopilot_action_description(action: AutopilotAction) -> &'static str {
+        match action {
+            AutopilotAction::Mark => {
+                "Set the agent status to indicate input is needed and send a notification."
+            }
+            AutopilotAction::Ask => {
+                "Show a dialog letting you switch to the agent, dismiss, or auto-continue."
+            }
+            AutopilotAction::Continue => "Automatically send \"yes, continue\" to the agent.",
+            AutopilotAction::Custom => {
+                "Use your own prompt to decide what to reply. The LLM response is injected \
+                 directly into the agent."
+            }
+        }
+    }
+
+    fn select_ai_provider(&mut self, provider: AiProvider, cx: &mut Context<Self>) {
+        self.settings.ai_provider = provider;
+        self.persist();
+        cx.notify();
+    }
+
+    fn select_autopilot_action(&mut self, action: AutopilotAction, cx: &mut Context<Self>) {
+        self.settings.autopilot_action = action;
+        self.persist();
+        cx.notify();
+    }
+
+    pub(crate) fn save_ai_api_key(&mut self, cx: &mut Context<Self>) {
+        self.settings.ai_api_key = self.ai_api_key_input.read(cx).value().to_string();
+        self.persist();
+    }
+
+    pub(crate) fn save_autopilot_custom_prompt(&mut self, cx: &mut Context<Self>) {
+        self.settings.autopilot_custom_prompt = self.autopilot_custom_prompt_input
+                                                    .read(cx)
+                                                    .value()
+                                                    .to_string();
+        self.persist();
+    }
+
+    pub(crate) fn render_autopilot(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let settings_window = cx.entity();
+        let autopilot_enabled = self.settings.autopilot_enabled;
+        let ai_provider = self.settings.ai_provider;
+        let autopilot_action = self.settings.autopilot_action;
+        let provider_label = Self::ai_provider_label(ai_provider);
+        let model_name = Self::ai_model_for(ai_provider);
+        let action_label = Self::autopilot_action_label(autopilot_action);
+        let is_custom_action = autopilot_action == AutopilotAction::Custom;
+
+        v_flex()
+            .gap_3()
+            .child(
+                Self::group("Enable")
+                    .child(Self::row(
+                        "Enable autopilot",
+                        Switch::new("autopilot-enabled")
+                            .checked(autopilot_enabled)
+                            .on_click({
+                                let settings_window = settings_window.clone();
+                                move |checked, _, app| {
+                                    let checked = *checked;
+                                    settings_window.update(app, |view, _| {
+                                        view.settings.autopilot_enabled = checked;
+                                        view.persist();
+                                    })
+                                }
+                            }),
+                    ))
+                    .child(Self::hint(
+                        cx,
+                        "Automatically detect when agents need input and take action — no need \
+                         to babysit your agents. Only available with Claude Code.",
+                    )),
+            )
+            .child(
+                Self::group("AI Provider")
+                    .child(Self::row(
+                        "Provider",
+                        Button::new("autopilot-provider-picker")
+                            .label(provider_label)
+                            .dropdown_caret(true)
+                            .dropdown_menu({
+                                let settings_window = settings_window.clone();
+                                move |menu, _, _| {
+                                    let mut menu = menu;
+                                    // Driven off `AiProvider::ALL`, so a new
+                                    // provider reaches the picker with its
+                                    // variant rather than a second list.
+                                    for value in AiProvider::ALL.iter().copied() {
+                                        let label = Self::ai_provider_label(value);
+                                        menu = menu.item(PopupMenuItem::new(label).on_click({
+                                            let settings_window = settings_window.clone();
+                                            move |_, _, app| {
+                                                settings_window.update(app, |view, cx| {
+                                                    view.select_ai_provider(value, cx);
+                                                })
+                                            }
+                                        }));
+                                    }
+                                    menu
+                                }
+                            }),
+                    ))
+                    .child(Self::row(
+                        "API Key",
+                        Input::new(&self.ai_api_key_input)
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .flex_1(),
+                    ))
+                    .child(Self::text_row(
+                        "Model",
+                        Self::mono_text(cx, model_name).text_color(cx.theme().muted_foreground),
+                    )),
+            )
+            .child(
+                Self::group("Action")
+                    .child(Self::row(
+                        "When input is detected",
+                        Button::new("autopilot-action-picker")
+                            .label(action_label)
+                            .dropdown_caret(true)
+                            .dropdown_menu({
+                                let settings_window = settings_window.clone();
+                                move |menu, _, _| {
+                                    let mut menu = menu;
+                                    for value in AutopilotAction::ALL.iter().copied() {
+                                        let label = Self::autopilot_action_label(value);
+                                        menu = menu.item(PopupMenuItem::new(label).on_click({
+                                            let settings_window = settings_window.clone();
+                                            move |_, _, app| {
+                                                settings_window.update(app, |view, cx| {
+                                                    view.select_autopilot_action(value, cx);
+                                                })
+                                            }
+                                        }));
+                                    }
+                                    menu
+                                }
+                            }),
+                    ))
+                    .children(is_custom_action.then(|| {
+                        Self::row(
+                            "Custom prompt",
+                            Input::new(&self.autopilot_custom_prompt_input).flex_1(),
+                        )
+                        .into_any_element()
+                    }))
+                    .children((!is_custom_action).then(|| {
+                        Self::hint(cx, Self::autopilot_action_description(autopilot_action))
+                            .into_any_element()
+                    })),
+            )
+    }
+}

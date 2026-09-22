@@ -1,6 +1,6 @@
 [package]
 name = "knot"
-version = "1.11.0"
+version = "1.12.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -8,6 +8,7 @@ rust-version.workspace = true
 default-run = "knot"
 
 [dependencies]
+parking_lot.workspace = true
 knot-acp = { path = "../knot-acp" }
 knot-agent-launch = { path = "../knot-agent-launch" }
 knot-core = { path = "../knot-core" }
@@ -27,16 +28,28 @@ serde_json.workspace = true
 gpui-kit = "0.6"
 unicode-segmentation = "1.13"
 
+# Only for `build.rs`, which stamps the build date into the binary; the
+# `time` pin is the workspace's.
+[build-dependencies]
+time.workspace = true
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-app-kit = { version = "0.3", features = [
+    "NSColor",
+    "NSColorSpace",
     "NSFont",
     "NSFontManager",
     "NSFontPanel",
     "NSApplication",
     "objc2-core-foundation",
 ] }
+# The embedded faces are registered with GPUI's text system, which AppKit
+# cannot see - the font panel resolves families through CoreText. Registering
+# them here too is what lets the panel open on the current font.
+objc2-core-text = { version = "0.3", features = ["CTFontManager", "block2"] }
+objc2-core-foundation = { version = "0.3", features = ["CFArray", "CFData"] }
 
 [dev-dependencies]
 # `test-support` brings in GPUI's headless test platform and the
@@ -44,6 +57,7 @@ objc2-app-kit = { version = "0.3", features = [
 # dialogs) can be covered without a display. Dev-only: the shipped binary
 # still builds against the default features.
 gpui-kit = { version = "0.6", features = ["test-support"] }
+tempfile.workspace = true
 
 # Packaging config for cargo-packager, which assembles Knot.app and the DMG.
 # Paths are relative to this manifest. Mirrors the layout the other
@@ -51,13 +65,13 @@ gpui-kit = { version = "0.6", features = ["test-support"] }
 [package.metadata.packager]
 name = "knot"
 product-name = "Knot"
-identifier = "net.kochava-studios.knot"
+identifier = "com.pilgrimagesoftware.knot"
 description = "AI coding agents, tied together"
 homepage = "https://github.com/pilgrimagesoftware/Knot"
 authors = ["Paul Schifferer <paul@schifferers.net>"]
-publisher = "Kochava Studios"
+publisher = "Pilgrimage Software"
 license_file = "../../LICENSE.md"
-copyright = "Copyright (c) 2026 Kochava Studios"
+copyright = "Copyright (c) 2026 Pilgrimage Software"
 category = "DeveloperTool"
 before-packaging-command = "cargo build --release --package knot"
 icons = ["assets/icon/icon.png", "assets/icon/icon.icns"]

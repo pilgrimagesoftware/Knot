@@ -2,7 +2,7 @@
 //! Swift `CodingKeys` shape must load field-for-field, and re-serializing it
 //! must reproduce the same keys.
 
-use knot_core::{PersonaState, PersonaType, Settings};
+use knot_core::{AiProvider, AppearanceMode, AutopilotAction, PersonaState, PersonaType, Settings};
 use uuid::Uuid;
 
 const FIXTURE: &str = include_str!("fixtures/settings_swift_shape.json");
@@ -15,7 +15,7 @@ fn loads_swift_shaped_document() {
 
     let s = Settings::load_from(&path).unwrap();
 
-    assert_eq!(s.appearance_mode, "dark");
+    assert_eq!(s.appearance_mode, AppearanceMode::Dark);
     assert!(!s.restore_layout_on_launch);
     assert!(!s.restore_conversation_on_launch);
     assert!(s.keep_in_menu_bar);
@@ -27,22 +27,18 @@ fn loads_swift_shaped_document() {
     assert_eq!(s.markdown_font_size, 16);
     assert_eq!(s.mermaid_theme, "forest");
     assert_eq!(s.mermaid_scale, 1.5);
-    assert_eq!(
-        s.agent_commands.get("custom1").map(String::as_str),
-        Some("my-agent")
-    );
-    assert_eq!(
-        s.agent_options.get("claude").map(String::as_str),
-        Some("--verbose")
-    );
+    assert_eq!(s.agent_commands.get("custom1").map(String::as_str),
+               Some("my-agent"));
+    assert_eq!(s.agent_options.get("claude").map(String::as_str),
+               Some("--verbose"));
     assert_eq!(s.terminal_font_name, "Menlo");
     assert_eq!(s.terminal_font_size, 12.5);
 
     // Fixture predates the autopilot scalars; decode-tolerant defaults apply.
     assert!(!s.autopilot_enabled);
-    assert_eq!(s.ai_provider, "openai");
+    assert_eq!(s.ai_provider, AiProvider::OpenAi);
     assert_eq!(s.ai_api_key, "");
-    assert_eq!(s.autopilot_action, "mark");
+    assert_eq!(s.autopilot_action, AutopilotAction::Mark);
     assert_eq!(s.autopilot_custom_prompt, "");
 
     // Fixture predates the voice scalars; decode-tolerant defaults apply.
@@ -57,10 +53,8 @@ fn loads_swift_shaped_document() {
     assert_eq!(agent.agent_type, "claude");
     assert!(agent.is_companion);
     assert_eq!(agent.shell_command.as_deref(), Some("zsh -l"));
-    assert_eq!(
-        agent.persona_id,
-        Some(Uuid::parse_str("a1000001-0000-0000-0000-000000000001").unwrap())
-    );
+    assert_eq!(agent.persona_id,
+               Some(Uuid::parse_str("a1000001-0000-0000-0000-000000000001").unwrap()));
 
     assert_eq!(s.saved_workspaces.len(), 1);
     let ws = &s.saved_workspaces[0];
@@ -92,45 +86,126 @@ fn reserializes_with_swift_keys() {
     let json = serde_json::to_value(&s).unwrap();
     let obj = json.as_object().unwrap();
 
-    for key in [
-        "appearanceMode",
-        "restoreLayoutOnLaunch",
-        "mcpServerPort",
-        "sourceBaseFolderInitialized",
-        "terminalFontName",
-        "autopilotEnabled",
-        "aiProvider",
-        "aiApiKey",
-        "autopilotAction",
-        "autopilotCustomPrompt",
-        "voiceEnabled",
-        "voiceEngine",
-        "voicePushToTalkKey",
-        "voiceAutoInsert",
-        "savedAgents",
-        "savedWorkspaces",
-        "benchAgents",
-        "recentRepos",
-    ] {
+    for key in ["appearanceMode",
+                "restoreLayoutOnLaunch",
+                "mcpServerPort",
+                "sourceBaseFolderInitialized",
+                "terminalFontName",
+                "autopilotEnabled",
+                "aiProvider",
+                "aiApiKey",
+                "autopilotAction",
+                "autopilotCustomPrompt",
+                "voiceEnabled",
+                "voiceEngine",
+                "voicePushToTalkKey",
+                "voiceAutoInsert",
+                "savedAgents",
+                "savedWorkspaces",
+                "benchAgents",
+                "recentRepos"]
+    {
         assert!(obj.contains_key(key), "missing key {key}");
     }
-    assert!(
-        !obj.contains_key("storePath"),
-        "store_path must not serialize"
-    );
+    assert!(!obj.contains_key("storePath"),
+            "store_path must not serialize");
 
     let agent = obj["savedAgents"][0].as_object().unwrap();
-    for key in [
-        "agentType",
-        "createdBy",
-        "isCompanion",
-        "shellCommand",
-        "personaId",
-    ] {
+    for key in ["agentType",
+                "createdBy",
+                "isCompanion",
+                "shellCommand",
+                "personaId"]
+    {
         assert!(agent.contains_key(key), "saved agent missing key {key}");
     }
 
     let persona = obj["personas"][0].as_object().unwrap();
     assert!(persona.contains_key("type"));
     assert!(persona.contains_key("state"));
+}
+
+/// The font-role migration is only correct if persisting records that it ran:
+/// a second load that exchanged the values again would invert a user's fonts
+/// on every launch.
+#[test]
+fn a_migrated_document_is_recorded_as_migrated() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path,
+                   r#"{"uiFontName":"Helvetica Neue","uiFontSize":13,
+                       "titleFontName":"Palatino","titleFontSize":18}"#).unwrap();
+
+    let migrated = Settings::load_from(&path).unwrap();
+    assert_eq!(migrated.ui_font_name, "Palatino");
+    assert_eq!(migrated.title_font_name, "Helvetica Neue");
+    migrated.persist().unwrap();
+
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(written["settingsVersion"], serde_json::json!(1));
+
+    let reloaded = Settings::load_from(&path).unwrap();
+    assert_eq!(reloaded.ui_font_name, migrated.ui_font_name);
+    assert_eq!(reloaded.ui_font_size, migrated.ui_font_size);
+    assert_eq!(reloaded.title_font_name, migrated.title_font_name);
+    assert_eq!(reloaded.title_font_size, migrated.title_font_size);
+}
+
+/// The divider's width is only durable if the write survives the round trip:
+/// the drag handler sets the field and persists, and the next window to open
+/// reads the document back.
+#[test]
+fn a_written_sidebar_width_survives_a_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+
+    let mut settings = Settings::with_store_path(&path);
+    settings.sidebar_width = 180.0;
+    settings.persist().unwrap();
+
+    let reloaded = Settings::load_from(&path).unwrap();
+    assert_eq!(reloaded.sidebar_width, 180.0);
+}
+
+/// The whole compatibility claim of #224 in one test: an existing settings
+/// file keeps its meaning, and a rewritten one keeps its shape. If these
+/// strings ever change, every user's stored appearance and autopilot choice
+/// silently resets.
+#[test]
+fn the_vocabulary_wire_format_is_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path,
+                   r#"{"appearanceMode":"dark","aiProvider":"google","autopilotAction":"continue"}"#).unwrap();
+
+    let loaded = Settings::load_from(&path).unwrap();
+    assert_eq!(loaded.appearance_mode, AppearanceMode::Dark);
+    assert_eq!(loaded.ai_provider, AiProvider::Google);
+    assert_eq!(loaded.autopilot_action, AutopilotAction::Continue);
+
+    loaded.persist().unwrap();
+    let written: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(written["appearanceMode"], "dark");
+    assert_eq!(written["aiProvider"], "google");
+    assert_eq!(written["autopilotAction"], "continue");
+}
+
+/// A corrupt value degrades to the default rather than failing the document -
+/// which holds every agent, workspace and persona.
+#[test]
+fn a_corrupt_vocabulary_value_does_not_take_the_document_down() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    // `mcpServerPort` rather than a font field: an unmarked document also goes
+    // through the font-role migration, which moves font values around and
+    // would make this test about the wrong thing.
+    std::fs::write(&path, r#"{"appearanceMode":"aut0","mcpServerPort":9111}"#).unwrap();
+
+    let loaded = Settings::load_from(&path).unwrap();
+
+    assert_eq!(loaded.appearance_mode, AppearanceMode::default());
+    assert_eq!(loaded.mcp_server_port, 9111,
+               "the rest of the document survived");
 }

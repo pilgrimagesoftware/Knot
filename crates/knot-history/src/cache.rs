@@ -2,7 +2,8 @@
 //! refresh / invalidate and delete-then-backfill.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+
+use parking_lot::Mutex;
 
 use crate::provider::{SessionSummary, provider};
 
@@ -26,35 +27,32 @@ impl HistoryCache {
     /// touches disk.
     pub fn get(&self, agent_type: &str, folder: &str) -> Vec<SessionSummary> {
         let key = Self::key(agent_type, folder);
-        self.entries
-            .lock()
-            .unwrap()
-            .get(&key)
-            .cloned()
-            .unwrap_or_default()
+        self.entries.lock().get(&key).cloned().unwrap_or_default()
     }
 
     /// Reload from disk and replace the entry. No-op for an unsupported
     /// agent type.
     pub fn refresh(&self, agent_type: &str, folder: &str) {
-        let Some(p) = provider(agent_type) else {
+        let Some(p) = provider(agent_type)
+        else {
             return;
         };
         let sessions = p.load_sessions(folder);
         let key = Self::key(agent_type, folder);
-        self.entries.lock().unwrap().insert(key, sessions);
+        self.entries.lock().insert(key, sessions);
     }
 
     /// Drop the entry without reloading.
     pub fn invalidate(&self, agent_type: &str, folder: &str) {
         let key = Self::key(agent_type, folder);
-        self.entries.lock().unwrap().remove(&key);
+        self.entries.lock().remove(&key);
     }
 
     /// Delete a session via its provider, then refresh the entry so the
     /// list reflects the removal. No-op for an unsupported agent type.
     pub fn delete_session(&self, agent_type: &str, id: &str, folder: &str) {
-        let Some(p) = provider(agent_type) else {
+        let Some(p) = provider(agent_type)
+        else {
             return;
         };
         p.delete_session(id, folder);
@@ -77,19 +75,13 @@ mod tests {
         let cache = HistoryCache::new();
         // Seed an entry directly, bypassing disk I/O, to test invalidate in
         // isolation.
-        cache
-            .entries
-            .lock()
-            .unwrap()
-            .insert(("claude".to_owned(), "/proj".to_owned()), vec![]);
+        cache.entries
+             .lock()
+             .insert(("claude".to_owned(), "/proj".to_owned()), vec![]);
         cache.invalidate("claude", "/proj");
-        assert!(
-            !cache
-                .entries
-                .lock()
-                .unwrap()
-                .contains_key(&("claude".to_owned(), "/proj".to_owned()))
-        );
+        assert!(!cache.entries
+                      .lock()
+                      .contains_key(&("claude".to_owned(), "/proj".to_owned())));
     }
 
     #[test]

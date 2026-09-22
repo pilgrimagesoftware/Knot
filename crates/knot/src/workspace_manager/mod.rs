@@ -1,15 +1,65 @@
-use super::*;
+use std::sync::Arc;
+
+use gpui_kit::AppContext;
+use gpui_kit::ClickEvent;
+use gpui_kit::Context;
+use gpui_kit::Entity;
+use gpui_kit::InteractiveElement;
+use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
+use gpui_kit::Styled;
+use gpui_kit::Subscription;
+use gpui_kit::Window;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::Disableable;
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Icon;
+use gpui_kit::component::TitleBar;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::input::Input;
+use gpui_kit::component::input::InputState;
+use gpui_kit::div;
+use gpui_kit::px;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
+use crate::app_support::app_titlebar_icon;
+use crate::command_center::CommandCenterWindow;
+use crate::consts;
+use crate::settings_window::SettingsWindow;
+use crate::workspace_window::WorkspaceWindow;
+
+/// Whether a typed workspace name counts as nothing at all.
+///
+/// The confirm button's disabled state and the Return key both read this,
+/// so a name the button refuses is a name Return refuses, by construction
+/// rather than by two guards kept in step by hand. Judged on the trimmed
+/// form, which is also the form `save_name` stores.
+pub(crate) fn workspace_name_is_blank(name: &str) -> bool {
+    name.trim().is_empty()
+}
+
 pub(crate) struct WorkspaceManager {
-    pub(crate) store: Arc<Mutex<knot_agents::AgentStore>>,
-    pub(crate) messages: Arc<Mutex<knot_messaging::MessageStore>>,
-    pub(crate) settings: knot_core::Settings,
-    pub(crate) name_input: Entity<InputState>,
-    pub(crate) editing_id: Option<Uuid>,
-    pub(crate) workspace_dialog_id: Option<Uuid>,
+    pub(crate) store:                 Arc<Mutex<knot_agents::AgentStore>>,
+    pub(crate) messages:              Arc<Mutex<knot_messaging::MessageStore>>,
+    pub(crate) settings:              knot_core::Settings,
+    pub(crate) name_input:            Entity<InputState>,
+    pub(crate) editing_id:            Option<Uuid>,
+    pub(crate) workspace_dialog_id:   Option<Uuid>,
     pub(crate) show_workspace_dialog: bool,
-    pub(crate) delete_workspace_id: Option<Uuid>,
-    pub(crate) error: Option<String>,
-    pub(crate) _mcp_stop: Option<tokio::sync::oneshot::Sender<()>>,
+    pub(crate) delete_workspace_id:   Option<Uuid>,
+    pub(crate) error:                 Option<String>,
+    /// Keeps the confirm button's disabled state honest while the user
+    /// types: without it the button only re-reads the name on the next
+    /// unrelated re-render, so an empty field could stay greyed after the
+    /// first character.
+    pub(crate) _name_subscription:    Subscription,
+    pub(crate) _mcp_stop:             Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 #[derive(Clone)]
@@ -25,10 +75,7 @@ impl Render for WorkspaceDragPreview {
 
 impl WorkspaceManager {
     fn persist(&mut self) {
-        let Ok(store) = self.store.lock() else {
-            self.error = Some("Agent store is unavailable.".to_string());
-            return;
-        };
+        let store = self.store.lock();
         self.settings.saved_agents =
             store.saved_agents(self.settings.restore_conversation_on_launch);
         self.settings.saved_workspaces = store.saved_workspaces();
@@ -37,38 +84,35 @@ impl WorkspaceManager {
         }
     }
 
-    fn save_name(
-        &mut self, name: String, editing_id: Option<Uuid>, window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn save_name(&mut self, name: String, editing_id: Option<Uuid>, window: &mut Window,
+                 cx: &mut Context<Self>) {
         if name.is_empty() {
             self.error = Some("Workspace name cannot be empty.".to_string());
             cx.notify();
             return;
         }
-        let mut store = self.store.lock().unwrap();
+        let mut store = self.store.lock();
         if let Some(id) = editing_id {
             if !store.rename_workspace(id, name) {
                 self.error = Some("Workspace no longer exists.".to_string());
                 cx.notify();
                 return;
             }
-        } else {
+        }
+        else {
             let id = Uuid::new_v4();
-            store.add_workspace(knot_core::Workspace {
-                id,
-                name,
-                color_hex: "#1B4FB2".to_string(),
-                agent_ids: Vec::new(),
-                layout_mode: "single".to_string(),
-                active_agent_ids: Vec::new(),
-                focused_pane_index: 0,
-                split_ratio: 0.5,
-                split_ratio_secondary: None,
-                show_dashboard: None,
-                is_detached: None,
-                window_bounds: None,
-            });
+            store.add_workspace(knot_core::Workspace { id,
+                                                       name,
+                                                       color_hex: consts::COLOR_WORKSPACE_DEFAULT_HEX.to_string(),
+                                                       agent_ids: Vec::new(),
+                                                       layout_mode: "single".to_string(),
+                                                       active_agent_ids: Vec::new(),
+                                                       focused_pane_index: 0,
+                                                       split_ratio: 0.5,
+                                                       split_ratio_secondary: None,
+                                                       show_dashboard: None,
+                                                       is_detached: None,
+                                                       window_bounds: None });
             store.set_current_workspace(id);
         }
         drop(store);
@@ -76,32 +120,28 @@ impl WorkspaceManager {
         self.editing_id = None;
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
+              input.clean(window, input_cx);
+          });
         cx.notify();
     }
 
-    fn open_workspace_dialog(
-        &mut self, editing_id: Option<Uuid>, window: &mut Window, cx: &mut Context<Self>,
-    ) {
-        let name = editing_id
-            .and_then(|id| {
-                self.store.lock().ok().and_then(|store| {
-                    store
-                        .workspaces()
-                        .iter()
-                        .find(|workspace| workspace.id == id)
-                        .map(|workspace| workspace.name.clone())
-                })
-            })
-            .unwrap_or_default();
+    pub(crate) fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>,
+                                        window: &mut Window, cx: &mut Context<Self>) {
+        let name = editing_id.and_then(|id| {
+                                 let store = self.store.lock();
+                                 store.workspaces()
+                                      .iter()
+                                      .find(|workspace| workspace.id == id)
+                                      .map(|workspace| workspace.name.clone())
+                             })
+                             .unwrap_or_default();
         self.workspace_dialog_id = editing_id;
         self.show_workspace_dialog = true;
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
-            input.set_value(name, window, input_cx);
-            input.focus(window, input_cx);
-        });
+              input.set_value(name, window, input_cx);
+              input.focus(window, input_cx);
+          });
         cx.notify();
     }
 
@@ -110,8 +150,8 @@ impl WorkspaceManager {
         self.show_workspace_dialog = false;
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
-            input.clean(window, input_cx);
-        });
+              input.clean(window, input_cx);
+          });
         cx.notify();
     }
 
@@ -127,9 +167,10 @@ impl WorkspaceManager {
     }
 
     fn delete(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        if !self.store.lock().unwrap().remove_workspace(id) {
+        if !self.store.lock().remove_workspace(id) {
             self.error = Some("At least one workspace must remain.".to_string());
-        } else {
+        }
+        else {
             self.persist();
             self.error = None;
         }
@@ -148,55 +189,52 @@ impl WorkspaceManager {
     }
 
     fn confirm_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.delete_workspace_id.take() else {
+        let Some(id) = self.delete_workspace_id.take()
+        else {
             return;
         };
         self.delete(id, cx);
     }
 
     fn move_before(&mut self, id: Uuid, target_id: Uuid, cx: &mut Context<Self>) {
-        if self
-            .store
-            .lock()
-            .unwrap()
-            .move_workspace_before(id, target_id)
-        {
+        if self.store.lock().move_workspace_before(id, target_id) {
             self.persist();
             cx.notify();
         }
     }
 
     fn select(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        self.store.lock().unwrap().set_current_workspace(id);
+        self.store.lock().set_current_workspace(id);
         cx.notify();
     }
 
     fn open(&mut self, id: Uuid, cx: &mut Context<Self>) {
         self.select(id, cx);
-        WorkspaceWindow::open(
-            Arc::clone(&self.store),
-            Arc::clone(&self.messages),
-            self.settings.clone(),
-            id,
-            cx,
-        );
+        WorkspaceWindow::open(Arc::clone(&self.store),
+                              Arc::clone(&self.messages),
+                              self.settings.clone(),
+                              id,
+                              cx);
     }
 }
 
 impl Render for WorkspaceManager {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let workspaces = self.store.lock().unwrap().workspaces().to_vec();
-        let delete_name = self.delete_workspace_id.and_then(|id| {
-            workspaces
-                .iter()
-                .find(|workspace| workspace.id == id)
-                .map(|workspace| workspace.name.clone())
-        });
+        let workspaces = self.store.lock().workspaces().to_vec();
+        let delete_name =
+            self.delete_workspace_id.and_then(|id| {
+                                        workspaces.iter()
+                                                  .find(|workspace| workspace.id == id)
+                                                  .map(|workspace| workspace.name.clone())
+                                    });
+        let name_is_blank = workspace_name_is_blank(&self.name_input.read(cx).value());
         let rows = workspaces.into_iter().map(|workspace| {
-            let id = workspace.id;
-            let agent_count = workspace.agent_ids.len();
-            let selected = self.store.lock().unwrap().current_workspace_id() == Some(id);
-            h_flex()
+                                             let id = workspace.id;
+                                             let agent_count = workspace.agent_ids.len();
+                                             let selected =
+                                                 self.store.lock().current_workspace_id()
+                                                 == Some(id);
+                                             h_flex()
                 .id(format!("workspace-row-{id}"))
                 .on_drop(
                     cx.listener(move |manager, drag: &WorkspaceDrag, _window, cx| {
@@ -280,7 +318,7 @@ impl Render for WorkspaceManager {
                             cx.new(|_| WorkspaceDragPreview)
                         }),
                 )
-        });
+                                         });
 
         v_flex()
             .size_full()
@@ -345,6 +383,37 @@ impl Render for WorkspaceManager {
                             .items_center()
                             .justify_center()
                             .bg(cx.theme().overlay)
+                            // The keys ride on the overlay's own bubble-phase
+                            // `on_key_down` rather than the gpui action route
+                            // design.md holds in reserve, because the focused
+                            // `Input` lets both through: its `Enter` handler
+                            // calls `cx.propagate()` on a single-line field,
+                            // and its `Escape` handler does the same unless
+                            // `clean_on_escape` is set, which this input does
+                            // not set. The listener lives here, not on the
+                            // window, so it exists only in frames where the
+                            // dialog is open.
+                            .on_key_down(cx.listener(
+                                move |manager, event: &gpui_kit::KeyDownEvent, window, cx| {
+                                    match event.keystroke.key.as_str() {
+                                        "enter" => {
+                                            // Inert on a blank name, matching
+                                            // the disabled confirm button
+                                            // rather than raising the error
+                                            // `save_name` would.
+                                            if !name_is_blank {
+                                                manager.confirm_workspace_dialog(window, cx);
+                                            }
+                                            cx.stop_propagation();
+                                        },
+                                        "escape" => {
+                                            manager.cancel_workspace_dialog(window, cx);
+                                            cx.stop_propagation();
+                                        },
+                                        _ => {},
+                                    }
+                                },
+                            ))
                             .child(
                                 v_flex()
                                     .w(px(360.))
@@ -385,6 +454,7 @@ impl Render for WorkspaceManager {
                                                         "Create"
                                                     })
                                                     .primary()
+                                                    .disabled(name_is_blank)
                                                     .on_click(cx.listener(
                                                         |manager, _: &ClickEvent, window, cx| {
                                                             manager.confirm_workspace_dialog(

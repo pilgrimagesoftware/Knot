@@ -3757,7 +3757,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "knot"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "alacritty_terminal",
  "gpui-kit",
@@ -3775,8 +3775,13 @@ dependencies = [
  "knot-terminal",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-core-text",
  "objc2-foundation 0.3.2",
+ "parking_lot",
  "serde_json",
+ "tempfile",
+ "time",
  "tokio",
  "unicode-segmentation",
  "uuid",
@@ -3784,8 +3789,9 @@ dependencies = [
 
 [[package]]
 name = "knot-acp"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
+ "parking_lot",
  "serde",
  "serde_json",
  "tempfile",
@@ -3795,17 +3801,18 @@ dependencies = [
 
 [[package]]
 name = "knot-activity"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "knot-agents",
  "knot-core",
+ "parking_lot",
  "thiserror 2.0.20",
  "tokio",
 ]
 
 [[package]]
 name = "knot-agent-launch"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "knot-acp",
  "knot-core",
@@ -3815,7 +3822,7 @@ dependencies = [
 
 [[package]]
 name = "knot-agents"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "knot-core",
  "serde",
@@ -3826,7 +3833,7 @@ dependencies = [
 
 [[package]]
 name = "knot-core"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "directories",
  "rust-i18n",
@@ -3839,9 +3846,10 @@ dependencies = [
 
 [[package]]
 name = "knot-discovery"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "notify 8.2.0",
+ "parking_lot",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -3849,7 +3857,7 @@ dependencies = [
 
 [[package]]
 name = "knot-git"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "insta",
  "tempfile",
@@ -3858,9 +3866,10 @@ dependencies = [
 
 [[package]]
 name = "knot-history"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "directories",
+ "parking_lot",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3871,11 +3880,12 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "async-trait",
  "axum",
  "knot-agents",
+ "parking_lot",
  "reqwest",
  "serde",
  "serde_json",
@@ -3887,7 +3897,7 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp-tools"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "async-trait",
  "knot-activity",
@@ -3897,6 +3907,7 @@ dependencies = [
  "knot-git",
  "knot-mcp",
  "knot-messaging",
+ "parking_lot",
  "serde",
  "serde_json",
  "tempfile",
@@ -3908,9 +3919,10 @@ dependencies = [
 
 [[package]]
 name = "knot-messaging"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "knot-agents",
+ "parking_lot",
  "serde",
  "thiserror 2.0.20",
  "uuid",
@@ -3918,7 +3930,7 @@ dependencies = [
 
 [[package]]
 name = "knot-terminal"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "alacritty_terminal",
  "knot-acp",
@@ -3926,6 +3938,7 @@ dependencies = [
  "knot-agent-launch",
  "knot-agents",
  "knot-core",
+ "parking_lot",
  "portable-pty",
  "tempfile",
  "thiserror 2.0.20",
@@ -3935,9 +3948,10 @@ dependencies = [
 
 [[package]]
 name = "knot-watch"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "notify 8.2.0",
+ "parking_lot",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -4849,7 +4863,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
  "bitflags 2.13.1",
+ "block2 0.6.2",
  "dispatch2",
+ "libc",
  "objc2 0.6.4",
 ]
 
@@ -4905,6 +4921,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cde0dfb48d25d2b4862161a4d5fcc0e3c24367869ad306b0c9ec0073bfed92d"
 dependencies = [
  "bitflags 2.13.1",
+ "block2 0.6.2",
+ "libc",
  "objc2 0.6.4",
  "objc2-core-foundation",
  "objc2-core-graphics",

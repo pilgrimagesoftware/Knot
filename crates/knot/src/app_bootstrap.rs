@@ -1,9 +1,45 @@
-use super::*;
-pub(crate) fn start_mcp_server(
-    agents: Arc<Mutex<knot_agents::AgentStore>>, settings: knot_core::Settings,
-    notifier: Arc<QueuedNotifier>, messages: Arc<Mutex<knot_messaging::MessageStore>>,
-    awaiting_input: AwaitingInputQueue,
-) -> tokio::sync::oneshot::Sender<()> {
+use std::cell::RefCell;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui_kit::AnyWindowHandle;
+use gpui_kit::App;
+use gpui_kit::AppContext;
+use gpui_kit::KeyBinding;
+use gpui_kit::Menu;
+use gpui_kit::MenuItem;
+use gpui_kit::SystemMenuType;
+use gpui_kit::actions;
+use gpui_kit::component::Root;
+use gpui_kit::component::Theme;
+use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::input::InputState;
+use knot_mcp::ToolCatalog;
+use knot_messaging::QueuedNotifier;
+use parking_lot::Mutex;
+
+use crate::about_window::register_about_action;
+use crate::agent_menu::AgentMenuSnapshot;
+use crate::agent_menu::AgentsMenuState;
+use crate::agent_menu::agents_menu;
+use crate::app_state::build_agent_store;
+use crate::app_state::notification_response_agent_id;
+use crate::app_support;
+use crate::app_support::AwaitingInput;
+use crate::app_support::AwaitingInputQueue;
+use crate::app_support::apply_visual_identity;
+use crate::app_support::observe_system_appearance;
+use crate::quit_guard;
+use crate::settings_window::open_settings_window;
+use crate::window_options::manager_window_options;
+use crate::workspace_manager::WorkspaceManager;
+
+pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
+                               settings: knot_core::Settings, notifier: Arc<QueuedNotifier>,
+                               messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                               awaiting_input: AwaitingInputQueue)
+                               -> tokio::sync::oneshot::Sender<()> {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Runtime::new() {
@@ -14,70 +50,68 @@ pub(crate) fn start_mcp_server(
             }
         };
         runtime.block_on(async move {
-            if !settings.mcp_server_enabled {
-                return;
-            }
+                   if !settings.mcp_server_enabled {
+                       return;
+                   }
 
-            let (discovery, repos_rx) = knot_discovery::Discovery::new();
-            if !settings.source_base_folder.is_empty()
+                   let (discovery, repos_rx) = knot_discovery::Discovery::new();
+                   if !settings.source_base_folder.is_empty()
                 && let Err(err) =
                     discovery.set_source_folder(Some(PathBuf::from(&settings.source_base_folder)))
             {
                 eprintln!("failed to watch source folder: {err}");
             }
 
-            let catalog = Arc::new(
+                   let catalog = Arc::new(
                 knot_mcp_tools::McpToolCatalog::new(agents, repos_rx, notifier)
                     .with_message_store(messages)
                     .with_awaiting_input_queue(awaiting_input)
                     .with_settings(settings.clone()),
             );
-            catalog.set_bench_agents(settings.bench_agents.clone());
+                   catalog.set_bench_agents(settings.bench_agents.clone());
 
-            let agents_snapshot: knot_mcp::AgentsSnapshotFn = {
-                let catalog = catalog.clone();
-                Arc::new(move || catalog.agents_snapshot())
-            };
-            let hook_handler = catalog.clone();
-            let mut server = knot_mcp::McpServer::new(
-                settings.mcp_server_port,
-                catalog as Arc<dyn ToolCatalog>,
-                agents_snapshot,
-            )
-            .with_hook_handler(hook_handler);
-            if let Err(err) = server.start().await {
-                eprintln!("failed to start MCP server: {err}");
-                return;
-            }
+                   let agents_snapshot: knot_mcp::AgentsSnapshotFn = {
+                       let catalog = catalog.clone();
+                       Arc::new(move || catalog.agents_snapshot())
+                   };
+                   let hook_handler = catalog.clone();
+                   let mut server =
+                       knot_mcp::McpServer::new(settings.mcp_server_port,
+                                                catalog as Arc<dyn ToolCatalog>,
+                                                agents_snapshot).with_hook_handler(hook_handler);
+                   if let Err(err) = server.start().await {
+                       eprintln!("failed to start MCP server: {err}");
+                       return;
+                   }
 
-            tokio::select! {
-                _ = stop_rx => {}
-                _ = std::future::pending::<()>() => {}
-            }
-            server.stop();
-            drop(discovery);
-        });
+                   tokio::select! {
+                       _ = stop_rx => {}
+                       _ = std::future::pending::<()>() => {}
+                   }
+                   server.stop();
+                   drop(discovery);
+               });
     });
     stop
 }
 
-actions!(
-    knot_app,
-    [
-        Quit,
-        HideApp,
-        HideOthers,
-        ShowAllWindows,
-        AboutKnot,
-        OpenSettings,
-        PanelPermissionAllow,
-        PanelPermissionDeny,
-        PanelOpenPermissionSelector
-    ]
-);
+actions!(knot_app,
+         [Quit,
+          HideApp,
+          HideOthers,
+          ShowAllWindows,
+          AboutKnot,
+          OpenSettings,
+          PanelPermissionAllow,
+          PanelPermissionDeny,
+          PanelOpenPermissionSelector]);
 
+/// Every user-facing quit path lands here - the application menu's Quit
+/// Knot item and the `cmd-q` binding both dispatch `Quit` - so the guard
+/// only has to be applied once. See `quit_guard` for why the check cannot
+/// live in `on_app_quit` instead.
 pub(crate) fn quit(_: &Quit, cx: &mut App) {
-    cx.quit();
+    quit_guard::request_quit(cx);
 }
 
 /// Quits on Ctrl-C (or `kill`) from the launching terminal.
@@ -95,9 +129,8 @@ pub(crate) fn quit_on_terminal_signals() {
     use tokio::signal::unix::{SignalKind, signal};
 
     std::thread::spawn(|| {
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
+        let runtime = match tokio::runtime::Builder::new_current_thread().enable_all()
+                                                                         .build()
         {
             Ok(runtime) => runtime,
             Err(error) => {
@@ -106,20 +139,19 @@ pub(crate) fn quit_on_terminal_signals() {
             }
         };
         runtime.block_on(async {
-            let (Ok(mut interrupt), Ok(mut terminate)) = (
-                signal(SignalKind::interrupt()),
-                signal(SignalKind::terminate()),
-            ) else {
-                eprintln!("failed to install terminal signal handlers");
-                return;
-            };
-            tokio::select! {
-                _ = interrupt.recv() => {}
-                _ = terminate.recv() => {}
-            }
-            // 128 + SIGINT, the conventional shell exit code.
-            std::process::exit(130);
-        });
+                   let (Ok(mut interrupt), Ok(mut terminate)) =
+                       (signal(SignalKind::interrupt()), signal(SignalKind::terminate()))
+                   else {
+                       eprintln!("failed to install terminal signal handlers");
+                       return;
+                   };
+                   tokio::select! {
+                       _ = interrupt.recv() => {}
+                       _ = terminate.recv() => {}
+                   }
+                   // 128 + SIGINT, the conventional shell exit code.
+                   std::process::exit(130);
+               });
     });
 }
 
@@ -138,38 +170,14 @@ pub(crate) fn show_all_windows(_: &ShowAllWindows, cx: &mut App) {
     cx.activate(true);
 }
 
-pub(crate) fn about_knot(_: &AboutKnot, cx: &mut App) {
-    // Falls back to any open window: `active_window` can be empty (no
-    // window key at the moment the menu fires), and the silent `if let`
-    // this used to be made "About Knot" look like a dead menu item.
-    let window = cx.active_window().or_else(|| cx.windows().first().copied());
-    let Some(window) = window else {
-        eprintln!("About Knot: no open window to show the dialog on");
-        return;
-    };
-    // Deferred, because the menu runs this *inside* the active window's
-    // update: `App::dispatch_action` wraps the dispatch in
-    // `active_window.update(...)`, which takes the window out of
-    // `cx.windows` for the duration, and gpui reports a re-entrant
-    // `window.update` with the same "window not found" it uses for a
-    // closed window. `cx.defer` runs at the end of the effect cycle, once
-    // the window has been returned to the app.
-    cx.defer(move |cx| {
-        let result = window.update(cx, |_, window, cx| {
-            window.open_alert_dialog(cx, |alert, _, _| {
-                alert
-                    .title("About Knot")
-                    .description("Knot is a workspace for coordinating coding agents.")
-                    .show_cancel(false)
-            });
-        });
-        if let Err(error) = result {
-            eprintln!("About Knot: window went away before the dialog opened: {error}");
-        }
-    });
-}
-
-pub(crate) fn set_app_menus(cx: &mut App) {
+/// Installs the menu bar.
+///
+/// Called again whenever `snapshot` changes, because a `Menu` is a static
+/// snapshot: the Agents menu's Move to Workspace and Markdown Files
+/// submenus cannot re-read the store on their own (`app-menu`). Everything
+/// else in the bar is rebuilt identically, which is cheap and keeps the
+/// whole bar described in one place.
+pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
     cx.set_menus([
         Menu::new("Knot").items([
             MenuItem::action("About Knot", AboutKnot),
@@ -199,6 +207,7 @@ pub(crate) fn set_app_menus(cx: &mut App) {
         ]),
         Menu::new("View")
             .items([MenuItem::action("Enter Full Screen", gpui_kit::NoAction).disabled(true)]),
+        agents_menu(snapshot),
         Menu::new("Window").items([
             MenuItem::action("Minimize", gpui_kit::NoAction).disabled(true),
             MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
@@ -220,99 +229,124 @@ pub(crate) fn run() {
     let notifier = Arc::new(QueuedNotifier::new());
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
-    let mcp_stop = start_mcp_server(
-        Arc::clone(&store),
-        settings.clone(),
-        Arc::clone(&notifier),
-        Arc::clone(&messages),
-        Arc::clone(&awaiting_input),
-    );
+    let mcp_stop = start_mcp_server(Arc::clone(&store),
+                                    settings.clone(),
+                                    Arc::clone(&notifier),
+                                    Arc::clone(&messages),
+                                    Arc::clone(&awaiting_input));
 
     gpui_kit::application()
-        // `Assets` only embeds gpui-component's own curated icon subset; our
-        // settings-window icon buttons (folder-open/pencil/trash/x/plus/copy)
-        // aren't in it, so `Icon::path(...)` silently resolved to nothing and
-        // rendered invisible. `AllAssets` embeds the complete Lucide catalog.
-        .with_assets(gpui_kit::assets::AllAssets)
-        .run(move |cx| {
-            // Before `set_app_menus`: AppKit labels the
-            // application menu from the process name.
-            app_support::set_process_name(&knot_core::l10n::t("app.name"));
-            gpui_kit::init(cx);
-            Theme::change(cx.window_appearance(), None, cx);
-            apply_visual_identity(&settings, cx);
+                           // `Assets` only embeds gpui-component's own curated icon subset; our
+                           // settings-window icon buttons (folder-open/pencil/trash/x/plus/copy)
+                           // aren't in it, so `Icon::path(...)` silently resolved to nothing and
+                           // rendered invisible. `AllAssets` embeds the complete Lucide catalog.
+                           .with_assets(gpui_kit::assets::AllAssets)
+                           .run(move |cx| {
+                               // Before `set_app_menus`: AppKit labels the
+                               // application menu from the process name.
+                               app_support::set_process_name(&knot_core::l10n::t("app.name"));
+                               gpui_kit::init(cx);
+                               Theme::change(cx.window_appearance(), None, cx);
+                               apply_visual_identity(&settings, cx);
 
-            cx.on_action(quit);
-            cx.on_action(about_knot);
-            cx.on_action(hide_app);
-            cx.on_action(hide_others);
-            cx.on_action(show_all_windows);
-            // The standard macOS application-menu
-            // shortcuts. A `MenuItem::action` only shows a
-            // shortcut next to its label if the action has
-            // a binding, so without these the menu read as
-            // if Knot had none.
-            cx.bind_keys([
-                KeyBinding::new("cmd-q", Quit, None),
-                KeyBinding::new("cmd-,", OpenSettings, None),
-                KeyBinding::new("cmd-h", HideApp, None),
-                KeyBinding::new("cmd-alt-h", HideOthers, None),
-            ]);
-            cx.bind_keys([
-                KeyBinding::new("cmd-shift-a", PanelPermissionAllow, None),
-                KeyBinding::new("cmd-shift-d", PanelPermissionDeny, None),
-                KeyBinding::new("cmd-shift-p", PanelOpenPermissionSelector, None),
-            ]);
-            let settings_window: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
-            {
-                let settings_window = Rc::clone(&settings_window);
-                let settings = settings.clone();
-                let store = Arc::clone(&store);
-                cx.on_action(move |_: &OpenSettings, cx| {
-                    open_settings_window(
-                        &settings_window,
-                        settings.clone(),
-                        Arc::clone(&store),
-                        cx,
-                    );
-                });
-            }
-            set_app_menus(cx);
+                               // Before `on_action(quit)`: the guard reads
+                               // the store through this global, and a quit
+                               // arriving without it would be waved
+                               // through unguarded.
+                               cx.set_global(quit_guard::QuitGuard::new(Arc::clone(&store)));
+                               cx.on_action(quit);
+                               // Holds its own window handle; see
+                               // `about_window::register_about_action`.
+                               register_about_action(settings.title_font_name.clone().into(), cx);
+                               cx.on_action(hide_app);
+                               cx.on_action(hide_others);
+                               cx.on_action(show_all_windows);
+                               // The standard macOS application-menu
+                               // shortcuts. A `MenuItem::action` only shows a
+                               // shortcut next to its label if the action has
+                               // a binding, so without these the menu read as
+                               // if Knot had none.
+                               cx.bind_keys([KeyBinding::new("cmd-q", Quit, None),
+                                             KeyBinding::new("cmd-,", OpenSettings, None),
+                                             KeyBinding::new("cmd-h", HideApp, None),
+                                             KeyBinding::new("cmd-alt-h", HideOthers, None)]);
+                               cx.bind_keys([KeyBinding::new("cmd-shift-a",
+                                                             PanelPermissionAllow,
+                                                             None),
+                                             KeyBinding::new("cmd-shift-d",
+                                                             PanelPermissionDeny,
+                                                             None),
+                                             KeyBinding::new("cmd-shift-p",
+                                                             PanelOpenPermissionSelector,
+                                                             None)]);
+                               let settings_window: Rc<RefCell<Option<AnyWindowHandle>>> =
+                                   Rc::new(RefCell::new(None));
+                               {
+                                   let settings_window = Rc::clone(&settings_window);
+                                   let settings = settings.clone();
+                                   let store = Arc::clone(&store);
+                                   cx.on_action(move |_: &OpenSettings, cx| {
+                                         open_settings_window(&settings_window,
+                                                              settings.clone(),
+                                                              Arc::clone(&store),
+                                                              cx);
+                                     });
+                               }
+                               // The Agents menu starts with nothing
+                               // selected, and so disabled; a workspace
+                               // window claims it once one is.
+                               cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
+                               cx.set_global(AgentsMenuState::default());
+                               set_app_menus(&AgentMenuSnapshot::default(), cx);
 
-            cx.on_system_notification_response(|response, cx| {
-                if notification_response_agent_id(&response).is_some() {
-                    cx.activate(true);
-                }
-            });
+                               cx.on_system_notification_response(|response, cx| {
+                                     if notification_response_agent_id(&response).is_some() {
+                                         cx.activate(true);
+                                     }
+                                 });
 
-            let options = manager_window_options(cx);
-            cx.open_window(options, |window, cx| {
+                               let options = manager_window_options(cx);
+                               cx.open_window(options, |window, cx| {
+// Every window tracks the OS appearance, so a light/dark flip
+// re-resolves the system palette and repaints.
+observe_system_appearance(window);
                 // macOS leaves untitled windows out of
                 // the Window menu, which is why only
                 // open workspaces were listed there.
                 window.set_window_title(&knot_core::l10n::t("workspace.manager"));
                 let name_input =
                     cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
-                let view = cx.new(|_| WorkspaceManager {
-                    store: Arc::clone(&store),
-                    messages: Arc::clone(&messages),
-                    settings: settings.clone(),
-                    name_input,
-                    editing_id: None,
-                    workspace_dialog_id: None,
-                    show_workspace_dialog: false,
-                    delete_workspace_id: None,
-                    error: None,
-                    _mcp_stop: Some(mcp_stop),
+                let view = cx.new(|cx| {
+                    let name_subscription = cx.subscribe(
+                        &name_input,
+                        |_: &mut WorkspaceManager, _, event, cx| {
+                            if matches!(event, InputEvent::Change) {
+                                cx.notify();
+                            }
+                        },
+                    );
+                    WorkspaceManager {
+                        store: Arc::clone(&store),
+                        messages: Arc::clone(&messages),
+                        settings: settings.clone(),
+                        name_input,
+                        editing_id: None,
+                        workspace_dialog_id: None,
+                        show_workspace_dialog: false,
+                        delete_workspace_id: None,
+                        error: None,
+                        _name_subscription: name_subscription,
+                        _mcp_stop: Some(mcp_stop),
+                    }
                 });
-                cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
+                cx.new(|cx| Root::new(view, window, cx))
             })
             .expect("failed to open workspace manager");
-            // macOS launches a non-bundled binary without
-            // making it frontmost, so without this the
-            // window opens behind whatever was already on
-            // screen. `activate` is the app-level
-            // equivalent of ordering the window front.
-            cx.activate(true);
-        });
+                               // macOS launches a non-bundled binary without
+                               // making it frontmost, so without this the
+                               // window opens behind whatever was already on
+                               // screen. `activate` is the app-level
+                               // equivalent of ordering the window front.
+                               cx.activate(true);
+                           });
 }

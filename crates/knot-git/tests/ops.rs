@@ -28,10 +28,8 @@ fn stage_then_commit_moves_head() {
     repo.stage(&["f.txt"]).unwrap();
     let staged = repo.status().unwrap();
     assert_eq!(staged.staged().count(), 1);
-    assert_eq!(
-        staged.staged().next().unwrap().staged,
-        Some(ChangeType::Added)
-    );
+    assert_eq!(staged.staged().next().unwrap().staged,
+               Some(ChangeType::Added));
 
     repo.commit("add f").unwrap();
     let after = Runner::new(path).run(&["rev-parse", "HEAD"]).unwrap();
@@ -83,9 +81,8 @@ fn commit_failure_propagates() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
     init_repo(path);
-    Runner::new(path)
-        .run(&["commit", "-qm", "init", "--allow-empty"])
-        .unwrap();
+    Runner::new(path).run(&["commit", "-qm", "init", "--allow-empty"])
+                     .unwrap();
 
     let err = Repository::open(path).commit("nothing staged").unwrap_err();
 

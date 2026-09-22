@@ -40,11 +40,94 @@ messages, assistant messages, and system/tool content.
 - **THEN** the panel reflects the latest accumulated text without visible
   flicker or reordering
 
+### Requirement: Rendered Markdown separates body from headers by font
+
+Every Markdown surface — the panel's assistant messages and the Markdown pane
+opened for an agent — SHALL draw body text in the configured UI font and
+headers (`#` through `######`) in the configured title font.
+
+Body text is everything but a header: paragraphs, list items, table cells,
+block quotes, link text, and the text around inline code. Inline code and code
+blocks SHALL keep the monospace family, as elsewhere in the panel.
+
+A header SHALL keep the size and weight its level already gives it, so the two
+faces are the change and the heading hierarchy is not.
+
+Inline formatting inside a header — bold, italics, a link, inline code — SHALL
+render as plain text in the title font. The renderer draws a header from its
+text rather than its inline marks, and a header carrying a mark SHALL render as
+the words themselves rather than as the Markdown source that marked them: `##
+A **bold** word` renders as "A bold word", with no asterisks shown and no bold
+run.
+
+Changing either font in settings SHALL change the corresponding Markdown text
+without reopening the surface.
+
+#### Scenario: A response with a header and a paragraph
+
+- **WHEN** an agent's response contains a `##` header followed by a paragraph
+- **THEN** the header is drawn in the title font and the paragraph in the UI
+  font
+
+#### Scenario: Body constructs stay in the UI font
+
+- **WHEN** a response contains a list, a table and a block quote
+- **THEN** each is drawn in the UI font, and none of them in the title font
+
+#### Scenario: Code keeps its own family
+
+- **WHEN** a response contains a fenced code block and an inline code span
+- **THEN** both are drawn in the monospace family, and the words around the
+  inline span are drawn in the UI font
+
+#### Scenario: A header keeps its level's size and weight
+
+- **WHEN** a response contains an `#` header and a `###` header
+- **THEN** both are drawn in the title font, at the sizes and weights their
+  levels had before the two faces were split
+
+#### Scenario: A header containing a mark
+
+- **WHEN** a response contains the header `## A **bold** word`
+- **THEN** the header line reads "A bold word" in the title font, with no
+  asterisks and no bold run
+
+#### Scenario: The Markdown pane follows the same split
+
+- **WHEN** a Markdown file shown for an agent contains headers and paragraphs
+- **THEN** its headers are drawn in the title font and its body in the UI font
+
+#### Scenario: Changing the UI font redraws body text
+
+- **WHEN** the user picks a new UI font family while a response with headers
+  and paragraphs is on screen
+- **THEN** the body text is redrawn in the new family and the headers are
+  unchanged
+
 ### Requirement: Tool-call rendering
 The system SHALL render each tool call as a distinct card showing its kind,
 input summary, and result (or in-progress state) once received, and SHALL
 render a file-edit tool call's diff as an added/removed line view rather than
-raw text.
+raw text. This is the default presentation.
+
+When the compact tool-call preference is enabled, contiguous tool-call
+activity SHALL instead render as one updating summary line reporting the
+call count and whichever file or command counts the tool metadata supports.
+Tool execution results SHALL remain available in panel state either way and
+SHALL NOT be discarded by compact rendering.
+
+#### Scenario: Default individual rendering
+- **WHEN** compact mode is disabled and a tool call completes
+- **THEN** the panel renders that call as its own card with its result
+
+#### Scenario: Compact rendering
+- **WHEN** compact mode is enabled and a sequence of tool calls runs
+- **THEN** the panel renders one updating summary line for the sequence
+
+#### Scenario: Failed call remains represented
+- **WHEN** a tool call fails in compact mode
+- **THEN** the summary reflects the failed call and its failure remains
+  inspectable in panel state
 
 #### Scenario: Tool call fails
 - **WHEN** a tool call's result reports an error
@@ -219,12 +302,32 @@ scroll to the top of the conversation history.
 
 ### Requirement: Track response toggle
 
-The response action bar SHALL include a track toggle. While enabled for a
-given response, the panel's virtualized list SHALL keep following the streamed
-output for that response, auto-scrolling so the newest output stays visible.
-Manually scrolling the history away from the tail SHALL disable following.
-Disabling the toggle SHALL stop following even while the list is at the tail,
-so following is only ever resumed by enabling the toggle or jumping to latest.
+The response still being streamed SHALL carry a track toggle in place of the
+response action bar, and SHALL show the action bar instead once its turn
+ends. The two SHALL NOT appear together: tracking only means something while
+output is still arriving, and the action bar's items - copy, jump to the
+prompt, jump to the top - only mean something once there is a finished
+response to act on.
+
+While the toggle is enabled for a given response, the panel's virtualized
+list SHALL keep following the streamed output for that response,
+auto-scrolling so the newest output stays visible. Manually scrolling the
+history away from the tail SHALL disable following. Disabling the toggle
+SHALL stop following even while the list is at the tail, so following is only
+ever resumed by enabling the toggle or jumping to latest.
+
+#### Scenario: The toggle gives way to the action bar
+
+- **WHEN** the last response is still streaming
+- **THEN** it shows the track toggle and not the response action bar
+- **WHEN** that turn ends
+- **THEN** it shows the response action bar and not the track toggle
+
+#### Scenario: An earlier response never shows the toggle
+
+- **WHEN** a response that is not the last one is rendered
+- **THEN** it shows the response action bar, whether or not a later turn is
+  active
 
 #### Scenario: Tracking follows streamed output
 
@@ -283,17 +386,26 @@ level, applied starting with the next message.
 
 ### Requirement: Input area send control
 
-The input area SHALL provide a send control that submits the pending
-message (with any attached context) to the agent. The control SHALL be
-disabled while the input is empty and while a response is in progress if
-the agent does not support concurrent input. While a response is in progress,
-the input area SHALL also provide a stop control that interrupts the active
-ACP turn for the selected session.
+The input area SHALL provide a send control that submits the pending message
+(with any attached context) to the agent. The control SHALL be disabled while
+the input is empty and while a permission request is pending. While a
+response is in progress, activating the control SHALL enqueue the message for
+delivery when the current turn ends; it SHALL NOT discard the message and
+SHALL NOT be disabled on that account. While a response is in progress, the
+input area SHALL also provide a stop control that interrupts the active ACP
+turn for the selected session.
 
 #### Scenario: Send a message
-- **WHEN** the user activates send with non-empty input
-- **THEN** the message and any attached context are submitted to the
-  agent and the input area clears
+- **WHEN** the user activates send with non-empty input and no response is in
+  progress
+- **THEN** the message and any attached context are submitted to the agent
+  and the input area clears
+
+#### Scenario: Send during a response enqueues
+- **WHEN** the user activates send with non-empty input while a response is
+  in progress
+- **THEN** the message joins the prompt queue, the input area clears, and the
+  message is delivered when the current turn ends
 
 #### Scenario: Stop an active turn
 - **WHEN** the user activates stop while an ACP turn is in progress
@@ -309,6 +421,47 @@ ACP turn for the selected session.
 #### Scenario: Stop is scoped to one session
 - **WHEN** the user stops work in one panel while another panel is active
 - **THEN** only the selected panel's ACP turn is interrupted
+
+### Requirement: Prompt queue
+The system SHALL queue prompts delivered during a response and deliver them to
+the agent in the order they were enqueued, one turn at a time, until the queue
+empties. A queued prompt SHALL be visible in the conversation, clearly marked
+as waiting until it is delivered, and SHALL read as a normal prompt once
+delivered. Delivery SHALL resume on each turn end; a prompt whose delivery
+fails SHALL be reported under that prompt, and the queue SHALL continue with
+the remaining prompts.
+
+#### Scenario: Prompts are delivered in order
+- **WHEN** the user enqueues "first" and then "second" while a response is in
+  progress
+- **THEN** "first" is delivered when the current turn ends and "second" is
+  delivered when the turn "first" started has ended
+
+#### Scenario: A queued prompt is marked until delivered
+- **WHEN** a prompt is enqueued during a response
+- **THEN** the conversation shows it as waiting, and once its turn starts the
+  same message reads as a delivered prompt
+
+#### Scenario: A failed queued delivery continues the queue
+- **WHEN** a queued prompt's delivery fails
+- **THEN** the failure is reported under that prompt, the turn ends, and the
+  next queued prompt is delivered
+
+#### Scenario: A clean queue delivers immediately
+- **WHEN** the user sends while no prompt is queued and no response is in
+  progress
+- **THEN** the prompt is delivered immediately and no queue entry is created
+
+### Requirement: Permission gate is independent of the queue
+Queued delivery SHALL NOT bypass a pending permission request: a prompt must
+not be delivered while a permission request is awaiting an answer, whether or
+not it was enqueued, and the send control remains disabled while a permission
+request is pending.
+
+#### Scenario: A permission request holds the queue
+- **WHEN** a permission request is pending and the queue holds prompts
+- **THEN** no queued prompt is delivered until the permission request is
+  answered, after which delivery resumes
 
 ### Requirement: Input area expand and collapse
 The input area SHALL provide an expand control that grows the input into
@@ -557,3 +710,61 @@ counts. The indicator SHALL be absent until the agent reports usable values.
 #### Scenario: No usage update is available
 - **WHEN** the ACP agent does not report context-window usage
 - **THEN** the bottom bar does not show a context indicator
+
+### Requirement: Retry uses the icon-button convention
+
+The retry action SHALL render as an icon button rather than a text button. The icon SHALL have a localized accessible label and tooltip describing retry, and activating it SHALL preserve the existing retry behavior.
+
+#### Scenario: Retry renders as an icon
+- **WHEN** a response exposes a retry action
+- **THEN** the action is shown as an icon button with no visible text label
+
+#### Scenario: Retry tooltip identifies the action
+- **WHEN** the user points to or focuses the retry icon
+- **THEN** a localized tooltip and accessible label identify it as retry
+
+#### Scenario: Retry behavior is unchanged
+- **WHEN** the user activates the retry icon
+- **THEN** the same message is retried using the existing retry flow
+
+### Requirement: Panel chrome adopts the macOS system palette
+
+On macOS, the panel's chrome SHALL follow the platform's system colors: the
+user prompt bubble and primary controls tinted by the system accent color
+(`controlAccentColor`), the prompt's foreground contrasting the resolved
+accent, focused controls bordered/tinted by that accent, and neutral surfaces
+(bubbles, cards, inputs, separators, window background) taken from the
+system's dynamic neutrals so they track the current appearance. Non-macOS
+platforms SHALL render the fixed palette they render today.
+Semantic state colors (agent status indicators, risk tinting, danger) SHALL
+NOT be replaced by system colors.
+
+#### Scenario: The prompt bubble follows the user's accent color
+- **WHEN** the system accent color is changed on macOS
+- **THEN** the user prompt bubble and primary buttons render in that accent,
+  and the prompt text remains readable against it
+
+#### Scenario: The prompt stays readable in light mode
+- **WHEN** the panel is in light appearance with an accent whose luminance
+  makes white text unreadable
+- **THEN** the prompt foreground switches to a dark contrast color
+
+#### Scenario: Focus paints with the system accent
+- **WHEN** an input or button receives focus on macOS
+- **THEN** its border and focus tint use the system accent, not a fixed
+  application blue
+
+#### Scenario: An appearance flip repaints live
+- **WHEN** the macOS appearance changes from light to dark (or back)
+- **THEN** the panel's neutral surfaces re-resolve and repaint without
+  requiring a settings change or restart
+
+#### Scenario: State colors stay fixed
+- **WHEN** a tool call or agent renders a semantic state color (idle,
+  running, error, safe, danger)
+- **THEN** that color is the application's fixed state palette, unchanged by
+  the system accent or appearance
+
+#### Scenario: Non-macOS platforms are unchanged
+- **WHEN** the app runs on Linux or Windows
+- **THEN** the panel renders with the existing fixed palette

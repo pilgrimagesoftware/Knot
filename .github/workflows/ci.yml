@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  workspace:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Linux system dependencies (gpui-component build requirements)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc g++ clang libfontconfig-dev libwayland-dev \
+            libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev \
+            libssl-dev libzstd-dev \
+            vulkan-validationlayers libvulkan1
+
+      - name: Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          components: clippy
+          cache-key: ${{ matrix.os }}
+
+      # The rustfmt pin lives in the Makefile (RUSTFMT_NIGHTLY), which is also
+      # what runs the check -- so the toolchain and the command it is invoked
+      # with can never drift apart between here and a developer's machine.
+      #
+      # Installed with plain rustup rather than setup-rust-toolchain: that
+      # action makes whatever it installs the default toolchain, which would
+      # send Clippy, Test and Build below to nightly (no cargo-clippy there).
+      - name: rustfmt toolchain (pinned)
+        run: rustup toolchain install "$(make -s print-rustfmt-nightly)" --profile minimal --component rustfmt
+
+      - name: Format
+        run: make fmt-check
+
+      # A file nobody can hold in their head stops being reviewed properly,
+      # and the only reliable moment to split one is before it gets large.
+      # This limit was applied once by hand and then regressed, because
+      # nothing enforced it.
+      - name: File size
+        run: make size-check
+
+      - name: Git version (needs >= 2.30 for porcelain v2 tests)
+        run: |
+          git --version
+          v=$(git --version | awk '{print $3}')
+          low=$(printf '2.30.0\n%s\n' "$v" | sort -V | head -1)
+          if [ "$low" != "2.30.0" ]; then
+            echo "git $v is older than the 2.30 floor"; exit 1
+          fi
+
+      - name: Clippy
+        run: make lint
+
+      # Split per-crate (rather than one `cargo test --workspace`) so a hang or
+      # failure names the crate directly in the job summary instead of a
+      # single opaque "Test" step.
+      - name: Test (knot-core)
+        run: cargo test -p knot-core
+      - name: Test (knot-git)
+        run: cargo test -p knot-git
+      - name: Test (knot-discovery)
+        run: cargo test -p knot-discovery
+      - name: Test (knot-history)
+        run: cargo test -p knot-history
+      - name: Test (knot)
+        run: cargo test -p knot
+
+      - name: Build
+        run: make build

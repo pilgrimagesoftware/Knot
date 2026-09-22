@@ -27,7 +27,7 @@ fn system_time_to_offset(time: SystemTime) -> OffsetDateTime {
 }
 
 struct ParsedSession {
-    title: String,
+    title:         String,
     message_count: usize,
 }
 
@@ -44,10 +44,12 @@ fn parse_session_file(path: &Path) -> Option<ParsedSession> {
         if trimmed.is_empty() {
             continue;
         }
-        let Ok(json) = serde_json::from_str::<Value>(trimmed) else {
+        let Ok(json) = serde_json::from_str::<Value>(trimmed)
+        else {
             continue;
         };
-        let Some(entry_type) = json.get("type").and_then(Value::as_str) else {
+        let Some(entry_type) = json.get("type").and_then(Value::as_str)
+        else {
             continue;
         };
 
@@ -59,10 +61,9 @@ fn parse_session_file(path: &Path) -> Option<ParsedSession> {
             if json.get("isMeta").and_then(Value::as_bool) == Some(true) {
                 continue;
             }
-            let Some(message_content) = json
-                .get("message")
-                .and_then(|m| m.get("content"))
-                .and_then(Value::as_str)
+            let Some(message_content) = json.get("message")
+                                            .and_then(|m| m.get("content"))
+                                            .and_then(Value::as_str)
             else {
                 continue;
             };
@@ -72,7 +73,8 @@ fn parse_session_file(path: &Path) -> Option<ParsedSession> {
                     Some(cleaned) if !cleaned.is_empty() => cleaned,
                     _ => continue,
                 }
-            } else {
+            }
+            else {
                 message_content.to_owned()
             };
 
@@ -87,33 +89,33 @@ fn parse_session_file(path: &Path) -> Option<ParsedSession> {
     if message_count == 0 {
         return None;
     }
-    Some(ParsedSession {
-        title,
-        message_count,
-    })
+    Some(ParsedSession { title,
+                         message_count })
 }
 
 impl HistoryProvider for ClaudeProvider {
     fn load_sessions(&self, folder: &str) -> Vec<SessionSummary> {
-        let Some(dir) = dashed_dir(folder) else {
+        let Some(dir) = dashed_dir(folder)
+        else {
             return Vec::new();
         };
-        let Ok(entries) = fs::read_dir(&dir) else {
+        let Ok(entries) = fs::read_dir(&dir)
+        else {
             return Vec::new();
         };
 
-        let mut files: Vec<(PathBuf, String, SystemTime)> = entries
-            .filter_map(|entry| entry.ok())
-            .filter_map(|entry| {
-                let path = entry.path();
-                let stem = path.file_stem()?.to_str()?.to_owned();
-                if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
-                    return None;
-                }
-                let modified = entry.metadata().ok()?.modified().ok()?;
-                Some((path, stem, modified))
-            })
-            .collect();
+        let mut files: Vec<(PathBuf, String, SystemTime)> =
+            entries.filter_map(|entry| entry.ok())
+                   .filter_map(|entry| {
+                       let path = entry.path();
+                       let stem = path.file_stem()?.to_str()?.to_owned();
+                       if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                           return None;
+                       }
+                       let modified = entry.metadata().ok()?.modified().ok()?;
+                       Some((path, stem, modified))
+                   })
+                   .collect();
         files.sort_by_key(|(_, _, modified)| std::cmp::Reverse(*modified));
 
         let mut summaries = Vec::new();
@@ -123,18 +125,15 @@ impl HistoryProvider for ClaudeProvider {
             }
             let timestamp = system_time_to_offset(modified);
             match parse_session_file(&path) {
-                Some(parsed) => summaries.push(SessionSummary {
-                    id: session_id,
-                    title: parsed.title,
-                    timestamp,
-                    message_count: parsed.message_count,
-                }),
-                None if index == 0 => summaries.push(SessionSummary {
-                    id: session_id,
-                    title: String::new(),
-                    timestamp,
-                    message_count: 0,
-                }),
+                Some(parsed) => summaries.push(SessionSummary { id: session_id,
+                                                                title: parsed.title,
+                                                                timestamp,
+                                                                message_count:
+                                                                    parsed.message_count }),
+                None if index == 0 => summaries.push(SessionSummary { id: session_id,
+                                                                      title: String::new(),
+                                                                      timestamp,
+                                                                      message_count: 0 }),
                 None => {}
             }
         }
@@ -142,7 +141,8 @@ impl HistoryProvider for ClaudeProvider {
     }
 
     fn delete_session(&self, id: &str, folder: &str) {
-        let Some(dir) = dashed_dir(folder) else {
+        let Some(dir) = dashed_dir(folder)
+        else {
             return;
         };
         let _ = fs::remove_file(dir.join(format!("{id}.jsonl")));
@@ -168,14 +168,10 @@ mod tests {
     #[test]
     fn parses_normal_session_title_and_count() {
         let tmp = tempfile::tempdir().unwrap();
-        write_session(
-            tmp.path(),
-            "abc",
-            &[
-                r#"{"type":"user","message":{"content":"fix the login bug"}}"#,
-                r#"{"type":"assistant","message":{"content":"done"}}"#,
-            ],
-        );
+        write_session(tmp.path(),
+                      "abc",
+                      &[r#"{"type":"user","message":{"content":"fix the login bug"}}"#,
+                        r#"{"type":"assistant","message":{"content":"done"}}"#]);
 
         let parsed = parse_session_file(&tmp.path().join("abc.jsonl")).unwrap();
         assert_eq!(parsed.title, "fix the login bug");
@@ -185,14 +181,10 @@ mod tests {
     #[test]
     fn command_only_first_message_expands() {
         let tmp = tempfile::tempdir().unwrap();
-        write_session(
-            tmp.path(),
-            "abc",
-            &[
-                r#"{"type":"user","message":{"content":"<command-name>/review</command-name><command-args>please check</command-args>"}}"#,
-                r#"{"type":"assistant","message":{"content":"ok"}}"#,
-            ],
-        );
+        write_session(tmp.path(),
+                      "abc",
+                      &[r#"{"type":"user","message":{"content":"<command-name>/review</command-name><command-args>please check</command-args>"}}"#,
+                        r#"{"type":"assistant","message":{"content":"ok"}}"#]);
 
         let parsed = parse_session_file(&tmp.path().join("abc.jsonl")).unwrap();
         assert_eq!(parsed.title, "/review please check");

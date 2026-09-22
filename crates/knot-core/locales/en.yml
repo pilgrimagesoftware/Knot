@@ -12,6 +12,8 @@ dashboard:
     status: "Status"
 
 count:
+  agent: "agent"
+  agents: "agents"
   file: "file"
   files: "files"
 
@@ -20,6 +22,9 @@ git:
 
 workspace:
   manager: "Workspaces"
+
+sidebar:
+  new_agent: "New agent"
 
 agent:
   companion: "Shell companion"
@@ -30,4 +35,59 @@ panel:
   copied_prompt: "Copied prompt to clipboard"
   copied_response: "Copied response to clipboard"
   queued: "Queued"
+  queued_inbox_nudge: "Queued inbox check"
+  failed: "Failed"
+  retry: "Retry"
+  retry_queued: "Retry this message"
+  delete_queued: "Delete this queued message"
+  edit_queued: "Edit this queued message"
+  replace_composer_title: "Replace Composer Text"
+  replace_composer_body: "What you typed will be replaced by the queued message you are editing."
+  retry_connect: "Try again"
   context_usage: "Context usage"
+  summary:
+    calls_one: "%{count} tool call"
+    calls_other: "%{count} tool calls"
+    files_edited_one: "%{count} file edited"
+    files_edited_other: "%{count} files edited"
+    files_read_one: "%{count} file read"
+    files_read_other: "%{count} files read"
+    commands_run_one: "%{count} command run"
+    commands_run_other: "%{count} commands run"
+    failures_one: "%{count} failed"
+    failures_other: "%{count} failed"
+    separator: " · "
+    running_suffix: "…"
+    expand: "Show these tool calls"
+
+settings:
+  font_unavailable: "unavailable"
+  compact_tool_calls: "Collapse tool calls"
+  compact_tool_calls_hint: "Show a turn's tool calls as one summary line instead of a card each."
+
+menu:
+  agents: "Agents"
+
+quit:
+  working_title: "Agents are still working"
+  working_message_one: "One agent is still working. Quitting now ends its session, and any work in progress is lost."
+  working_message_many: "%{count} agents are still working. Quitting now ends their sessions, and any work in progress is lost."
+  working_confirm: "Quit Anyway"
+  working_cancel: "Keep Working"
+
+about:
+  title: "About Knot"
+  version_label: "Version"
+  build_label: "Build"
+  commit_unknown: "commit unknown"
+  copy_details: "Click to copy the version and build"
+  close: "Close"
+  copyright: "Copyright © 2026 Pilgrimage Software"
+  derived_from: "Derived from Skwad by Kochava Studios"
+  credits:
+    author: "Created by Paul Schifferer"
+    license: "Released under the GNU Affero General Public License v3.0"
+    built_with: "Built with"
+    toolkit: "gpui-kit — Apache-2.0"
+    terminal: "Alacritty terminal — Apache-2.0"
+    fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"

@@ -4,6 +4,8 @@
 //! round-trips. `#[serde(default)]` on the later-added fields is the
 //! decode-tolerant migration path.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -35,13 +37,13 @@ pub enum PersonaState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Persona {
-    pub id: Uuid,
-    pub name: String,
+    pub id:           Uuid,
+    pub name:         String,
     pub instructions: String,
     #[serde(rename = "type", default = "default_persona_type")]
     pub persona_type: PersonaType,
     #[serde(default = "default_persona_state")]
-    pub state: PersonaState,
+    pub state:        PersonaState,
 }
 
 /// Which surface an agent is driven through: the terminal grid (default,
@@ -81,60 +83,71 @@ pub enum ActivationMode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedAgent {
-    pub id: Uuid,
-    pub name: String,
+    pub id:              Uuid,
+    pub name:            String,
     #[serde(default = "default_avatar")]
-    pub avatar: String,
-    pub folder: String,
+    pub avatar:          String,
+    pub folder:          String,
     #[serde(default = "default_agent_type")]
-    pub agent_type: String,
+    pub agent_type:      String,
     #[serde(default)]
-    pub created_by: Option<Uuid>,
+    pub created_by:      Option<Uuid>,
     #[serde(default)]
-    pub is_companion: bool,
+    pub is_companion:    bool,
     #[serde(default)]
-    pub shell_command: Option<String>,
+    pub shell_command:   Option<String>,
     #[serde(default)]
-    pub persona_id: Option<Uuid>,
+    pub persona_id:      Option<Uuid>,
     #[serde(default)]
-    pub session_id: Option<String>,
+    pub session_id:      Option<String>,
     #[serde(default)]
-    pub view_mode: ViewMode,
+    pub view_mode:       ViewMode,
     #[serde(default)]
-    pub acp_session_id: Option<String>,
+    pub acp_session_id:  Option<String>,
     /// Loads as `Active`, not the enum's own `Passive` default: a record
     /// written before this field existed describes an agent that started
     /// with its workspace, and it must go on doing so. New agents get
     /// `Passive` from `CreateOptions` instead.
     #[serde(default = "default_activation_mode")]
     pub activation_mode: ActivationMode,
+    /// The session setup last chosen in the Panel - model, permission mode
+    /// and reasoning effort - keyed by the ACP config-option id the adapter
+    /// declared, holding that option's selected value.
+    ///
+    /// Not an enum per closed-vocabulary convention, and not three named
+    /// fields: the ids and their legal values are declared by the adapter at
+    /// runtime (`ConfigOption`), not fixed by Knot, and they differ between
+    /// agent types. Storing the adapter's own id/value pairs is what lets the
+    /// selection be replayed verbatim on reopen. Absent for records written
+    /// before this field existed, which restore the adapter's own defaults.
+    /// See `openspec/specs/session-setup-persistence/spec.md`.
+    #[serde(default)]
+    pub session_config:  BTreeMap<String, String>,
 }
 
 impl SavedAgent {
     /// Build a saved agent, substituting the default robot avatar when `avatar`
     /// is `None` or empty. Remaining fields start at their defaults; set them
     /// on the returned value as needed.
-    pub fn new(
-        id: Uuid, name: impl Into<String>, avatar: Option<String>, folder: impl Into<String>,
-    ) -> Self {
-        let avatar = avatar
-            .filter(|a| !a.is_empty())
-            .unwrap_or_else(default_avatar);
-        Self {
-            id,
-            name: name.into(),
-            avatar,
-            folder: folder.into(),
-            agent_type: default_agent_type(),
-            created_by: None,
-            is_companion: false,
-            shell_command: None,
-            persona_id: None,
-            session_id: None,
-            view_mode: ViewMode::default(),
-            acp_session_id: None,
-            activation_mode: default_activation_mode(),
-        }
+    pub fn new(id: Uuid, name: impl Into<String>, avatar: Option<String>,
+               folder: impl Into<String>)
+               -> Self {
+        let avatar = avatar.filter(|a| !a.is_empty())
+                           .unwrap_or_else(default_avatar);
+        Self { id,
+               name: name.into(),
+               avatar,
+               folder: folder.into(),
+               agent_type: default_agent_type(),
+               created_by: None,
+               is_companion: false,
+               shell_command: None,
+               persona_id: None,
+               session_id: None,
+               view_mode: ViewMode::default(),
+               acp_session_id: None,
+               activation_mode: default_activation_mode(),
+               session_config: BTreeMap::new() }
     }
 }
 
@@ -146,36 +159,33 @@ impl SavedAgent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BenchAgent {
-    pub id: Uuid,
-    pub name: String,
+    pub id:            Uuid,
+    pub name:          String,
     #[serde(default = "default_avatar")]
-    pub avatar: String,
-    pub folder: String,
+    pub avatar:        String,
+    pub folder:        String,
     #[serde(default = "default_agent_type")]
-    pub agent_type: String,
+    pub agent_type:    String,
     #[serde(default)]
     pub shell_command: Option<String>,
     #[serde(default)]
-    pub persona_id: Option<Uuid>,
+    pub persona_id:    Option<Uuid>,
 }
 
 impl BenchAgent {
     /// Build a bench entry with default avatar/agent-type fallback.
-    pub fn new(
-        id: Uuid, name: impl Into<String>, avatar: Option<String>, folder: impl Into<String>,
-    ) -> Self {
-        let avatar = avatar
-            .filter(|a| !a.is_empty())
-            .unwrap_or_else(default_avatar);
-        Self {
-            id,
-            name: name.into(),
-            avatar,
-            folder: folder.into(),
-            agent_type: default_agent_type(),
-            shell_command: None,
-            persona_id: None,
-        }
+    pub fn new(id: Uuid, name: impl Into<String>, avatar: Option<String>,
+               folder: impl Into<String>)
+               -> Self {
+        let avatar = avatar.filter(|a| !a.is_empty())
+                           .unwrap_or_else(default_avatar);
+        Self { id,
+               name: name.into(),
+               avatar,
+               folder: folder.into(),
+               agent_type: default_agent_type(),
+               shell_command: None,
+               persona_id: None }
     }
 }
 
@@ -188,39 +198,39 @@ impl BenchAgent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
-    pub id: Uuid,
-    pub name: String,
-    pub color_hex: String,
+    pub id:                    Uuid,
+    pub name:                  String,
+    pub color_hex:             String,
     #[serde(default)]
-    pub agent_ids: Vec<Uuid>,
+    pub agent_ids:             Vec<Uuid>,
     #[serde(default)]
-    pub layout_mode: String,
+    pub layout_mode:           String,
     #[serde(default)]
-    pub active_agent_ids: Vec<Uuid>,
+    pub active_agent_ids:      Vec<Uuid>,
     #[serde(default)]
-    pub focused_pane_index: i32,
+    pub focused_pane_index:    i32,
     #[serde(default)]
-    pub split_ratio: f64,
+    pub split_ratio:           f64,
     #[serde(default)]
     pub split_ratio_secondary: Option<f64>,
     #[serde(default)]
-    pub show_dashboard: Option<bool>,
+    pub show_dashboard:        Option<bool>,
     #[serde(default)]
-    pub is_detached: Option<bool>,
+    pub is_detached:           Option<bool>,
     /// Where this workspace's window was last seen, so reopening it puts
     /// it back rather than re-centring. `None` until the window has been
     /// opened once.
     #[serde(default)]
-    pub window_bounds: Option<SavedWindowBounds>,
+    pub window_bounds:         Option<SavedWindowBounds>,
 }
 
 /// A window's position and size in logical pixels, as plain numbers -
 /// `knot-core` has no GPUI dependency, so the UI converts.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SavedWindowBounds {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
+    pub x:      f32,
+    pub y:      f32,
+    pub width:  f32,
     pub height: f32,
 }
 
@@ -260,14 +270,10 @@ mod tests {
 
     #[test]
     fn persona_enum_round_trips_lowercase() {
-        assert_eq!(
-            serde_json::to_string(&PersonaType::System).unwrap(),
-            "\"system\""
-        );
-        assert_eq!(
-            serde_json::to_string(&PersonaState::Deleted).unwrap(),
-            "\"deleted\""
-        );
+        assert_eq!(serde_json::to_string(&PersonaType::System).unwrap(),
+                   "\"system\"");
+        assert_eq!(serde_json::to_string(&PersonaState::Deleted).unwrap(),
+                   "\"deleted\"");
         let parsed: PersonaState = serde_json::from_str("\"enabled\"").unwrap();
         assert_eq!(parsed, PersonaState::Enabled);
     }
@@ -283,34 +289,46 @@ mod tests {
 
     #[test]
     fn legacy_saved_agent_defaults_added_fields() {
-        let json = format!(
-            r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
-            id()
-        );
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           id());
         let agent: SavedAgent = serde_json::from_str(&json).unwrap();
         assert_eq!(agent.agent_type, "claude");
         assert_eq!(agent.created_by, None);
         assert!(!agent.is_companion);
         assert_eq!(agent.persona_id, None);
         assert_eq!(agent.session_id, None);
+        assert!(agent.session_config.is_empty());
+    }
+
+    #[test]
+    fn saved_agent_session_config_round_trips() {
+        let mut agent = SavedAgent::new(id(), "A", None, "/tmp");
+        agent.session_config
+             .insert("model".to_string(), "sonnet".to_string());
+        agent.session_config
+             .insert("permission_mode".to_string(), "plan".to_string());
+        agent.session_config
+             .insert("reasoning-effort".to_string(), "high".to_string());
+
+        let json = serde_json::to_string(&agent).unwrap();
+        assert!(json.contains("sessionConfig"), "camelCase key: {json}");
+
+        let decoded: SavedAgent = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.session_config, agent.session_config);
     }
 
     #[test]
     fn legacy_saved_agent_without_activation_mode_loads_active() {
-        let json = format!(
-            r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
-            id()
-        );
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           id());
         let agent: SavedAgent = serde_json::from_str(&json).unwrap();
         assert_eq!(agent.activation_mode, ActivationMode::Active);
     }
 
     #[test]
     fn activation_mode_round_trips_in_lowercase() {
-        assert_eq!(
-            serde_json::to_string(&ActivationMode::Passive).unwrap(),
-            "\"passive\""
-        );
+        assert_eq!(serde_json::to_string(&ActivationMode::Passive).unwrap(),
+                   "\"passive\"");
         let mut a = SavedAgent::new(id(), "A", None, "/tmp");
         a.activation_mode = ActivationMode::Passive;
         let json = serde_json::to_string(&a).unwrap();
@@ -340,10 +358,8 @@ mod tests {
 
     #[test]
     fn legacy_bench_agent_defaults() {
-        let json = format!(
-            r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
-            id()
-        );
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           id());
         let bench: BenchAgent = serde_json::from_str(&json).unwrap();
         assert_eq!(bench.agent_type, "claude");
         assert_eq!(bench.persona_id, None);
@@ -351,25 +367,21 @@ mod tests {
 
     #[test]
     fn workspace_round_trips() {
-        let ws = Workspace {
-            id: id(),
-            name: "Main".to_string(),
-            color_hex: "#1B4FB2".to_string(),
-            agent_ids: vec![id()],
-            layout_mode: "grid".to_string(),
-            active_agent_ids: vec![id()],
-            focused_pane_index: 1,
-            split_ratio: 0.5,
-            split_ratio_secondary: Some(0.3),
-            show_dashboard: Some(false),
-            is_detached: Some(true),
-            window_bounds: Some(SavedWindowBounds {
-                x: 12.,
-                y: 34.,
-                width: 960.,
-                height: 640.,
-            }),
-        };
+        let ws = Workspace { id:                    id(),
+                             name:                  "Main".to_string(),
+                             color_hex:             "#1B4FB2".to_string(),
+                             agent_ids:             vec![id()],
+                             layout_mode:           "grid".to_string(),
+                             active_agent_ids:      vec![id()],
+                             focused_pane_index:    1,
+                             split_ratio:           0.5,
+                             split_ratio_secondary: Some(0.3),
+                             show_dashboard:        Some(false),
+                             is_detached:           Some(true),
+                             window_bounds:         Some(SavedWindowBounds { x:      12.,
+                                                                             y:      34.,
+                                                                             width:  960.,
+                                                                             height: 640., }), };
         let json = serde_json::to_string(&ws).unwrap();
         let back: Workspace = serde_json::from_str(&json).unwrap();
         assert_eq!(ws, back);

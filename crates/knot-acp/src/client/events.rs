@@ -10,6 +10,6 @@ pub enum SessionEvent {
 
 #[derive(Debug, Clone, Default)]
 pub struct NewSession {
-    pub session_id: String,
+    pub session_id:     String,
     pub config_options: Vec<ConfigOption>,
 }

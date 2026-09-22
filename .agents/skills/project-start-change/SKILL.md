@@ -44,18 +44,29 @@ below as `<owner>/<repo>`.
 
 ### 5. Create the worktree
 
-Use this repo's fixed worktree convention (do not use `EnterWorktree` - it creates worktrees
-under `.Codex/worktrees/`, which conflicts with the path used here):
+Worktrees live in a peer directory beside the checkout, named `<checkout>-Worktrees`, one
+subdirectory per branch. Derive it from wherever the repo actually is rather than assuming a
+path - the checkout root moves between machines, the convention does not:
 
 ```
-git worktree add /Users/paulyhedral/Projects/Code/knot-rust-worktrees/<branch-slug> -b <branch-name> origin/main
+REPO=$(git rev-parse --show-toplevel)
+git worktree add "$REPO-Worktrees/<branch-slug>" -b <branch-name> origin/develop
 ```
+
+So a checkout at `~/Code/ThirdParty/Knot` puts its worktrees in
+`~/Code/ThirdParty/Knot-Worktrees/<branch-slug>` - a sibling of the checkout, never inside it,
+so worktree files never show up as untracked noise in the primary checkout.
+
+Do not use `EnterWorktree` to create one: it puts worktrees under `.Codex/worktrees/`, which
+is inside the checkout and conflicts with this convention.
 
 - `<branch-name>`: `<issue-number>-<change-name>`, matching GitHub's own suggested linked
   branch name so the branch auto-links to the issue.
 - `<branch-slug>`: `<branch-name>` with any `/` replaced by `-`.
-- Base ref is `origin/main`.
-- If you use `gh issue develop <n> --name <branch-name> --base main` instead (to get GitHub's
+- Base ref is `origin/develop`. This repo runs git-flow: `develop` is the integration branch
+  and `main` is release-only, so feature work never branches from or targets `main`. Only a
+  `release/x.y.z` or `hotfix/x.y.z` branch bases on `origin/main`.
+- If you use `gh issue develop <n> --name <branch-name> --base develop` instead (to get GitHub's
   native issue-branch link), it checks the branch out in the current working tree by default -
   immediately switch that working tree back to its original branch, then
   `git worktree add <path> <branch-name>` (no `-b`, the branch already exists).
@@ -67,8 +78,9 @@ session into it, since that form of the tool accepts any existing worktree of th
 ### 6. Push and open the PR
 
 - Push the new branch: `git push -u origin <branch-name>` (run inside the worktree).
-- `gh pr create --repo <owner>/<repo> --base main --title "<issue title, no Conventional Commits prefix>" --body "..."`
-  (never `--draft` - PRs are opened ready for review)
+- `gh pr create --repo <owner>/<repo> --base develop --title "<issue title, no Conventional Commits prefix>" --body "..."`
+  (never `--draft` - PRs are opened ready for review; `--base main` only for a `release/*` or
+  `hotfix/*` branch)
 - Set PR assignee, labels, project, and milestone to match the issue.
 - Link the PR to the issue (via a `Closes #<n>` line in the body, or `gh issue develop`'s
   auto-link if used in step 5).

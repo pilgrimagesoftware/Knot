@@ -24,7 +24,7 @@ jobs:
       tag: ${{ inputs.tag }}
       # The reusable workflow tests on ubuntu-latest without the system
       # libraries gpui needs (fontconfig, wayland, webkit, xkbcommon), so the
-      # `knot` binary crate cannot build there. rust.yml already runs the whole
+      # `knot` binary crate cannot build there. ci.yml already runs the whole
       # workspace on both Linux and macOS for every push and PR.
       test-args: "--workspace --exclude knot"
       publish-to-crates-io: false

@@ -72,18 +72,32 @@ squash.
 git-flow. `develop` is the integration branch; `main` is release-only.
 
 Always do code changes in a dedicated `git worktree` on its own feature
-branch, no exceptions - never commit directly in the primary checkout at
-`/Users/paulyhedral/Projects/Code/Knot/App` (it stays on `develop`/`main` for
-syncing and reference) and never commit straight to `develop` or `main`. Use
-the `project-start-change` skill to create the worktree; convention is
-`/Users/paulyhedral/Projects/Code/Knot/Worktrees/<issue>-<change>` on branch
-`<issue>-<change>`.
+branch, no exceptions - never commit directly in the primary checkout (it
+stays on `develop`/`main` for syncing and reference) and never commit
+straight to `develop` or `main`. Use the `project-start-change` skill to
+create the worktree.
+
+Worktrees go in a peer directory beside the checkout, `<checkout>-Worktrees`,
+one subdirectory per branch, named `<issue>-<change>` to match the branch. So
+a checkout at `~/Code/ThirdParty/Knot` keeps them in
+`~/Code/ThirdParty/Knot-Worktrees/<issue>-<change>`. Derive the root rather
+than assuming a path - the checkout moves between machines, the convention
+does not:
+
+```bash
+REPO=$(git rev-parse --show-toplevel)
+git worktree add "$REPO-Worktrees/<issue>-<change>" -b <issue>-<change> origin/develop
+```
+
+A peer directory, never one inside the checkout, so worktree files don't show
+up as untracked noise in the primary checkout. `git worktree list` is
+authoritative for finding the existing ones.
 
 1. Branch from `develop`: `feature/<change>` (or `release/x.y.z`, `hotfix/x.y.z`).
 2. Implement against the OpenSpec change / spec contract.
 3. Open a PR to `develop` (`release/*` and `hotfix/*` PR to `main`). Rulesets on
    both branches require the Rust CI matrix (`workspace (ubuntu-latest)` and
-   `workspace (macos-latest)` from `.github/workflows/rust.yml`) to pass, and a
+   `workspace (macos-latest)` from `.github/workflows/ci.yml`) to pass, and a
    PR to merge. Merge with a merge commit or rebase, never squash.
 4. `dependabot` opens weekly grouped PRs against `develop` for `cargo` and
    `github-actions`.
@@ -98,28 +112,34 @@ the `project-start-change` skill to create the worktree; convention is
 ## Running Checks Locally
 
 ```bash
-make rust          # fmt (nightly) + clippy + test + build, whole workspace
+make             # the whole gate, in the order CI runs it
 
-make rust-fmt      # cargo +nightly fmt --check
-make rust-lint     # cargo clippy --workspace --all-targets -- -D warnings
-make rust-test     # cargo test --workspace
-make rust-build    # cargo build --workspace
+make fmt         # reformat with the pinned nightly
+make fmt-check   # verify formatting (what CI runs)
+make size-check  # fail on any .rs file over 700 lines
+make lint        # cargo clippy --workspace --all-targets -- -D warnings
+make test        # cargo test --workspace
+make build       # cargo build --workspace
 ```
 
 ```bash
-make rust-package  # Knot.app + DMG via cargo-packager (macOS only)
+make package     # Knot.app + DMG via cargo-packager (macOS only)
 ```
 
 Packaging is configured in `crates/knot/Cargo.toml` under
 `[package.metadata.packager]` and needs `cargo install cargo-packager --locked`.
 CI runs the same command from `.github/workflows/package.yml`.
 
-Run `cargo +nightly fmt` before committing (needs `rustup toolchain install
-nightly`). `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
+Run `make fmt` before committing. `rustfmt.toml` uses unstable options, so
+formatting is only reproducible on one exact nightly, pinned as
+`RUSTFMT_NIGHTLY` in the `Makefile` and installed with `rustup toolchain install
+$(make -s print-rustfmt-nightly)`. CI installs that same pin and runs these same
+targets. `knot-git` tests need `git` >= 2.30 on `PATH` for porcelain v2.
 
-The Swift app has its own targets in the same `Makefile` (`make build`,
-`make test`, `make notarize`) and its own CI (`tests.yml`, `build.yml`); those
-are unrelated to port work.
+The `Makefile` drives the Rust workspace only. It used to carry the Swift
+app's xcodebuild targets as well - which is why the Rust ones were all prefixed
+`rust-` - but those were removed along with the Swift release workflow they
+fed. Build or test the Swift reference through `Skwad.xcodeproj` in Xcode.
 
 ## Releases
 
@@ -138,9 +158,23 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 
 ## Conventions
 
+- **No `.rs` file over 700 lines.** Enforced by `make size-check` in CI. Split
+  by concern, not by line count; move colocated tests to a sibling `tests.rs`
+  first. Do not raise the limit to make a change fit.
+- **No crate-wide `allow`.** Allow on the item, with a comment saying why.
+  `UNWIRED` marks ported-but-unconnected code, `SUPERSEDED` marks code a newer
+  path replaced - both greppable.
 - Constants live in a single `consts.rs` per crate.
 - Errors: `thiserror` enums per crate (`GitError`, `DiscoveryError`, core
   `Error`), re-exported with a crate `Result` alias.
-- User-facing text goes through `knot_core::l10n::t`.
+- User-facing text goes through `knot_core::l10n::t`; tests assert the key
+  resolves, never the English copy.
 - Keep functions to <= 5-6 args; group related args in a struct.
+- Closed vocabularies are enums with `Display`/`FromStr`, not `String` matched
+  with a `_ => default` arm.
+- No I/O on the render path - GPUI re-renders per keystroke.
 - No statement-hugging brace style; format with nightly `rustfmt`.
+
+`.claude/rules/rust-structure.md` has the reasoning behind each of these, with
+the defect that produced it. Read it before a refactor; every rule names the
+cost of breaking it, so you can tell when it genuinely does not apply.
