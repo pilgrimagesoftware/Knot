@@ -4,12 +4,13 @@ use std::fs;
 use std::path::PathBuf;
 
 use rusqlite::{Connection, OpenFlags, params};
+use serde_json::Value;
 use time::OffsetDateTime;
 
 use crate::consts::{CODEX_DB_PATH, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::title::{extract_title, is_valid_title};
+use crate::providers::{first_title, jsonl_entries, resolve_title};
 
 pub struct CodexProvider;
 
@@ -18,39 +19,16 @@ fn db_path() -> Option<PathBuf> {
 }
 
 /// Parse a Codex rollout JSONL file for the first real `user_message`.
+/// Codex nests both the kind and the text under `payload`.
 fn title_from_rollout(path: &str) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+    first_title(jsonl_entries(&content), |entry| {
+        let payload = entry.get("payload")?;
+        if payload.get("type").and_then(Value::as_str) != Some("user_message") {
+            return None;
         }
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed)
-        else {
-            continue;
-        };
-        let payload = json.get("payload")?;
-        if payload.get("type").and_then(serde_json::Value::as_str) != Some("user_message") {
-            continue;
-        }
-        let Some(message) = payload.get("message").and_then(serde_json::Value::as_str)
-        else {
-            continue;
-        };
-        if !is_valid_title(message) {
-            continue;
-        }
-        return extract_title(message);
-    }
-    None
-}
-
-fn resolve_title(db_title: &str, rollout_path: &str) -> String {
-    if is_valid_title(db_title) {
-        return crate::title::truncate(db_title);
-    }
-    title_from_rollout(rollout_path).unwrap_or_default()
+        payload.get("message").and_then(Value::as_str)
+    })
 }
 
 impl HistoryProvider for CodexProvider {
@@ -91,7 +69,7 @@ impl HistoryProvider for CodexProvider {
             .map(|(id, rollout_path, title, updated_at)| {
                 SessionSummary {
                 id,
-                title: resolve_title(&title, &rollout_path),
+                title: resolve_title(&title, || title_from_rollout(&rollout_path)),
                 timestamp: OffsetDateTime::from_unix_timestamp(updated_at)
                     .unwrap_or(OffsetDateTime::UNIX_EPOCH),
                 message_count: 0,

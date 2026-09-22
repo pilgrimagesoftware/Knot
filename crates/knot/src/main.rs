@@ -15,6 +15,7 @@ mod broadcast_sheet;
 mod command_center;
 mod consts;
 mod dashboard;
+mod diff_stats;
 mod macos;
 mod markdown_view;
 mod open_in;

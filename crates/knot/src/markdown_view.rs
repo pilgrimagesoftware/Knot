@@ -31,9 +31,15 @@
 //! A heading-face refinement upstream would delete this whole module; until
 //! then the duplication is the cost of the second face.
 
+use gpui_kit::assets::IconName;
+use gpui_kit::base::text::CodeBlock;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::text::{MarkdownNode, MarkdownParseContext, TextView, markdown_ast};
+use gpui_kit::component::{Sizable, WindowExt};
 use gpui_kit::{
-    App, ElementId, FontWeight, ParentElement, Pixels, SharedString, Styled, Window, div, rems,
+    App, ClickEvent, ClipboardItem, ElementId, FontWeight, ParentElement, Pixels, SharedString,
+    Styled, Window, div, rems,
 };
 
 /// The name the heading block parser claims and the block renderer answers to.
@@ -154,6 +160,39 @@ fn render_heading(node: &MarkdownNode, title_font_family: SharedString, body_siz
          .child(node.as_text().to_string())
 }
 
+/// The text a code block's copy control places on the clipboard.
+///
+/// `CodeBlock::code()` rather than a re-scan of the Markdown source for
+/// fences: the parser already decided where the block starts and ends -
+/// including for an indented block, and for a fence whose content itself
+/// contains backticks - and re-deriving that here would be a second,
+/// disagreeing parser. It is also what makes the spec's "no fence markers, no
+/// language tag" true by construction rather than by trimming.
+pub(crate) fn code_block_copy_text(block: &CodeBlock) -> SharedString {
+    block.code()
+}
+
+/// A code block's copy control: puts [`code_block_copy_text`] on the clipboard
+/// and confirms with the same notification the panel's own copy actions use -
+/// see `panel_view::message::render_response_actions`.
+///
+/// A plain `"copy"` element id is safe: `gpui-base` scopes the ids under a
+/// code block by that block's own id, so one surface's blocks cannot collide.
+fn code_block_copy_button(block: &CodeBlock) -> Button {
+    let code = code_block_copy_text(block);
+    Button::new("copy").icon(IconName::Copy)
+                       .tooltip(knot_core::l10n::t("panel.copy_code"))
+                       .ghost()
+                       .small()
+                       .on_click(move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                           cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
+                           window.push_notification(
+                            Notification::info(knot_core::l10n::t("panel.copied_code")),
+                            cx,
+                        );
+                       })
+}
+
 /// The configured Markdown view: body text in `ui_font_family`, headers in
 /// `title_font_family` at the size and weight their level already gave them.
 ///
@@ -169,6 +208,14 @@ fn render_heading(node: &MarkdownNode, title_font_family: SharedString, body_siz
 /// tracking the system appearance; a `TextViewStyle::default()` would pin them
 /// to the light palette. Its heading sizes would not be read anyway - see
 /// [`heading_size_and_weight`].
+///
+/// The code block copy control is wired here, once, for the same no-drift
+/// reason as everything else in this constructor. There is no layout code for
+/// it here to go looking for: `code_block_actions` is `gpui-base`'s own hook,
+/// and `gpui-base` draws what it returns absolutely at the block's top-right,
+/// inside the block's background. Unlike the heading renderer it claims no
+/// node, so nothing here duplicates an upstream value a gpui-kit bump could
+/// leave silently disagreeing.
 pub(crate) fn markdown_view(id: impl Into<ElementId>, source: impl Into<SharedString>,
                             ui_font_family: SharedString, title_font_family: SharedString,
                             body_size: Pixels)
@@ -183,4 +230,9 @@ pub(crate) fn markdown_view(id: impl Into<ElementId>, source: impl Into<SharedSt
                                                                         title_font_family.clone(),
                                                                         body_size)
                                                            })
+                                  .code_block_actions(|block: &CodeBlock,
+                                                       _window: &mut Window,
+                                                       _cx: &mut App| {
+                                      code_block_copy_button(block)
+                                  })
 }

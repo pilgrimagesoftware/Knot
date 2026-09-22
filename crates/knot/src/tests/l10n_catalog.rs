@@ -262,3 +262,81 @@ fn panel_transcript_errors_resolve_and_keep_their_cause() {
                 "{key} left its placeholder unfilled");
     }
 }
+
+/// The chrome a panel draws around a conversation - two decision buttons,
+/// four icon-only controls whose tooltip is their only name, and the two
+/// lines a panel shows when it has no conversation yet.
+#[test]
+fn panel_chrome_labels_resolve() {
+    for key in ["panel.allow",
+                "panel.deny",
+                "panel.close",
+                "panel.stop",
+                "panel.running",
+                "panel.connecting",
+                "panel.select_agent_to_start",
+                "panel.attach_context",
+                "panel.scroll_to_latest",
+                "panel.scroll_to_your_message",
+                "panel.scroll_to_top"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
+/// The four confirmations, and the values they embed. A body that lost its
+/// placeholder would ask "Restart ?" and still pass a resolution check, so
+/// these assert the substitution as well as the key.
+#[test]
+fn menu_confirmation_copy_resolves_and_keeps_its_values() {
+    for key in ["menu.agent.confirm.restart_title",
+                "menu.agent.confirm.remove_title",
+                "menu.sidebar.confirm.restart_all_title",
+                "menu.sidebar.confirm.close_all_title"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+
+    for key in ["menu.agent.confirm.restart_body",
+                "menu.agent.confirm.remove_body"]
+    {
+        let body = knot_core::l10n::t_with(key, &[("name", "Alpha")]);
+        assert!(body.contains("Alpha"), "{key} must name the agent: {body}");
+        assert!(!body.contains("%{name}"),
+                "{key} left its placeholder unfilled: {body}");
+    }
+
+    for key in ["menu.sidebar.confirm.restart_all_body",
+                "menu.sidebar.confirm.close_all_body"]
+    {
+        let agents = knot_core::l10n::pluralize(3, "count.agent", "count.agents");
+        let body = knot_core::l10n::t_with(key, &[("agents", &agents)]);
+        assert!(body.contains("3 agents"), "{key} must say how many: {body}");
+        assert!(!body.contains("%{agents}"),
+                "{key} left its placeholder unfilled: {body}");
+    }
+}
+
+/// The window title and the one error the sidebar can show, neither of
+/// which is reachable from a label lookup.
+#[test]
+fn window_chrome_labels_resolve() {
+    for key in ["broadcast.window_title",
+                "workspace.name_placeholder",
+                "workspace.missing",
+                "workspace.choose_agent"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+
+    let error = knot_core::l10n::t_with("sidebar.width_error", &[("error", "disk full")]);
+    assert!(error.contains("disk full"),
+            "the width error must say what failed: {error}");
+    assert!(!error.contains("%{error}"));
+}

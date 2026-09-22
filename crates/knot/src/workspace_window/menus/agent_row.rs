@@ -92,7 +92,27 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
                                            insert_after,
                                            edit_target },
                       move |_id, _window, app| {
-                          window_entity.update(app, |_, cx| cx.notify());
+                          window_entity.update(app, |view, cx| {
+                                           // Freshly loaded, not this window's
+                                           // snapshot: the
+                                           // sidebar row resolves the agent's
+                                           // persona name
+                                           // from `view.settings.personas`,
+                                           // which was taken
+                                           // when the window opened. Assigning
+                                           // a persona
+                                           // added since then (or via this same
+                                           // edit, on an
+                                           // agent that had none) would resolve
+                                           // to nothing
+                                           // and the row would keep showing no
+                                           // persona line.
+                                           view.settings =
+                                               knot_core::Settings::load().unwrap_or_else(|_| {
+                                                                              view.settings.clone()
+                                                                          });
+                                           cx.notify();
+                                       });
                       },
                       app);
 }
@@ -359,15 +379,18 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
-            let description = format!("Remove \"{}\"? This closes its session and cannot be \
-                                       undone.",
-                                      targets.name);
-            confirm_then(window, app, "Remove Agent", description, move |app| {
-                targets.window_entity.update(app, |view, cx| {
-                                         view.remove_agent(targets.id);
-                                         cx.notify();
-                                     });
-            });
+            let description = knot_core::l10n::t_with("menu.agent.confirm.remove_body",
+                                                      &[("name", &targets.name)]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.agent.confirm.remove_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      view.remove_agent(targets.id);
+                                                      cx.notify();
+                                                  });
+                         });
         }
         // Handled by the builder, which needs `Window`/`Context` to make
         // a submenu, or carries no action at all.

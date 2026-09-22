@@ -19,7 +19,6 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::app_state::apply_terminal_status;
-use crate::consts;
 use crate::panel_session;
 use crate::panel_state;
 use crate::workspace_window::WorkspaceWindow;
@@ -167,24 +166,14 @@ impl WorkspaceWindow {
     /// `git`. `knot-git` is runtime-agnostic by contract, hence
     /// `spawn_blocking` rather than an async call.
     pub(super) fn refresh_diff_stats(&mut self, id: Uuid, folder: &str) {
-        let fresh = self.diff_stats_requested
-                        .get(&id)
-                        .is_some_and(|at| at.elapsed() < consts::DIFF_STATS_MAX_AGE);
-        if fresh {
+        let Some(writer) = self.diff_stats.claim_refresh(id)
+        else {
             return;
-        }
-        self.diff_stats_requested
-            .insert(id, std::time::Instant::now());
+        };
         let folder = folder.to_string();
-        let cache = Arc::clone(&self.diff_stats);
-        let dirty = Arc::clone(&self.diff_stats_dirty);
         let _runtime_guard = self.runtime.enter();
-        self.runtime.spawn_blocking(move || {
-                        let stats = Repository::open(&folder).diff_stats().ok();
-                        if cache.lock().insert(id, stats) != Some(stats) {
-                            dirty.store(true, std::sync::atomic::Ordering::SeqCst);
-                        }
-                    });
+        self.runtime
+            .spawn_blocking(move || writer.record(Repository::open(&folder).diff_stats().ok()));
     }
 
     /// Requests fresh diff stats for every agent the dashboard draws a card
@@ -219,7 +208,7 @@ impl WorkspaceWindow {
     /// The cached diff stat per agent, copied out so a render can read it
     /// without holding the cache lock across the element tree it builds.
     pub(super) fn diff_stats_snapshot(&self) -> BTreeMap<Uuid, Option<knot_git::DiffStats>> {
-        self.diff_stats.lock().clone()
+        self.diff_stats.snapshot()
     }
 
     /// Tears down a session (e.g. its agent was removed or restarted).
@@ -286,11 +275,7 @@ impl WorkspaceWindow {
         // for the window's whole life - including agents that no longer
         // exist. A stale nudge marker is not just memory: an id reused by a
         // recreated agent would inherit it and skip its first inbox prompt.
-        {
-            let mut cache = self.diff_stats.lock();
-            cache.remove(&id);
-        }
-        self.diff_stats_requested.remove(&id);
+        self.diff_stats.forget(id);
         self.nudged_messages.remove(&id);
         self.forget_awaiting_notification(id);
         self.panel_states.remove(&id);
