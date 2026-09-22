@@ -34,7 +34,7 @@
 - [x] 3.2 Wire Up/Down selection, Enter/Tab insert, and Esc dismissal through
       the input's key-capture path, plus dismissal on blur and on the token
       being edited away. Verify each in the app.
-- [ ] 3.3 Confirm inserted text flows through the normal send path unchanged;
+- [x] 3.3 Confirm inserted text flows through the normal send path unchanged;
       verify in the app that a completed prompt is delivered as ordinary text
       and nothing executes.
 
@@ -49,6 +49,6 @@
 ## 5. Verification
 
 - [x] 5.1 `make` passes clean (fmt, clippy, tests, build).
-- [ ] 5.2 Exercise the full flow in the app: open the lookup, filter to one
+- [x] 5.2 Exercise the full flow in the app: open the lookup, filter to one
       entry, insert, send, and confirm the agent receives the completed token
       as a prompt.
