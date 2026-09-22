@@ -22,10 +22,10 @@ use gpui_kit::component::Sizable;
 use gpui_kit::{ClickEvent, IntoElement, div, rgb};
 use knot_core::l10n::{t, t_with};
 
+use crate::panel_state::PanelState;
 use crate::panel_state::ToolRunSummary;
-use crate::panel_view::MUTED;
-use crate::panel_view::PanelState;
-use crate::panel_view::PanelStyle;
+use crate::panel_view::style::MUTED;
+use crate::panel_view::style::PanelStyle;
 use crate::panel_view::tool_call;
 
 /// What compact mode makes of one message row.
