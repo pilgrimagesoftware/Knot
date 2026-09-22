@@ -78,6 +78,7 @@ impl WorkspaceWindow {
                     store,
                     messages,
                     nudged_messages: BTreeMap::new(),
+                    notified_awaiting: BTreeMap::new(),
                     settings,
                     workspace_id,
                     selected_agent,
@@ -182,6 +183,7 @@ impl WorkspaceWindow {
                                                  // where an agent going idle
                                                  // is noticed.
                                                  view.deliver_inbox_nudges();
+                                                 view.raise_awaiting_notifications(cx);
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))

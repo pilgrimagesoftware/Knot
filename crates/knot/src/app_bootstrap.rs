@@ -259,6 +259,7 @@ pub(crate) fn run() {
                                // The Agents menu starts with nothing
                                // selected, and so disabled; a workspace
                                // window claims it once one is.
+                               cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(AgentsMenuState::default());
                                set_app_menus(&AgentMenuSnapshot::default(), cx);
 

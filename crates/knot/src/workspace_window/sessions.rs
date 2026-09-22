@@ -270,6 +270,7 @@ impl WorkspaceWindow {
         }
         self.diff_stats_requested.remove(&id);
         self.nudged_messages.remove(&id);
+        self.forget_awaiting_notification(id);
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
         self.panel_prompt_input_subscriptions.remove(&id);
