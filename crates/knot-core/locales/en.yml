@@ -184,6 +184,11 @@ settings:
 
 menu:
   agents: "Agents"
+  # The Window menu's own items. macOS appends and maintains the list of
+  # open windows below them.
+  window:
+    command_center: "Command Center"
+    workspaces: "Workspaces"
   # One agent row's context menu, and the menu bar's Agents menu,
   # which is built from the same entry list.
   agent:

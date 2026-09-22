@@ -67,7 +67,7 @@
 
 ## 5. Menu bar
 
-- [ ] 5.1 Remove the `EnterFullScreen` item from the View menu in
+- [x] 5.1 Remove the `EnterFullScreen` item from the View menu in
       `set_app_menus` (`app_bootstrap.rs:251-252`), leaving that menu with no
       items of its own, and remove the name from `actions!` (`:129-134`), the
       `cmd-ctrl-f` binding (`:310`) and the assertion at
@@ -77,19 +77,19 @@
       it is enabled, that ⌃⌘F enters and leaves full screen, and that the item
       reads Exit Full Screen while full screen - including on the settings
       window and after switching away from Knot and back
-- [ ] 5.3 Add `OpenCommandCenter` and `OpenWorkspaces` to `actions!`, register
+- [x] 5.3 Add `OpenCommandCenter` and `OpenWorkspaces` to `actions!`, register
       their `cx.on_action` handlers calling the registry, and bind `cmd-alt-0`
       and `cmd-0`; verify both shortcuts raise the right window with every Knot
       window closed and with several open
-- [ ] 5.4 Add `menu.window.command_center` and `menu.window.workspaces` to
+- [x] 5.4 Add `menu.window.command_center` and `menu.window.workspaces` to
       `crates/knot-core/locales/en.yml` and use `l10n::t` for both item labels;
       verify the l10n key test resolves them, touching `knot-core` first so the
       build is not stale
-- [ ] 5.5 Declare the Window menu as Command Center, Workspaces, separator,
+- [x] 5.5 Declare the Window menu as Command Center, Workspaces, separator,
       Minimize, Zoom, separator; verify the menu shows that order with AppKit's
       window list below the trailing separator, and that the fixed items stay
       put after opening three more windows
-- [ ] 5.6 Extend `menu_key_equivalents.rs` with assertions for `cmd-alt-0` and
+- [x] 5.6 Extend `menu_key_equivalents.rs` with assertions for `cmd-alt-0` and
       `cmd-0`; verify `make test` passes
 
 ## 6. Command Center scrolling

@@ -383,6 +383,17 @@ fn menu_confirmation_copy_resolves_and_keeps_its_values() {
 
 /// The window title and the one error the sidebar can show, neither of
 /// which is reachable from a label lookup.
+/// The Window menu's own items. A missing key here ships the key string as a
+/// menu label, in the one menu a user goes to when they have lost a window.
+#[test]
+fn window_menu_labels_resolve() {
+    for key in ["menu.window.command_center", "menu.window.workspaces"] {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
 #[test]
 fn window_chrome_labels_resolve() {
     for key in ["broadcast.window_title",
