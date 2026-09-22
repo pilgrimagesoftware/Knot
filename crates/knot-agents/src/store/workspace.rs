@@ -3,6 +3,15 @@ use uuid::Uuid;
 use super::AgentStore;
 
 impl AgentStore {
+    /// The workspace `id` names, for the operations that edit one in place.
+    /// The sibling of `agent_mut`, which the agent half of the store has
+    /// had all along - four lookups here were written out by hand instead.
+    fn workspace_mut(&mut self, id: Uuid) -> Option<&mut knot_core::Workspace> {
+        self.workspaces
+            .iter_mut()
+            .find(|workspace| workspace.id == id)
+    }
+
     pub fn add_workspace(&mut self, workspace: knot_core::Workspace) {
         self.workspaces.push(workspace);
     }
@@ -21,9 +30,7 @@ impl AgentStore {
     /// since bounds observers fire continuously through a drag.
     pub fn set_workspace_window_bounds(&mut self, id: Uuid, bounds: knot_core::SavedWindowBounds)
                                        -> bool {
-        let Some(workspace) = self.workspaces
-                                  .iter_mut()
-                                  .find(|workspace| workspace.id == id)
+        let Some(workspace) = self.workspace_mut(id)
         else {
             return false;
         };
@@ -35,9 +42,7 @@ impl AgentStore {
     }
 
     pub fn rename_workspace(&mut self, id: Uuid, name: impl Into<String>) -> bool {
-        let Some(workspace) = self.workspaces
-                                  .iter_mut()
-                                  .find(|workspace| workspace.id == id)
+        let Some(workspace) = self.workspace_mut(id)
         else {
             return false;
         };
@@ -120,18 +125,12 @@ impl AgentStore {
             if source == target_workspace_id {
                 return;
             }
-            if let Some(workspace) = self.workspaces
-                                         .iter_mut()
-                                         .find(|workspace| workspace.id == source)
-            {
+            if let Some(workspace) = self.workspace_mut(source) {
                 workspace.agent_ids.retain(|id| *id != agent_id);
                 workspace.active_agent_ids.retain(|id| *id != agent_id);
             }
         }
-        if let Some(workspace) = self.workspaces
-                                     .iter_mut()
-                                     .find(|workspace| workspace.id == target_workspace_id)
-        {
+        if let Some(workspace) = self.workspace_mut(target_workspace_id) {
             workspace.agent_ids.push(agent_id);
             if workspace.active_agent_ids.is_empty() {
                 workspace.active_agent_ids = vec![agent_id];
