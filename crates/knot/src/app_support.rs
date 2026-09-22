@@ -237,6 +237,25 @@ pub(crate) fn shorten_path(path: &str) -> String {
                          .unwrap_or_else(|| path.to_string())
 }
 
+/// Joins text onto one line: every run of whitespace - line breaks, tabs,
+/// runs of spaces - collapses to a single space, and both ends are trimmed.
+///
+/// Call this wherever a render declares a single line. The style flags do
+/// not achieve it on their own: `gpui::text_system::shape_text` splits its
+/// input on `\n` and shapes each piece as its own line before any wrapping
+/// or truncation decision, and `whitespace_nowrap` only disables *soft*
+/// wrapping. An element styled `whitespace_nowrap().text_ellipsis()`
+/// therefore still renders one line per line break, truncating each of them
+/// separately. Flattening the text first is what makes the declaration true;
+/// the width-based ellipsis then works as intended.
+///
+/// Presentational only. Flatten at the point of render, never on the way in,
+/// so what is stored, delivered to an agent, or drawn somewhere that permits
+/// several lines keeps the text as it was written.
+pub(crate) fn single_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Registers the embedded faces with CoreText as well as with GPUI's text
 /// system, for the process only.
 ///
