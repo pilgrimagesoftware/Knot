@@ -23,6 +23,7 @@ use parking_lot::Mutex;
 use crate::about_window::register_about_action;
 use crate::agent_menu::AgentMenuSnapshot;
 use crate::agent_menu::AgentsMenuState;
+use crate::agent_menu::agent_menu_key_bindings;
 use crate::agent_menu::agents_menu;
 use crate::app_state::build_agent_store;
 use crate::app_state::notification_response_agent_id;
@@ -302,6 +303,10 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
                   KeyBinding::new("cmd-ctrl-f", EnterFullScreen, None),
                   KeyBinding::new("cmd-m", MinimizeWindow, None),
                   KeyBinding::new("cmd-shift-/", KnotHelp, None)]);
+    // The Agents menu's own keys. No platform convention names these -
+    // the items are Knot's - so they come from the Swift reference; see
+    // `agent_menu::agent_menu_key_bindings`.
+    cx.bind_keys(agent_menu_key_bindings());
     cx.bind_keys([KeyBinding::new("cmd-shift-a", PanelPermissionAllow, None),
                   KeyBinding::new("cmd-shift-d", PanelPermissionDeny, None),
                   KeyBinding::new("cmd-shift-p", PanelOpenPermissionSelector, None)]);

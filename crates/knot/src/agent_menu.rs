@@ -32,6 +32,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use gpui_kit::KeyBinding;
 use gpui_kit::Menu;
 use gpui_kit::MenuItem;
 use gpui_kit::actions;
@@ -57,6 +58,33 @@ actions!(knot_app,
           AgentMenuDeactivate,
           AgentMenuRestartAgent,
           AgentMenuRemoveAgent]);
+
+/// The shortcuts the Swift reference gives to items that live in this
+/// menu, which are spread across its File and Edit command groups rather
+/// than sitting on its context menu (`Skwad/SkwadApp.swift:198`, `:277`,
+/// `:287`, `:295`).
+///
+/// The reference's four others do not land here: New Agent (cmd-t) and
+/// Broadcast (cmd-shift-b) belong to the sidebar's background menu, which
+/// has no menu-bar presence to show a shortcut on; Open in <app>
+/// (cmd-shift-o) was one item for the *default* application, where this
+/// port has a submenu of all of them; and Close Agent (cmd-w) is this
+/// menu's Remove Agent, which keeps no shortcut because cmd-w is Close
+/// Window here.
+///
+/// No context, so a workspace window answers these wherever focus sits
+/// inside it - which is also why cmd-f forks rather than reaching gpui's
+/// in-field Search: every input in this port is single-line, so Search has
+/// nothing to open, and a menu item's key equivalent is claimed by AppKit
+/// ahead of the window either way. The handlers are registered per
+/// selected agent on the window's root element, so these do nothing at all
+/// when no agent is selected - the same rule that greys the menu items.
+pub(crate) fn agent_menu_key_bindings() -> Vec<KeyBinding> {
+    vec![KeyBinding::new("cmd-shift-s", AgentMenuNewShellCompanion, None),
+         KeyBinding::new("cmd-f", AgentMenuForkAgent, None),
+         KeyBinding::new("cmd-d", AgentMenuDuplicateAgent, None),
+         KeyBinding::new("cmd-r", AgentMenuRestartAgent, None)]
+}
 
 /// One workspace in the Move to Workspace submenu.
 ///

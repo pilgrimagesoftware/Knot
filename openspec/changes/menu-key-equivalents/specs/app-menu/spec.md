@@ -26,8 +26,7 @@ implemented yet:
 | Knot > Quit Knot | ⌘Q |
 
 About Knot, Show All and Zoom SHALL have no key equivalent, because macOS
-gives those three none. The Agents menu's items SHALL have none either:
-they are Knot's own, so no platform convention names a key for them.
+gives those three none.
 
 An item whose behavior is not implemented SHALL still show its key
 equivalent, drawn greyed beside the disabled label. That is how macOS
@@ -49,9 +48,59 @@ reads as one the application does not have at all.
 
 #### Scenario: No invented shortcuts
 
-- **WHEN** the user opens the Knot menu, or the Agents menu
-- **THEN** About Knot, Show All and every Agents item show no key
-  equivalent
+- **WHEN** the user opens the Knot menu or the Window menu
+- **THEN** About Knot, Show All and Zoom show no key equivalent
+
+### Requirement: The Agents menu's shortcuts come from the reference
+
+No platform convention names a key for the Agents menu's items - they are
+Knot's own - so the Swift reference is the source. The menu SHALL carry the
+shortcuts it gives them:
+
+| Item | Key |
+| --- | --- |
+| New Shell Companion | ⇧⌘S |
+| Fork Agent | ⌘F |
+| Duplicate Agent | ⌘D |
+| Restart Agent | ⌘R |
+
+Remove Agent SHALL have no key equivalent. The reference calls that item
+Close Agent and gives it ⌘W, which belongs to Close Window here; where the
+two sources disagree over a key this common, the platform wins, and the
+losing item goes without rather than taking a second-choice key - the more
+so as Remove Agent is the destructive one.
+
+Every other item in the menu SHALL have none: the reference gives them
+none either.
+
+A shortcut SHALL do exactly what the menu item does, which includes doing
+nothing when the item is disabled - no agent selected, or one the item does
+not apply to.
+
+#### Scenario: Restarting the selected agent by keyboard
+
+- **WHEN** an agent is selected in the focused workspace window and the
+  user presses ⌘R
+- **THEN** the same confirmation appears, and confirming restarts the same
+  agent, as choosing Agents > Restart Agent
+
+#### Scenario: A shortcut for an item that does not apply
+
+- **WHEN** a shell companion is selected - Fork Agent is shown disabled for
+  it - and the user presses ⌘F
+- **THEN** nothing happens, matching the disabled item
+
+#### Scenario: A shortcut with no agent selected
+
+- **WHEN** no agent is selected, or no workspace window is focused, and the
+  user presses ⌘D
+- **THEN** nothing happens
+
+#### Scenario: Remove Agent has no shortcut
+
+- **WHEN** the user opens the Agents menu
+- **THEN** Remove Agent shows no key equivalent, and ⌘W remains Close
+  Window
 
 ### Requirement: The Edit menu operates the focused text field
 

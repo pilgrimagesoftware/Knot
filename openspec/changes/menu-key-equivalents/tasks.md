@@ -23,24 +23,48 @@
       and AppKit enables them from `is_action_available` on the focused
       element's dispatch path.
 
-## 3. Tests
+## 3. The Agents menu's keys
 
-- [x] 3.1 Add a test that each standard shortcut resolves to its item's
+- [x] 3.1 Bind ⇧⌘S, ⌘F, ⌘D and ⌘R to New Shell Companion, Fork Agent,
+      Duplicate Agent and Restart Agent, in a table beside the actions in
+      `agent_menu.rs` rather than in `app_bootstrap.rs`, so the keys sit with
+      the menu they annotate.
+- [x] 3.2 Leave Remove Agent without a key: the reference's ⌘W is Close
+      Window here. Record why in the table's doc comment so it does not read
+      as an oversight.
+- [x] 3.3 Confirm no toolkit binding is displaced. ⌘F is gpui's in-field
+      Search in its `Input` context - every input in this port is
+      single-line, so Search has nothing to open, and a menu item's key
+      equivalent is taken by AppKit ahead of the window in any case. Note it
+      where the binding is written.
+
+## 4. Tests
+
+- [x] 4.1 Add a test that each standard shortcut resolves to its item's
       action, driving the real keymap through `install_actions_and_keys`.
       Done as `standard_menu_items_carry_their_platform_shortcut`.
-- [x] 3.2 Add a test that ⌘Z, ⇧⌘Z, ⌘X, ⌘C and ⌘V still resolve to gpui's
+- [x] 4.2 Add a test that ⌘Z, ⇧⌘Z, ⌘X, ⌘C and ⌘V still resolve to gpui's
       text actions after our bindings are installed, so a placeholder added
       on one of those keys fails loudly rather than silently breaking text
       fields. Done as `the_edit_menu_leaves_the_text_keys_with_gpui`.
+- [x] 4.3 Add a test that the four reference shortcuts resolve to their
+      Agents-menu actions, that ⌘W still resolves to Close Window, and that
+      Remove Agent is in no binding. Done as
+      `the_agents_menu_carries_the_reference_shortcuts`.
 
-## 4. Verification
+## 5. Verification
 
-- [x] 4.1 Run `make` and verify fmt, size-check, clippy, tests and build all
+- [x] 5.1 Run `make` and verify fmt, size-check, clippy, tests and build all
       pass for the workspace.
-- [ ] 4.2 Open the app and walk every menu, confirming each item listed in
+- [ ] 5.2 Open the app and walk every menu, confirming each item listed in
       the spec's table shows its key - greyed on the items with no behavior
       yet - and that About Knot, Show All, Zoom and the Agents items show
       none.
-- [ ] 4.3 In the running app, confirm Edit > Copy enables with a settings
+- [ ] 5.3 In the running app, confirm Edit > Copy enables with a settings
       text field focused and copies the selection, and that ⌘C in a terminal
       pane still copies the terminal's selection.
+- [ ] 5.4 In the running app, confirm ⌘D duplicates the selected agent and
+      ⌘R restarts it with its confirmation, that both do nothing with no
+      agent selected, and that ⌘F does nothing while typing in a
+      single-line field beyond forking - i.e. that it forks, and no find
+      affordance was lost.

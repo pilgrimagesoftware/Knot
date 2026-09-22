@@ -18,6 +18,12 @@ use gpui_kit::Keystroke;
 use gpui_kit::TestAppContext;
 use gpui_kit::base::input;
 
+use crate::agent_menu::AgentMenuDuplicateAgent;
+use crate::agent_menu::AgentMenuForkAgent;
+use crate::agent_menu::AgentMenuNewShellCompanion;
+use crate::agent_menu::AgentMenuRemoveAgent;
+use crate::agent_menu::AgentMenuRestartAgent;
+use crate::agent_menu::agent_menu_key_bindings;
 use crate::app_bootstrap::CloseWindow;
 use crate::app_bootstrap::EnterFullScreen;
 use crate::app_bootstrap::HideApp;
@@ -84,6 +90,27 @@ fn standard_menu_items_carry_their_platform_shortcut(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-m", &MinimizeWindow);
           assert_bound(cx, "cmd-shift-/", &KnotHelp);
       });
+}
+
+/// The Agents menu's items are Knot's own, so their keys come from the
+/// Swift reference rather than from macOS. Four of the reference's carry
+/// over; Close Agent's cmd-w does not, because Close Window has that key
+/// here, and this asserts Remove Agent is left without one rather than
+/// quietly given the destructive half of a very common keystroke.
+#[gpui_kit::test]
+fn the_agents_menu_carries_the_reference_shortcuts(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert_bound(cx, "cmd-shift-s", &AgentMenuNewShellCompanion);
+          assert_bound(cx, "cmd-f", &AgentMenuForkAgent);
+          assert_bound(cx, "cmd-d", &AgentMenuDuplicateAgent);
+          assert_bound(cx, "cmd-r", &AgentMenuRestartAgent);
+          assert_bound(cx, "cmd-w", &CloseWindow);
+      });
+    assert!(!agent_menu_key_bindings().iter().any(|binding| {
+                                                 binding.action().partial_eq(&AgentMenuRemoveAgent)
+                                             }),
+            "Remove Agent must have no shortcut: cmd-w is Close Window here");
 }
 
 /// The Edit menu shows the standard text shortcuts because it points at

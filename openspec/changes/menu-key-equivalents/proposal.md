@@ -30,11 +30,13 @@ whose items could work today is the one that does nothing.
 - The items that have no behavior yet SHALL stay disabled. Their shortcut is
   drawn greyed beside the label, which is how macOS presents a standard item
   an application does not currently offer.
-
-The Agents menu is untouched. Its items are Knot's own, so no platform
-convention names a key for them; the Swift reference does assign some
-(`Skwad/SkwadApp.swift:188-355`), and adopting that set is a separate
-decision from following the platform's.
+- The Agents menu SHALL take the shortcuts the Swift reference gives its
+  items: New Shell Companion ⇧⌘S, Fork Agent ⌘F, Duplicate Agent ⌘D and
+  Restart Agent ⌘R. No platform convention names a key for these - they are
+  Knot's own items - so the reference is the source.
+- Remove Agent SHALL keep no shortcut. The reference calls it Close Agent and
+  gives it ⌘W, which Close Window has here; the destructive half of a very
+  common keystroke is not the place to depart from the platform.
 
 ## Capabilities
 
@@ -44,15 +46,19 @@ decision from following the platform's.
 
 ### Modified Capabilities
 
-- `app-menu`: today it specifies the Agents menu only. This adds the rule
-  that the bar's standard items carry the platform's key equivalents, which
-  is what stops the next person adding an item without one.
+- `app-menu`: today it specifies the Agents menu's items and their
+  enablement, and says nothing about keys. This adds the rule that the bar's
+  standard items carry the platform's key equivalents, and records the four
+  the Agents menu takes from the Swift reference - which is what stops the
+  next person adding an item without one.
 
 ## Impact
 
-- `crates/knot`: `app_bootstrap.rs` only - one `actions!` block for the
+- `crates/knot`: `app_bootstrap.rs` - one `actions!` block for the
   not-yet-wired standard items, five bindings, and the menu definitions in
-  `set_app_menus` pointing at real actions instead of `NoAction`.
+  `set_app_menus` pointing at real actions instead of `NoAction`;
+  `agent_menu.rs` - a table of the four bindings its own actions take from
+  the reference, beside the actions they name.
 - No change below the UI. Nothing gains behavior except the Edit menu, whose
   actions already existed and were already reachable by keyboard.
 
@@ -65,4 +71,8 @@ decision from following the platform's.
 - Adding Select All to the Edit menu, or any other item the bar does not
   already have. Which items the bar carries is a separate question from
   which keys the ones it carries answer to.
-- Key equivalents for the Agents menu - see above.
+- The reference's shortcuts that do not land on a menu the port shows one
+  on: New Agent ⌘T and Broadcast ⇧⌘B belong to the sidebar's background
+  menu, which has no menu-bar presence; Open in <app> ⇧⌘O was one item for
+  the default application where this port has a submenu of all of them. Each
+  needs a menu item before it can need a key.
