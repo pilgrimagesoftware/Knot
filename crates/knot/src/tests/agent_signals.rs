@@ -89,8 +89,8 @@ fn terminal_status_updates_the_shared_agent_store() {
                knot_agents::AgentState::Running);
 }
 
-/// An idle, MCP-enabled, non-shell agent with a live session and an unread
-/// message it has not been told about is the only case that nudges.
+/// An idle, MCP-enabled, non-shell agent with an unread message it has not
+/// been told about is the only case that nudges.
 #[test]
 fn inbox_prompt_requires_new_unread_message_for_non_shell_mcp_agent() {
     let message = Uuid::new_v4();
@@ -98,8 +98,7 @@ fn inbox_prompt_requires_new_unread_message_for_non_shell_mcp_agent() {
                              mcp_enabled:    true,
                              latest_message: Some(message),
                              last_nudged:    None,
-                             idle:           true,
-                             can_receive:    true, };
+                             idle:           true, };
 
     assert!(should_inject_inbox_prompt(ready));
     assert!(!should_inject_inbox_prompt(NudgeCheck { last_nudged: Some(message),
@@ -115,9 +114,6 @@ fn inbox_prompt_requires_new_unread_message_for_non_shell_mcp_agent() {
     assert!(!should_inject_inbox_prompt(NudgeCheck { idle: false,
                                                      ..ready }),
             "a working agent is nudged when it next goes idle, not now");
-    assert!(!should_inject_inbox_prompt(NudgeCheck { can_receive: false,
-                                                     ..ready }),
-            "no live session able to take a prompt means no nudge yet");
 }
 
 /// The id carried out is the one the caller must record as nudged, so the
@@ -130,8 +126,7 @@ fn inbox_prompt_message_id_carries_the_message_the_nudge_is_about() {
                              mcp_enabled:    true,
                              latest_message: Some(message),
                              last_nudged:    None,
-                             idle:           true,
-                             can_receive:    true, };
+                             idle:           true, };
 
     assert_eq!(inbox_prompt_message_id(ready), Some(message));
     assert_eq!(inbox_prompt_message_id(NudgeCheck { last_nudged: Some(message),
@@ -145,6 +140,40 @@ fn inbox_prompt_message_id_carries_the_message_the_nudge_is_about() {
                None);
 }
 
+/// The nudge can land behind work the agent had already started, so it has
+/// to say what to do when the inbox turns out to be empty. Without the
+/// closing instruction the agent reads the prompt as a new task and drops
+/// what it was doing - `mcp-messaging`'s "Inbox nudges preserve interrupted
+/// session work".
+///
+/// This asserts the requirement, not the copy: the wording either carries
+/// the continuation instruction or the requirement is not met.
+#[test]
+fn the_inbox_nudge_tells_the_agent_to_continue_its_previous_work() {
+    let prompt = app_support::CHECK_INBOX_PROMPT.to_lowercase();
+
+    assert!(prompt.contains("check your inbox"),
+            "the nudge must still say to check the inbox");
+    assert!(prompt.contains("continue your previous work"),
+            "the nudge must tell the agent what to do when there is nothing in the inbox");
+}
+
+/// Whether the session can take a prompt this instant is no longer part of
+/// the decision. It used to be, and a nudge that failed it was dropped and
+/// left to a later poll; delivery queues now, so the decision is only about
+/// the message and the agent.
+#[test]
+fn a_session_busy_right_now_no_longer_suppresses_the_nudge() {
+    let message = Uuid::new_v4();
+    let check = NudgeCheck { agent_type:     "claude",
+                             mcp_enabled:    true,
+                             latest_message: Some(message),
+                             last_nudged:    None,
+                             idle:           true, };
+
+    assert_eq!(inbox_prompt_message_id(check), Some(message));
+}
+
 /// A later message re-nudges: the rule is once per message, not once per
 /// agent.
 #[test]
@@ -155,8 +184,7 @@ fn a_second_message_nudges_again() {
                              mcp_enabled:    true,
                              latest_message: Some(second),
                              last_nudged:    Some(first),
-                             idle:           true,
-                             can_receive:    true, };
+                             idle:           true, };
     assert!(should_inject_inbox_prompt(check));
 }
 

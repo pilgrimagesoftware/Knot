@@ -277,7 +277,7 @@ impl WorkspaceWindow {
             text.push_str("\n\nAttached: ");
             text.push_str(&path.to_string_lossy());
         }
-        if !self.deliver_panel_prompt(id, text) {
+        if !self.deliver_panel_prompt(id, text, PromptOrigin::User) {
             return;
         }
         cx.update_entity(&input, |state, cx| {
@@ -297,9 +297,16 @@ impl WorkspaceWindow {
     /// and the error reporting are one implementation rather than two that
     /// can drift.
     ///
+    /// `origin` says what produced the prompt. It is recorded on the queued
+    /// entry so a prompt Knot sent of its own accord stays distinguishable
+    /// from one the user typed, per `mcp-messaging`'s "Inbox nudges
+    /// preserve interrupted session work" - the alternative, matching the
+    /// nudge's wording, misclassifies a user who pastes it.
+    ///
     /// Returns whether `id` has a panel session at all. An agent with none
     /// is skipped, and its composer is left untouched.
-    pub(in crate::workspace_window) fn deliver_panel_prompt(&mut self, id: Uuid, text: String)
+    pub(in crate::workspace_window) fn deliver_panel_prompt(&mut self, id: Uuid, text: String,
+                                                            origin: PromptOrigin)
                                                             -> bool {
         let Some(slot) = self.panel_sessions.get(&id)
         else {
@@ -326,7 +333,7 @@ impl WorkspaceWindow {
             self.panel_prompt_queues
                 .entry(id)
                 .or_default()
-                .push(QueuedPanelPrompt::new(text));
+                .push(QueuedPanelPrompt::new(text, origin));
             return true;
         };
         let _runtime_guard = self.runtime.enter();

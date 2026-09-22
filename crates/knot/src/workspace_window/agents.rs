@@ -140,7 +140,7 @@ impl WorkspaceWindow {
     /// not a reason to withhold the message from the rest.
     pub(super) fn broadcast_to_agents(&mut self, text: &str) {
         for id in self.workspace_agent_ids() {
-            if self.deliver_panel_prompt(id, text.to_string()) {
+            if self.deliver_panel_prompt(id, text.to_string(), PromptOrigin::User) {
                 continue;
             }
             if let Some(session) = self.sessions.get(&id) {

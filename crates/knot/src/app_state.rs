@@ -527,8 +527,8 @@ pub(crate) fn apply_terminal_status(store: &Arc<Mutex<knot_agents::AgentStore>>,
 }
 
 /// What the idle-time delivery nudge needs to know about one agent, per
-/// `mcp-messaging`. Grouped because the decision has six inputs and a
-/// six-argument predicate invites callers to transpose two of them.
+/// `mcp-messaging`. Grouped because the decision has several inputs and a
+/// five-argument predicate invites callers to transpose two of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NudgeCheck<'a> {
     pub(crate) agent_type:     &'a str,
@@ -539,10 +539,6 @@ pub(crate) struct NudgeCheck<'a> {
     pub(crate) last_nudged:    Option<Uuid>,
     /// The agent's state is Idle. A nudge must not land mid-work.
     pub(crate) idle:           bool,
-    /// The agent has a live session able to take a prompt right now - for a
-    /// panel agent, a ready slot with no turn in flight and no permission
-    /// outstanding.
-    pub(crate) can_receive:    bool,
 }
 
 // The bool form of `inbox_prompt_message_id`, kept because the spec's
@@ -553,7 +549,14 @@ pub(crate) struct NudgeCheck<'a> {
 /// Every condition here is one the spec names: MCP off means no messaging at
 /// all; a shell agent cannot receive messages; an unread message that has
 /// already been nudged about must not nudge again on the next poll; and a
-/// busy agent, or one with no live session, is nudged later instead.
+/// busy agent is nudged later instead.
+///
+/// Whether the session can take a prompt *this instant* is deliberately not
+/// a condition. That was checked here and the nudge dropped when it failed,
+/// which made delivery depend on the poll catching a quiet moment. The
+/// delivery path queues instead (`send_inbox_nudge`), so a turn that starts
+/// between this check and the send defers the nudge rather than losing it -
+/// `mcp-messaging`'s "Inbox nudges preserve interrupted session work".
 pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
     inbox_prompt_message_id(check).is_some()
 }
@@ -569,11 +572,7 @@ pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
 /// repaint poll the moment a condition above changes without the caller
 /// changing with it.
 pub(crate) fn inbox_prompt_message_id(check: NudgeCheck<'_>) -> Option<Uuid> {
-    if !(check.mcp_enabled
-         && check.agent_type != consts::SHELL_AGENT_TYPE
-         && check.idle
-         && check.can_receive)
-    {
+    if !(check.mcp_enabled && check.agent_type != consts::SHELL_AGENT_TYPE && check.idle) {
         return None;
     }
     check.latest_message

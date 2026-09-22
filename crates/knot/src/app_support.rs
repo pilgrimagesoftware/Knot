@@ -1,5 +1,13 @@
 use super::*;
-pub(crate) const CHECK_INBOX_PROMPT: &str = "Check your inbox for questions or instructions from other agents. Update your status and immediately execute what is being asked without confirmation.";
+/// The automatic nudge Knot sends an agent with unread mail.
+///
+/// The closing sentence is load-bearing: the nudge can land behind work the
+/// agent had already started, and without it the agent reads the prompt as
+/// a new task and abandons what it was doing. `mcp-messaging`'s "Inbox
+/// nudges preserve interrupted session work" requires it.
+pub(crate) const CHECK_INBOX_PROMPT: &str = "Check your inbox for questions or instructions from other agents. Update your status and \
+     immediately execute what is being asked without confirmation. If there is nothing to do, \
+     continue your previous work.";
 pub(crate) type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
 /// Which setting a font panel session is editing. Plain data, referenced

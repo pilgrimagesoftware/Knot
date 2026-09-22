@@ -11,6 +11,26 @@
 
 use uuid::Uuid;
 
+/// What put a prompt in the queue.
+///
+/// Carried explicitly rather than recovered from the prompt text, per
+/// `mcp-messaging`'s "Inbox nudges preserve interrupted session work": an
+/// automatic nudge and a user prompt that reads the same are
+/// indistinguishable after the fact, so matching on the nudge's wording
+/// would reclassify a user who pasted it.
+///
+/// Never serialized - the queue lives only as long as the window - so
+/// unlike the vocabularies in `.claude/rules/rust-structure.md` this one
+/// needs no `Display`/`FromStr`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum PromptOrigin {
+    /// Typed by the user, or sent on the user's behalf by a broadcast.
+    #[default]
+    User,
+    /// The automatic "check your inbox" nudge Knot sends of its own accord.
+    InboxNudge,
+}
+
 /// One prompt waiting to be delivered to an agent.
 ///
 /// `in_flight` marks the entry the pump has handed to the agent - it stays
@@ -24,14 +44,18 @@ pub(crate) struct QueuedPanelPrompt {
     pub(crate) text:      String,
     pub(crate) failed:    bool,
     pub(crate) in_flight: bool,
+    /// What put this prompt here. Set at the one point where that is still
+    /// known; nothing downstream can recover it.
+    pub(crate) origin:    PromptOrigin,
 }
 
 impl QueuedPanelPrompt {
-    pub(crate) fn new(text: String) -> Self {
+    pub(crate) fn new(text: String, origin: PromptOrigin) -> Self {
         Self { id: Uuid::new_v4(),
                text,
                failed: false,
-               in_flight: false }
+               in_flight: false,
+               origin }
     }
 
     /// Whether the user may delete this entry.
@@ -125,12 +149,18 @@ pub(crate) fn needs_replace_confirmation(composer: &str) -> bool {
 /// The icon carries the state visually and the row's only text is the
 /// prompt itself, so this is the sole thing that tells a screen reader
 /// whether the entry is waiting or stuck.
-pub(crate) fn queued_status_label(failed: bool) -> String {
-    knot_core::l10n::t(if failed {
-                           "panel.failed"
-                       }
-                       else {
-                           "panel.queued"
+///
+/// A queued inbox nudge says so. Since nudges queue behind a running turn
+/// the user sees a prompt in their own queue that they never typed, and the
+/// row's text - the nudge's wording - is the only other clue.
+///
+/// `failed` wins over the origin: a stuck entry is the state the user has
+/// to act on, and where it came from does not change that.
+pub(crate) fn queued_status_label(failed: bool, origin: PromptOrigin) -> String {
+    knot_core::l10n::t(match (failed, origin) {
+                           (true, _) => "panel.failed",
+                           (false, PromptOrigin::InboxNudge) => "panel.queued_inbox_nudge",
+                           (false, PromptOrigin::User) => "panel.queued",
                        })
 }
 
@@ -140,12 +170,45 @@ mod tests {
 
     fn queue(texts: &[&str]) -> Vec<QueuedPanelPrompt> {
         texts.iter()
-             .map(|text| QueuedPanelPrompt::new((*text).to_string()))
+             .map(|text| QueuedPanelPrompt::new((*text).to_string(), PromptOrigin::User))
              .collect()
     }
 
     fn texts(queue: &[QueuedPanelPrompt]) -> Vec<&str> {
         queue.iter().map(|prompt| prompt.text.as_str()).collect()
+    }
+
+    /// A nudge that arrives mid-turn goes behind the work already waiting
+    /// and stays marked as a nudge: nothing downstream can tell one from a
+    /// user's prompt by its text, which is the whole point of the field.
+    #[test]
+    fn a_queued_nudge_waits_its_turn_and_keeps_its_origin() {
+        let mut queue = queue(&["first", "second"]);
+        queue.push(QueuedPanelPrompt::new("nudge".to_string(), PromptOrigin::InboxNudge));
+
+        assert_eq!(texts(&queue), ["first", "second", "nudge"]);
+        assert_eq!(queue.iter().map(|prompt| prompt.origin).collect::<Vec<_>>(),
+                   [PromptOrigin::User,
+                    PromptOrigin::User,
+                    PromptOrigin::InboxNudge]);
+    }
+
+    /// Delivering the entry in front of a nudge leaves the nudge where it
+    /// is - the turn it was waiting behind ending is what promotes it, not
+    /// anything about the nudge itself.
+    #[test]
+    fn completing_the_entry_ahead_promotes_the_nudge_unchanged() {
+        let mut queue = queue(&["first"]);
+        queue.push(QueuedPanelPrompt::new("nudge".to_string(), PromptOrigin::InboxNudge));
+        let first = queue[0].id;
+        queue[0].in_flight = true;
+
+        complete(&mut queue, first, true);
+
+        assert_eq!(texts(&queue), ["nudge"]);
+        assert_eq!(queue[0].origin, PromptOrigin::InboxNudge);
+        assert!(!queue[0].in_flight,
+                "the promoted nudge has not been sent yet");
     }
 
     #[test]
@@ -286,7 +349,7 @@ mod tests {
         let first = queue[0].id;
 
         let text = take(&mut queue, first).expect("first should be editable");
-        queue.push(QueuedPanelPrompt::new(format!("{text} (edited)")));
+        queue.push(QueuedPanelPrompt::new(format!("{text} (edited)"), PromptOrigin::User));
 
         assert_eq!(texts(&queue), ["second", "third", "first (edited)"]);
     }

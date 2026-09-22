@@ -19,7 +19,10 @@ None.
 ### Modified Capabilities
 
 - `mcp-messaging`: define continuation behavior for inbox nudges delivered around an active session.
+- `queued-message-management`: drain a queued prompt for every agent rather than only the selected one, and identify a queued prompt the system generated.
 
 ## Impact
 
 The agent session prompt/queue handling and MCP idle-nudge delivery path are affected. Message payloads and persistence do not change, and no dependency changes are required.
+
+Two adjacent behaviors had to move with it. The queue drained only for the selected agent, which would have stranded a nudge queued for any other; and the queue is user-visible, so a nudge waiting in it needs to say it was not something the user typed.
