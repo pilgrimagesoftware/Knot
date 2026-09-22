@@ -121,7 +121,9 @@ impl McpToolCatalog {
     }
 
     fn tracker_for(&self, id: Uuid, agent_type: &str) -> bool {
-        if !matches!(agent_type, "claude" | "codex") {
+        // Only the types whose hooks report progress get a tracker; for
+        // the rest it would arm timers nothing ever feeds.
+        if !knot_core::agent_type::has_hook_activity(agent_type) {
             return false;
         }
         let mut trackers = self.trackers.lock();

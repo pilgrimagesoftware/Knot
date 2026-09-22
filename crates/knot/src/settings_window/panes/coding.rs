@@ -17,24 +17,25 @@ use gpui_kit::div;
 use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
-    pub(crate) fn agent_type_label(agent_type: &str) -> &'static str {
-        match agent_type {
-            "codex" => "Codex",
-            "opencode" => "OpenCode",
-            "gemini" => "Gemini",
-            "copilot" => "Copilot",
-            "custom1" => "Custom 1",
-            "custom2" => "Custom 2",
-            "shell" => "Shell",
-            _ => "Claude",
-        }
+    /// The name to show for an agent type.
+    ///
+    /// The roster in `knot_core::agent_type` answers this, so a type added
+    /// there is named everywhere at once. An id this build does not know
+    /// shows as itself rather than as Claude: the point of #224 is that a
+    /// value nothing recognizes must not be indistinguishable from the
+    /// default.
+    pub(crate) fn agent_type_label(agent_type: &str) -> &str {
+        knot_core::agent_type::label(agent_type)
     }
 
     /// A representative icon per agent type, so a sidebar row is
     /// identifiable at a glance rather than by its one-character avatar.
+    ///
     /// Picked to echo each vendor's own mark where the icon set has one
-    /// (Claude's asterisk, Gemini's sparkle, GitHub's for Copilot);
-    /// everything else falls back to a generic bot.
+    /// (Claude's asterisk, Gemini's sparkle, GitHub's for Copilot). Keyed
+    /// on the same ids as `knot_core::agent_type`'s roster; the fallback
+    /// covers the user's own custom commands, which have no mark to echo,
+    /// and any type this build does not know.
     ///
     /// Uses the full `gpui_kit::assets` (Lucide) set rather than GPUI
     /// Component's smaller built-in `IconName`, which has no brace,
@@ -190,14 +191,18 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |menu, _, _| {
                                     let mut menu = menu;
-                                    for (label, value) in [
-                                        ("Claude", "claude"),
-                                        ("Codex", "codex"),
-                                        ("OpenCode", "opencode"),
-                                        ("Gemini", "gemini"),
-                                        ("Copilot", "copilot"),
-                                        ("Shell", "shell"),
-                                    ] {
+                                    // Every type but the user's own custom
+                                    // commands, which are configured below
+                                    // rather than chosen here - the Swift
+                                    // reference's `availableAgents` list
+                                    // (`CodingSettingsView.swift`), read off
+                                    // the roster.
+                                    for (label, value) in
+                                        knot_core::agent_type::ALL
+                                            .iter()
+                                            .filter(|kind| !kind.is_custom)
+                                            .map(|kind| (kind.label, kind.id))
+                                    {
                                         menu = menu.item(PopupMenuItem::new(label).on_click({
                                             let settings_window = settings_window.clone();
                                             move |_, window, app| {

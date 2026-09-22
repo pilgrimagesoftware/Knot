@@ -70,7 +70,7 @@ impl Render for AgentEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let editor = cx.entity();
         let personas = persona_choices(&self.settings);
-        let is_shell = self.agent_type == "shell";
+        let is_shell = knot_core::agent_type::is_shell(&self.agent_type);
 
         let identity_rows = vec![
             Self::dialog_row(knot_core::l10n::t("agent_editor.name"), Input::new(&self.name_input).w(px(200.))).into_any_element(),
@@ -105,7 +105,7 @@ impl Render for AgentEditor {
                     knot_core::l10n::t("agent_editor.coding_agent"),
                     div()
                         .text_color(cx.theme().muted_foreground)
-                        .child(SettingsWindow::agent_type_label("shell")),
+                        .child(SettingsWindow::agent_type_label(knot_core::agent_type::SHELL)),
                 )
                 .into_any_element(),
             ]
@@ -122,16 +122,15 @@ impl Render for AgentEditor {
                             move |mut menu, _, _| {
                                 // Matches the Swift reference's `availableAgents`
                                 // list (`CodingSettingsView.swift`).
-                                for (agent_type, label) in [
-                                    ("claude", "Claude"),
-                                    ("codex", "Codex"),
-                                    ("opencode", "OpenCode"),
-                                    ("gemini", "Gemini"),
-                                    ("copilot", "Copilot"),
-                                    ("custom1", "Custom 1"),
-                                    ("custom2", "Custom 2"),
-                                    ("shell", "Shell"),
-                                ] {
+                                // Every known type, including the user's
+                                // own custom commands - this is where an
+                                // agent's type is chosen, so the roster is
+                                // offered whole.
+                                for (agent_type, label) in
+                                    knot_core::agent_type::ALL
+                                        .iter()
+                                        .map(|kind| (kind.id, kind.label))
+                                {
                                     let editor = editor.clone();
                                     menu = menu.item(PopupMenuItem::new(label).on_click(
                                         move |_, _, app| {

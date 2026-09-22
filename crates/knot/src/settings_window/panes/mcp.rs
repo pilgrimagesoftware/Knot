@@ -128,13 +128,16 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |menu, _, _| {
                                     let mut menu = menu;
-                                    for (label, value) in [
-                                        ("Claude", "claude"),
-                                        ("Codex", "codex"),
-                                        ("OpenCode", "opencode"),
-                                        ("Gemini", "gemini"),
-                                        ("Copilot", "copilot"),
-                                    ] {
+                                    // The agents that have an MCP server to
+                                    // register with: not a shell, and not a
+                                    // custom command whose registration Knot
+                                    // knows nothing about.
+                                    for (label, value) in
+                                        knot_core::agent_type::ALL
+                                            .iter()
+                                            .filter(|kind| !kind.is_custom && !kind.is_shell)
+                                            .map(|kind| (kind.label, kind.id))
+                                    {
                                         menu = menu.item(PopupMenuItem::new(label).on_click({
                                             let settings_window = settings_window.clone();
                                             move |_, _, app| {
