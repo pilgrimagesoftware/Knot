@@ -6,8 +6,10 @@
 //! [`WorkspaceWindow::persist_agents`] - `AgentStore` only mutates memory,
 //! so a roster change that skips the persist is undone by the next launch.
 
+use gpui_kit::Context;
 use uuid::Uuid;
 
+use crate::app_support::Activation;
 use crate::workspace_window::PromptOrigin;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::workspace_agent_ids;
@@ -53,6 +55,56 @@ impl WorkspaceWindow {
     pub(super) fn select_agent(&mut self, id: Uuid) {
         self.selected_agent = Some(id);
         self.store.lock().set_activated(id, true);
+    }
+
+    /// Starts every agent a direct message activated, per `mcp-messaging`'s
+    /// "Direct send activates a deactivated recipient".
+    ///
+    /// Ids belonging to another workspace go back on the queue, the same way
+    /// [`Self::raise_awaiting_notifications`] puts back what it does not
+    /// own: the MCP tool layer has no window to call, so whichever window
+    /// polls first drains the queue and only the one that owns the agent may
+    /// act on an entry.
+    ///
+    /// Does what selecting the row does, minus the selection. Both halves
+    /// are needed and neither is sufficient: `ensure_session` and
+    /// `ensure_panel_session` both return early while `activated` is clear,
+    /// and the flag on its own starts nothing. The window's selection is
+    /// deliberately left where the user put it - a message addressed to a
+    /// background agent is not a request to change what is on screen.
+    ///
+    /// Returns whether anything was started, for the poll's dirty check: the
+    /// sidebar row reads `activated` off the store each render, so the flag
+    /// flipping off the render path is exactly the case that needs a repaint
+    /// asking for it.
+    pub(in crate::workspace_window) fn activate_messaged_agents(&mut self,
+                                                                cx: &mut Context<Self>)
+                                                                -> bool {
+        if !cx.has_global::<Activation>() {
+            return false;
+        }
+        let mine = self.workspace_agent_ids();
+        let claimed = claim_activations(&cx.global::<Activation>().0.clone(), &mine);
+        if claimed.is_empty() {
+            return false;
+        }
+        {
+            // One lock for the batch, like `restart_all_agents` - the flags
+            // are independent and another window has no business seeing the
+            // workspace half activated.
+            let mut store = self.store.lock();
+            for id in &claimed {
+                store.set_activated(*id, true);
+            }
+        }
+        for id in claimed {
+            // A duplicate id (two messages to the same stopped agent before
+            // this window polled) costs nothing: both are no-ops once the
+            // session exists.
+            self.ensure_session(id);
+            self.ensure_panel_session(id);
+        }
+        true
     }
 
     /// Stops `id`'s session without removing the agent, per
@@ -168,5 +220,61 @@ impl WorkspaceWindow {
                 }
             }
         }
+    }
+}
+
+/// Takes the entries of `queue` that name an agent in `mine`, leaving the
+/// rest in place.
+///
+/// Split out from [`WorkspaceWindow::activate_messaged_agents`] so the
+/// put-back is testable without a window: dropping what this window does
+/// not own would strand a stopped agent whose own window simply had not
+/// polled yet, which is silent - the message is already delivered and
+/// nothing ever starts the recipient.
+fn claim_activations(queue: &crate::app_support::ActivationQueue, mine: &[Uuid]) -> Vec<Uuid> {
+    let mut queue = queue.lock();
+    let (claimed, rest): (Vec<_>, Vec<_>) =
+        std::mem::take(&mut *queue).into_iter()
+                                   .partition(|id| mine.contains(id));
+    *queue = rest;
+    claimed
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use parking_lot::Mutex;
+
+    use super::*;
+
+    #[test]
+    fn claims_only_this_workspace_and_leaves_the_rest_queued() {
+        let mine = [Uuid::new_v4(), Uuid::new_v4()];
+        let theirs = Uuid::new_v4();
+        let queue = Arc::new(Mutex::new(vec![theirs, mine[0], mine[1]]));
+
+        let claimed = claim_activations(&queue, &mine);
+
+        assert_eq!(claimed, vec![mine[0], mine[1]]);
+        assert_eq!(&*queue.lock(), &[theirs]);
+    }
+
+    #[test]
+    fn claims_nothing_when_no_entry_belongs_to_this_workspace() {
+        let theirs = Uuid::new_v4();
+        let queue = Arc::new(Mutex::new(vec![theirs]));
+
+        assert!(claim_activations(&queue, &[Uuid::new_v4()]).is_empty());
+        assert_eq!(&*queue.lock(), &[theirs]);
+    }
+
+    #[test]
+    fn a_repeated_id_is_claimed_once_per_entry_and_drains_fully() {
+        let mine = Uuid::new_v4();
+        let queue = Arc::new(Mutex::new(vec![mine, mine]));
+
+        assert_eq!(claim_activations(&queue, &[mine]), vec![mine, mine]);
+        assert!(queue.lock().is_empty());
     }
 }

@@ -86,9 +86,7 @@ impl WorkspaceWindow {
                             let mut window = WorkspaceWindow {
                     exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
-                    diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
-                    diff_stats_requested: BTreeMap::new(),
-                    diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    diff_stats: crate::diff_stats::DiffStatsCache::default(),
                     open_config_selector: None,
                     store,
                     messages,
@@ -119,6 +117,7 @@ impl WorkspaceWindow {
                     working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
+                    panel_lookups: BTreeMap::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     error: None,
@@ -197,6 +196,11 @@ impl WorkspaceWindow {
                                                  // is noticed.
                                                  view.deliver_inbox_nudges();
                                                  view.raise_awaiting_notifications(cx);
+                                                 // Before the repaint
+                                                 // checks below, so an agent
+                                                 // started here has its slot
+                                                 // in place when they run.
+                                                 let activated = view.activate_messaged_agents(cx);
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))
@@ -206,7 +210,11 @@ impl WorkspaceWindow {
                                                          });
                                                  let panel_dirty = view.panel_needs_repaint();
                                                  let spinner_dirty = view.spinner_repaint_due();
-                                                 if grid_dirty || panel_dirty || spinner_dirty {
+                                                 if grid_dirty
+                                                    || panel_dirty
+                                                    || spinner_dirty
+                                                    || activated
+                                                 {
                                                      cx.notify();
                                                  }
                                                  view.refresh_agents_menu(cx);

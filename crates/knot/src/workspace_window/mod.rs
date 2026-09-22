@@ -27,7 +27,7 @@ mod creation;
 mod menus;
 mod notifications;
 mod open;
-mod panel;
+pub(crate) mod panel;
 mod render;
 mod repaint;
 mod sessions;
@@ -123,10 +123,7 @@ struct AgentRow {
 pub(crate) struct WorkspaceWindow {
     /// Last known diff stat per agent, refreshed off the render path - see
     /// `refresh_diff_stats`.
-    diff_stats:                       Arc<Mutex<BTreeMap<Uuid, Option<knot_git::DiffStats>>>>,
-    /// When each agent's diff stat was last *requested*, so the refresh
-    /// runs on a cadence rather than once per render. Main-thread only.
-    diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
+    diff_stats:                       crate::diff_stats::DiffStatsCache,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off
@@ -134,8 +131,6 @@ pub(crate) struct WorkspaceWindow {
     exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
     /// Keeps the window-bounds observer alive for this window's lifetime.
     window_bounds_subscription:       Option<gpui_kit::Subscription>,
-    /// Set by a finished refresh so the repaint poll redraws the header.
-    diff_stats_dirty:                 Arc<std::sync::atomic::AtomicBool>,
     /// Which config selector's popover is open, by element id, or `None`
     /// when none is. One shared flag used to back all three: because every
     /// selector's `on_open_change` wrote it and the permission selector
@@ -234,6 +229,11 @@ pub(crate) struct WorkspaceWindow {
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     panel_input_expanded:             BTreeSet<Uuid>,
+    /// The slash lookup's state per Panel-mode agent: the memoized
+    /// command/skill registry, which entry is selected, and the token Esc
+    /// closed it on. Created on the agent's first lookup, since building it
+    /// reads skill roots off disk - see `panel::lookup`.
+    panel_lookups:                    BTreeMap<Uuid, panel::lookup::PanelLookup>,
     /// This window's handle, so the poll can tell whether it is the active
     /// window before replacing the app-wide menu bar - two open workspace
     /// windows must not fight over whose selection the Agents menu shows.

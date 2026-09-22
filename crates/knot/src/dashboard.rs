@@ -219,24 +219,32 @@ fn add_agent_tile(workspace_id: Uuid,
 
 /// One workspace's section: color bar + name (+ nav when global) + agent
 /// grid, or an "No agents" empty state.
-pub(crate) fn workspace_section(workspace: DashboardWorkspace, is_global: bool,
-                                muted: gpui_kit::Hsla,
-                                on_agent_tap: impl Fn(Uuid,
-                                   &mut gpui_kit::Window,
-                                   &mut gpui_kit::App)
-                                + Clone
-                                + 'static,
-                                on_workspace_nav: impl Fn(Uuid,
-                                   &mut gpui_kit::Window,
-                                   &mut gpui_kit::App)
-                                + Clone
-                                + 'static,
-                                on_add_agent: impl Fn(Uuid,
-                                   &mut gpui_kit::Window,
-                                   &mut gpui_kit::App)
-                                + Clone
-                                + 'static)
-                                -> impl IntoElement {
+/// What a dashboard section does when the user acts on it.
+///
+/// A struct rather than three positional parameters: all three take
+/// `(Uuid, &mut Window, &mut App)`, so passing them in the wrong order
+/// compiled cleanly and swapped "open this agent" with "add an agent here".
+pub(crate) struct WorkspaceSectionCallbacks<Tap, Nav, Add> {
+    /// The user tapped an agent card - the agent's id.
+    pub(crate) on_agent_tap:     Tap,
+    /// The user tapped the section's own title - the workspace's id.
+    pub(crate) on_workspace_nav: Nav,
+    /// The user tapped the section's add button - the workspace's id.
+    pub(crate) on_add_agent:     Add,
+}
+
+pub(crate) fn workspace_section<Tap, Nav, Add>(workspace: DashboardWorkspace, is_global: bool,
+                                               muted: gpui_kit::Hsla,
+                                               callbacks: WorkspaceSectionCallbacks<Tap,
+                                                                         Nav,
+                                                                         Add>)
+                                               -> impl IntoElement
+    where Tap: Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + Clone + 'static,
+          Nav: Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + Clone + 'static,
+          Add: Fn(Uuid, &mut gpui_kit::Window, &mut gpui_kit::App) + Clone + 'static {
+    let WorkspaceSectionCallbacks { on_agent_tap,
+                                    on_workspace_nav,
+                                    on_add_agent, } = callbacks;
     let color: gpui_kit::Hsla =
         gpui_kit::Rgba::try_from(workspace.color_hex.as_str()).map(Into::into)
                                                               .unwrap_or_else(|_| {

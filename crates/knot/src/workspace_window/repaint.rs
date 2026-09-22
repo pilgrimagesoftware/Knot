@@ -69,8 +69,7 @@ impl WorkspaceWindow {
                 prompt_queue::complete(queue, prompt_id, result.is_ok());
             }
         }
-        let stats_changed = self.diff_stats_dirty
-                                .swap(false, std::sync::atomic::Ordering::SeqCst);
+        let stats_changed = self.diff_stats.take_changed();
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
