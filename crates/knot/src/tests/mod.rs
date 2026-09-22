@@ -10,6 +10,7 @@ use crate::app_state::agent_context_menu_entries;
 
 mod about_window;
 mod agent_context_menu;
+mod agent_registry_fields;
 mod agent_signals;
 mod agents_menu;
 mod l10n_catalog;

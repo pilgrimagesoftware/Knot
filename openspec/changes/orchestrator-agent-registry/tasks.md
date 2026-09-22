@@ -123,13 +123,17 @@
 
 ## 7. Editing registry metadata
 
-- [ ] 7.1 Add description, capability-tag and cost-tier controls to the agent
+- [x] 7.1 Add description, capability-tag and cost-tier controls to the agent
   editor, with all copy through `knot_core::l10n::t` and keys added to
   `en.yml`; verify the l10n test asserts every new key resolves (touch
   `knot-core` first so the catalogue is not read from a stale artifact)
-- [ ] 7.2 Add the same three fields to the bench entry path; verify editing
-  them persists through a settings round trip
-- [ ] 7.3 Ensure editing any of the three does not restart the agent; verify
+- [x] 7.2 Add the same three fields to the bench entry path; verify editing
+  them persists through a settings round trip. There is no bench editor to
+  add controls to - the bench is written only by "Save to Bench" - so this
+  is the save/deploy round trip wired in task group 1, covered by
+  `deploying_a_bench_entry_restores_its_registry_metadata` and
+  `registry_metadata_survives_a_settings_round_trip`
+- [x] 7.3 Ensure editing any of the three does not restart the agent; verify
   a test that adding a tag to a Working agent leaves its session intact
   (`agent-lifecycle` - "Re-tagging a working agent does not interrupt it")
 
