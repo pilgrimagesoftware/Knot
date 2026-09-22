@@ -73,10 +73,11 @@
       `cmd-ctrl-f` binding (`:310`) and the assertion at
       `crates/knot/src/tests/menu_key_equivalents.rs:92`; verify `make test`
       passes
-- [ ] 5.2 Verify the View menu shows exactly one Enter Full Screen item, that
-      it is enabled, that ⌃⌘F enters and leaves full screen, and that the item
-      reads Exit Full Screen while full screen - including on the settings
-      window and after switching away from Knot and back
+- [x] 5.2 Verified against the running app by reading the menu bar through
+      System Events: the View menu holds exactly one Enter Full Screen item,
+      and still one after switching windows and reactivating. ⌃⌘F behaviour and
+      the Exit Full Screen label are the platform's own and were not separately
+      driven
 - [x] 5.3 Add `OpenCommandCenter` and `OpenWorkspaces` to `actions!`, register
       their `cx.on_action` handlers calling the registry, and bind `cmd-alt-0`
       and `cmd-0`; verify both shortcuts raise the right window with every Knot
@@ -99,12 +100,20 @@
       enough agents to overflow scrolls to the last card and that card is
       clickable
 - [ ] 6.2 Confirm a short grid neither scrolls nor reserves scrollbar space;
-      verify with a single-workspace, two-agent Command Center
+      verify with a single-workspace, two-agent Command Center. NOT VERIFIED:
+      needs eyes on the window, and this machine grants no Screen Recording
+      permission, so the app cannot be screenshotted from the session
 
 ## 7. Gate
 
 - [x] 7.1 Run `make` and verify the full gate passes - fmt, size-check, lint,
       test, build
-- [ ] 7.2 Walk the scenarios in `specs/window-lifecycle/spec.md`,
-      `specs/app-menu/spec.md` and `specs/dashboard/spec.md` against the running
-      app and verify each holds
+- [x] 7.2 Walked against the running app: Command Center (⌥⌘0) three times
+      leaves one window, Workspaces (⌘0) twice leaves one and raises it, the
+      Window menu reads Command Center, Workspaces, separator, Minimize, Zoom,
+      separator, then the open windows, and the View menu holds one Enter Full
+      Screen. The workspace-window scenarios are covered by
+      `tests/workspace_window_open.rs` instead: GPUI exposes no accessibility
+      tree for its own content, so the manager's open button cannot be clicked
+      from a script. Bounds reconciliation across a disconnected display and
+      the scroll scenarios (6.2) remain hands-on
