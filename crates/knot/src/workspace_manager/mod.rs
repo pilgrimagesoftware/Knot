@@ -19,6 +19,7 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Icon;
 use gpui_kit::component::TitleBar;
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Input;
@@ -52,7 +53,6 @@ pub(crate) struct WorkspaceManager {
     pub(crate) editing_id:            Option<Uuid>,
     pub(crate) workspace_dialog_id:   Option<Uuid>,
     pub(crate) show_workspace_dialog: bool,
-    pub(crate) delete_workspace_id:   Option<Uuid>,
     pub(crate) error:                 Option<String>,
     /// Keeps the confirm button's disabled state honest while the user
     /// types: without it the button only re-reads the name on the next
@@ -177,23 +177,35 @@ impl WorkspaceManager {
         cx.notify();
     }
 
-    fn request_delete(&mut self, id: Uuid, cx: &mut Context<Self>) {
-        self.delete_workspace_id = Some(id);
+    /// Asks before deleting, through the shared alert dialog.
+    ///
+    /// `.claude/rules/knot-ui-conventions.md` requires `open_alert_dialog`
+    /// for destructive actions, and this was the one window still painting
+    /// its own overlay - so it was also the only confirmation without the
+    /// dialog's focus trapping, Escape handling and default button.
+    fn request_delete(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
         self.error = None;
+        let name = self.store
+                       .lock()
+                       .workspaces()
+                       .iter()
+                       .find(|workspace| workspace.id == id)
+                       .map(|workspace| workspace.name.clone())
+                       .unwrap_or_else(|| "this workspace".to_string());
+        let manager = cx.entity();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+                  let manager = manager.clone();
+                  alert.title("Delete Workspace?")
+                       .description(format!("Delete \"{name}\" and its agents?"))
+                       .confirm()
+                       .on_ok(move |_, _, app| {
+                           manager.update(app, |view, cx| {
+                                      view.delete(id, cx);
+                                  });
+                           true
+                       })
+              });
         cx.notify();
-    }
-
-    fn cancel_delete(&mut self, cx: &mut Context<Self>) {
-        self.delete_workspace_id = None;
-        cx.notify();
-    }
-
-    fn confirm_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self.delete_workspace_id.take()
-        else {
-            return;
-        };
-        self.delete(id, cx);
     }
 
     fn move_before(&mut self, id: Uuid, target_id: Uuid, cx: &mut Context<Self>) {
@@ -220,20 +232,18 @@ impl WorkspaceManager {
 
 impl Render for WorkspaceManager {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let workspaces = self.store.lock().workspaces().to_vec();
-        let delete_name =
-            self.delete_workspace_id.and_then(|id| {
-                                        workspaces.iter()
-                                                  .find(|workspace| workspace.id == id)
-                                                  .map(|workspace| workspace.name.clone())
-                                    });
+        // One lock for both reads: the current workspace was being re-read
+        // per row, taking the store lock once per workspace in the middle of
+        // building the element tree.
+        let (workspaces, current_workspace) = {
+            let store = self.store.lock();
+            (store.workspaces().to_vec(), store.current_workspace_id())
+        };
         let name_is_blank = workspace_name_is_blank(&self.name_input.read(cx).value());
         let rows = workspaces.into_iter().map(|workspace| {
                                              let id = workspace.id;
                                              let agent_count = workspace.agent_ids.len();
-                                             let selected =
-                                                 self.store.lock().current_workspace_id()
-                                                 == Some(id);
+                                             let selected = current_workspace == Some(id);
                                              h_flex()
                 .id(format!("workspace-row-{id}"))
                 .on_drop(
@@ -300,8 +310,8 @@ impl Render for WorkspaceManager {
                         .icon(IconName::Delete)
                         .danger()
                         .tooltip("Delete workspace")
-                        .on_click(cx.listener(move |manager, _: &ClickEvent, _window, cx| {
-                            manager.request_delete(id, cx);
+                        .on_click(cx.listener(move |manager, _: &ClickEvent, window, cx| {
+                            manager.request_delete(id, window, cx);
                         })),
                 )
                 .child(
@@ -466,59 +476,6 @@ impl Render for WorkspaceManager {
                                     ),
                             )
                     }))
-                    .children(self.delete_workspace_id.map(|_| {
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .bg(cx.theme().overlay)
-                            .child(
-                                v_flex()
-                                    .w(px(360.))
-                                    .gap_3()
-                                    .p_4()
-                                    .rounded(cx.theme().radius_lg)
-                                    .bg(cx.theme().background)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .child(div().text_lg().child("Delete Workspace?"))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "Delete \"{}\" and its agents?",
-                                                delete_name.as_deref().unwrap_or("this workspace")
-                                            )),
-                                    )
-                                    .child(
-                                        h_flex()
-                                            .justify_end()
-                                            .gap_2()
-                                            .child(
-                                                Button::new("cancel-delete-workspace")
-                                                    .label("Cancel")
-                                                    .on_click(cx.listener(
-                                                        |manager, _: &ClickEvent, _window, cx| {
-                                                            manager.cancel_delete(cx);
-                                                        },
-                                                    )),
-                                            )
-                                            .child(
-                                                Button::new("confirm-delete-workspace")
-                                                    .label("Delete")
-                                                    .danger()
-                                                    .on_click(cx.listener(
-                                                        |manager, _: &ClickEvent, _window, cx| {
-                                                            manager.confirm_delete(cx);
-                                                        },
-                                                    )),
-                                            ),
-                                    ),
-                            )
-                    })),
             )
             .children(crate::app_support::root_overlays(window, cx))
     }
