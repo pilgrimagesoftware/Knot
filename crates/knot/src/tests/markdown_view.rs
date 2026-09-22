@@ -10,11 +10,21 @@
 //! Markdown because the `markdown` crate reaches `knot` only as a gpui-kit
 //! re-export, and driving it would test that crate's parser rather than this
 //! module's handling of what it produces.
+//!
+//! The same boundary decides what the code block copy control leaves
+//! untested. Only [`code_block_copy_text`] is a pure function; the button
+//! around it needs a `Window` and an `App`, and where `gpui-base` draws it is
+//! `gpui-base`'s own placement. So its corner, its tooltip and its click
+//! handler are covered by the spec's scenarios and by the manual check in the
+//! change's task list, not by an assertion here.
 
+use gpui_kit::base::text::CodeBlock;
 use gpui_kit::component::text::markdown_ast;
 use gpui_kit::{FontWeight, Pixels, px};
 
-use crate::markdown_view::{HeadingLevel, heading_node, heading_size_and_weight};
+use crate::markdown_view::{
+    HeadingLevel, code_block_copy_text, heading_node, heading_size_and_weight,
+};
 
 /// The body size the factors multiply. Deliberately not 14, the default of
 /// `TextViewStyle::heading_base_font_size`, so these assertions would fail if
@@ -134,4 +144,31 @@ fn a_block_that_is_not_a_heading_is_left_to_the_built_in_conversion() {
                                                              lang:     None,
                                                              meta:     None, });
     assert!(heading_node(&code).is_none());
+}
+
+/// The language tag is metadata the parser keeps beside the code, never part
+/// of it, so the spec's "no fence markers, no language tag" needs no trimming
+/// - only that this reads the code and not the source.
+#[test]
+fn a_tagged_block_copies_its_lines_without_the_tag() {
+    let block = CodeBlock::from_code("cargo test\ncargo build\n", Some("bash"));
+    assert_eq!(code_block_copy_text(&block), "cargo test\ncargo build\n");
+}
+
+/// Backticks inside the code are content, not delimiters. Re-scanning the
+/// Markdown source for a closing fence is where this would go wrong; reading
+/// the parser's own text is where it cannot.
+#[test]
+fn backticks_inside_the_code_are_copied_verbatim() {
+    let block = CodeBlock::from_code("echo `date` and ``nested``", Some("sh"));
+    assert_eq!(code_block_copy_text(&block), "echo `date` and ``nested``");
+}
+
+/// An empty block still draws a button, per design.md - suppressing it would
+/// make the block chrome inconsistent - so the empty copy has to be the honest
+/// answer rather than a panic or a placeholder.
+#[test]
+fn an_empty_block_copies_an_empty_string() {
+    let block = CodeBlock::from_code("", None::<&str>);
+    assert_eq!(code_block_copy_text(&block), "");
 }

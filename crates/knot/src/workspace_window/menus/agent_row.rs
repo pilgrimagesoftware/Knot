@@ -92,7 +92,27 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
                                            insert_after,
                                            edit_target },
                       move |_id, _window, app| {
-                          window_entity.update(app, |_, cx| cx.notify());
+                          window_entity.update(app, |view, cx| {
+                                           // Freshly loaded, not this window's
+                                           // snapshot: the
+                                           // sidebar row resolves the agent's
+                                           // persona name
+                                           // from `view.settings.personas`,
+                                           // which was taken
+                                           // when the window opened. Assigning
+                                           // a persona
+                                           // added since then (or via this same
+                                           // edit, on an
+                                           // agent that had none) would resolve
+                                           // to nothing
+                                           // and the row would keep showing no
+                                           // persona line.
+                                           view.settings =
+                                               knot_core::Settings::load().unwrap_or_else(|_| {
+                                                                              view.settings.clone()
+                                                                          });
+                                           cx.notify();
+                                       });
                       },
                       app);
 }
