@@ -86,6 +86,10 @@ impl WorkspaceWindow {
                     exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
                     diff_stats: crate::diff_stats::DiffStatsCache::default(),
+                    pull_request_states:
+                        crate::pull_request_state::PullRequestStateCache::default(),
+                    forge_status: crate::pull_request_state::ForgeStatus::default(),
+                    pull_request_open_failed: false,
                     open_config_selector: None,
                     store,
                     messages,

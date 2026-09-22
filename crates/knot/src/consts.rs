@@ -38,6 +38,15 @@ pub(crate) const WORKING_INDICATOR_MIN_REPAINT: Duration = Duration::from_millis
 /// repaints - see `workspace_window::sessions`.
 pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 
+/// How stale a pull request's fetched state may get before the Pull Requests
+/// view asks for it again.
+///
+/// Far longer than a diff stat's two seconds: this is a network round trip
+/// through `gh`, and a pull request's title and status change on a human
+/// timescale rather than a keystroke's. A list of twenty rows therefore costs
+/// twenty `gh` runs a minute while it is open, and none while it is not.
+pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
+
 /// How often the settings window drains the native font panel's selections.
 ///
 /// The panel is an AppKit window with no callback into GPUI, so its choice is

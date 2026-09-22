@@ -3767,6 +3767,7 @@ dependencies = [
  "knot-agents",
  "knot-core",
  "knot-discovery",
+ "knot-forge",
  "knot-git",
  "knot-history",
  "knot-mcp",

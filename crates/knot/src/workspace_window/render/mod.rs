@@ -55,6 +55,8 @@ use crate::workspace_window::with_agents_menu_actions;
 
 mod content;
 mod overview;
+pub(super) mod pull_requests_pane;
+mod pull_requests_row;
 mod sidebar;
 mod sidebar_compact;
 mod title_bar;
@@ -184,6 +186,7 @@ impl WorkspaceWindow {
     /// list with the dashboard row above it, the error line, and the new
     /// agent button.
     fn sidebar_column(&self, compact: bool, dashboard_row: gpui_kit::AnyElement,
+                      pull_requests_row: Option<gpui_kit::AnyElement>,
                       agent_rows: Vec<gpui_kit::AnyElement>,
                       background_targets: SidebarMenuTargets, cx: &mut Context<Self>)
                       -> impl IntoElement + use<> {
@@ -208,6 +211,7 @@ impl WorkspaceWindow {
                     .gap_1()
                     .p_4()
                     .child(dashboard_row)
+                    .children(pull_requests_row)
                     .children(agent_rows)
                     // The background menu hangs off a
                     // filler below the rows rather
@@ -253,8 +257,15 @@ impl Render for WorkspaceWindow {
                            .child(knot_core::l10n::t("workspace.missing"));
         };
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
+        let is_pull_requests = self.view_mode == WorkspaceViewMode::PullRequests;
+        // Every takeover hides the selected agent's header and pane, so the
+        // question the rest of this render asks is "is anything taking the
+        // content over", not "is it the dashboard".
+        let is_takeover = self.view_mode.is_takeover();
 
-        self.prepare_frame(is_dashboard, window, cx);
+        self.prepare_frame(is_takeover, window, cx);
+        // Gated on the view inside: nothing is fetched while it is closed.
+        self.refresh_pull_request_states();
         // The one place the compact breakpoint is read. Every surface that
         // changes below it takes this `bool`, so none of them can disagree
         // about where compact begins.
@@ -267,17 +278,21 @@ impl Render for WorkspaceWindow {
                                          compact,
                                          cx);
         let dashboard_row = self.dashboard_row(is_dashboard, compact, cx);
+        let pull_requests_row = self.pull_requests_row(compact, cx);
 
         let selected_header = self.selected_agent_header();
 
-        let dashboard_content = self.dashboard_content(is_dashboard, cx);
+        // One content slot: at most one takeover shows at a time, so the
+        // first that claims it wins and `content_column` needs no third arm.
+        let takeover_content = self.dashboard_content(is_dashboard, cx)
+                                   .or_else(|| self.pull_requests_content(is_pull_requests, cx));
 
-        let title_bar_left = self.title_bar_left(is_dashboard,
+        let title_bar_left = self.title_bar_left(is_takeover,
                                                  &selected_header,
                                                  &title_font_name,
                                                  title_font_size,
                                                  cx);
-        let title_bar_right = self.title_bar_right(is_dashboard,
+        let title_bar_right = self.title_bar_right(is_takeover,
                                                    &selected_header,
                                                    &title_font_name,
                                                    title_font_size,
@@ -334,11 +349,12 @@ impl Render for WorkspaceWindow {
                         .flex_none()
                         .child(self.sidebar_column(compact,
                                                    dashboard_row,
+                                                   pull_requests_row,
                                                    agent_rows,
                                                    background_targets,
                                                    cx)))
-                    .child(resizable_panel().child(self.content_column(is_dashboard,
-                                                                       dashboard_content,
+                    .child(resizable_panel().child(self.content_column(is_takeover,
+                                                                       takeover_content,
                                                                        title_bar_left,
                                                                        title_bar_right,
                                                                        window,

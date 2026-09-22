@@ -61,50 +61,50 @@
 
 ## 5. State cache
 
-- [ ] 5.1 Add a claim-refresh cache for pull request state following
+- [x] 5.1 Add a claim-refresh cache for pull request state following
       `crates/knot/src/diff_stats.rs` - per-URL TTL, writer, dirty flag -
       either by generalizing that type or as a sibling; verify unit tests for
       claim, TTL expiry and dirty-flag handoff
-- [ ] 5.2 Drive refreshes from `WorkspaceWindow`'s tokio runtime via
+- [x] 5.2 Drive refreshes from `WorkspaceWindow`'s tokio runtime via
       `spawn_blocking`, only while the Pull Requests view is showing; verify no
       `gh` process is spawned while the view is closed
-- [ ] 5.3 Verify a row keeps its last state while a refresh is in flight rather
+- [x] 5.3 Verify a row keeps its last state while a refresh is in flight rather
       than blanking; add that test against the cache
 
 ## 6. The view
 
-- [ ] 6.1 Add the Pull Requests launcher row to the sidebar in
+- [x] 6.1 Add the Pull Requests launcher row to the sidebar in
       `crates/knot/src/workspace_window/render/sidebar.rs`, with its state
       breakdown and selected background; verify the count updates when a record
       is added with the window open
-- [ ] 6.1a Derive the breakdown from the state cache - open (draft included),
+- [x] 6.1a Derive the breakdown from the state cache - open (draft included),
       merged, closed, and pending for records whose state is not known; verify
       unit tests for a fully-known set, a fully-unknown set falling back to the
       total, and a mixed set counting the rest as pending
-- [ ] 6.1b Verify the breakdown follows a state change on the next refresh, and
+- [x] 6.1b Verify the breakdown follows a state change on the next refresh, and
       that it needs no `gh` process while the view is closed - the row falls
       back to the total instead; add both tests
-- [ ] 6.2 Add the content pane listing the workspace's pull requests grouped by
+- [x] 6.2 Add the content pane listing the workspace's pull requests grouped by
       agent, newest first, following the markdown/mermaid takeover in
       `workspace_window/panel/pane.rs`; verify the pane replaces the content and
       the row toggles back
-- [ ] 6.3 Render each row's fetched state - number, title, draft/open/merged/
+- [x] 6.3 Render each row's fetched state - number, title, draft/open/merged/
       closed, check rollup - and the empty-workspace message; verify against a
       workspace with and without records
-- [ ] 6.4 Show the single availability message derived from `probe()`, wording
+- [x] 6.4 Show the single availability message derived from `probe()`, wording
       distinguishing missing, unauthenticated and failed; verify each of the
       three by stubbing the probe
-- [ ] 6.5 Add `open_url` to `crates/knot/src/open_in.rs` beside `run_open` and
+- [x] 6.5 Add `open_url` to `crates/knot/src/open_in.rs` beside `run_open` and
       wire the row click to it; verify clicking a row opens the browser, and
       that a row without state is still clickable
-- [ ] 6.6 Add row removal and verify a removed row stays absent after a restart
-- [ ] 6.7 Add the view's strings to `crates/knot-core/locales/en.yml` and route
+- [x] 6.6 Add row removal and verify a removed row stays absent after a restart
+- [x] 6.7 Add the view's strings to `crates/knot-core/locales/en.yml` and route
       every user-facing string through `l10n::t`; verify the key test resolves
       them, touching `knot-core` first so the build is not stale
 
 ## 7. Gate
 
-- [ ] 7.1 Run `make` and verify the full gate passes - fmt, size-check, lint,
+- [x] 7.1 Run `make` and verify the full gate passes - fmt, size-check, lint,
       test, build
 - [ ] 7.2 Walk the scenarios in `specs/pull-request-tracking/spec.md` against
       the running app, including the `gh`-absent and `gh`-unauthenticated paths,

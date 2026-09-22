@@ -166,7 +166,8 @@ impl WorkspaceWindow {
     /// `git`. `knot-git` is runtime-agnostic by contract, hence
     /// `spawn_blocking` rather than an async call.
     pub(super) fn refresh_diff_stats(&mut self, id: Uuid, folder: &str) {
-        let Some(writer) = self.diff_stats.claim_refresh(id)
+        let Some(writer) = self.diff_stats
+                               .claim_refresh(id, crate::diff_stats::MAX_AGE)
         else {
             return;
         };
@@ -275,7 +276,11 @@ impl WorkspaceWindow {
         // for the window's whole life - including agents that no longer
         // exist. A stale nudge marker is not just memory: an id reused by a
         // recreated agent would inherit it and skip its first inbox prompt.
-        self.diff_stats.forget(id);
+        self.diff_stats.forget(&id);
+        // The same hazard, keyed by URL rather than by agent: this agent's
+        // records have just cascaded out of the store, so their cached
+        // states are entries nothing will ever ask for again.
+        self.prune_pull_request_states();
         self.nudged_messages.remove(&id);
         self.forget_awaiting_notification(id);
         self.panel_states.remove(&id);

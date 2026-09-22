@@ -26,7 +26,9 @@ mod panel_session;
 mod panel_state;
 mod panel_view;
 mod plan_view;
+mod pull_request_state;
 mod quit_guard;
+mod refresh_cache;
 mod settings_window;
 mod terminal_view;
 #[cfg(test)]

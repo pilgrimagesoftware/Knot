@@ -144,7 +144,7 @@ impl WorkspaceWindow {
         let id = self.selected_agent?;
         let store = self.store.lock();
         let agent = store.agent(id)?;
-        let stats = self.diff_stats.get(id);
+        let stats = self.diff_stats.get(&id);
         let state = (!agent.is_shell()).then_some((agent.state, stats));
         Some(SelectedAgentHeader { avatar: agent.avatar.clone(),
                                    name: agent.name.clone(),
