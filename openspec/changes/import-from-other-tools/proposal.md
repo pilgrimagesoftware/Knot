@@ -25,14 +25,16 @@ Two sources are sitting on disk right now:
   which to import, and each becomes a `user` persona.
   - **Claude Code's provider ships with this change.** Its format is
     confirmed against real files.
-  - **Codex, OpenCode and Gemini providers are part of this change but their
-    formats are not yet confirmed.** Nothing on this machine has subagent
-    definitions for any of the three: Codex has `~/.codex/config.toml` and a
-    `skills/` directory with no agents, OpenCode's `opencode.jsonc` holds
-    only a `$schema` key, and `~/.gemini/` has skills and plugins but no
-    agents. Each provider's requirement is written once its format has been
-    read from a real installation, not inferred - inferring a format is the
-    mistake that produced four silent failures on the last branch.
+  - **Codex, OpenCode and Gemini are deferred to a follow-up change.**
+    Nothing on this machine has subagent definitions for any of the three:
+    Codex has `~/.codex/config.toml` and a `skills/` directory with no
+    agents, OpenCode's `opencode.jsonc` holds only a `$schema` key, and
+    `~/.gemini/` has config, history and plugins but no agents. Each
+    provider's requirement is written once its format has been read from a
+    real installation, not inferred - inferring a format is the mistake that
+    produced four silent failures on the last branch. The registry knows all
+    four tools; the import tab lists only the ones with a reader, so an
+    unimplemented tool is absent rather than falsely empty.
 - **Import workspaces from Skwad.** Read Skwad's preferences, list its
   workspaces, and import the chosen ones along with the agents they hold, the
   personas those agents reference, and the bench templates.

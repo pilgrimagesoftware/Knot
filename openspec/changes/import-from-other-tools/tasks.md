@@ -48,18 +48,17 @@
 
 ## 4. The remaining providers
 
-Each of these is blocked on reading a real installation. Do not write a
-provider - or its spec requirement - from an inferred format; that is the
-failure this change's design section refuses.
+Deferred to the `import-subagents-from-more-tools` change. Each is blocked on
+reading a real installation, and none of the three holds subagent definitions
+on this machine. Writing a provider - or its spec requirement - from an
+inferred format is the failure this change's design section refuses, so the
+registry keeps them absent from the import surface until their format can be
+confirmed.
 
-- [ ] 4.1 Codex: find where it keeps subagent definitions on a machine that
-      has them, add the requirement to `specs/data-import/spec.md` describing
-      that format, then implement the provider with fixture tests. If Codex
-      has no such concept, record that in the spec instead and drop it from
-      the registry.
-- [ ] 4.2 OpenCode: same, starting from a populated `opencode.jsonc` or
-      whatever its agent directory turns out to be.
-- [ ] 4.3 Gemini: same.
+- [x] 4.1 Record in `specs/data-import/spec.md` that Codex, OpenCode and
+      Gemini have no reader, what was found on disk for each, and that the
+      import surface lists only tools that have one. Move the three providers
+      to a follow-up change rather than inferring their formats.
 
 ## 5. Verification
 
