@@ -8,7 +8,7 @@
 //! Contract: `openspec/specs/data-import/spec.md` - "Subagent definition
 //! provider registry".
 
-mod claude;
+pub(crate) mod claude;
 #[cfg(test)]
 mod tests;
 

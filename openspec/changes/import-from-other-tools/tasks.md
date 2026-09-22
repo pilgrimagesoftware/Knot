@@ -24,7 +24,7 @@
 - [x] 2.3 Import selected definitions as `user` personas, skipping any whose
       name already exists. Verify with a test that a second import of the same
       definitions adds nothing and reports every one as skipped.
-- [ ] 2.4 Wire the personas section of the Import tab to the registry, listing
+- [x] 2.4 Wire the personas section of the Import tab to the registry, listing
       only tools whose provider is implemented. Verify in the app against the
       real `~/.claude/agents` directory.
 
@@ -40,7 +40,7 @@
       templates for their folders; skip any id Knot already holds; import an
       agent whose persona is missing without one. Verify with tests for each
       of those four behaviours.
-- [ ] 3.3 Wire the Skwad section of the Import tab. Verify in the app against
+- [x] 3.3 Wire the Skwad section of the Import tab. Verify in the app against
       the real Skwad preferences on a machine that has them, including that
       re-running the import adds nothing.
 - [x] 3.4 Confirm the import does not write to Skwad: capture the plist's
@@ -63,10 +63,10 @@ failure this change's design section refuses.
 
 ## 5. Verification
 
-- [ ] 5.1 `make` passes clean.
-- [ ] 5.2 Confirm every import is additive: with a Knot holding personas,
+- [x] 5.1 `make` passes clean.
+- [x] 5.2 Confirm every import is additive: with a Knot holding personas,
       agents and workspaces, run both imports and verify nothing pre-existing
       changed name, contents or ordering.
-- [ ] 5.3 Confirm partial failure is tolerated: put one malformed `.md` among
+- [x] 5.3 Confirm partial failure is tolerated: put one malformed `.md` among
       several valid ones and verify the valid ones import and the bad one is
       named.

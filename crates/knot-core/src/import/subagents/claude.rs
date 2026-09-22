@@ -45,6 +45,19 @@ fn definition_dirs(folder: Option<&Path>) -> Vec<PathBuf> {
     dirs
 }
 
+/// Every definition in one specific directory.
+///
+/// Test-only, and `pub(crate)` so the end-to-end import tests can point at a
+/// fixture directory: [`SubagentProvider::definitions`] resolves the real home
+/// directory, which would make a test's result depend on whatever the
+/// developer happens to have in `~/.claude/agents`.
+#[cfg(test)]
+pub(crate) fn definitions_in(dir: &Path) -> SubagentScan {
+    let mut scan = SubagentScan::default();
+    read_dir_into(dir, &mut scan);
+    scan
+}
+
 /// Read every `.md` file in `dir` into `scan`. A missing or unreadable
 /// directory contributes nothing and is not an error: the tool may not be
 /// installed.

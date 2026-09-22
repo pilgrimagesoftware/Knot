@@ -16,6 +16,9 @@ pub mod skwad;
 pub mod subagents;
 pub mod workspaces;
 
+#[cfg(test)]
+mod tests;
+
 pub use personas::import_definitions;
 pub use result::{ImportResult, Unreadable, UnreadableReason};
 pub use skwad::SkwadSource;
