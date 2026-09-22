@@ -139,14 +139,17 @@
 
 ## 8. Showing the plan
 
-- [ ] 8.1 Render `Agent::mermaid_source` in the agent panel, honouring
+- [x] 8.1 Render `Agent::mermaid_source` in the agent panel, honouring
   `mermaid_title`; verify the existing `view-mermaid` tool now produces a
   visible diagram, since nothing under `crates/knot/` consumed that state
-  before
-- [ ] 8.2 Emit mermaid text for a committed graph, with each task's state
+  before. Drawn as a real layered DAG - cards positioned by depth with
+  dependency edges painted on a canvas layer - which needed a parser for
+  the emitted mermaid subset (`plan_view::mermaid`) and a layout pass
+  (`plan_view::layout`), both pure and tested without a window
+- [x] 8.2 Emit mermaid text for a committed graph, with each task's state
   shown, and write it through the same panel-state path `view-mermaid` uses;
   verify a snapshot test of the generated mermaid for a four-task graph
-- [ ] 8.3 Re-emit the diagram on every task state change; verify a test that
+- [x] 8.3 Re-emit the diagram on every task state change; verify a test that
   reporting a task `done` updates the stored mermaid source
   (`task-graph` - "The diagram tracks state")
 

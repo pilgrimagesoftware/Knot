@@ -5,10 +5,12 @@
 //! `openspec/specs/mcp-tools/spec.md`, over the graph in `knot-tasks`.
 
 mod dispatch;
+pub(crate) mod mermaid;
 mod plan;
 mod store;
 
 pub use dispatch::{DispatchContext, complete_task, dispatch_task};
+pub use mermaid::to_mermaid as plan_mermaid;
 pub use plan::{plan_tasks, task_status};
 pub use store::GraphStore;
 

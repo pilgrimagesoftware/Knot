@@ -249,3 +249,7 @@ broadcast:
   placeholder: "Message every agent in this workspace…"
   send: "Send"
   cancel: "Cancel"
+
+plan:
+  title: "Plan"
+  empty: "No plan committed yet."

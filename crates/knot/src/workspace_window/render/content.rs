@@ -83,13 +83,18 @@ impl WorkspaceWindow {
                     .child(
                         self.selected_agent
                                     .and_then(|id| {
-                                        let (is_panel_mode, markdown_file, stopped) = {
+                                        let (is_panel_mode, markdown_file, diagram, stopped) = {
                                             let store = self.store.lock();
                                             let agent = store.agent(id);
                                             (agent.map(|agent| agent.view_mode)
                                              == Some(knot_core::ViewMode::Panel),
                                              agent.and_then(|agent| {
                                                       agent.markdown_file.clone()
+                                                  }),
+                                             agent.and_then(|agent| {
+                                                      agent.mermaid_source.clone().map(|source| {
+                                                          (source, agent.mermaid_title.clone())
+                                                      })
                                                   }),
                                              agent.filter(|agent| !agent.activated)
                                                   .map(|agent| agent.name.clone()))
@@ -103,6 +108,18 @@ impl WorkspaceWindow {
                                             return Some(self.render_markdown_pane(id,
                                                                                   &file,
                                                                                   cx));
+                                        }
+                                        // Same reasoning as the markdown
+                                        // pane above: something the agent
+                                        // put in front of the user takes
+                                        // the content area until closed.
+                                        if let Some((source, title)) = diagram {
+                                            return Some(self.render_mermaid_pane(
+                                                id,
+                                                &source,
+                                                title.as_deref(),
+                                                cx,
+                                            ));
                                         }
                                         // Ahead of both session
                                         // panes, which would

@@ -44,14 +44,14 @@ fn fixture() -> Fixture {
 
 impl Fixture {
     fn plan(&mut self, tasks: serde_json::Value) -> ToolCallResult {
-        plan_tasks(&self.agents,
+        plan_tasks(&mut self.agents,
                    &mut self.graphs,
                    &json!({"agentId": self.lead.to_string(), "tasks": tasks}))
     }
 
     fn dispatch(&mut self, task_id: &str) -> ToolCallResult {
         let bench = Vec::new();
-        dispatch_task(DispatchContext { agents:   &self.agents,
+        dispatch_task(DispatchContext { agents:   &mut self.agents,
                                         graphs:   &mut self.graphs,
                                         messages: &mut self.messages,
                                         notifier: &NoopNotifier,
@@ -60,7 +60,7 @@ impl Fixture {
     }
 
     fn complete(&mut self, task_id: &str, outcome: &str) -> ToolCallResult {
-        complete_task(&self.agents,
+        complete_task(&mut self.agents,
                       &mut self.graphs,
                       &json!({"agentId": self.lead.to_string(),
                               "taskId": task_id,
@@ -176,7 +176,7 @@ fn plan_tasks_requires_a_tasks_array() {
     let mut f = fixture();
     let lead = f.lead;
 
-    let result = plan_tasks(&f.agents,
+    let result = plan_tasks(&mut f.agents,
                             &mut f.graphs,
                             &json!({"agentId": lead.to_string()}));
 

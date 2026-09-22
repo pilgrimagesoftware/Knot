@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::args::require_str;
 use crate::lookup::{agent_not_found, find_by_name_or_id, find_in_workspace};
 use crate::responses::{PlanTasksResponse, TaskInfo, TaskStatusResponse, success};
+use crate::tasks::mermaid::to_mermaid;
 use crate::tasks::store::GraphStore;
 
 /// Projects a task into the wire shape.
@@ -68,7 +69,8 @@ fn parse_spec(agents: &AgentStore, caller: Uuid, raw: &serde_json::Value)
     Ok(spec)
 }
 
-pub fn plan_tasks(agents: &AgentStore, graphs: &mut GraphStore, arguments: &serde_json::Value)
+pub fn plan_tasks(agents: &mut AgentStore, graphs: &mut GraphStore,
+                  arguments: &serde_json::Value)
                   -> ToolCallResult {
     graphs.prune(agents);
     let caller_id_str = match require_str(arguments, "agentId") {
@@ -102,6 +104,7 @@ pub fn plan_tasks(agents: &AgentStore, graphs: &mut GraphStore, arguments: &serd
         Err(error) => return ToolCallResult::error(error.to_string()),
     };
     let tasks = graph.tasks().iter().map(task_info).collect();
+    publish_diagram(agents, caller, &graph);
     graphs.set(caller, graph);
     success(&PlanTasksResponse { tasks })
 }
@@ -123,4 +126,17 @@ pub fn task_status(agents: &AgentStore, graphs: &mut GraphStore, arguments: &ser
                       .map(|graph| graph.tasks().iter().map(task_info).collect())
                       .unwrap_or_default();
     success(&TaskStatusResponse { tasks })
+}
+
+/// Writes the plan into the owner's panel, through the same state the
+/// `view-mermaid` tool sets.
+///
+/// Called on every change, not just on commit: a diagram that showed the
+/// plan as it was committed would be wrong the moment the first task was
+/// dispatched, and a stale plan is worse than none.
+pub fn publish_diagram(agents: &mut AgentStore, owner: Uuid, graph: &TaskGraph) {
+    let title = knot_core::l10n::t("plan.title");
+    // Best effort: the diagram is a view of the plan, so failing to show
+    // it must not fail the call that changed the plan.
+    let _ = agents.set_mermaid_panel(owner, to_mermaid(graph), Some(title));
 }

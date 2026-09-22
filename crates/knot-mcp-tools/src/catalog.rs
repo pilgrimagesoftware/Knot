@@ -222,11 +222,11 @@ impl ToolCatalog for McpToolCatalog {
             }
             consts::VIEW_MERMAID => panels::view_mermaid(&mut self.agents.lock(), &arguments),
             consts::PLAN_TASKS => {
-                tasks::plan_tasks(&self.agents.lock(), &mut self.graphs.lock(), &arguments)
+                tasks::plan_tasks(&mut self.agents.lock(), &mut self.graphs.lock(), &arguments)
             }
             consts::DISPATCH_TASK => {
                 let bench_agents = self.bench_agents.lock();
-                tasks::dispatch_task(tasks::DispatchContext { agents:   &self.agents.lock(),
+                tasks::dispatch_task(tasks::DispatchContext { agents:   &mut self.agents.lock(),
                                                               graphs:   &mut self.graphs.lock(),
                                                               messages: &mut self.messages.lock(),
                                                               notifier: self.notifier.as_ref(),
@@ -234,7 +234,7 @@ impl ToolCatalog for McpToolCatalog {
                                      &arguments)
             }
             consts::COMPLETE_TASK => {
-                tasks::complete_task(&self.agents.lock(), &mut self.graphs.lock(), &arguments)
+                tasks::complete_task(&mut self.agents.lock(), &mut self.graphs.lock(), &arguments)
             }
             consts::TASK_STATUS => {
                 tasks::task_status(&self.agents.lock(), &mut self.graphs.lock(), &arguments)

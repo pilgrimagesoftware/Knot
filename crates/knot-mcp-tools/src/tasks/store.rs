@@ -45,8 +45,15 @@ impl GraphStore {
             .retain(|owner, _| agents.agent(*owner).is_some());
     }
 
+    /// How many plans are held. Test-facing: the observable behaviour is
+    /// whether a given owner's plan can be read, and `get` answers that.
     #[cfg(test)]
     pub fn len(&self) -> usize {
         self.graphs.len()
+    }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.graphs.is_empty()
     }
 }

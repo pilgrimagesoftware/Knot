@@ -3772,6 +3772,7 @@ dependencies = [
  "knot-mcp",
  "knot-mcp-tools",
  "knot-messaging",
+ "knot-tasks",
  "knot-terminal",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",

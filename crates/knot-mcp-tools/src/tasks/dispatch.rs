@@ -12,6 +12,7 @@ use crate::agents::registry::declared_tools;
 use crate::args::require_str;
 use crate::lookup::{agent_not_found, find_by_name_or_id, workspace_members};
 use crate::responses::{CompleteTaskResponse, DispatchTaskResponse, success};
+use crate::tasks::plan::publish_diagram;
 use crate::tasks::store::GraphStore;
 
 /// Everything `dispatch-task` needs from its caller's side of the app.
@@ -109,7 +110,8 @@ pub fn dispatch_task(ctx: DispatchContext<'_>, arguments: &serde_json::Value) ->
                                     message:      "Task dispatched.".to_string(), })
 }
 
-pub fn complete_task(agents: &AgentStore, graphs: &mut GraphStore, arguments: &serde_json::Value)
+pub fn complete_task(agents: &mut AgentStore, graphs: &mut GraphStore,
+                     arguments: &serde_json::Value)
                      -> ToolCallResult {
     graphs.prune(agents);
     let caller_id_str = match require_str(arguments, "agentId") {
@@ -141,7 +143,15 @@ pub fn complete_task(agents: &AgentStore, graphs: &mut GraphStore, arguments: &s
     };
 
     let task_id = TaskId::new(task_id_str);
-    match graph.complete(&task_id, outcome) {
+    let completed = graph.complete(&task_id, outcome);
+    if completed.is_ok() {
+        // Every state change re-publishes: a diagram frozen at commit time
+        // would be wrong the moment the first task moved, and a stale plan
+        // is worse than none.
+        let graph = graph.clone();
+        publish_diagram(agents, caller.id, &graph);
+    }
+    match completed {
         Ok(completion) => {
             success(&CompleteTaskResponse { success:     true,
                                             task_id:     task_id.to_string(),
