@@ -285,14 +285,19 @@ pub(crate) fn run() {
                                    let settings_window = Rc::clone(&settings_window);
                                    let store = Arc::clone(&store);
                                    cx.on_action(move |_: &OpenSettings, cx| {
-                                         // Reload from disk rather than reusing a clone
-                                         // captured at bootstrap: reopening the window
-                                         // with a stale snapshot would both show old
-                                         // values and overwrite a since-saved change
-                                         // the moment anything in the reopened window
+                                         // Reload from disk rather than reusing
+                                         // a clone
+                                         // captured at bootstrap: reopening the
+                                         // window
+                                         // with a stale snapshot would both
+                                         // show old
+                                         // values and overwrite a since-saved
+                                         // change
+                                         // the moment anything in the reopened
+                                         // window
                                          // persists.
-                                         let settings = knot_core::Settings::load()
-                                             .unwrap_or_default();
+                                         let settings =
+                                             knot_core::Settings::load().unwrap_or_default();
                                          open_settings_window(&settings_window,
                                                               settings,
                                                               Arc::clone(&store),
