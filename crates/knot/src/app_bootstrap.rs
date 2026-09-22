@@ -219,6 +219,107 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
     ]);
 }
 
+/// What [`open_workspace_manager`] needs to build the window, grouped so it
+/// stays inside the workspace's argument-count convention.
+struct WorkspaceManagerWindow {
+    store:    Arc<Mutex<knot_agents::AgentStore>>,
+    messages: Arc<Mutex<knot_messaging::MessageStore>>,
+    settings: knot_core::Settings,
+    /// Dropped with the window, which is what stops the MCP server when
+    /// the last window closes.
+    mcp_stop: tokio::sync::oneshot::Sender<()>,
+}
+
+/// The application-menu actions and their key bindings.
+///
+/// A `MenuItem::action` only shows a shortcut beside its label if the
+/// action has a binding, so without these the menu read as if Knot had
+/// none.
+fn install_actions_and_keys(settings: &knot_core::Settings,
+                            store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
+    cx.on_action(quit);
+    // Holds its own window handle; see
+    // `about_window::register_about_action`.
+    register_about_action(settings.title_font_name.clone().into(), cx);
+    cx.on_action(hide_app);
+    cx.on_action(hide_others);
+    cx.on_action(show_all_windows);
+    // The standard macOS application-menu
+    // shortcuts. A `MenuItem::action` only shows a
+    // shortcut next to its label if the action has
+    // a binding, so without these the menu read as
+    // if Knot had none.
+    cx.bind_keys([KeyBinding::new("cmd-q", Quit, None),
+                  KeyBinding::new("cmd-,", OpenSettings, None),
+                  KeyBinding::new("cmd-h", HideApp, None),
+                  KeyBinding::new("cmd-alt-h", HideOthers, None)]);
+    cx.bind_keys([KeyBinding::new("cmd-shift-a", PanelPermissionAllow, None),
+                  KeyBinding::new("cmd-shift-d", PanelPermissionDeny, None),
+                  KeyBinding::new("cmd-shift-p", PanelOpenPermissionSelector, None)]);
+    let settings_window: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
+    {
+        let settings_window = Rc::clone(&settings_window);
+        let store = Arc::clone(&store);
+        cx.on_action(move |_: &OpenSettings, cx| {
+              // Reload from disk rather than reusing
+              // a clone
+              // captured at bootstrap: reopening the
+              // window
+              // with a stale snapshot would both
+              // show old
+              // values and overwrite a since-saved
+              // change
+              // the moment anything in the reopened
+              // window
+              // persists.
+              let settings = knot_core::Settings::load().unwrap_or_default();
+              open_settings_window(&settings_window, settings, Arc::clone(&store), cx);
+          });
+    }
+}
+
+/// Opens the workspace manager - the window the application starts in.
+fn open_workspace_manager(parts: WorkspaceManagerWindow, cx: &mut App) {
+    let WorkspaceManagerWindow { store,
+                                 messages,
+                                 settings,
+                                 mcp_stop, } = parts;
+    let options = manager_window_options(cx);
+    cx.open_window(options, |window, cx| {
+          // Every window tracks the OS appearance, so a light/dark flip
+          // re-resolves the system palette and repaints.
+          observe_system_appearance(window);
+          // macOS leaves untitled windows out of the Window menu, which is
+          // why only open workspaces were listed there.
+          window.set_window_title(&knot_core::l10n::t("workspace.manager"));
+          let name_input = cx.new(|cx| {
+                                 InputState::new(window, cx)
+                        .placeholder(knot_core::l10n::t("workspace.name_placeholder"))
+                             });
+          let view = cx.new(|cx| {
+                           let name_subscription =
+                               cx.subscribe(&name_input,
+                                            |_: &mut WorkspaceManager, _, event, cx| {
+                                                if matches!(event, InputEvent::Change) {
+                                                    cx.notify();
+                                                }
+                                            });
+                           WorkspaceManager { store,
+                                              messages,
+                                              settings,
+                                              name_input,
+                                              editing_id: None,
+                                              workspace_dialog_id: None,
+                                              show_workspace_dialog: false,
+                                              error: None,
+                                              _name_subscription: name_subscription,
+                                              _mcp_stop: Some(mcp_stop) }
+                       });
+          cx.new(|cx| Root::new(view, window, cx))
+      })
+      .expect("failed to open workspace manager");
+}
+
 pub(crate) fn run() {
     let mut settings = knot_core::Settings::load().unwrap_or_default();
     if let Err(err) = settings.init_source_folder() {
@@ -259,56 +360,7 @@ pub(crate) fn run() {
                                // arriving without it would be waved
                                // through unguarded.
                                cx.set_global(quit_guard::QuitGuard::new(Arc::clone(&store)));
-                               cx.on_action(quit);
-                               // Holds its own window handle; see
-                               // `about_window::register_about_action`.
-                               register_about_action(settings.title_font_name.clone().into(), cx);
-                               cx.on_action(hide_app);
-                               cx.on_action(hide_others);
-                               cx.on_action(show_all_windows);
-                               // The standard macOS application-menu
-                               // shortcuts. A `MenuItem::action` only shows a
-                               // shortcut next to its label if the action has
-                               // a binding, so without these the menu read as
-                               // if Knot had none.
-                               cx.bind_keys([KeyBinding::new("cmd-q", Quit, None),
-                                             KeyBinding::new("cmd-,", OpenSettings, None),
-                                             KeyBinding::new("cmd-h", HideApp, None),
-                                             KeyBinding::new("cmd-alt-h", HideOthers, None)]);
-                               cx.bind_keys([KeyBinding::new("cmd-shift-a",
-                                                             PanelPermissionAllow,
-                                                             None),
-                                             KeyBinding::new("cmd-shift-d",
-                                                             PanelPermissionDeny,
-                                                             None),
-                                             KeyBinding::new("cmd-shift-p",
-                                                             PanelOpenPermissionSelector,
-                                                             None)]);
-                               let settings_window: Rc<RefCell<Option<AnyWindowHandle>>> =
-                                   Rc::new(RefCell::new(None));
-                               {
-                                   let settings_window = Rc::clone(&settings_window);
-                                   let store = Arc::clone(&store);
-                                   cx.on_action(move |_: &OpenSettings, cx| {
-                                         // Reload from disk rather than reusing
-                                         // a clone
-                                         // captured at bootstrap: reopening the
-                                         // window
-                                         // with a stale snapshot would both
-                                         // show old
-                                         // values and overwrite a since-saved
-                                         // change
-                                         // the moment anything in the reopened
-                                         // window
-                                         // persists.
-                                         let settings =
-                                             knot_core::Settings::load().unwrap_or_default();
-                                         open_settings_window(&settings_window,
-                                                              settings,
-                                                              Arc::clone(&store),
-                                                              cx);
-                                     });
-                               }
+                               install_actions_and_keys(&settings, Arc::clone(&store), cx);
                                // The Agents menu starts with nothing
                                // selected, and so disabled; a workspace
                                // window claims it once one is.
@@ -323,42 +375,14 @@ pub(crate) fn run() {
                                      }
                                  });
 
-                               let options = manager_window_options(cx);
-                               cx.open_window(options, |window, cx| {
-// Every window tracks the OS appearance, so a light/dark flip
-// re-resolves the system palette and repaints.
-observe_system_appearance(window);
-                // macOS leaves untitled windows out of
-                // the Window menu, which is why only
-                // open workspaces were listed there.
-                window.set_window_title(&knot_core::l10n::t("workspace.manager"));
-                let name_input =
-                    cx.new(|cx| InputState::new(window, cx).placeholder(knot_core::l10n::t("workspace.name_placeholder")));
-                let view = cx.new(|cx| {
-                    let name_subscription = cx.subscribe(
-                        &name_input,
-                        |_: &mut WorkspaceManager, _, event, cx| {
-                            if matches!(event, InputEvent::Change) {
-                                cx.notify();
-                            }
-                        },
-                    );
-                    WorkspaceManager {
-                        store: Arc::clone(&store),
-                        messages: Arc::clone(&messages),
-                        settings: settings.clone(),
-                        name_input,
-                        editing_id: None,
-                        workspace_dialog_id: None,
-                        show_workspace_dialog: false,
-                        error: None,
-                        _name_subscription: name_subscription,
-                        _mcp_stop: Some(mcp_stop),
-                    }
-                });
-                cx.new(|cx| Root::new(view, window, cx))
-            })
-            .expect("failed to open workspace manager");
+                               open_workspace_manager(WorkspaceManagerWindow { store:
+                                                                                   Arc::clone(&store),
+                                                                               messages:
+                                                                                   Arc::clone(&messages),
+                                                                               settings:
+                                                                                   settings.clone(),
+                                                                               mcp_stop },
+                                                      cx);
                                // macOS launches a non-bundled binary without
                                // making it frontmost, so without this the
                                // window opens behind whatever was already on
