@@ -150,13 +150,25 @@ placement at all. `import_window` would have been 443 lines in one `mod.rs` -
 comfortably legal, and still wrong, because nothing about the name says where
 the rendering is.
 
-Six `mod.rs` files predate the rule: `agent_editor` (438 lines),
-`panel_state` (352), `panel_view` (348), `settings_window` (324),
-`about_window` (313) and `workspace_window` (290). They are a backlog, not
-exceptions - tracked in issue #300, one module per PR so a regression is
-bisectable to a single split. The rule applies to all of them; only the timing
-is open. Grandfathering has to be argued for, not assumed, or a rule that the
-codebase visibly breaks in six places stops being a rule.
+Six `mod.rs` files predated the rule - `agent_editor`, `panel_state`,
+`panel_view`, `settings_window`, `about_window` and `workspace_window`. They
+were treated as a backlog rather than as exceptions, and split under issue
+#300, one module per PR so a regression is bisectable to a single split.
+Grandfathering has to be argued for, not assumed, or a rule the codebase
+visibly breaks stops being a rule.
+
+Splitting those six turned up one hazard worth naming. A parent's private
+items are visible to its descendants, so anything declared in a `mod.rs` can be
+read from every child module. Moving it to a sibling breaks that: widen to
+`pub(super)` - the module and no further - never `pub(crate)` "to be safe".
+`rustc` reporting a `pub(crate) use` re-export as an unused import is the
+signal that nothing outside actually consumed the item, and that it should
+narrow rather than be re-exported.
+
+`mod.rs` files still holding implementation elsewhere in the workspace -
+`workspace_window/render`, `workspace_manager` and `plan_view` in `knot`, and
+several in `knot-acp` and `knot-terminal` - were outside that issue's scope and
+are still to do.
 
 A `mod.rs` that is only declarations and re-exports also makes the module's
 shape readable in one screen, which is the same argument as splitting by
