@@ -2,6 +2,11 @@
 //! keys - a missing entry renders the key, which is visible but easy to
 //! miss in review.
 
+use crate::app_state::AgentListBackgroundEntry;
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::SidebarMenuFacts;
+use crate::app_state::sidebar_background_menu_entries;
+use crate::settings_window::SettingsTab;
 use crate::workspace_window;
 
 /// Every word the About window shows comes from the catalog, so a missing
@@ -153,5 +158,89 @@ fn settings_window_labels_resolve() {
         let value = knot_core::l10n::t(key);
         assert_ne!(value, key, "{key} is missing from the catalog");
         assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+}
+
+/// The agent editor, the workspace manager and the broadcast sheet had no
+/// catalog references at all before #223. Harvested from the source, so a
+/// label added without an entry fails rather than shipping its key.
+#[test]
+fn dialog_labels_resolve() {
+    for key in ["agent_editor.activation",
+                "agent_editor.activation_hint",
+                "agent_editor.avatar",
+                "agent_editor.cancel",
+                "agent_editor.coding_agent",
+                "agent_editor.command",
+                "agent_editor.error_choose_folder",
+                "agent_editor.error_enter_name",
+                "agent_editor.folder",
+                "agent_editor.name",
+                "agent_editor.persona",
+                "agent_editor.shell_command",
+                "agent_editor.title_edit",
+                "agent_editor.title_new",
+                "broadcast.cancel",
+                "broadcast.placeholder",
+                "broadcast.send",
+                "workspace_manager.cancel",
+                "workspace_manager.delete",
+                "workspace_manager.delete_title",
+                "workspace_manager.error_last_workspace",
+                "workspace_manager.error_missing",
+                "workspace_manager.error_name_empty",
+                "workspace_manager.new",
+                "workspace_manager.open",
+                "workspace_manager.rename",
+                "workspace_manager.title",
+                "workspace_manager.workspace"]
+    {
+        let value = knot_core::l10n::t(key);
+        assert_ne!(value, key, "{key} is missing from the catalog");
+        assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+}
+
+/// Driven by `ALL` rather than a written-out key list, so a variant added
+/// without a catalog entry fails here instead of drawing its own key in the
+/// menu. Separators have no label and are skipped.
+#[test]
+fn every_menu_entry_label_resolves() {
+    for entry in AgentMenuEntry::ALL {
+        let Some(label) = entry.label()
+        else {
+            assert_eq!(entry, AgentMenuEntry::Separator);
+            continue;
+        };
+        assert!(!label.starts_with("menu.agent."),
+                "{entry:?} is missing from the catalog: {label}");
+    }
+}
+
+/// The sidebar's background menu, the same way. It has no `ALL`, so the
+/// entries come from a full menu - which this one always is, since it
+/// disables rather than omits.
+#[test]
+fn every_sidebar_menu_entry_label_resolves() {
+    for item in sidebar_background_menu_entries(SidebarMenuFacts::default()) {
+        let Some(label) = item.entry.label()
+        else {
+            assert_eq!(item.entry, AgentListBackgroundEntry::Separator);
+            continue;
+        };
+        assert!(!label.starts_with("menu.sidebar."),
+                "{:?} is missing from the catalog: {label}",
+                item.entry);
+    }
+}
+
+/// Every settings tab's title, so an added pane cannot show `settings.tabs.*`
+/// where its name belongs.
+#[test]
+fn every_settings_tab_label_resolves() {
+    for tab in SettingsTab::ALL {
+        let label = tab.label();
+        assert!(!label.starts_with("settings.tabs."),
+                "{tab:?} is missing from the catalog: {label}");
     }
 }

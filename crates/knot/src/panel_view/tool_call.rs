@@ -27,6 +27,7 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::div;
 use gpui_kit::rgb;
 
+use crate::app_support::single_line;
 use crate::panel_view::CardOutline;
 use crate::panel_view::ERROR_COLOR;
 use crate::panel_view::MUTED;
@@ -84,10 +85,17 @@ pub(super) fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, col
                                                 .text_xs()
                                                 .text_color(rgb(MUTED));
                                if collapsed {
+                                   // Joined before it is handed over: the
+                                   // style flags below only stop *soft*
+                                   // wrapping, so a title carrying line
+                                   // breaks - a heredoc command, say - would
+                                   // otherwise draw one line per break and
+                                   // fill the pane. Expanded keeps `label`
+                                   // verbatim.
                                    title.overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
-                                        .child(label)
+                                        .child(single_line(&label))
                                }
                                else {
                                    title.child(label)

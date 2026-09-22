@@ -14,7 +14,6 @@ use gpui_kit::App;
 use gpui_kit::Context;
 use gpui_kit::Entity;
 use gpui_kit::Window;
-use gpui_kit::component::WindowExt;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use parking_lot::Mutex;
@@ -29,6 +28,7 @@ use crate::app_state::AgentMenuFacts;
 use crate::app_state::agent_context_menu_entries;
 use crate::open_in;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::menus::confirm_then;
 
 /// Everything the agent-row context menu's handlers need. Grouped so the
 /// builder takes one argument instead of seven, and so the row render can
@@ -214,7 +214,9 @@ pub(super) fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: 
 pub(super) fn show_agent_markdown_file(targets: &AgentMenuTargets, file: &Path, app: &mut App) {
     {
         let mut store = targets.store.lock();
-        let _ = store.set_markdown_panel(targets.id, file.to_path_buf(), false);
+        if let Err(error) = store.set_markdown_panel(targets.id, file.to_path_buf(), false) {
+            eprintln!("failed to show {}: {error}", file.display());
+        }
     }
     targets.window_entity.update(app, |_, cx| cx.notify());
 }
@@ -334,58 +336,38 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         }
         AgentMenuEntry::RestartAgent => {
             let targets = targets.clone();
-            window.defer(app, move |window, app| {
-                      window.open_alert_dialog(app, move |alert, _, _| {
-                                let targets = targets.clone();
-                                alert.title("Restart Agent")
-                                     .description(format!("Restart \"{}\"? Its session will be \
-                                                           cleared.",
-                                                          targets.name))
-                                     .confirm()
-                                     .on_ok(move |_, _, app| {
-                                         {
-                                             let mut store = targets.store.lock();
-                                             let _ = store.restart(targets.id);
-                                         }
-                                         targets.window_entity.update(app, |view, cx| {
-                                                                  view.remove_session(targets.id);
-                                                                  view.panel_states
-                                                                      .remove(&targets.id);
-                                                                  // `restart` clears the
-                                                                  // persisted session ids;
-                                                                  // write them
-                                                                  // out so a
-                                                                  // relaunch doesn't resume
-                                                                  // the session
-                                                                  // just dropped.
-                                                                  //
-                                                                  view.persist_agents();
-                                                                  cx.notify();
-                                                              });
-                                         true
-                                     })
-                            });
-                  });
+            let description = format!("Restart \"{}\"? Its session will be cleared.", targets.name);
+            confirm_then(window, app, "Restart Agent", description, move |app| {
+                {
+                    let mut store = targets.store.lock();
+                    if let Err(error) = store.restart(targets.id) {
+                        eprintln!("failed to restart agent {}: {error}", targets.id);
+                    }
+                }
+                targets.window_entity.update(app, |view, cx| {
+                                         view.remove_session(targets.id);
+                                         view.panel_states.remove(&targets.id);
+                                         // `restart` clears the persisted
+                                         // session ids; write
+                                         // them out so a relaunch doesn't
+                                         // resume the session
+                                         // just dropped.
+                                         view.persist_agents();
+                                         cx.notify();
+                                     });
+            });
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
-            window.defer(app, move |window, app| {
-                      window.open_alert_dialog(app, move |alert, _, _| {
-                                let targets = targets.clone();
-                                alert.title("Remove Agent")
-                                     .description(format!("Remove \"{}\"? This closes its session \
-                                                           and cannot be undone.",
-                                                          targets.name))
-                                     .confirm()
-                                     .on_ok(move |_, _, app| {
-                                         targets.window_entity.update(app, |view, cx| {
-                                                                  view.remove_agent(targets.id);
-                                                                  cx.notify();
-                                                              });
-                                         true
-                                     })
-                            });
-                  });
+            let description = format!("Remove \"{}\"? This closes its session and cannot be \
+                                       undone.",
+                                      targets.name);
+            confirm_then(window, app, "Remove Agent", description, move |app| {
+                targets.window_entity.update(app, |view, cx| {
+                                         view.remove_agent(targets.id);
+                                         cx.notify();
+                                     });
+            });
         }
         // Handled by the builder, which needs `Window`/`Context` to make
         // a submenu, or carries no action at all.

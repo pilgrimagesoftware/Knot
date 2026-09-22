@@ -5,6 +5,7 @@
 mod agents;
 mod args;
 mod consts;
+mod error;
 mod lookup;
 mod messaging;
 mod panels;
@@ -29,6 +30,7 @@ use parking_lot::Mutex;
 use tokio::sync::watch;
 use uuid::Uuid;
 
+pub use crate::error::{Result, ToolError};
 use crate::lookup::state_string;
 
 type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
@@ -93,7 +95,7 @@ impl McpToolCatalog {
         self
     }
 
-    fn persist_agent_state(&self) -> Result<(), String> {
+    fn persist_agent_state(&self) -> Result<()> {
         let agents = self.agents.lock();
         let mut settings = self.settings.lock();
         let Some(settings) = settings.as_mut()
@@ -102,7 +104,7 @@ impl McpToolCatalog {
         };
         settings.saved_agents = agents.saved_agents(settings.restore_conversation_on_launch);
         settings.saved_workspaces = agents.saved_workspaces();
-        settings.persist().map_err(|error| error.to_string())
+        Ok(settings.persist()?)
     }
 
     fn tracker_for(&self, id: Uuid, agent_type: &str) -> bool {

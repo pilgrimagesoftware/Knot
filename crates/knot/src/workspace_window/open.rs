@@ -16,7 +16,6 @@ use gpui_kit::App;
 use gpui_kit::AppContext;
 use gpui_kit::ClipboardItem;
 use gpui_kit::component::Root;
-use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
 use parking_lot::Mutex;
 use uuid::Uuid;
@@ -74,10 +73,6 @@ impl WorkspaceWindow {
                   // behind whatever has focus - matching what the settings
                   // window already does when it reuses an open one.
                   window.activate_window();
-                  let new_agent_name_input =
-                      cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
-                  let new_agent_folder_input =
-                      cx.new(|cx| InputState::new(window, cx).placeholder("Agent folder path"));
                   let selected_agent = select_agent.or_else(|| {
                                                        let store = store.lock();
                                                        agent_selection_for_workspace(&store,
@@ -126,9 +121,6 @@ impl WorkspaceWindow {
                     panel_input_expanded: BTreeSet::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
-                    new_agent_name_input,
-                    new_agent_folder_input,
-                    show_new_agent: false,
                     error: None,
                 };
                             // Matches the Swift reference: every agent in the

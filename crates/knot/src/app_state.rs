@@ -73,6 +73,11 @@ pub(crate) const DIFF_FILES_COLOR: u32 = consts::COLOR_INPUT;
 /// The file noun comes from `l10n::plural_noun` rather than a local
 /// `if count == 1`, and separately from the count so only the number takes
 /// the accent color.
+///
+/// The only `whitespace_nowrap` in the crate that does not pass its text
+/// through [`crate::app_support::single_line`], and it needs no such pass:
+/// every string here is formatted from integers Knot holds, so none can
+/// arrive carrying a line break.
 pub(crate) fn diff_stats_row(stats: &knot_git::DiffStats, muted: gpui_kit::Hsla) -> gpui_kit::Div {
     let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
     h_flex().flex_shrink_0()
@@ -150,22 +155,22 @@ impl AgentMenuEntry {
     /// reference's strings (`Skwad/Views/Components/AgentContextMenu.swift`),
     /// except that the port keeps "Remove Agent" where the reference says
     /// "Close Agent" - `agent-list-ui` already specifies the former.
-    pub(crate) fn label(self) -> Option<&'static str> {
+    pub(crate) fn label(self) -> Option<String> {
         match self {
             Self::Separator => None,
-            Self::NewCompanion => Some("New Companion…"),
-            Self::NewShellCompanion => Some("New Shell Companion"),
-            Self::EditAgent => Some("Edit Agent…"),
-            Self::ForkAgent => Some("Fork Agent"),
-            Self::DuplicateAgent => Some("Duplicate Agent"),
-            Self::MoveToWorkspace => Some("Move to Workspace"),
-            Self::SaveToBench => Some("Save to Bench"),
-            Self::OpenIn => Some("Open In…"),
-            Self::MarkdownFiles => Some("Markdown Files"),
-            Self::RegisterAgent => Some("Register Agent"),
-            Self::Deactivate => Some("Deactivate"),
-            Self::RestartAgent => Some("Restart Agent"),
-            Self::RemoveAgent => Some("Remove Agent"),
+            Self::NewCompanion => Some(knot_core::l10n::t("menu.agent.new_companion")),
+            Self::NewShellCompanion => Some(knot_core::l10n::t("menu.agent.new_shell_companion")),
+            Self::EditAgent => Some(knot_core::l10n::t("menu.agent.edit_agent")),
+            Self::ForkAgent => Some(knot_core::l10n::t("menu.agent.fork_agent")),
+            Self::DuplicateAgent => Some(knot_core::l10n::t("menu.agent.duplicate_agent")),
+            Self::MoveToWorkspace => Some(knot_core::l10n::t("menu.agent.move_to_workspace")),
+            Self::SaveToBench => Some(knot_core::l10n::t("menu.agent.save_to_bench")),
+            Self::OpenIn => Some(knot_core::l10n::t("menu.agent.open_in")),
+            Self::MarkdownFiles => Some(knot_core::l10n::t("menu.agent.markdown_files")),
+            Self::RegisterAgent => Some(knot_core::l10n::t("menu.agent.register_agent")),
+            Self::Deactivate => Some(knot_core::l10n::t("menu.agent.deactivate")),
+            Self::RestartAgent => Some(knot_core::l10n::t("menu.agent.restart_agent")),
+            Self::RemoveAgent => Some(knot_core::l10n::t("menu.agent.remove_agent")),
         }
     }
 }
@@ -273,14 +278,14 @@ impl AgentListBackgroundEntry {
     /// The user-visible label, or `None` for a separator. Matches the Swift
     /// reference's strings (`Skwad/Views/Sidebar/SidebarView.swift`), except
     /// Deactivate All, which the reference has no counterpart for.
-    pub(crate) fn label(self) -> Option<&'static str> {
+    pub(crate) fn label(self) -> Option<String> {
         match self {
             Self::Separator => None,
-            Self::NewAgent => Some("New Agent"),
-            Self::RestartAll => Some("Restart All"),
-            Self::CloseAll => Some("Close All"),
-            Self::DeactivateAll => Some("Deactivate All"),
-            Self::Broadcast => Some("Broadcast to All Agents…"),
+            Self::NewAgent => Some(knot_core::l10n::t("menu.sidebar.new_agent")),
+            Self::RestartAll => Some(knot_core::l10n::t("menu.sidebar.restart_all")),
+            Self::CloseAll => Some(knot_core::l10n::t("menu.sidebar.close_all")),
+            Self::DeactivateAll => Some(knot_core::l10n::t("menu.sidebar.deactivate_all")),
+            Self::Broadcast => Some(knot_core::l10n::t("menu.sidebar.broadcast")),
         }
     }
 }

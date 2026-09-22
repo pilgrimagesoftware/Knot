@@ -63,6 +63,15 @@ panel:
     expand: "Show these tool calls"
 
 settings:
+  title: "Settings"
+  tabs:
+    general: "General"
+    coding: "Coding"
+    personas: "Personas"
+    autopilot: "Autopilot"
+    voice: "Voice"
+    mcp: "MCP"
+    appearance: "Appearance"
   general:
     appearance: "Appearance"
     appearance_hint: "Derives color scheme from terminal background color."
@@ -141,6 +150,30 @@ settings:
 
 menu:
   agents: "Agents"
+  # One agent row's context menu, and the menu bar's Agents menu,
+  # which is built from the same entry list.
+  agent:
+    new_companion: "New Companion…"
+    new_shell_companion: "New Shell Companion"
+    edit_agent: "Edit Agent…"
+    fork_agent: "Fork Agent"
+    duplicate_agent: "Duplicate Agent"
+    move_to_workspace: "Move to Workspace"
+    save_to_bench: "Save to Bench"
+    open_in: "Open In…"
+    markdown_files: "Markdown Files"
+    register_agent: "Register Agent"
+    deactivate: "Deactivate"
+    restart_agent: "Restart Agent"
+    remove_agent: "Remove Agent"
+  # The agent list's background menu, over the workspace rather than
+  # any one agent.
+  sidebar:
+    new_agent: "New Agent"
+    restart_all: "Restart All"
+    close_all: "Close All"
+    deactivate_all: "Deactivate All"
+    broadcast: "Broadcast to All Agents…"
 
 quit:
   working_title: "Agents are still working"
@@ -165,3 +198,44 @@ about:
     toolkit: "gpui-kit — Apache-2.0"
     terminal: "Alacritty terminal — Apache-2.0"
     fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"
+
+agent_editor:
+  title_new: "New Agent"
+  title_edit: "Edit Agent"
+  name: "Name"
+  avatar: "Avatar"
+  coding_agent: "Coding agent"
+  command: "Command"
+  persona: "Persona"
+  activation: "Activation"
+  folder: "Folder"
+  shell_command: "Shell command (optional)"
+  choose_character: "Choose character…"
+  choose_folder: "Choose folder…"
+  choose_folder_prompt: "Choose Agent Folder"
+  activation_hint: "Active starts this agent whenever its workspace opens. Passive leaves it stopped until you select it."
+  active: "Active"
+  passive: "Passive"
+  save: "Save"
+  add: "Add Agent"
+  cancel: "Cancel"
+  error_choose_folder: "Choose a folder."
+  error_enter_name: "Enter a name."
+
+workspace_manager:
+  title: "Workspaces"
+  workspace: "Workspace"
+  new: "New workspace"
+  open: "Open workspace"
+  rename: "Rename workspace"
+  delete: "Delete workspace"
+  delete_title: "Delete Workspace?"
+  cancel: "Cancel"
+  error_name_empty: "Workspace name cannot be empty."
+  error_missing: "Workspace no longer exists."
+  error_last_workspace: "At least one workspace must remain."
+
+broadcast:
+  placeholder: "Message every agent in this workspace…"
+  send: "Send"
+  cancel: "Cancel"

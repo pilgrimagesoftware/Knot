@@ -110,19 +110,19 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
     let settings = knot_core::Settings::load().unwrap_or(settings);
     let editing = edit_target.and_then(|id| store.lock().agent(id).cloned());
     let title = if editing.is_some() {
-        "Edit Agent"
+        knot_core::l10n::t("agent_editor.title_edit")
     }
     else {
-        "New Agent"
+        knot_core::l10n::t("agent_editor.title_new")
     };
-    let options = agent_window_options(title, cx);
+    let options = agent_window_options(&title, cx);
     let _ =
         cx.open_window(options, move |window, cx| {
               // Every window tracks the OS appearance, so a light/dark flip
               // re-resolves the system palette and repaints.
               observe_system_appearance(window);
               let name_input = cx.new(|cx| {
-                                     InputState::new(window, cx).placeholder("Name")
+                                     InputState::new(window, cx).placeholder(knot_core::l10n::t("agent_editor.name"))
                                                    .default_value(editing.as_ref()
                                                                          .map(|a| a.name.clone())
                                                                          .or_else(|| {
@@ -131,7 +131,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                                          .unwrap_or_default())
                                  });
               let shell_command_input =
-                  cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
+                  cx.new(|cx| InputState::new(window, cx).placeholder(knot_core::l10n::t("agent_editor.shell_command")));
               let avatar_input = cx.new(|cx| {
                                        InputState::new(window, cx).default_value(
                 editing
@@ -243,13 +243,13 @@ impl AgentEditor {
     fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let folder = self.folder_path.trim().to_string();
         if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
-            self.error = Some("Choose a folder.".to_string());
+            self.error = Some(knot_core::l10n::t("agent_editor.error_choose_folder"));
             cx.notify();
             return;
         }
         let name = self.name_input.read(cx).value().trim().to_string();
         if name.is_empty() {
-            self.error = Some("Enter a name.".to_string());
+            self.error = Some(knot_core::l10n::t("agent_editor.error_enter_name"));
             cx.notify();
             return;
         }
@@ -279,15 +279,19 @@ impl AgentEditor {
             // both its id and its resume target with the fork flag set -
             // `CreateOptions` has no field for any of the three, because
             // every other creation path starts a session from scratch.
-            if let Some(session) = self.prefill.session_id.clone() {
-                let _ = store.fork_session(id, session);
+            if let Some(session) = self.prefill.session_id.clone()
+               && let Err(error) = store.fork_session(id, session)
+            {
+                eprintln!("failed to fork the agent's session: {error}");
             }
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
             id
         };
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist() {
+            eprintln!("failed to persist the agent roster: {error}");
+        }
         (self.on_created)(created_id, window, cx);
         window.remove_window();
     }
@@ -302,13 +306,13 @@ impl AgentEditor {
         };
         let folder = self.folder_path.trim().to_string();
         if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
-            self.error = Some("Choose a folder.".to_string());
+            self.error = Some(knot_core::l10n::t("agent_editor.error_choose_folder"));
             cx.notify();
             return;
         }
         let name = self.name_input.read(cx).value().trim().to_string();
         if name.is_empty() {
-            self.error = Some("Enter a name.".to_string());
+            self.error = Some(knot_core::l10n::t("agent_editor.error_enter_name"));
             cx.notify();
             return;
         }
@@ -339,7 +343,9 @@ impl AgentEditor {
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
         }
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist() {
+            eprintln!("failed to persist the agent roster: {error}");
+        }
         (self.on_created)(id, window, cx);
         window.remove_window();
     }
