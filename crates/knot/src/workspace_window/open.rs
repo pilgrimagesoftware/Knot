@@ -22,6 +22,7 @@ use uuid::Uuid;
 use crate::app_state::agent_selection_for_workspace;
 use crate::app_support::observe_system_appearance;
 use crate::dashboard;
+use crate::window_options::reconciled_workspace_bounds;
 use crate::window_options::workspace_window_options;
 use crate::window_registry::WindowKey;
 use crate::window_registry::WindowRegistry;
@@ -73,7 +74,8 @@ impl WorkspaceWindow {
                  .find(|workspace| workspace.id == workspace_id)
                  .and_then(|workspace| workspace.window_bounds)
         };
-        let options = workspace_window_options(saved_bounds, cx);
+        let placed = reconciled_workspace_bounds(saved_bounds, cx);
+        let options = workspace_window_options(placed, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
                   // Every window tracks the OS appearance, so a light/dark flip
@@ -188,6 +190,16 @@ impl WorkspaceWindow {
                           let subscription =
                               cx.observe_window_bounds(window, move |view, window, _cx| {
                                     let bounds = window.window_bounds().get_bounds();
+                                    // Our own placement is not a move the user
+                                    // made. Writing it back would replace the
+                                    // remembered frame with the one we fell
+                                    // back to, so a window arranged on a
+                                    // display that is merely unplugged would
+                                    // lose its place the first time it was
+                                    // reopened without it.
+                                    if Some(bounds) == placed {
+                                        return;
+                                    }
                                     let saved =
                                         knot_core::SavedWindowBounds { x:      bounds.origin
                                                                                      .x

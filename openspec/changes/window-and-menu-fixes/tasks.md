@@ -48,20 +48,22 @@
 
 ## 4. Bounds reconciliation
 
-- [ ] 4.1 Add the title-bar strip height and minimum horizontal overlap
+- [x] 4.1 Add the title-bar strip height and minimum horizontal overlap
       constants to `crates/knot/src/consts.rs`; verify `make lint` passes
-- [ ] 4.2 Implement `reconcile_bounds(saved, displays) -> Option<Bounds<Pixels>>`
+- [x] 4.2 Implement `reconcile_bounds(saved, displays) -> Option<Bounds<Pixels>>`
       in `window_options.rs` (or a sibling if the file nears 700 lines) per
       design.md - contained, too-large, overlapping, disjoint; verify unit tests
       covering all four branches plus the "greatest overlap wins" tie
-- [ ] 4.3 Call it from `workspace_window_options` with `cx.displays()`, falling
+- [x] 4.3 Call it from `workspace_window_options` with `cx.displays()`, falling
       back to the centered default on `None`; verify a workspace whose saved
       bounds lie at x=4000 opens on the attached display with its title bar
       visible
-- [ ] 4.4 Confirm `cx.observe_window_bounds` (`open.rs:166-192`) does not
-      persist the reconciled bounds on open - add a first-notification guard if
-      it does; verify by reconnecting the original display and checking the
-      window returns to its remembered position
+- [x] 4.4 Guarded the write-back: `cx.observe_window_bounds` only fires from
+      the platform resize callback, so it does not see the initial placement,
+      but the observer now also skips a notification whose bounds equal what we
+      placed - a spurious post-creation resize would otherwise overwrite the
+      remembered frame with the fallback. Manual check (reconnect the display,
+      confirm the window returns to its remembered position) is in 7.2
 
 ## 5. Menu bar
 

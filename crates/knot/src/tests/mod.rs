@@ -28,6 +28,7 @@ mod sidebar_menu;
 mod sidebar_width;
 mod single_line;
 mod startup;
+mod window_bounds;
 mod window_registry;
 mod workspace_dialog;
 mod workspace_window_config;
