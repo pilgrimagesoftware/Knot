@@ -2,24 +2,24 @@
 
 ## 1. Registry fields on the durable records
 
-- [ ] 1.1 Add `CostTier { Low, Medium, High }` to `knot-core` with `Display`,
+- [x] 1.1 Add `CostTier { Low, Medium, High }` to `knot-core` with `Display`,
   `FromStr`, `Default` returning `Medium`, and serde; verify a unit test
   round-trips each variant through string and JSON and rejects an unknown
   value with a typed error rather than a default
-- [ ] 1.2 Add `description: String`, `capabilities: BTreeSet<String>` and
+- [x] 1.2 Add `description: String`, `capabilities: BTreeSet<String>` and
   `cost_tier: CostTier` to `SavedAgent` and `BenchAgent` in
   `crates/knot-core/src/settings/records.rs`, all `#[serde(default)]`;
   verify the existing `crates/knot-core/tests/fixtures/settings_swift_shape.json`
   fixture still loads and the three fields read back as empty / empty /
   `Medium`
-- [ ] 1.3 Normalize capability tags on write (trim, lowercase, drop empties);
+- [x] 1.3 Normalize capability tags on write (trim, lowercase, drop empties);
   verify a test that `[" Rust ", "rust", ""]` stores as the single tag
   `rust`
-- [ ] 1.4 Mirror the three fields onto `knot_agents::Agent` as durable
+- [x] 1.4 Mirror the three fields onto `knot_agents::Agent` as durable
   fields and carry them through `convert::from_saved` and the persist path;
   verify the existing reload test still shows runtime fields resetting while
   the three new ones survive a round trip
-- [ ] 1.5 Carry the three fields through save-to-bench and bench deployment;
+- [x] 1.5 Carry the three fields through save-to-bench and bench deployment;
   verify a test that an agent tagged `testing` at `Low` saved to the bench
   and redeployed comes back with the same tag and tier
   (`agent-registry` - "Registry metadata survives the bench round trip")

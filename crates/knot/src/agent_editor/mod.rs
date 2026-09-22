@@ -272,6 +272,9 @@ impl AgentEditor {
                     is_companion: self.prefill.is_companion,
                     activation_mode: self.activation_mode,
                     workspace_id: Some(self.workspace_id),
+                    // Registry metadata has no control in this form yet; a
+                    // newly created agent starts undescribed and untagged.
+                    ..Default::default()
                 },
             );
             // A fork continues the source's conversation rather than
@@ -321,6 +324,17 @@ impl AgentEditor {
         let persona_changed = self.persona_id != self.original_persona_id;
         {
             let mut store = self.store.lock();
+            // Registry metadata has no control in this form yet, and
+            // `EditRequest` applies every field verbatim - so read the
+            // agent's current values and hand them straight back. Defaulting
+            // them here would erase an agent's description and tags every
+            // time someone renamed it.
+            let (description, capabilities, cost_tier) =
+                store.agent(id)
+                     .map(|agent| {
+                         (agent.description.clone(), agent.capabilities.clone(), agent.cost_tier)
+                     })
+                     .unwrap_or_default();
             let result = store.edit(
                 id,
                 knot_agents::EditRequest {
@@ -332,6 +346,9 @@ impl AgentEditor {
                     persona_changed,
                     relocate_companions: false,
                     activation_mode: self.activation_mode,
+                    description,
+                    capabilities,
+                    cost_tier,
                 },
             );
             if let Err(error) = result {

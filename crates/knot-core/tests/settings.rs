@@ -2,7 +2,9 @@
 //! Swift `CodingKeys` shape must load field-for-field, and re-serializing it
 //! must reproduce the same keys.
 
-use knot_core::{AiProvider, AppearanceMode, AutopilotAction, PersonaState, PersonaType, Settings};
+use knot_core::{
+    AiProvider, AppearanceMode, AutopilotAction, CostTier, PersonaState, PersonaType, Settings,
+};
 use uuid::Uuid;
 
 const FIXTURE: &str = include_str!("fixtures/settings_swift_shape.json");
@@ -208,4 +210,46 @@ fn a_corrupt_vocabulary_value_does_not_take_the_document_down() {
     assert_eq!(loaded.appearance_mode, AppearanceMode::default());
     assert_eq!(loaded.mcp_server_port, 9111,
                "the rest of the document survived");
+}
+
+/// `agent-lifecycle` - "Legacy record without registry fields". The
+/// fixture is a real Swift-era document: it predates the registry entirely,
+/// so every agent and bench entry in it must load undescribed, untagged and
+/// mid-priced rather than failing or being hidden.
+#[test]
+fn a_document_written_before_the_registry_loads_with_registry_defaults() {
+    let settings: Settings = serde_json::from_str(FIXTURE).expect("fixture still loads");
+
+    assert!(!settings.saved_agents.is_empty(),
+            "fixture must exercise this");
+    for agent in &settings.saved_agents {
+        assert_eq!(agent.description, "");
+        assert!(agent.capabilities.is_empty());
+        assert_eq!(agent.cost_tier, CostTier::Medium);
+    }
+    for bench in &settings.bench_agents {
+        assert_eq!(bench.description, "");
+        assert!(bench.capabilities.is_empty());
+        assert_eq!(bench.cost_tier, CostTier::Medium);
+    }
+}
+
+/// Nothing about how an agent launches changes when it gains a tag, so the
+/// three fields must survive a write/read cycle untouched.
+#[test]
+fn registry_metadata_survives_a_settings_round_trip() {
+    let mut settings: Settings = serde_json::from_str(FIXTURE).expect("fixture loads");
+    settings.saved_agents[0].description = "Runs the test suite".to_string();
+    settings.saved_agents[0].capabilities = [" Testing ", "rust"].iter().collect();
+    settings.saved_agents[0].cost_tier = CostTier::Low;
+
+    let encoded = serde_json::to_string(&settings).unwrap();
+    let back: Settings = serde_json::from_str(&encoded).unwrap();
+
+    let agent = &back.saved_agents[0];
+    assert_eq!(agent.description, "Runs the test suite");
+    assert!(agent.capabilities.contains("testing"),
+            "normalized on the way in");
+    assert!(agent.capabilities.contains("rust"));
+    assert_eq!(agent.cost_tier, CostTier::Low);
 }
