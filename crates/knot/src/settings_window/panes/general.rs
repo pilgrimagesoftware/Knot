@@ -4,9 +4,6 @@ use gpui_kit::ParentElement;
 use gpui_kit::Styled;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::button::Button;
-use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
 use knot_core::AppearanceMode;
 
@@ -30,59 +27,44 @@ impl SettingsWindow {
         restore_layout_on_launch
     }
 
-    pub(crate) fn render_general(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// How the window looks.
+    fn appearance_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
-        let restore_layout_on_launch = self.settings.restore_layout_on_launch;
-        let restore_conversation_on_launch = self.settings.restore_conversation_on_launch;
-        let keep_in_menu_bar = self.settings.keep_in_menu_bar;
-        let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
-        let agent_panel_shift_enter_sends = self.settings.agent_panel_shift_enter_sends;
-        let agent_panel_compact_tool_calls = self.settings.agent_panel_compact_tool_calls;
         let appearance_label = Self::appearance_label(self.settings.appearance_mode);
-        // Bound here rather than inline: `row`/`hint` borrow their text,
-        // so a `t(..)` temporary in the call would not outlive it.
-        let compact_tool_calls_label = knot_core::l10n::t("settings.compact_tool_calls");
-        let compact_tool_calls_hint = knot_core::l10n::t("settings.compact_tool_calls_hint");
-
-        v_flex()
-            .gap_3()
-            .child(
-                Self::group(knot_core::l10n::t("settings.general.appearance"))
+        Self::group(knot_core::l10n::t("settings.general.appearance"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.appearance"),
-                        Button::new("appearance-picker")
-                            .label(appearance_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    // Driven off `AppearanceMode::ALL`, so a
-                                    // new variant appears in the picker
-                                    // without anyone remembering to add it.
-                                    let mut menu = menu;
-                                    for mode in AppearanceMode::ALL.iter().copied() {
-                                        let label = Self::appearance_label(mode);
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, _, app| {
-                                                settings_window.update(app, |view, _| {
-                                                    view.settings.appearance_mode = mode;
-                                                    view.persist();
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+                        // Driven off `AppearanceMode::ALL`, so a new variant
+                        // appears in the picker without anyone remembering to
+                        // add it.
+                        Self::dropdown("appearance-picker",
+                                       appearance_label,
+                                       AppearanceMode::ALL.iter()
+                                                          .copied()
+                                                          .map(|mode| {
+                                                              (Self::appearance_label(mode).into(),
+                                                               mode)
+                                                          })
+                                                          .collect(),
+                                       settings_window.clone(),
+                                       |view, mode, _, _| {
+                                           view.settings.appearance_mode = *mode;
+                                           view.persist();
+                                       }),
                     ))
                     .child(Self::hint(
                         cx,
                         knot_core::l10n::t("settings.general.appearance_hint"),
-                    )),
-            )
-            .child(
-                Self::group(knot_core::l10n::t("settings.general.startup"))
+                    ))
+    }
+
+    /// What the app restores when it launches.
+    fn startup_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let settings_window = cx.entity();
+        let restore_layout_on_launch = self.settings.restore_layout_on_launch;
+        let restore_conversation_on_launch = self.settings.restore_conversation_on_launch;
+        let keep_in_menu_bar = self.settings.keep_in_menu_bar;
+        Self::group(knot_core::l10n::t("settings.general.startup"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.restore_agents"),
                         Switch::new("restore-layout-on-launch")
@@ -130,10 +112,14 @@ impl SettingsWindow {
                                     })
                                 }
                             }),
-                    )),
-            )
-            .child(
-                Self::group(knot_core::l10n::t("settings.general.notifications")).child(Self::row(
+                    ))
+    }
+
+    /// Whether an agent waiting for input raises a desktop notification.
+    fn notifications_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let settings_window = cx.entity();
+        let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
+        Self::group(knot_core::l10n::t("settings.general.notifications")).child(Self::row(
                     knot_core::l10n::t("settings.general.desktop_notifications"),
                     Switch::new("desktop-notifications-enabled")
                         .checked(desktop_notifications_enabled)
@@ -147,10 +133,19 @@ impl SettingsWindow {
                                 })
                             }
                         }),
-                )),
-            )
-            .child(
-                Self::group(knot_core::l10n::t("settings.general.agent_panel"))
+                ))
+    }
+
+    /// How the agent panel's composer and tool calls behave.
+    fn agent_panel_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let settings_window = cx.entity();
+        let agent_panel_shift_enter_sends = self.settings.agent_panel_shift_enter_sends;
+        let agent_panel_compact_tool_calls = self.settings.agent_panel_compact_tool_calls;
+        // Bound here rather than inline: `row`/`hint` borrow their text,
+        // so a `t(..)` temporary in the call would not outlive it.
+        let compact_tool_calls_label = knot_core::l10n::t("settings.compact_tool_calls");
+        let compact_tool_calls_hint = knot_core::l10n::t("settings.compact_tool_calls_hint");
+        Self::group(knot_core::l10n::t("settings.general.agent_panel"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.shift_enter_to_send"),
                         Switch::new("agent-panel-shift-enter-sends")
@@ -191,7 +186,14 @@ impl SettingsWindow {
                     .child(Self::hint(
                         cx,
                         compact_tool_calls_hint,
-                    )),
-            )
+                    ))
+    }
+
+    pub(crate) fn render_general(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex().gap_3()
+                .child(self.appearance_group(cx))
+                .child(self.startup_group(cx))
+                .child(self.notifications_group(cx))
+                .child(self.agent_panel_group(cx))
     }
 }
