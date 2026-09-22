@@ -136,6 +136,7 @@ pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
                                           created_by:      Some(created_by),
                                           is_companion:    companion,
                                           insert_after:    None,
+                                          workspace_id:    None,
                                           // Active, not the dialog's
                                           // `Passive` default: an agent
                                           // created over MCP was asked for

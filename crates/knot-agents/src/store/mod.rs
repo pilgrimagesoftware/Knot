@@ -33,6 +33,12 @@ pub struct CreateOptions {
     pub created_by:      Option<Uuid>,
     pub is_companion:    bool,
     pub insert_after:    Option<Uuid>,
+    /// Workspace to place the new agent in. Takes priority over inferring one
+    /// from `created_by`/`insert_after`. A caller that knows which workspace
+    /// it means must say so explicitly rather than relying on whichever
+    /// workspace happens to be "current" - that's ambient global state a
+    /// concurrent window or MCP call can change out from under it.
+    pub workspace_id:    Option<Uuid>,
     /// Defaults to `Passive` - deliberately not the load default a record
     /// with no stored mode gets (`Active`, see `knot_core::SavedAgent`).
     pub activation_mode: ActivationMode,

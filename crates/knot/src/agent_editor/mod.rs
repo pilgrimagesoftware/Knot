@@ -259,7 +259,6 @@ impl AgentEditor {
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
         let created_id = {
             let mut store = self.store.lock();
-            store.set_current_workspace(self.workspace_id);
             let id = store.create(
                 folder,
                 knot_agents::CreateOptions {
@@ -272,6 +271,7 @@ impl AgentEditor {
                     created_by: self.prefill.created_by,
                     is_companion: self.prefill.is_companion,
                     activation_mode: self.activation_mode,
+                    workspace_id: Some(self.workspace_id),
                 },
             );
             // A fork continues the source's conversation rather than

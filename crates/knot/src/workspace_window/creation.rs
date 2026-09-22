@@ -79,9 +79,9 @@ impl WorkspaceWindow {
                        .to_string();
         let id = {
             let mut store = self.store.lock();
-            store.set_current_workspace(self.workspace_id);
             store.create(folder,
                          knot_agents::CreateOptions { name: (!name.is_empty()).then_some(name),
+                                                      workspace_id: Some(self.workspace_id),
                                                       ..Default::default() })
         };
         {

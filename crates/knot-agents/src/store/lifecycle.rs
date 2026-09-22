@@ -52,8 +52,9 @@ impl AgentStore {
             None => self.agents.push(agent),
         }
         let source = opts.created_by.or(opts.insert_after);
-        let workspace_id = source.and_then(|source| self.workspace_of(source))
-                                 .unwrap_or_else(|| self.ensure_current_workspace());
+        let workspace_id = opts.workspace_id
+                               .or_else(|| source.and_then(|source| self.workspace_of(source)))
+                               .unwrap_or_else(|| self.ensure_current_workspace());
         if let Some(workspace) = self.workspaces
                                      .iter_mut()
                                      .find(|workspace| workspace.id == workspace_id)
