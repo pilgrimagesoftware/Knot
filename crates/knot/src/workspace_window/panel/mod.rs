@@ -11,7 +11,7 @@
 //! [`super::WorkspaceWindow`]; the modules carve the impl up by concern,
 //! not by type.
 
-mod input;
+pub(super) mod input;
 pub(crate) mod lookup;
 mod pane;
 mod prompt;

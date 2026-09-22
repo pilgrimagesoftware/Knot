@@ -25,7 +25,6 @@ use gpui_kit::px;
 use uuid::Uuid;
 
 use crate::app_support::single_line;
-use crate::workspace_window::DetailLineSize;
 
 /// One labelled detail line on an agent row: a leading icon saying what the
 /// line is, then the text.
@@ -242,4 +241,18 @@ mod context_usage_tests {
         assert_eq!(format_token_count(12), "12");
         assert_eq!(format_token_count(0), "0");
     }
+}
+
+/// Which text size a detail line renders at, and therefore what size its
+/// icon has to be.
+///
+/// The row's detail lines are not all one size - the agent type and persona
+/// are `text_xs`, the status and folder are the UI font size - so an icon
+/// fixed at one size reads as undersized beside half of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DetailLineSize {
+    /// `text_xs`, for the type and persona lines.
+    Small,
+    /// The UI font size, for the status and folder lines.
+    Body,
 }
