@@ -81,20 +81,36 @@ easier.
 GPUI re-renders on every keystroke. A subprocess, a file read or a blocking
 lock inside `Render::render` runs at that rate.
 
-`workspace_window` learned this twice: `git diff --numstat` ran inline in the
-header, was moved behind a TTL cache and `spawn_blocking`, and then came back
-inline in the dashboard - once per card, per frame. Route through the cache
-that already exists.
+`git diff --numstat` has been on this path three times: the workspace
+window's header, then its dashboard once per card, then the command center -
+which shows *every* workspace's agents, so it was the worst of the three and
+the last to be found.
 
-## `Mutex` poisoning: one policy per crate
+The cache that answers this is `knot/src/diff_stats.rs`. A render asks it for
+what it already has (`snapshot`) and separately asks it to refresh what has
+aged out (`claim_refresh`); the `git` call runs off the main thread and a
+later frame draws the answer. Route through it rather than adding a fourth
+instance.
 
-`workspace_window/mod.rs` had 22 `lock().unwrap()` against 52 `if let Ok(..)`,
-sometimes two lines apart. Whether a poisoned lock crashes the app or is
-silently ignored depended on which call site happened to fire.
+## Locks: `parking_lot`, and a guard that does not outlive its statement
 
-Prefer the degrading form on the UI thread - a window that must keep rendering
-should not panic because a background thread died. `knot-terminal/src/pty.rs`
-shows the better shape still: map poisoning to a typed error.
+`workspace_window/mod.rs` once had 22 `lock().unwrap()` against 52
+`if let Ok(..)`, sometimes two lines apart, so whether a poisoned lock crashed
+the app or was silently ignored depended on which call site happened to fire.
+The workspace answered that by deleting the question: locks are
+`parking_lot::Mutex`, which has no poisoning and whose `lock()` returns the
+guard directly. Do not write `if let Ok(..)` or `.unwrap()` around one - there
+is no `Result` to unwrap.
+
+`tokio::sync::Mutex` stays in exactly one place, `knot-acp`'s transport, where
+the guard is held across an `.await`. Everywhere else the `parking_lot` guard
+is `!Send`, which is what makes the compiler reject that mistake.
+
+What still needs care is *how long* a guard lives. Scope it so it is dropped
+before any blocking call - `persist_agents` takes the store lock, copies what
+it needs, drops it, and only then writes the settings file - and take it once
+around a loop rather than once per iteration, or another window can observe a
+workspace half restarted.
 
 ## Owning spawned work
 
@@ -128,19 +144,43 @@ duplicating live code and already drifting from it.
 After splitting a module, confirm every new file is reachable: `cargo check`
 passing is not evidence, because an unreferenced file cannot fail to compile.
 
-## Enums over strings for closed vocabularies
+## Vocabularies: an enum when closed, one roster when open
 
-`appearance_mode`, `ai_provider`, `autopilot_action`, `agent_type` are stored
-as `String` and matched in several places each with a `_ => default` arm, so a
-corrupt value is indistinguishable from the real default (issue #224). New
-closed vocabularies get an enum with `Display`/`FromStr`, serialized as the
-same string, so every match is exhaustive and the compiler finds the next site.
+`appearance_mode`, `ai_provider` and `autopilot_action` were `String`s matched
+in several places each with a `_ => default` arm, so a corrupt value was
+indistinguishable from the real default (issue #224). They are enums now, in
+`knot-core/src/settings/vocabulary.rs`, serialized as the same strings they
+have always been stored as, with an unrecognized value turned into the default
+*once*, at load, where it can be seen.
+
+`agent_type` is the other case and stays a `String`: MCP `agent_create` takes
+whatever an agent asks for, and a type with no ACP adapter deliberately
+launches through the terminal path, so an unknown value is a working
+configuration. What it gets instead is one roster -
+`knot_core::agent_type::ALL` - carrying the label and the flags every crate
+was deciding by hand, with the pickers built by filtering it. Per-type data
+that cannot live there (the adapter table, the icons, the install commands)
+keeps a test that fails when a roster row has nothing matching it.
+
+So: an enum when the set is genuinely closed, a roster plus coverage tests
+when it is not. What is not acceptable is the same list written out in six
+places.
 
 ## User-facing text
 
 Goes through `knot_core::l10n::t` with a key in
-`crates/knot-core/locales/en.yml`. Much existing code does not (issue #223);
-match `about_window` and `agent_menu`, not `settings_window`.
+`crates/knot-core/locales/en.yml` (issue #223, now closed - every window's
+chrome is routed, so match any of them).
+
+A sentence that embeds a value stays **one** entry and substitutes through
+`t_with`; assembling it from fragments at the call site takes the word order
+away from the translator. `pluralize` does the same for a count and its noun.
 
 Tests assert the catalogue **key resolves**, never the English copy - a copy
-edit should not fail a test.
+edit should not fail a test. For a sentence with a placeholder, assert the
+value survives substitution too: a body that lost its `%{name}` still resolves,
+and still asks "Restart ?".
+
+Three times in #223 the reason a file was unlocalized was a helper whose
+signature took `&'static str`. If text will not go through the catalog, check
+the signature before concluding the call site is special.
