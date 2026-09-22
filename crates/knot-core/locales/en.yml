@@ -34,6 +34,8 @@ panel:
   copy_response: "Copy response"
   copied_prompt: "Copied prompt to clipboard"
   copied_response: "Copied response to clipboard"
+  copy_code: "Copy code"
+  copied_code: "Copied code to clipboard"
   queued: "Queued"
   queued_inbox_nudge: "Queued inbox check"
   failed: "Failed"
