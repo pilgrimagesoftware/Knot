@@ -28,13 +28,13 @@ use gpui_kit::div;
 use gpui_kit::rgb;
 
 use crate::app_support::single_line;
-use crate::panel_view::CardOutline;
-use crate::panel_view::ERROR_COLOR;
-use crate::panel_view::MUTED;
-use crate::panel_view::PanelStyle;
-use crate::panel_view::SAFE_COLOR;
-use crate::panel_view::ToolCallCard;
-use crate::panel_view::card_outline;
+use crate::panel_state::ToolCallCard;
+use crate::panel_view::style::CardOutline;
+use crate::panel_view::style::ERROR_COLOR;
+use crate::panel_view::style::MUTED;
+use crate::panel_view::style::PanelStyle;
+use crate::panel_view::style::SAFE_COLOR;
+use crate::panel_view::style::card_outline;
 
 /// A tool-call card: an icon/title/status header over whatever content
 /// the agent has reported so far - diff blocks as an added/removed line
