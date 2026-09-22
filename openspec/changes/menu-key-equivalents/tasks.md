@@ -25,18 +25,19 @@
 
 ## 3. The Agents menu's keys
 
-- [x] 3.1 Bind ⇧⌘S, ⌘F, ⌘D and ⌘R to New Shell Companion, Fork Agent,
+- [x] 3.1 Bind ⇧⌘S, ⌥⌘F, ⌘D and ⌘R to New Shell Companion, Fork Agent,
       Duplicate Agent and Restart Agent, in a table beside the actions in
       `agent_menu.rs` rather than in `app_bootstrap.rs`, so the keys sit with
       the menu they annotate.
 - [x] 3.2 Leave Remove Agent without a key: the reference's ⌘W is Close
       Window here. Record why in the table's doc comment so it does not read
       as an oversight.
-- [x] 3.3 Confirm no toolkit binding is displaced. ⌘F is gpui's in-field
-      Search in its `Input` context - every input in this port is
-      single-line, so Search has nothing to open, and a menu item's key
-      equivalent is taken by AppKit ahead of the window in any case. Note it
-      where the binding is written.
+- [x] 3.3 Leave ⌘F free rather than taking the reference's key for Fork
+      Agent. It is Find on every other Mac application, gpui binds it to
+      in-field Search, and a menu item's key equivalent is taken by AppKit
+      ahead of the window - so an Agents item there would spend the find key
+      before this port has a find to put on it. ⌥⌘F is the nearest free key;
+      record the reasoning where the binding is written.
 
 ## 4. Tests
 
@@ -47,9 +48,9 @@
       text actions after our bindings are installed, so a placeholder added
       on one of those keys fails loudly rather than silently breaking text
       fields. Done as `the_edit_menu_leaves_the_text_keys_with_gpui`.
-- [x] 4.3 Add a test that the four reference shortcuts resolve to their
-      Agents-menu actions, that ⌘W still resolves to Close Window, and that
-      Remove Agent is in no binding. Done as
+- [x] 4.3 Add a test that the four shortcuts resolve to their Agents-menu
+      actions, that ⌘W still resolves to Close Window and ⌘F still to gpui's
+      Search, and that Remove Agent is in no binding. Done as
       `the_agents_menu_carries_the_reference_shortcuts`.
 
 ## 5. Verification
@@ -65,6 +66,4 @@
       pane still copies the terminal's selection.
 - [ ] 5.4 In the running app, confirm ⌘D duplicates the selected agent and
       ⌘R restarts it with its confirmation, that both do nothing with no
-      agent selected, and that ⌘F does nothing while typing in a
-      single-line field beyond forking - i.e. that it forks, and no find
-      affordance was lost.
+      agent selected, and that ⌥⌘F forks while ⌘F does nothing.

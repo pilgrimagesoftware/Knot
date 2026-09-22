@@ -93,19 +93,23 @@ fn standard_menu_items_carry_their_platform_shortcut(cx: &mut TestAppContext) {
 }
 
 /// The Agents menu's items are Knot's own, so their keys come from the
-/// Swift reference rather than from macOS. Four of the reference's carry
-/// over; Close Agent's cmd-w does not, because Close Window has that key
-/// here, and this asserts Remove Agent is left without one rather than
-/// quietly given the destructive half of a very common keystroke.
+/// Swift reference rather than from macOS - except where the reference
+/// wants a key the platform has already spoken for. Two such: Close
+/// Agent's cmd-w, which is Close Window here, leaving Remove Agent without
+/// a shortcut rather than quietly given the destructive half of a very
+/// common keystroke; and Fork Agent's cmd-f, which stays free for a find.
 #[gpui_kit::test]
 fn the_agents_menu_carries_the_reference_shortcuts(cx: &mut TestAppContext) {
     app_with_bindings(cx);
     cx.update(|cx| {
           assert_bound(cx, "cmd-shift-s", &AgentMenuNewShellCompanion);
-          assert_bound(cx, "cmd-f", &AgentMenuForkAgent);
+          assert_bound(cx, "cmd-alt-f", &AgentMenuForkAgent);
           assert_bound(cx, "cmd-d", &AgentMenuDuplicateAgent);
           assert_bound(cx, "cmd-r", &AgentMenuRestartAgent);
           assert_bound(cx, "cmd-w", &CloseWindow);
+          // Still gpui's, not ours: cmd-f is the platform's find key, and
+          // is left for whatever find this port grows.
+          assert_bound(cx, "cmd-f", &input::Search);
       });
     assert!(!agent_menu_key_bindings().iter().any(|binding| {
                                                  binding.action().partial_eq(&AgentMenuRemoveAgent)

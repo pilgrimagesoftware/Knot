@@ -72,16 +72,20 @@ actions!(knot_app,
 /// menu's Remove Agent, which keeps no shortcut because cmd-w is Close
 /// Window here.
 ///
+/// Fork Agent departs from the reference's cmd-f, which is Find on every
+/// other Mac application: gpui binds it to in-field Search already, and a
+/// menu item's key equivalent is claimed by AppKit ahead of the window, so
+/// taking it would spend the platform's find key on a Knot action before
+/// this port has a find of its own to put there. cmd-alt-f is the nearest
+/// free key.
+///
 /// No context, so a workspace window answers these wherever focus sits
-/// inside it - which is also why cmd-f forks rather than reaching gpui's
-/// in-field Search: every input in this port is single-line, so Search has
-/// nothing to open, and a menu item's key equivalent is claimed by AppKit
-/// ahead of the window either way. The handlers are registered per
-/// selected agent on the window's root element, so these do nothing at all
-/// when no agent is selected - the same rule that greys the menu items.
+/// inside it. The handlers are registered per selected agent on the
+/// window's root element, so these do nothing at all when no agent is
+/// selected - the same rule that greys the menu items.
 pub(crate) fn agent_menu_key_bindings() -> Vec<KeyBinding> {
     vec![KeyBinding::new("cmd-shift-s", AgentMenuNewShellCompanion, None),
-         KeyBinding::new("cmd-f", AgentMenuForkAgent, None),
+         KeyBinding::new("cmd-alt-f", AgentMenuForkAgent, None),
          KeyBinding::new("cmd-d", AgentMenuDuplicateAgent, None),
          KeyBinding::new("cmd-r", AgentMenuRestartAgent, None)]
 }

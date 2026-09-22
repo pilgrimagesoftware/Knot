@@ -60,13 +60,21 @@ shortcuts it gives them:
 | Item | Key |
 | --- | --- |
 | New Shell Companion | ⇧⌘S |
-| Fork Agent | ⌘F |
+| Fork Agent | ⌥⌘F |
 | Duplicate Agent | ⌘D |
 | Restart Agent | ⌘R |
 
-Remove Agent SHALL have no key equivalent. The reference calls that item
-Close Agent and gives it ⌘W, which belongs to Close Window here; where the
-two sources disagree over a key this common, the platform wins, and the
+Where the reference wants a key the platform has already spoken for, the
+platform SHALL win, and no item of this menu SHALL hold a key the platform
+reserves - including one the port has no item for yet. A menu item's key
+equivalent is claimed by AppKit ahead of the window, so a Knot action on
+such a key does not merely share it, it takes it.
+
+Fork Agent SHALL therefore take ⌥⌘F rather than the reference's ⌘F, and ⌘F
+SHALL stay free for a find.
+
+Remove Agent SHALL have no key equivalent at all. The reference calls that
+item Close Agent and gives it ⌘W, which belongs to Close Window here; the
 losing item goes without rather than taking a second-choice key - the more
 so as Remove Agent is the destructive one.
 
@@ -87,8 +95,14 @@ not apply to.
 #### Scenario: A shortcut for an item that does not apply
 
 - **WHEN** a shell companion is selected - Fork Agent is shown disabled for
-  it - and the user presses ⌘F
+  it - and the user presses ⌥⌘F
 - **THEN** nothing happens, matching the disabled item
+
+#### Scenario: The find key is left alone
+
+- **WHEN** the user presses ⌘F anywhere in the application
+- **THEN** no Agents menu item runs, and the key remains available to a
+  find
 
 #### Scenario: A shortcut with no agent selected
 

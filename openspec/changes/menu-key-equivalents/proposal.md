@@ -31,12 +31,18 @@ whose items could work today is the one that does nothing.
   drawn greyed beside the label, which is how macOS presents a standard item
   an application does not currently offer.
 - The Agents menu SHALL take the shortcuts the Swift reference gives its
-  items: New Shell Companion ⇧⌘S, Fork Agent ⌘F, Duplicate Agent ⌘D and
+  items: New Shell Companion ⇧⌘S, Fork Agent ⌥⌘F, Duplicate Agent ⌘D and
   Restart Agent ⌘R. No platform convention names a key for these - they are
-  Knot's own items - so the reference is the source.
+  Knot's own items - so the reference is the source, except where it wants a
+  key the platform has already spoken for.
 - Remove Agent SHALL keep no shortcut. The reference calls it Close Agent and
   gives it ⌘W, which Close Window has here; the destructive half of a very
   common keystroke is not the place to depart from the platform.
+- Fork Agent SHALL take ⌥⌘F rather than the reference's ⌘F, and ⌘F SHALL stay
+  free. ⌘F is Find on every other Mac application - gpui binds it to in-field
+  Search already - and a menu item's key equivalent is claimed by AppKit
+  ahead of the window, so taking it would spend the platform's find key on a
+  Knot action before this port has a find of its own to put there.
 
 ## Capabilities
 
