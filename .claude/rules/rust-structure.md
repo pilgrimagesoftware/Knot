@@ -150,13 +150,13 @@ placement at all. `import_window` would have been 443 lines in one `mod.rs` -
 comfortably legal, and still wrong, because nothing about the name says where
 the rendering is.
 
-The drift it guards against is already visible: `agent_editor/mod.rs` (438
-lines), `panel_state/mod.rs` (352), `panel_view/mod.rs` (348),
-`settings_window/mod.rs` (324), `about_window/mod.rs` (313) and
-`workspace_window/mod.rs` (290) all predate the rule. Do not refactor them to
-satisfy it - a churn commit across six modules buys nothing on its own. Apply
-it to new modules, and to an existing one when you are already restructuring
-it for another reason.
+Six `mod.rs` files predate the rule: `agent_editor` (438 lines),
+`panel_state` (352), `panel_view` (348), `settings_window` (324),
+`about_window` (313) and `workspace_window` (290). They are a backlog, not
+exceptions - tracked in issue #300, one module per PR so a regression is
+bisectable to a single split. The rule applies to all of them; only the timing
+is open. Grandfathering has to be argued for, not assumed, or a rule that the
+codebase visibly breaks in six places stops being a rule.
 
 A `mod.rs` that is only declarations and re-exports also makes the module's
 shape readable in one screen, which is the same argument as splitting by
