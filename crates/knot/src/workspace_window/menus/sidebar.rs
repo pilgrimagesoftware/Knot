@@ -11,7 +11,6 @@ use std::sync::Arc;
 use gpui_kit::App;
 use gpui_kit::Entity;
 use gpui_kit::Window;
-use gpui_kit::component::WindowExt;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use parking_lot::Mutex;
@@ -22,6 +21,7 @@ use crate::app_state::SidebarMenuFacts;
 use crate::app_state::sidebar_background_menu_entries;
 use crate::broadcast_sheet::open_broadcast_sheet;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::menus::confirm_then;
 
 /// What the sidebar's background context menu acts on. The workspace, not
 /// any one agent: every item here is scoped to the workspace the sidebar is
@@ -112,45 +112,29 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
         }
         AgentListBackgroundEntry::RestartAll => {
             let targets = targets.clone();
-            window.defer(app, move |window, app| {
-                      window.open_alert_dialog(app, move |alert, _, _| {
-                                let targets = targets.clone();
-                                let count = workspace_agent_count(&targets);
-                                alert.title("Restart All")
-                                     .description(format!("Restart {count} {}? Every session is \
-                                                           cleared and cannot be recovered.",
-                                                          agent_noun(count)))
-                                     .confirm()
-                                     .on_ok(move |_, _, app| {
-                                         targets.window_entity.update(app, |view, cx| {
-                                                                  view.restart_all_agents();
-                                                                  cx.notify();
-                                                              });
-                                         true
-                                     })
-                            });
-                  });
+            let count = workspace_agent_count(&targets);
+            let description = format!("Restart {count} {}? Every session is cleared and cannot be \
+                                       recovered.",
+                                      agent_noun(count));
+            confirm_then(window, app, "Restart All", description, move |app| {
+                targets.window_entity.update(app, |view, cx| {
+                                         view.restart_all_agents();
+                                         cx.notify();
+                                     });
+            });
         }
         AgentListBackgroundEntry::CloseAll => {
             let targets = targets.clone();
-            window.defer(app, move |window, app| {
-                      window.open_alert_dialog(app, move |alert, _, _| {
-                                let targets = targets.clone();
-                                let count = workspace_agent_count(&targets);
-                                alert.title("Close All")
-                                     .description(format!("Close {count} {}? This closes every \
-                                                           session and cannot be undone.",
-                                                          agent_noun(count)))
-                                     .confirm()
-                                     .on_ok(move |_, _, app| {
-                                         targets.window_entity.update(app, |view, cx| {
-                                                                  view.close_all_agents();
-                                                                  cx.notify();
-                                                              });
-                                         true
-                                     })
-                            });
-                  });
+            let count = workspace_agent_count(&targets);
+            let description = format!("Close {count} {}? This closes every session and cannot be \
+                                       undone.",
+                                      agent_noun(count));
+            confirm_then(window, app, "Close All", description, move |app| {
+                targets.window_entity.update(app, |view, cx| {
+                                         view.close_all_agents();
+                                         cx.notify();
+                                     });
+            });
         }
         AgentListBackgroundEntry::DeactivateAll => {
             // No confirmation, matching the row menu's Deactivate: every

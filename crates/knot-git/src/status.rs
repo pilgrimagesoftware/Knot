@@ -48,8 +48,13 @@ pub struct RepoStatus {
     /// Branch name, or `None` when HEAD is detached.
     pub head:     Option<String>,
     pub upstream: Option<String>,
-    pub ahead:    i64,
-    pub behind:   i64,
+    /// Commits on this branch that the upstream does not have, and
+    /// vice versa. `u32` to match [`Repository::ahead_behind`], which
+    /// reports the same two numbers - they are counts, never negative.
+    ///
+    /// [`Repository::ahead_behind`]: crate::Repository::ahead_behind
+    pub ahead:    u32,
+    pub behind:   u32,
     pub entries:  Vec<FileEntry>,
 }
 
@@ -129,7 +134,7 @@ fn parse_branch_header(rest: &str, status: &mut RepoStatus) {
     }
 }
 
-fn parse_ab(value: &str) -> (i64, i64) {
+fn parse_ab(value: &str) -> (u32, u32) {
     let mut ahead = 0;
     let mut behind = 0;
 
