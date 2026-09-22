@@ -5,33 +5,51 @@
 //!
 //! Contract: `openspec/specs/settings-persistence/spec.md`.
 //!
-//! The whole store is one [`Settings`] value serialized as a single JSON
-//! document. Every mutating helper writes the document immediately. A
-//! collection blob that fails to decode yields an empty collection rather than
-//! failing the load, so the app always starts.
+//! One [`Settings`] value is one settings surface over six documents, whose
+//! locations [`StorePaths`] derives:
 //!
-//! Two upgrades run on load. The terminal font's `"SF Mono"` default is
-//! replaced value-for-value, and a document written before the two
-//! proportional fonts swapped roles has them exchanged once, gated on the
-//! `settingsVersion` marker - see [`migrate_font_roles`].
+//! | Document | Holds | Directory |
+//! |---|---|---|
+//! | `preferences.json` | every scalar setting | user preferences |
+//! | `agents.json` | saved agents | application data |
+//! | `workspaces.json` | saved workspaces | application data |
+//! | `personas.json` | personas | application data |
+//! | `bench.json` | bench templates | application data |
+//! | `recent-repos.json` | recent repositories | application data |
+//!
+//! Every mutating helper writes immediately, and writes only the document it
+//! changed: [`Settings::persist`] is the whole surface, while
+//! [`Settings::persist_preferences`] and the per-collection writers are what
+//! the helpers actually call. Each document loads on its own, so one that
+//! fails to decode costs only what it held and the app still starts.
+//!
+//! An installation still holding the single `settings.json` is migrated once
+//! on load - see [`legacy`].
+//!
+//! Two upgrades run on the preferences document. The terminal font's
+//! `"SF Mono"` default is replaced value-for-value, and a document written
+//! before the two proportional fonts swapped roles has them exchanged once,
+//! gated on the `settingsVersion` marker - see [`migrate_font_roles`].
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
-use directories::{BaseDirs, ProjectDirs};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize};
+use directories::BaseDirs;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+
+mod documents;
+mod legacy;
+mod paths;
+
+pub use paths::StorePaths;
 
 pub use super::records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, Workspace};
 use super::vocabulary::{AiProvider, AppearanceMode, AutopilotAction, UnknownVariant};
 use crate::consts::{
-    APP_NAME, DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT,
-    MERMAID_THEME_DEFAULT, ORG_NAME, ORG_QUALIFIER, RECENT_REPOS_MAX, SETTINGS_FILE,
-    SETTINGS_TEMP_EXTENSION, SETTINGS_VERSION_CURRENT, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX,
+    DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT, MERMAID_THEME_DEFAULT,
+    RECENT_REPOS_MAX, SETTINGS_VERSION_CURRENT, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX,
     SIDEBAR_WIDTH_MIN, SOURCE_FOLDER_CANDIDATES, TERMINAL_FONT_DEFAULT, TERMINAL_FONT_SIZE_DEFAULT,
     TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT,
     VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
@@ -98,19 +116,23 @@ pub struct Settings {
     /// `openspec/specs/collapsed-tool-call-summary/spec.md`.
     pub agent_panel_compact_tool_calls: bool,
 
-    #[serde(deserialize_with = "de_tolerant_vec")]
+    /// The durable collections, each persisted as its own document rather
+    /// than as a key of the preferences document - hence `skip`, which also
+    /// makes a stray collection key in a hand-edited preferences document
+    /// ignored on read and never written back.
+    #[serde(skip)]
     pub saved_agents:     Vec<SavedAgent>,
-    #[serde(deserialize_with = "de_tolerant_vec")]
+    #[serde(skip)]
     pub saved_workspaces: Vec<Workspace>,
-    #[serde(deserialize_with = "de_tolerant_vec")]
+    #[serde(skip)]
     pub personas:         Vec<Persona>,
-    #[serde(deserialize_with = "de_tolerant_vec")]
+    #[serde(skip)]
     pub bench_agents:     Vec<BenchAgent>,
-    #[serde(deserialize_with = "de_tolerant_vec")]
+    #[serde(skip)]
     pub recent_repos:     Vec<String>,
 
     #[serde(skip)]
-    store_path: Option<PathBuf>,
+    paths: Option<StorePaths>,
 }
 
 impl Default for Settings {
@@ -153,54 +175,69 @@ impl Default for Settings {
                personas:                       Vec::new(),
                bench_agents:                   Vec::new(),
                recent_repos:                   Vec::new(),
-               store_path:                     None, }
+               paths:                          None, }
     }
 }
 
 impl Settings {
-    /// Load from the platform config directory. A missing file, an unreadable
-    /// blob, or a non-object document all yield defaults with `Ok` so the app
-    /// still starts. Only an I/O error other than "not found" is returned as
-    /// `Err`.
+    /// Load from the platform's preferences and application-data
+    /// directories, migrating a legacy single document first if one is
+    /// present. A missing, unreadable or malformed document yields that
+    /// document's defaults with `Ok` so the app still starts.
     pub fn load() -> Result<Self> {
-        match Self::platform_store_path() {
-            Some(path) => Self::load_at(&path, Some(path.clone())),
+        match StorePaths::platform() {
+            Some(paths) => Self::load_with(paths),
             None => Ok(Self::default()),
         }
     }
 
-    /// Load from an explicit path (tests, alternate profiles). Same tolerance
-    /// rules as [`Settings::load`].
-    pub fn load_from(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        Self::load_at(path, Some(path.to_path_buf()))
+    /// Load every document from one directory (tests, alternate profiles).
+    /// Same tolerance rules as [`Settings::load`].
+    pub fn load_from_root(dir: impl AsRef<Path>) -> Result<Self> {
+        Self::load_with(StorePaths::rooted(dir.as_ref()))
     }
 
-    /// An empty settings value bound to an explicit store path.
-    pub fn with_store_path(path: impl Into<PathBuf>) -> Self {
-        Self { store_path: Some(path.into()),
+    /// An empty settings value whose documents live under `dir`.
+    pub fn with_store_root(dir: impl Into<PathBuf>) -> Self {
+        Self { paths: Some(StorePaths::rooted(dir)),
                ..Self::default() }
     }
 
-    fn load_at(path: &Path, store: Option<PathBuf>) -> Result<Self> {
-        let bytes = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => {
-                return Ok(Self::bound(store));
-            }
-            Err(err) => return Err(err.into()),
-        };
+    fn load_with(paths: StorePaths) -> Result<Self> {
+        if let Some(migrated) = legacy::migrate(&paths)? {
+            return Ok(migrated);
+        }
+        Ok(Self::read_documents(paths))
+    }
 
-        let mut value: Value = match serde_json::from_slice::<Value>(&bytes) {
-            Ok(value) if value.is_object() => value,
-            _ => return Ok(Self::bound(store)),
+    /// Read each document on its own, so one that cannot be read costs only
+    /// what it held.
+    fn read_documents(paths: StorePaths) -> Self {
+        let mut settings = match documents::read_object(&paths.preferences()) {
+            Some(value) => Self::from_preferences(value),
+            None => Self::default(),
         };
+        settings.saved_agents = documents::read_collection(&paths.agents());
+        settings.saved_workspaces = documents::read_collection(&paths.workspaces());
+        settings.personas = documents::read_collection(&paths.personas());
+        settings.bench_agents = documents::read_collection(&paths.bench());
+        settings.recent_repos = documents::read_collection(&paths.recent_repos());
+        settings.paths = Some(paths);
+        settings
+    }
 
+    /// Decode a preferences object and apply the load-time upgrades. The
+    /// collections are left empty; the caller fills them from their own
+    /// documents.
+    ///
+    /// Also the path a legacy document takes once its collection keys have
+    /// been lifted out, so an upgrading installation gets exactly the same
+    /// upgrades as a document already in the new arrangement.
+    fn from_preferences(mut value: Value) -> Self {
         migrate_font_roles(&mut value);
         report_unreadable_vocabularies(&value);
 
         let mut settings: Self = serde_json::from_value(value).unwrap_or_default();
-        settings.store_path = store;
         // "SF Mono" was the terminal font default before JetBrains Mono
         // replaced it; a persisted document from before that change still
         // carries the old value, and SF Mono isn't reliably resolvable
@@ -217,58 +254,69 @@ impl Settings {
         // bound.
         settings.sidebar_width = settings.sidebar_width
                                          .clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
-        Ok(settings)
+        settings
     }
 
-    fn bound(store: Option<PathBuf>) -> Self {
-        Self { store_path: store,
-               ..Self::default() }
+    /// Where this value's documents live, falling back to the platform
+    /// directories when it was not bound to an explicit root.
+    fn resolved_paths(&self) -> Result<StorePaths> {
+        self.paths
+            .clone()
+            .or_else(StorePaths::platform)
+            .ok_or_else(|| Error::Config("no config directory available".to_string()))
     }
 
-    fn platform_store_path() -> Option<PathBuf> {
-        ProjectDirs::from(ORG_QUALIFIER, ORG_NAME, APP_NAME).map(|dirs| {
-                                                                dirs.config_dir()
-                                                                    .join(SETTINGS_FILE)
-                                                            })
-    }
-
-    /// The resolved path this value writes to.
-    pub fn store_path(&self) -> Option<PathBuf> {
-        self.store_path.clone().or_else(Self::platform_store_path)
-    }
-
-    /// Write the document to [`Settings::store_path`], creating the parent
-    /// directory as needed.
+    /// Write every document.
     ///
-    /// Written to a temporary file in the same directory and renamed into
-    /// place, so the settings file is never observed half-written. Nearly
-    /// every mutating helper on this type persists immediately, so this runs
-    /// on most user actions; a truncating write interrupted by a crash or a
-    /// power loss would leave unparseable JSON, and the next launch would
-    /// silently fall back to defaults - losing every agent, workspace and
-    /// persona with no way back. `rename` within one directory is atomic on
-    /// macOS and Linux, so a reader sees either the old document or the new
-    /// one.
+    /// The whole surface at once, for a caller that changed more than one
+    /// kind of value or does not know which. A caller that does know should
+    /// use the writer for what it changed: it then does not rewrite five
+    /// documents to record one edit, and - the reason that matters - does not
+    /// write back its own stale copy of what another window persisted in the
+    /// meantime.
     pub fn persist(&self) -> Result<()> {
-        let path = self.store_path()
-                       .ok_or_else(|| Error::Config("no config directory available".to_string()))?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let json = serde_json::to_string_pretty(self)?;
-        // Same directory as the target: `rename` is only atomic within one
-        // filesystem, and a temp dir may be on another.
-        let temporary = path.with_extension(SETTINGS_TEMP_EXTENSION);
-        fs::write(&temporary, json)?;
-        match fs::rename(&temporary, &path) {
-            Ok(()) => Ok(()),
-            Err(error) => {
-                // Leaving the temp file behind would shadow the next
-                // attempt's write with a stale document.
-                let _ = fs::remove_file(&temporary);
-                Err(error.into())
-            }
-        }
+        self.persist_preferences()?;
+        self.persist_roster()?;
+        self.persist_personas()?;
+        self.persist_bench()?;
+        self.persist_recent_repos()
+    }
+
+    /// Write the preferences document: every scalar setting, and nothing
+    /// else.
+    pub fn persist_preferences(&self) -> Result<()> {
+        documents::write(&self.resolved_paths()?.preferences(),
+                         &serde_json::to_string_pretty(self)?)
+    }
+
+    /// Write the saved-agents and saved-workspaces documents.
+    ///
+    /// The two together because that is the unit every caller changes: an
+    /// agent belongs to a workspace, so the roster is rebuilt from the agent
+    /// store as a pair or not at all.
+    pub fn persist_roster(&self) -> Result<()> {
+        self.persist_agents()?;
+        self.persist_workspaces()
+    }
+
+    fn persist_agents(&self) -> Result<()> {
+        documents::write_collection(&self.resolved_paths()?.agents(), &self.saved_agents)
+    }
+
+    fn persist_workspaces(&self) -> Result<()> {
+        documents::write_collection(&self.resolved_paths()?.workspaces(), &self.saved_workspaces)
+    }
+
+    fn persist_personas(&self) -> Result<()> {
+        documents::write_collection(&self.resolved_paths()?.personas(), &self.personas)
+    }
+
+    fn persist_bench(&self) -> Result<()> {
+        documents::write_collection(&self.resolved_paths()?.bench(), &self.bench_agents)
+    }
+
+    fn persist_recent_repos(&self) -> Result<()> {
+        documents::write_collection(&self.resolved_paths()?.recent_repos(), &self.recent_repos)
     }
 
     /// On first launch with no source folder set, adopt the first existing
@@ -286,7 +334,7 @@ impl Settings {
             self.source_base_folder = found.to_string_lossy().into_owned();
         }
         self.source_folder_detected = true;
-        self.persist()
+        self.persist_preferences()
     }
 
     /// Move `name` to the front of the recent-repos list, de-duplicating, and
@@ -296,14 +344,14 @@ impl Settings {
         self.recent_repos.retain(|entry| entry != &name);
         self.recent_repos.insert(0, name);
         self.recent_repos.truncate(RECENT_REPOS_MAX);
-        self.persist()
+        self.persist_recent_repos()
     }
 
     /// Add a bench template, replacing any existing entry for the same folder.
     pub fn add_bench_agent(&mut self, entry: BenchAgent) -> Result<()> {
         self.bench_agents.retain(|b| b.folder != entry.folder);
         self.bench_agents.push(entry);
-        self.persist()
+        self.persist_bench()
     }
 
     /// Personas excluding soft-deleted ones, sorted case-insensitively by name.
@@ -328,7 +376,7 @@ impl Settings {
             changed = true;
         }
         if changed {
-            self.persist()?;
+            self.persist_personas()?;
         }
         Ok(())
     }
@@ -342,7 +390,7 @@ impl Settings {
                                 persona_type: PersonaType::User,
                                 state:        PersonaState::Enabled, };
         self.personas.push(persona);
-        self.persist()?;
+        self.persist_personas()?;
         Ok(self.personas.last().expect("just pushed"))
     }
 
@@ -357,7 +405,7 @@ impl Settings {
         };
         persona.name = name.into();
         persona.instructions = instructions.into();
-        self.persist()
+        self.persist_personas()
     }
 
     /// Look up a persona by id, restricted to the active (non-deleted) list.
@@ -379,7 +427,7 @@ impl Settings {
         else {
             self.personas.remove(index);
         }
-        self.persist()
+        self.persist_personas()
     }
 
     /// Reset every shipped default persona already present (matched by id,
@@ -393,7 +441,7 @@ impl Settings {
                 None => self.personas.push(default),
             }
         }
-        self.persist()
+        self.persist_personas()
     }
 }
 
@@ -426,13 +474,6 @@ fn expand_tilde(path: &str) -> PathBuf {
         return base.home_dir().join(rest);
     }
     PathBuf::from(path)
-}
-
-fn de_tolerant_vec<'de, D, T>(deserializer: D) -> std::result::Result<Vec<T>, D::Error>
-    where D: Deserializer<'de>,
-          T: DeserializeOwned {
-    let value = Value::deserialize(deserializer)?;
-    Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 /// The version a document carrying no `settingsVersion` key was written under:

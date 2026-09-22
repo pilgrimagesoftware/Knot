@@ -362,7 +362,7 @@ impl AgentEditor {
             self.settings.saved_workspaces = store.saved_workspaces();
             id
         };
-        if let Err(error) = self.settings.persist() {
+        if let Err(error) = self.settings.persist_roster() {
             eprintln!("failed to persist the agent roster: {error}");
         }
         (self.on_created)(created_id, window, cx);
@@ -414,7 +414,7 @@ impl AgentEditor {
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
         }
-        if let Err(error) = self.settings.persist() {
+        if let Err(error) = self.settings.persist_roster() {
             eprintln!("failed to persist the agent roster: {error}");
         }
         (self.on_created)(id, window, cx);

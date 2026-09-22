@@ -122,7 +122,7 @@ impl McpToolCatalog {
         };
         settings.saved_agents = agents.saved_agents(settings.restore_conversation_on_launch);
         settings.saved_workspaces = agents.saved_workspaces();
-        Ok(settings.persist()?)
+        Ok(settings.persist_roster()?)
     }
 
     fn tracker_for(&self, id: Uuid, agent_type: &str) -> bool {
@@ -334,8 +334,7 @@ mod tests {
     #[tokio::test]
     async fn successful_agent_mutation_persists_durable_state() {
         let dir = tempdir().unwrap();
-        let path = dir.path().join("settings.json");
-        let cat = catalog().with_settings(knot_core::Settings::with_store_path(&path));
+        let cat = catalog().with_settings(knot_core::Settings::with_store_root(dir.path()));
         let id = cat.agents
                     .lock()
                     .create("/tmp/persisted", knot_agents::CreateOptions::default());
@@ -345,7 +344,7 @@ mod tests {
                         .await;
 
         assert!(result.is_error.is_none());
-        let settings = knot_core::Settings::load_from(path).unwrap();
+        let settings = knot_core::Settings::load_from_root(dir.path()).unwrap();
         assert_eq!(settings.saved_agents.len(), 1);
         assert_eq!(settings.saved_agents[0].id, id);
         assert_eq!(settings.saved_workspaces.len(), 1);

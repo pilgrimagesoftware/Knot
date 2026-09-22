@@ -1,4 +1,7 @@
 use gpui_kit::App;
+use gpui_kit::Pixels;
+use gpui_kit::SharedString;
+use gpui_kit::Size;
 use gpui_kit::WindowBounds;
 use gpui_kit::WindowOptions;
 use gpui_kit::component::TitleBar;
@@ -16,10 +19,36 @@ pub(crate) const WORKSPACE_TITLE_BAR_HEIGHT: f32 = 64.;
 const TRAFFIC_LIGHT_DIAMETER: f32 = 12.;
 const TRAFFIC_LIGHT_INSET: f32 = 9.;
 
-pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
-    WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(800.), px(600.)), cx)),
-                    window_min_size: Some(size(px(640.), px(420.))),
+/// A window that draws its own header into the toolkit's title bar: the
+/// three main windows, which put workspace controls up there.
+///
+/// Centred at `initial`, and no smaller than `min` however the user drags
+/// it. Anything past that - a restored frame, traffic-light placement - the
+/// caller sets on the options it gets back.
+fn toolkit_bar_window(initial: Size<Pixels>, min: Size<Pixels>, cx: &App) -> WindowOptions {
+    WindowOptions { window_bounds: Some(WindowBounds::centered(initial, cx)),
+                    window_min_size: Some(min),
                     ..TitleBar::window_options() }
+}
+
+/// A window that keeps the OS title bar and names itself in it: the
+/// dialogs, which per `knot-ui-conventions` carry their purpose there
+/// rather than in a body heading.
+///
+/// `title` is optional because the About window deliberately has none on
+/// macOS, and `min` because the same window is not resizable at all.
+fn os_bar_window(title: Option<SharedString>, initial: Size<Pixels>, min: Option<Size<Pixels>>,
+                 cx: &App)
+                 -> WindowOptions {
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title,
+                                                               ..Default::default() }),
+                    window_bounds: Some(WindowBounds::centered(initial, cx)),
+                    window_min_size: min,
+                    ..WindowOptions::default() }
+}
+
+pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
+    toolkit_bar_window(size(px(800.), px(600.)), size(px(640.), px(420.)), cx)
 }
 
 /// `saved` is the workspace's last known window frame, restored verbatim so
@@ -27,17 +56,12 @@ pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
 /// workspace never opened before) centres a default-sized window instead.
 pub(crate) fn workspace_window_options(saved: Option<knot_core::SavedWindowBounds>, cx: &App)
                                        -> WindowOptions {
-    let bounds = match saved {
-        Some(saved) => WindowBounds::Windowed(gpui_kit::Bounds { origin:
-                                                                     gpui_kit::point(px(saved.x),
-                                                                                     px(saved.y)),
-                                                                 size:   size(px(saved.width),
-                                                                              px(saved.height)), }),
-        None => WindowBounds::centered(size(px(960.), px(640.)), cx),
-    };
-    let mut options = WindowOptions { window_bounds: Some(bounds),
-                                      window_min_size: Some(size(px(760.), px(520.))),
-                                      ..TitleBar::window_options() };
+    let mut options = toolkit_bar_window(size(px(960.), px(640.)), size(px(760.), px(520.)), cx);
+    if let Some(saved) = saved {
+        let origin = gpui_kit::point(px(saved.x), px(saved.y));
+        let size = size(px(saved.width), px(saved.height));
+        options.window_bounds = Some(WindowBounds::Windowed(gpui_kit::Bounds { origin, size }));
+    }
     // AppKit places the traffic lights at a fixed offset, and the toolkit's
     // default (9px) centres them in its own ~30px bar. This window's bar is
     // taller, which left them stranded near the top edge and out of line
@@ -50,18 +74,14 @@ pub(crate) fn workspace_window_options(saved: Option<knot_core::SavedWindowBound
 }
 
 pub(crate) fn command_center_window_options(cx: &App) -> WindowOptions {
-    WindowOptions { window_bounds: Some(WindowBounds::centered(size(px(960.), px(640.)), cx)),
-                    window_min_size: Some(size(px(760.), px(520.))),
-                    ..TitleBar::window_options() }
+    toolkit_bar_window(size(px(960.), px(640.)), size(px(760.), px(520.)), cx)
 }
 
 pub(crate) fn agent_window_options(title: &str, cx: &App) -> WindowOptions {
-    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.to_string()
-                                                                                .into()),
-                                                               ..Default::default() }),
-                    window_bounds: Some(WindowBounds::centered(size(px(520.), px(500.)), cx)),
-                    window_min_size: Some(size(px(460.), px(460.))),
-                    ..WindowOptions::default() }
+    os_bar_window(Some(title.to_string().into()),
+                  size(px(520.), px(500.)),
+                  Some(size(px(460.), px(460.))),
+                  cx)
 }
 
 /// The broadcast sheet: a utility dialog, so its purpose goes in the OS
@@ -69,11 +89,10 @@ pub(crate) fn agent_window_options(title: &str, cx: &App) -> WindowOptions {
 /// than the agent editor - it holds one field and two buttons.
 pub(crate) fn broadcast_window_options(cx: &App) -> WindowOptions {
     let title = knot_core::l10n::t("broadcast.window_title");
-    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.into()),
-                                                               ..Default::default() }),
-                    window_bounds: Some(WindowBounds::centered(size(px(480.), px(280.)), cx)),
-                    window_min_size: Some(size(px(360.), px(220.))),
-                    ..WindowOptions::default() }
+    os_bar_window(Some(title.into()),
+                  size(px(480.), px(280.)),
+                  Some(size(px(360.), px(220.))),
+                  cx)
 }
 
 /// The About window's fixed size. It is not resizable and not minimizable:
@@ -86,31 +105,18 @@ pub(crate) fn broadcast_window_options(cx: &App) -> WindowOptions {
 /// window is the expectation, so the title is shown.
 pub(crate) fn about_window_options(cx: &App) -> WindowOptions {
     let title = (!cfg!(target_os = "macos")).then(|| knot_core::l10n::t("about.title").into());
-    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title,
-                                                               ..Default::default() }),
-                    window_bounds: Some(WindowBounds::centered(size(px(360.), px(560.)), cx)),
-                    is_resizable: false,
+    WindowOptions { is_resizable: false,
                     is_minimizable: false,
-                    ..WindowOptions::default() }
+                    ..os_bar_window(title, size(px(360.), px(560.)), None, cx) }
 }
 
 /// Fixed width for the settings window; only height varies per pane.
-pub(crate) const SETTINGS_WINDOW_WIDTH: gpui_kit::Pixels = px(620.);
+pub(crate) const SETTINGS_WINDOW_WIDTH: Pixels = px(620.);
 
 pub(crate) fn settings_window_options(cx: &App) -> WindowOptions {
-    WindowOptions {
-        titlebar: Some(gpui_kit::TitlebarOptions {
-            title: Some(knot_core::l10n::t("settings.title").into()),
-            ..Default::default()
-        }),
-        window_bounds: Some(WindowBounds::centered(
-            size(
-                SETTINGS_WINDOW_WIDTH,
-                SettingsWindow::pane_target_height(SettingsTab::General),
-            ),
-            cx,
-        )),
-        window_min_size: Some(size(px(480.), px(320.))),
-        ..WindowOptions::default()
-    }
+    let height = SettingsWindow::pane_target_height(SettingsTab::General);
+    os_bar_window(Some(knot_core::l10n::t("settings.title").into()),
+                  size(SETTINGS_WINDOW_WIDTH, height),
+                  Some(size(px(480.), px(320.))),
+                  cx)
 }

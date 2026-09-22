@@ -3,12 +3,38 @@ pub const APP_NAME: &str = "Knot";
 pub const ORG_QUALIFIER: &str = "com";
 pub const ORG_NAME: &str = "Pilgrimage Software";
 
-pub const SETTINGS_FILE: &str = "settings.json";
+/// The preferences document, holding every scalar setting. Lives in the
+/// platform's user-preferences directory, apart from the collections below.
+pub const PREFERENCES_FILE: &str = "preferences.json";
 
-/// Extension for the temporary file [`crate::Settings::persist`] writes
-/// before renaming it over [`SETTINGS_FILE`], so an interrupted write
-/// never leaves the real document truncated.
-pub const SETTINGS_TEMP_EXTENSION: &str = "json.tmp";
+/// The saved-agents collection, one of the durable data documents.
+pub const AGENTS_FILE: &str = "agents.json";
+
+/// The saved-workspaces collection.
+pub const WORKSPACES_FILE: &str = "workspaces.json";
+
+/// The personas collection.
+pub const PERSONAS_FILE: &str = "personas.json";
+
+/// The bench-templates collection.
+pub const BENCH_FILE: &str = "bench.json";
+
+/// The recent-repositories collection.
+pub const RECENT_REPOS_FILE: &str = "recent-repos.json";
+
+/// The single document every setting used to live in, read once on load and
+/// renamed to [`LEGACY_MIGRATED_EXTENSION`] after its values have been
+/// distributed across the documents above.
+pub const LEGACY_SETTINGS_FILE: &str = "settings.json";
+
+/// Extension the migrated legacy document is renamed to, so it is never read
+/// again but stays recoverable by hand.
+pub const LEGACY_MIGRATED_EXTENSION: &str = "json.migrated";
+
+/// Extension for the temporary file each document is written to before being
+/// renamed into place, so an interrupted write never leaves a real document
+/// truncated.
+pub const DOCUMENT_TEMP_EXTENSION: &str = "json.tmp";
 
 /// Distinct from Skwad's default (8766) so a Knot instance doesn't fight a
 /// running Skwad instance over the same port.
