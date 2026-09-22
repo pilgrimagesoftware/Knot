@@ -73,6 +73,11 @@ pub(crate) const DIFF_FILES_COLOR: u32 = consts::COLOR_INPUT;
 /// The file noun comes from `l10n::plural_noun` rather than a local
 /// `if count == 1`, and separately from the count so only the number takes
 /// the accent color.
+///
+/// The only `whitespace_nowrap` in the crate that does not pass its text
+/// through [`crate::app_support::single_line`], and it needs no such pass:
+/// every string here is formatted from integers Knot holds, so none can
+/// arrive carrying a line break.
 pub(crate) fn diff_stats_row(stats: &knot_git::DiffStats, muted: gpui_kit::Hsla) -> gpui_kit::Div {
     let files = knot_core::l10n::plural_noun(stats.files_changed, "count.file", "count.files");
     h_flex().flex_shrink_0()

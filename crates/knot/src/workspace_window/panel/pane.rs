@@ -34,6 +34,7 @@ use gpui_kit::rgb;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
@@ -81,7 +82,7 @@ impl WorkspaceWindow {
                             .whitespace_nowrap()
                             .text_ellipsis()
                             .font_semibold()
-                            .child(title),
+                            .child(single_line(&title)),
                     )
                     .child(
                         Button::new("markdown-pane-close")

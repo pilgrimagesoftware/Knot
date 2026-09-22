@@ -30,6 +30,7 @@ use gpui_kit::px;
 use gpui_kit::rgb;
 use uuid::Uuid;
 
+use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::PERMISSION_SELECTOR_ID;
@@ -110,7 +111,12 @@ impl WorkspaceWindow {
                                     .text_ellipsis()
                                     .text_xs()
                                     .font_family(cx.theme().mono_font_family.clone())
-                                    .child(prompt.text.clone()),
+                                    // The row is flattened, `prompt.text`
+                                    // is not: a prompt written across
+                                    // several lines waits as one row, and
+                                    // the agent still receives it as the
+                                    // user wrote it.
+                                    .child(single_line(&prompt.text)),
                             )
                             .child(
                                 Button::new(("panel-queued-prompt-status", element_key(prompt_id)))
