@@ -41,7 +41,13 @@ named sibling agent; absent a sibling, the new agent is appended.
 
 The system SHALL persist only these agent fields: id, name, avatar, folder,
 agent type, created-by, is-companion, shell command, persona id, activation
-mode, and, conditionally, session id (see below). All other fields are
+mode, description, capabilities, cost tier, and, conditionally, session id
+(see below).
+
+Description, capabilities and cost tier are the registry fields defined by
+`agent-registry`. A persisted record written before they existed SHALL load
+with an empty description, no capability tags, and cost tier `medium`, the
+same way a record predating activation mode loads as `active`. All other fields are
 runtime-only and MUST reset to defaults when agents are loaded: state (Idle),
 status text (empty), registered (false), pending-start (false), terminal title
 (empty), resume-session id (none), hook metadata (empty), git stats (none),
@@ -172,6 +178,13 @@ persisted session id.
   no history lookup is performed, and its persisted session id is untouched
   until the next persist
 
+#### Scenario: Legacy record without registry fields
+
+- **WHEN** a persisted agent record predates the description, capabilities
+  and cost-tier fields
+- **THEN** it loads with an empty description, no capability tags, and cost
+  tier `medium`, and nothing about how it launches changes
+
 ### Requirement: Three distinct status fields
 
 The system SHALL keep three independent per-agent strings: `state` (the
@@ -249,8 +262,10 @@ to the target session, clear the fork flag, and then perform a restart.
 
 ### Requirement: Edit triggers restart only for launch-affecting changes
 
-Editing an agent's name or avatar SHALL NOT restart it. Changing its folder,
-agent type, or persona SHALL restart it. When the folder changes and companion
+Editing an agent's name, avatar, description, capabilities, or cost tier
+SHALL NOT restart it: none of them changes how the session runs, and
+re-tagging an agent mid-job would otherwise throw away the work it is doing.
+Changing its folder, agent type, or persona SHALL restart it. When the folder changes and companion
 relocation is requested, each companion that shared the old folder SHALL be
 moved to the new folder and restarted.
 
@@ -264,6 +279,11 @@ moved to the new folder and restarted.
 - **WHEN** the agent's folder changes with relocate-companions requested
 - **THEN** the agent restarts, and each companion at the old folder moves to the
   new folder and restarts
+
+#### Scenario: Re-tagging a working agent does not interrupt it
+
+- **WHEN** a capability tag is added to an agent that is Working
+- **THEN** its session is not recreated and it keeps working
 
 ### Requirement: Ordering and workspace placement
 

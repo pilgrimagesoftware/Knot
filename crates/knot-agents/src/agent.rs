@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-use knot_core::{ActivationMode, ViewMode};
+use knot_core::{ActivationMode, Capabilities, CostTier, ViewMode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -58,6 +58,14 @@ pub struct Agent {
     /// When this agent's session starts on its own. Durable; distinct from
     /// [`Agent::activated`], which is runtime-only.
     pub activation_mode: ActivationMode,
+    /// Registry metadata: what this agent is for, what it can be asked to
+    /// do, and how expensive it is to ask. Durable, and deliberately
+    /// restart-free to edit - none of it changes how the session runs, so
+    /// re-tagging a working agent must not throw away its work. See
+    /// `openspec/specs/agent-registry/spec.md`.
+    pub description:     String,
+    pub capabilities:    Capabilities,
+    pub cost_tier:       CostTier,
     /// The Panel session setup last chosen for this agent - model,
     /// permission mode, reasoning effort - as adapter-declared ACP
     /// config-option id -> selected value. Durable, and deliberately not
@@ -170,6 +178,9 @@ mod tests {
                 persona_id:         None,
                 view_mode:          ViewMode::Terminal,
                 activation_mode:    ActivationMode::Passive,
+                description:        String::new(),
+                capabilities:       Default::default(),
+                cost_tier:          Default::default(),
                 session_config:     BTreeMap::new(),
                 activated:          false,
                 state:              AgentState::Idle,

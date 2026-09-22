@@ -9,7 +9,9 @@
 use knot_core::consts::{
     AGENTS_FILE, LEGACY_SETTINGS_FILE, PERSONAS_FILE, PREFERENCES_FILE, WORKSPACES_FILE,
 };
-use knot_core::{AiProvider, AppearanceMode, AutopilotAction, PersonaState, PersonaType, Settings};
+use knot_core::{
+    AiProvider, AppearanceMode, AutopilotAction, CostTier, PersonaState, PersonaType, Settings,
+};
 use uuid::Uuid;
 
 const FIXTURE: &str = include_str!("fixtures/settings_swift_shape.json");
@@ -222,4 +224,53 @@ fn a_corrupt_vocabulary_value_does_not_take_the_document_down() {
     assert_eq!(loaded.appearance_mode, AppearanceMode::default());
     assert_eq!(loaded.mcp_server_port, 9111,
                "the rest of the document survived");
+}
+
+/// `agent-lifecycle` - "Legacy record without registry fields". The
+/// fixture is a real Swift-era document: it predates the registry entirely,
+/// so every agent and bench entry in it must load undescribed, untagged and
+/// mid-priced rather than failing or being hidden.
+#[test]
+fn a_document_written_before_the_registry_loads_with_registry_defaults() {
+    // Through the store, not `serde_json::from_str`: the collections live in
+    // their own documents now, and a bare decode of the legacy blob would
+    // leave them empty and assert nothing.
+    let dir = legacy_store(FIXTURE);
+    let settings = Settings::load_from_root(dir.path()).expect("fixture still loads");
+
+    assert!(!settings.saved_agents.is_empty(),
+            "fixture must exercise this");
+    for agent in &settings.saved_agents {
+        assert_eq!(agent.description, "");
+        assert!(agent.capabilities.is_empty());
+        assert_eq!(agent.cost_tier, CostTier::Medium);
+    }
+    for bench in &settings.bench_agents {
+        assert_eq!(bench.description, "");
+        assert!(bench.capabilities.is_empty());
+        assert_eq!(bench.cost_tier, CostTier::Medium);
+    }
+}
+
+/// Nothing about how an agent launches changes when it gains a tag, so the
+/// three fields must survive a write/read cycle untouched.
+#[test]
+fn registry_metadata_survives_a_settings_round_trip() {
+    let dir = legacy_store(FIXTURE);
+    let mut settings = Settings::load_from_root(dir.path()).expect("fixture loads");
+    settings.saved_agents[0].description = "Runs the test suite".to_string();
+    settings.saved_agents[0].capabilities = [" Testing ", "rust"].iter().collect();
+    settings.saved_agents[0].cost_tier = CostTier::Low;
+
+    // The round trip is now write-then-read through the store: the agents
+    // document is where these three fields have to survive.
+    settings.persist().unwrap();
+    let back = Settings::load_from_root(dir.path()).unwrap();
+
+    let agent = &back.saved_agents[0];
+    assert_eq!(agent.description, "Runs the test suite");
+    assert!(agent.capabilities.contains("testing"),
+            "normalized on the way in");
+    assert!(agent.capabilities.contains("rust"));
+    assert_eq!(agent.cost_tier, CostTier::Low);
 }

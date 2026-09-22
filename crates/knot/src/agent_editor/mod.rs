@@ -132,6 +132,30 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                  });
               let shell_command_input =
                   cx.new(|cx| InputState::new(window, cx).placeholder(knot_core::l10n::t("agent_editor.shell_command")));
+              let description_input = cx.new(|cx| {
+                  InputState::new(window, cx)
+                      .placeholder(knot_core::l10n::t("agent_editor.description_placeholder"))
+                      .default_value(editing.as_ref()
+                                            .map(|a| a.description.clone())
+                                            .unwrap_or_default())
+              });
+              // Comma-separated, because a tag set is short and typing one
+              // is faster than managing a chip list for it. `Capabilities`
+              // normalizes whatever is typed, so spacing and case here do
+              // not matter.
+              let capabilities_input = cx.new(|cx| {
+                  InputState::new(window, cx)
+                      .placeholder(knot_core::l10n::t("agent_editor.capabilities_placeholder"))
+                      .default_value(editing.as_ref()
+                                            .map(|a| {
+                                                a.capabilities
+                                                 .iter()
+                                                 .cloned()
+                                                 .collect::<Vec<String>>()
+                                                 .join(", ")
+                                            })
+                                            .unwrap_or_default())
+              });
               let avatar_input = cx.new(|cx| {
                                        InputState::new(window, cx).default_value(
                 editing
@@ -167,6 +191,12 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                           name_input,
                                           shell_command_input,
                                           avatar_input,
+                                          description_input,
+                                          capabilities_input,
+                                          cost_tier:
+                                              editing.as_ref()
+                                                     .map(|a| a.cost_tier)
+                                                     .unwrap_or_default(),
                                           _avatar_subscription: avatar_subscription,
                                           _name_subscription: name_subscription,
                                           folder_path: editing.as_ref()
@@ -194,6 +224,13 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
           });
 }
 
+/// Splits the capabilities field into tags. `Capabilities` trims,
+/// lowercases and drops empties, so this only has to decide where one tag
+/// ends and the next begins.
+pub(crate) fn parse_capability_tags(raw: &str) -> knot_core::Capabilities {
+    raw.split(',').collect()
+}
+
 pub(crate) struct AgentEditor {
     store:                Arc<Mutex<knot_agents::AgentStore>>,
     settings:             knot_core::Settings,
@@ -201,6 +238,9 @@ pub(crate) struct AgentEditor {
     name_input:           Entity<InputState>,
     shell_command_input:  Entity<InputState>,
     avatar_input:         Entity<InputState>,
+    description_input:    Entity<InputState>,
+    capabilities_input:   Entity<InputState>,
+    cost_tier:            knot_core::CostTier,
     _avatar_subscription: Subscription,
     _name_subscription:   Subscription,
     folder_path:          String,
@@ -285,6 +325,8 @@ impl AgentEditor {
         // Defence in depth for the same invariant the form states above.
         let agent_type = created_agent_type(self.creating_a_companion(), &self.agent_type);
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
+        let description = self.description_input.read(cx).value().trim().to_string();
+        let capabilities = parse_capability_tags(&self.capabilities_input.read(cx).value());
         let created_id = {
             let mut store = self.store.lock();
             let id = store.create(
@@ -300,6 +342,9 @@ impl AgentEditor {
                     is_companion: self.prefill.is_companion,
                     activation_mode: self.activation_mode,
                     workspace_id: Some(self.workspace_id),
+                    description,
+                    capabilities,
+                    cost_tier: self.cost_tier,
                 },
             );
             // A fork continues the source's conversation rather than
@@ -340,6 +385,8 @@ impl AgentEditor {
         };
         let agent_type = self.agent_type.clone();
         let persona_changed = self.persona_id != self.original_persona_id;
+        let description = self.description_input.read(cx).value().trim().to_string();
+        let capabilities = parse_capability_tags(&self.capabilities_input.read(cx).value());
         {
             let mut store = self.store.lock();
             let result = store.edit(
@@ -353,6 +400,9 @@ impl AgentEditor {
                     persona_changed,
                     relocate_companions: false,
                     activation_mode: self.activation_mode,
+                    description,
+                    capabilities,
+                    cost_tier: self.cost_tier,
                 },
             );
             if let Err(error) = result {

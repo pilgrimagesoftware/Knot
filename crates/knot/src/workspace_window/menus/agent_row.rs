@@ -348,6 +348,12 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
             entry.agent_type = source.agent_type.clone();
             entry.shell_command = source.shell_command.clone();
             entry.persona_id = source.persona_id;
+            // Registry metadata travels with the template, so a saved entry
+            // records a role and not just a folder. See
+            // `openspec/specs/agent-registry/spec.md`.
+            entry.description = source.description.clone();
+            entry.capabilities = source.capabilities.clone();
+            entry.cost_tier = source.cost_tier;
             if let Err(error) = settings.add_bench_agent(entry) {
                 eprintln!("failed to save the agent to the bench: {error}");
             }

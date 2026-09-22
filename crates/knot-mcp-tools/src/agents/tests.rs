@@ -68,7 +68,10 @@ fn create_agent_from_bench_template() {
                              folder:        "/tmp/bench".to_string(),
                              agent_type:    "codex".to_string(),
                              shell_command: None,
-                             persona_id:    None, };
+                             persona_id:    None,
+                             description:   String::new(),
+                             capabilities:  Default::default(),
+                             cost_tier:     Default::default(), };
     let result = create_agent(&mut store,
                               &json!({"agentId": caller.to_string(), "benchAgentId": bench_id.to_string()}),
                               &[bench]);
