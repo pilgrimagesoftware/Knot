@@ -30,6 +30,55 @@ pub struct DescribeAgentsResponse {
     pub candidates: Vec<AgentInfo>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskInfo {
+    pub id:            String,
+    pub goal:          String,
+    pub state:         String,
+    /// The agent this task names, or the capability tags standing in for
+    /// one until dispatch resolves them. Absent when the plan recorded the
+    /// work without deciding who does it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee:      Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub capabilities:  Vec<String>,
+    pub depends_on:    Vec<String>,
+    /// The agent a dispatch actually went to, once one has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatched_to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlanTasksResponse {
+    pub tasks: Vec<TaskInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TaskStatusResponse {
+    pub tasks: Vec<TaskInfo>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchTaskResponse {
+    pub success:      bool,
+    pub task_id:      String,
+    pub recipient_id: String,
+    pub message:      String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompleteTaskResponse {
+    pub success:     bool,
+    pub task_id:     String,
+    pub state:       String,
+    /// Tasks this outcome made dispatchable, and tasks it stopped.
+    pub now_ready:   Vec<String>,
+    pub now_blocked: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ListAgentsResponse {
     pub agents: Vec<AgentInfo>,

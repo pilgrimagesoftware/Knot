@@ -12,3 +12,7 @@ pub const CREATE_WORKTREE: &str = "create-worktree";
 pub const SET_STATUS: &str = "set-status";
 pub const DISPLAY_MARKDOWN: &str = "display-markdown";
 pub const VIEW_MERMAID: &str = "view-mermaid";
+pub const PLAN_TASKS: &str = "plan-tasks";
+pub const DISPATCH_TASK: &str = "dispatch-task";
+pub const COMPLETE_TASK: &str = "complete-task";
+pub const TASK_STATUS: &str = "task-status";

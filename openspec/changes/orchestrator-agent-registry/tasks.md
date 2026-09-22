@@ -98,26 +98,26 @@
 
 ## 6. Task MCP surface
 
-- [ ] 6.1 Add a `tasks/` module beside `agents/` holding the four task tool
+- [x] 6.1 Add a `tasks/` module beside `agents/` holding the four task tool
   handlers; verify `make size-check` passes and each handler file stays well
   under the cap
-- [ ] 6.2 Implement `plan-tasks`: parse the task array, commit through
+- [x] 6.2 Implement `plan-tasks`: parse the task array, commit through
   `knot-tasks`, return each id and resulting state, and surface a validation
   failure as `isError` true naming the offending edge; verify tests for the
   valid-plan and cyclic-plan scenarios
-- [ ] 6.3 Implement `dispatch-task`: check the gate, resolve a tag assignee
+- [x] 6.3 Implement `dispatch-task`: check the gate, resolve a tag assignee
   against the registry, deliver through the existing messaging path, and
   mark `dispatched` only on successful delivery; verify tests for
   ready-task-delivered, unmet-dependency-reported,
   rejected-delivery-leaves-task-ready, tag-resolves-at-dispatch and
   no-candidate-for-tag
-- [ ] 6.4 Implement `complete-task` returning the ids that became `ready` and
+- [x] 6.4 Implement `complete-task` returning the ids that became `ready` and
   `blocked`, and `task-status` returning the caller's graph or an empty list;
   verify tests for completion-readies-dependent, failure-blocks-dependents
   and status-before-planning-is-empty
-- [ ] 6.5 Register all four tools in the catalogue with typed input schemas;
+- [x] 6.5 Register all four tools in the catalogue with typed input schemas;
   verify the `tools/list` test asserts all eighteen tools are present
-- [ ] 6.6 Verify the unplanned fan-out scenario end to end: dispatching with
+- [x] 6.6 Verify the unplanned fan-out scenario end to end: dispatching with
   no committed graph is refused with a message telling the caller to plan
   first (`task-graph` - "Nontrivial work requires a committed plan")
 

@@ -12,6 +12,7 @@ mod messaging;
 mod panels;
 mod repos;
 mod responses;
+mod tasks;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,7 +35,7 @@ use crate::lookup::state_string;
 
 type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
-/// The concrete `ToolCatalog` for the thirteen tools in
+/// The concrete `ToolCatalog` for the tools in
 /// `openspec/specs/mcp-tools/spec.md`. Holds every piece of shared state a
 /// handler needs; each `call` locks only what that tool touches.
 pub struct McpToolCatalog {
@@ -46,6 +47,9 @@ pub struct McpToolCatalog {
     settings:       Mutex<Option<Settings>>,
     trackers:       Mutex<HashMap<Uuid, Tracker>>,
     awaiting_input: Mutex<Option<AwaitingInputQueue>>,
+    /// Committed task plans, one per owning agent. Runtime state, like the
+    /// message queue: not persisted, gone with the process.
+    graphs:         Mutex<tasks::GraphStore>,
 }
 
 impl McpToolCatalog {
@@ -62,7 +66,8 @@ impl McpToolCatalog {
                bench_agents: Mutex::new(Vec::new()),
                settings: Mutex::new(None),
                trackers: Mutex::new(HashMap::new()),
-               awaiting_input: Mutex::new(None) }
+               awaiting_input: Mutex::new(None),
+               graphs: Mutex::new(tasks::GraphStore::new()) }
     }
 
     pub fn with_message_store(mut self, messages: Arc<Mutex<MessageStore>>) -> Self {
@@ -258,7 +263,7 @@ mod tests {
     #[test]
     fn lists_exactly_the_catalogued_tools_with_object_schemas() {
         let defs = catalog().list();
-        assert_eq!(defs.len(), 14);
+        assert_eq!(defs.len(), 18);
         for def in &defs {
             assert_eq!(def.input_schema.schema_type, "object");
         }
@@ -277,7 +282,11 @@ mod tests {
                          "create-worktree",
                          "set-status",
                          "display-markdown",
-                         "view-mermaid"]
+                         "view-mermaid",
+                         "plan-tasks",
+                         "dispatch-task",
+                         "complete-task",
+                         "task-status"]
         {
             assert!(names.contains(&expected), "missing tool: {expected}");
         }

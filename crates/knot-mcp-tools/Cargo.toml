@@ -23,6 +23,7 @@ knot-messaging = { path = "../knot-messaging" }
 knot-discovery = { path = "../knot-discovery" }
 knot-git = { path = "../knot-git" }
 knot-agent-launch = { path = "../knot-agent-launch" }
+knot-tasks = { path = "../knot-tasks" }
 
 [dev-dependencies]
 tempfile.workspace = true

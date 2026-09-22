@@ -3908,6 +3908,7 @@ dependencies = [
  "knot-git",
  "knot-mcp",
  "knot-messaging",
+ "knot-tasks",
  "parking_lot",
  "serde",
  "serde_json",

@@ -1,7 +1,7 @@
 mod create;
 mod lifecycle;
 mod listing;
-mod registry;
+pub(crate) mod registry;
 
 pub use create::create_agent;
 pub use lifecycle::{close_agent, set_status};

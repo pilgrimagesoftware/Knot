@@ -12,7 +12,7 @@
 use async_trait::async_trait;
 use knot_mcp::{PropertySchema, ToolCallResult, ToolCatalog, ToolDefinition, ToolInputSchema};
 
-use crate::{McpToolCatalog, agents, consts, messaging, panels, repos};
+use crate::{McpToolCatalog, agents, consts, messaging, panels, repos, tasks};
 
 fn mutates_agent_state(name: &str) -> bool {
     matches!(name,
@@ -143,6 +143,37 @@ fn tool_catalog() -> Vec<ToolDefinition> {
                  "boolean",
                  "If true, maximize the panel to fill the available space. Only set to true if the user explicitly requests it. Default: false")],
               &["agentId", "filePath"]),
+         tool(consts::PLAN_TASKS,
+              "Commit a plan: a small graph of tasks with dependencies. Required before \
+               dispatching work that spans more than one agent or more than one task. Cycles \
+               and dangling dependencies are rejected. Re-planning keeps the state of tasks \
+               already under way.",
+              &[("agentId", "string", "Your agent ID"),
+                ("tasks",
+                 "array",
+                 "Tasks as objects: id (unique in this plan), goal, and optionally assignee \
+                  (an agent name or ID), capabilities (tags to resolve at dispatch time) and \
+                  dependsOn (ids in this same plan)")],
+              &["agentId", "tasks"]),
+         tool(consts::DISPATCH_TASK,
+              "Dispatch one ready task from your committed plan. Refused while any \
+               dependency is not done, naming what it is waiting for.",
+              &[("agentId", "string", "Your agent ID"),
+                ("taskId", "string", "The task to dispatch")],
+              &["agentId", "taskId"]),
+         tool(consts::COMPLETE_TASK,
+              "Report how a dispatched task turned out. Returns the tasks this made ready \
+               and, on failure, the ones it blocked.",
+              &[("agentId", "string", "Your agent ID"),
+                ("taskId", "string", "The task to report on"),
+                ("outcome", "string", "Either 'done' or 'failed'"),
+                ("note", "string", "Optional note about the outcome")],
+              &["agentId", "taskId", "outcome"]),
+         tool(consts::TASK_STATUS,
+              "Read your committed plan: every task with its state, assignee and \
+               dependencies. Empty when you have not planned anything.",
+              &[("agentId", "string", "Your agent ID")],
+              &["agentId"]),
          tool(consts::VIEW_MERMAID,
               "Display a Mermaid diagram in a panel for the user to view. Supports flowcharts (graph TD/LR), state diagrams, sequence diagrams, class diagrams, and ER diagrams. Pass the mermaid source text directly. The diagram will be rendered natively alongside any open markdown panel.",
               &[("agentId", "string", "Your agent ID"),
@@ -190,6 +221,24 @@ impl ToolCatalog for McpToolCatalog {
                 panels::display_markdown(&mut self.agents.lock(), &arguments)
             }
             consts::VIEW_MERMAID => panels::view_mermaid(&mut self.agents.lock(), &arguments),
+            consts::PLAN_TASKS => {
+                tasks::plan_tasks(&self.agents.lock(), &mut self.graphs.lock(), &arguments)
+            }
+            consts::DISPATCH_TASK => {
+                let bench_agents = self.bench_agents.lock();
+                tasks::dispatch_task(tasks::DispatchContext { agents:   &self.agents.lock(),
+                                                              graphs:   &mut self.graphs.lock(),
+                                                              messages: &mut self.messages.lock(),
+                                                              notifier: self.notifier.as_ref(),
+                                                              bench:    &bench_agents, },
+                                     &arguments)
+            }
+            consts::COMPLETE_TASK => {
+                tasks::complete_task(&self.agents.lock(), &mut self.graphs.lock(), &arguments)
+            }
+            consts::TASK_STATUS => {
+                tasks::task_status(&self.agents.lock(), &mut self.graphs.lock(), &arguments)
+            }
             other => ToolCallResult::error(format!("unknown tool: {other}")),
         };
         if result.is_error.is_none()
