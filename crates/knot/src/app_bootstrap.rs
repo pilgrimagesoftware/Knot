@@ -11,6 +11,7 @@ use gpui_kit::Menu;
 use gpui_kit::MenuItem;
 use gpui_kit::SystemMenuType;
 use gpui_kit::actions;
+use gpui_kit::base::input;
 use gpui_kit::component::Root;
 use gpui_kit::component::Theme;
 use gpui_kit::component::input::InputEvent;
@@ -22,6 +23,7 @@ use parking_lot::Mutex;
 use crate::about_window::register_about_action;
 use crate::agent_menu::AgentMenuSnapshot;
 use crate::agent_menu::AgentsMenuState;
+use crate::agent_menu::agent_menu_key_bindings;
 use crate::agent_menu::agents_menu;
 use crate::app_state::build_agent_store;
 use crate::app_state::notification_response_agent_id;
@@ -108,6 +110,26 @@ actions!(knot_app,
           PanelPermissionAllow,
           PanelPermissionDeny,
           PanelOpenPermissionSelector]);
+
+// UNWIRED: the standard-menu items the port has not implemented yet. They
+// exist as named actions rather than `NoAction` only so each can carry its
+// own key equivalent - a menu item's shortcut is looked up by action, so
+// items sharing `NoAction` would all have to show the same one, and binding
+// a key to `NoAction` *unbinds* that key everywhere (`Keymap::add_bindings`
+// treats it as a disabling binding).
+//
+// Nothing registers a handler for any of these, so `is_action_available`
+// answers false and AppKit draws the items disabled with their shortcut
+// greyed beside them, which is how macOS presents a standard item an app
+// does not currently offer. Wiring one is a matter of registering its
+// handler on the window that owns the behavior; the binding is already
+// here.
+actions!(knot_app,
+         [NewWorkspace,
+          CloseWindow,
+          EnterFullScreen,
+          MinimizeWindow,
+          KnotHelp]);
 
 /// Every user-facing quit path lands here - the application menu's Quit
 /// Knot item and the `cmd-q` binding both dispatch `Quit` - so the guard
@@ -196,26 +218,42 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
             MenuItem::action("Quit Knot", Quit),
         ]),
         Menu::new("File").items([
-            MenuItem::action("New Workspace", gpui_kit::NoAction).disabled(true),
+            MenuItem::action("New Workspace", NewWorkspace).disabled(true),
             MenuItem::separator(),
-            MenuItem::action("Close Window", gpui_kit::NoAction).disabled(true),
+            MenuItem::action("Close Window", CloseWindow).disabled(true),
         ]),
+        // The text actions gpui already defines and binds for a focused
+        // input, rather than placeholders of our own. Reusing them is what
+        // puts the standard shortcuts beside these labels, and it is also
+        // the only safe way to get them: a placeholder action of ours bound
+        // to cmd-c would out-rank the input's own binding - a context-less
+        // binding ranks at the deepest context, and later bindings win ties
+        // - and copying in a text field would stop working.
+        //
+        // They carry no `disabled`, because these five do work: AppKit asks
+        // whether each action is available along the focused element's
+        // dispatch path, so they enable with a text field focused and grey
+        // out elsewhere. In the terminal pane, where nothing claims them,
+        // the disabled items let cmd-c fall through to the pane's own
+        // copy-selection handler.
         Menu::new("Edit").items([
-            MenuItem::action("Undo", gpui_kit::NoAction).disabled(true),
-            MenuItem::action("Redo", gpui_kit::NoAction).disabled(true),
+            MenuItem::action("Undo", input::Undo),
+            MenuItem::action("Redo", input::Redo),
             MenuItem::separator(),
-            MenuItem::action("Cut", gpui_kit::NoAction).disabled(true),
-            MenuItem::action("Copy", gpui_kit::NoAction).disabled(true),
-            MenuItem::action("Paste", gpui_kit::NoAction).disabled(true),
+            MenuItem::action("Cut", input::Cut),
+            MenuItem::action("Copy", input::Copy),
+            MenuItem::action("Paste", input::Paste),
         ]),
         Menu::new("View")
-            .items([MenuItem::action("Enter Full Screen", gpui_kit::NoAction).disabled(true)]),
+            .items([MenuItem::action("Enter Full Screen", EnterFullScreen).disabled(true)]),
         agents_menu(snapshot),
         Menu::new("Window").items([
-            MenuItem::action("Minimize", gpui_kit::NoAction).disabled(true),
+            MenuItem::action("Minimize", MinimizeWindow).disabled(true),
+            // Zoom keeps `NoAction`: macOS gives it no key equivalent, so
+            // it has no reason to be named.
             MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
         ]),
-        Menu::new("Help").items([MenuItem::action("Knot Help", gpui_kit::NoAction).disabled(true)]),
+        Menu::new("Help").items([MenuItem::action("Knot Help", KnotHelp).disabled(true)]),
     ]);
 }
 
@@ -235,8 +273,8 @@ struct WorkspaceManagerWindow {
 /// A `MenuItem::action` only shows a shortcut beside its label if the
 /// action has a binding, so without these the menu read as if Knot had
 /// none.
-fn install_actions_and_keys(settings: &knot_core::Settings,
-                            store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
+pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
+                                       store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     cx.on_action(quit);
     // Holds its own window handle; see
     // `about_window::register_about_action`.
@@ -253,6 +291,22 @@ fn install_actions_and_keys(settings: &knot_core::Settings,
                   KeyBinding::new("cmd-,", OpenSettings, None),
                   KeyBinding::new("cmd-h", HideApp, None),
                   KeyBinding::new("cmd-alt-h", HideOthers, None)]);
+    // The rest of the shortcuts macOS expects on a standard menu item,
+    // whether or not the item behind each is wired up yet - the menu bar
+    // reads as an app with no keyboard at all without them. About Knot,
+    // Show All and Zoom are absent on purpose: macOS gives those three no
+    // key equivalent either. Cut, Copy, Paste, Undo and Redo are absent
+    // because gpui already binds them for a focused input, and the Edit
+    // menu points at those same actions rather than at ours.
+    cx.bind_keys([KeyBinding::new("cmd-n", NewWorkspace, None),
+                  KeyBinding::new("cmd-w", CloseWindow, None),
+                  KeyBinding::new("cmd-ctrl-f", EnterFullScreen, None),
+                  KeyBinding::new("cmd-m", MinimizeWindow, None),
+                  KeyBinding::new("cmd-shift-/", KnotHelp, None)]);
+    // The Agents menu's own keys. No platform convention names these -
+    // the items are Knot's - so they come from the Swift reference; see
+    // `agent_menu::agent_menu_key_bindings`.
+    cx.bind_keys(agent_menu_key_bindings());
     cx.bind_keys([KeyBinding::new("cmd-shift-a", PanelPermissionAllow, None),
                   KeyBinding::new("cmd-shift-d", PanelPermissionDeny, None),
                   KeyBinding::new("cmd-shift-p", PanelOpenPermissionSelector, None)]);
