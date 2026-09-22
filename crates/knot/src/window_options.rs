@@ -56,13 +56,11 @@ pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
 /// workspace never opened before) centres a default-sized window instead.
 pub(crate) fn workspace_window_options(saved: Option<knot_core::SavedWindowBounds>, cx: &App)
                                        -> WindowOptions {
-    let mut options =
-        toolkit_bar_window(size(px(960.), px(640.)), size(px(760.), px(520.)), cx);
+    let mut options = toolkit_bar_window(size(px(960.), px(640.)), size(px(760.), px(520.)), cx);
     if let Some(saved) = saved {
         let origin = gpui_kit::point(px(saved.x), px(saved.y));
         let size = size(px(saved.width), px(saved.height));
-        options.window_bounds = Some(WindowBounds::Windowed(gpui_kit::Bounds { origin,
-                                                                               size }));
+        options.window_bounds = Some(WindowBounds::Windowed(gpui_kit::Bounds { origin, size }));
     }
     // AppKit places the traffic lights at a fixed offset, and the toolkit's
     // default (9px) centres them in its own ~30px bar. This window's bar is
