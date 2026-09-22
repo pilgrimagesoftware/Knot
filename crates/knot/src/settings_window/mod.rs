@@ -63,7 +63,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                 // Every window tracks the OS appearance, so a light/dark flip
                 // re-resolves the system palette and repaints.
                 observe_system_appearance(window);
-                let selected_agent_type = "claude".to_string();
+                let selected_agent_type = knot_core::agent_type::DEFAULT.to_string();
                 let initial_options = settings.agent_options
                                               .get(&selected_agent_type)
                                               .cloned()
@@ -121,7 +121,8 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                   store,
                                                   selected_tab: SettingsTab::General,
                                                   selected_agent_type,
-                                                  mcp_selected_agent_type: "claude".to_string(),
+                                                  mcp_selected_agent_type:
+                                                      knot_core::agent_type::DEFAULT.to_string(),
                                                   agent_options_input,
                                                   ai_api_key_input,
                                                   autopilot_custom_prompt_input,

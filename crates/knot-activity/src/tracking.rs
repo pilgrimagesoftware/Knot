@@ -55,7 +55,7 @@ impl Default for ActivityTracking {
 /// keystrokes are ignored even if its terminal still exists); every other
 /// agent tracks both terminal sources.
 pub fn tracking_for(agent_type: &str, view_mode: knot_core::ViewMode) -> ActivityTracking {
-    if agent_type == "shell" {
+    if knot_core::agent_type::is_shell(agent_type) {
         ActivityTracking::NONE
     }
     else if view_mode == knot_core::ViewMode::Panel {

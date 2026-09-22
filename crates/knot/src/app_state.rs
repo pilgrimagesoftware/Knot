@@ -583,7 +583,7 @@ pub(crate) fn should_inject_inbox_prompt(check: NudgeCheck<'_>) -> bool {
 /// repaint poll the moment a condition above changes without the caller
 /// changing with it.
 pub(crate) fn inbox_prompt_message_id(check: NudgeCheck<'_>) -> Option<Uuid> {
-    if !(check.mcp_enabled && check.agent_type != consts::SHELL_AGENT_TYPE && check.idle) {
+    if !(check.mcp_enabled && !knot_core::agent_type::is_shell(check.agent_type) && check.idle) {
         return None;
     }
     check.latest_message

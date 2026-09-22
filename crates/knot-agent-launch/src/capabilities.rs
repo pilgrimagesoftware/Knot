@@ -2,11 +2,13 @@
 //! decide between inline and deferred registration.
 
 /// Whether `agent_type` supports inline registration via CLI arguments.
-/// `shell` is included so shell agents skip the deferred registration path
-/// entirely.
+///
+/// Read from `knot_core::agent_type`'s roster rather than listed again
+/// here: `shell` carries the flag so shell agents skip the deferred
+/// registration path entirely, and a type the build does not know does not,
+/// so it takes the deferred path like any other unknown.
 pub fn supports_inline_registration(agent_type: &str) -> bool {
-    matches!(agent_type,
-             "claude" | "codex" | "opencode" | "gemini" | "copilot" | "shell")
+    knot_core::agent_type::supports_inline_registration(agent_type)
 }
 
 #[cfg(test)]
