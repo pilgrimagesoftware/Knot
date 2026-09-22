@@ -247,7 +247,7 @@ fn install_actions_and_keys(settings: &knot_core::Settings,
     register_about_action(settings.title_font_name.clone().into(), cx);
     // Holds its own window handle, and reloads the store when it opens; see
     // `import_window::register_import_action`.
-    register_import_action(cx);
+    register_import_action(Arc::clone(&store), cx);
     cx.on_action(hide_app);
     cx.on_action(hide_others);
     cx.on_action(show_all_windows);

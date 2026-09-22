@@ -12,6 +12,8 @@ mod lifecycle;
 mod ordering;
 mod panels;
 mod persistence;
+
+pub use persistence::AdoptedCounts;
 mod workspace;
 
 #[cfg(test)]

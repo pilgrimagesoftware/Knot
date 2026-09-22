@@ -4,6 +4,7 @@
 //! [`window`] holds the state and how the window opens; [`pane`] holds what it
 //! draws.
 
+mod outcome;
 mod pane;
 mod window;
 

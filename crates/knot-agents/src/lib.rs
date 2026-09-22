@@ -12,4 +12,4 @@ mod store;
 pub use agent::{Agent, AgentState};
 pub use convert::{from_saved, to_saved};
 pub use error::{AgentError, Result};
-pub use store::{AgentStore, CreateOptions, EditRequest, RemovedAgent};
+pub use store::{AdoptedCounts, AgentStore, CreateOptions, EditRequest, RemovedAgent};

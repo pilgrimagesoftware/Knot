@@ -64,6 +64,29 @@ confirmed.
       import surface lists only tools that have one. Move the three providers
       to a follow-up change rather than inferring their formats.
 
+## 4a. Reaching the running application, and saying so
+
+Found by testing the built app: an import wrote only to the settings
+document, so the workspace manager never showed it and the next
+store-to-settings write would have erased it; and the summary was rendered
+past the bottom edge of an unscrolled window, so a successful import and a
+failed one looked identical.
+
+- [x] 4a.1 Add `AgentStore::adopt_saved`, taking records that already exist
+      elsewhere while keeping their identifiers, skipping any the store
+      already holds so the live copy and its session win. Verify with tests
+      that identifiers survive, that an adopted workspace is still there in
+      what the store writes back to settings, that a held record is not
+      replaced, and that adopting twice adds nothing.
+- [x] 4a.2 Put what an import wrote into the live store, so an open workspace
+      manager shows it without a restart. Verify in the app with the manager
+      open.
+- [x] 4a.3 Make the outcome of every import visible: a pure summariser that
+      is never silent, a failure drawn distinctly from a summary, and the
+      panel pinned outside the scrolling region so a long list cannot push it
+      off-screen. Verify with tests over the failed, did-nothing, added and
+      unreadable cases.
+
 ## 5. Verification
 
 - [x] 5.1 `make` passes clean.

@@ -80,3 +80,67 @@ without reopening it. Scanning SHALL NOT happen while drawing a frame.
   look again
 - **THEN** the new definition is offered, and any earlier selection is
   cleared rather than pointing at records that may no longer be there
+
+### Requirement: An import always says what it did
+
+Every import SHALL report its outcome on screen, and the report SHALL remain
+visible without the user having to scroll or resize to find it. There is no
+input for which an import reports nothing: one that added nothing says so,
+and one that failed says so with the reason.
+
+A failure SHALL be distinguishable from a success at a glance. An import that
+failed and an import that did nothing otherwise read identically, and only
+one of them needs acting on.
+
+Reporting SHALL NOT depend on a delivery channel the user may not be able to
+see. A message written only to standard output, or a desktop notification
+that the platform suppresses outside an app bundle, does not satisfy this.
+
+#### Scenario: An import that fails
+
+- **WHEN** an import cannot complete
+- **THEN** the window names the failure and its reason, drawn so it does not
+  read as an ordinary summary
+
+#### Scenario: An import with nothing to do
+
+- **WHEN** every selected record is already present
+- **THEN** the window says there was nothing to import, rather than showing
+  an empty panel
+
+#### Scenario: A summary that will not fit
+
+- **WHEN** the sources hold more records than the window can show at once
+- **THEN** the lists scroll and the summary stays in view, rather than the
+  summary being pushed out of the window
+
+### Requirement: An import reaches the running application
+
+Imported workspaces and agents SHALL be added to the live store the open
+windows render from, not only to the settings document. A record written to
+settings alone is invisible until the application is restarted.
+
+The live copy of a record SHALL win over an incoming one: an agent the
+application already holds has session state that an imported copy does not,
+so a record whose identifier is already present is left as it is.
+
+Adding to the store SHALL be idempotent, so importing again adds nothing a
+second time.
+
+#### Scenario: An imported workspace appears without a restart
+
+- **WHEN** the user imports a workspace while the workspace manager is open
+- **THEN** the workspace manager shows it, without the application being
+  restarted
+
+#### Scenario: An imported workspace survives the next save
+
+- **WHEN** a workspace is imported and the user then renames, reorders or
+  deletes any workspace
+- **THEN** the imported workspace is still present afterwards
+
+#### Scenario: An agent already running is not replaced
+
+- **WHEN** an import offers a record whose identifier the application already
+  holds
+- **THEN** the held record is left exactly as it is, with its session intact

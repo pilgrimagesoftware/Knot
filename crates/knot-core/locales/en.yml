@@ -305,6 +305,8 @@ import:
   import_selected: "Import"
   import_count: "Import %{count}"
   result_title: "Last import"
+  failed_title: "Import failed"
+  failed: "The import could not be completed: %{error}"
   nothing_to_do: "Nothing to import."
   refresh: "Look again"
   result:

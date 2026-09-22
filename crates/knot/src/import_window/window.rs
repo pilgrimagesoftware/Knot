@@ -15,6 +15,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::AnyWindowHandle;
 use gpui_kit::App;
@@ -30,8 +31,10 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Root;
 use knot_core::import::{SkwadSource, SubagentScan, SubagentTool};
+use parking_lot::Mutex;
 use uuid::Uuid;
 
+use super::outcome::{ImportOutcome, summarise};
 use crate::app_support::observe_system_appearance;
 use crate::window_options::import_window_options;
 
@@ -55,20 +58,29 @@ pub(crate) struct ImportWindow {
     /// reloads: importing into a stale copy would overwrite whatever has
     /// been saved since.
     pub(super) settings:            knot_core::Settings,
+    /// The live store every open window renders from. Imported workspaces and
+    /// agents go in here as well as into settings: settings is what survives a
+    /// restart, the store is what the running app can see, and an import that
+    /// writes only the first is invisible until then - and is overwritten the
+    /// next time the store is written back over settings.
+    pub(super) store:               Arc<Mutex<knot_agents::AgentStore>>,
     pub(super) sources:             ImportSources,
     pub(super) subagent_selection:  BTreeSet<String>,
     pub(super) workspace_selection: BTreeSet<Uuid>,
-    pub(super) result:              Option<knot_core::import::ImportResult>,
+    pub(super) outcome:             Option<ImportOutcome>,
 }
 
 impl ImportWindow {
-    fn new(settings: knot_core::Settings, cx: &mut Context<Self>) -> Self {
+    fn new(settings: knot_core::Settings, store: Arc<Mutex<knot_agents::AgentStore>>,
+           cx: &mut Context<Self>)
+           -> Self {
         Self { focus: cx.focus_handle(),
                settings,
+               store,
                sources: Self::scan(),
                subagent_selection: BTreeSet::new(),
                workspace_selection: BTreeSet::new(),
-               result: None }
+               outcome: None }
     }
 
     /// Read every source. Called when the window opens and when the user
@@ -89,7 +101,7 @@ impl ImportWindow {
         self.sources = Self::scan();
         self.subagent_selection.clear();
         self.workspace_selection.clear();
-        self.result = None;
+        self.outcome = None;
     }
 
     pub(super) fn import_selected_definitions(&mut self, cx: &mut Context<Self>) {
@@ -101,17 +113,10 @@ impl ImportWindow {
                                    .cloned()
                                    .collect();
 
-        match knot_core::import::import_definitions(&mut self.settings, &selected) {
-            Ok(mut result) => {
-                // What the scan itself could not read belongs in the same
-                // summary: the user asked to import from a source, and a file
-                // that never made the list is part of that answer.
-                result.unreadable
-                      .extend(self.sources.subagents.unreadable.clone());
-                self.result = Some(result);
-            }
-            Err(error) => eprintln!("failed to import subagent definitions: {error}"),
-        }
+        let result = knot_core::import::import_definitions(&mut self.settings, &selected);
+        // Personas live only in settings - the store holds agents and
+        // workspaces - so there is nothing to adopt here.
+        self.outcome = Some(summarise(result, &self.sources.subagents.unreadable));
         self.subagent_selection.clear();
         cx.notify();
     }
@@ -120,15 +125,28 @@ impl ImportWindow {
         let source = self.sources.skwad.clone();
         let selected: Vec<Uuid> = self.workspace_selection.iter().copied().collect();
 
-        match knot_core::import::import_workspaces(&mut self.settings, &source, &selected) {
-            Ok(mut result) => {
-                result.unreadable.extend(source.unreadable.clone());
-                self.result = Some(result);
-            }
-            Err(error) => eprintln!("failed to import Skwad workspaces: {error}"),
+        let result = knot_core::import::import_workspaces(&mut self.settings, &source, &selected);
+        if result.is_ok() {
+            self.adopt_imported_records();
         }
+        self.outcome = Some(summarise(result, &source.unreadable));
         self.workspace_selection.clear();
         cx.notify();
+    }
+}
+
+impl ImportWindow {
+    /// Put what the import just wrote to settings into the live store, so the
+    /// open workspace manager shows it and the next store-to-settings write
+    /// keeps it instead of overwriting it.
+    ///
+    /// Diffed by id rather than tracked through the import: the store skips
+    /// anything it already holds, so handing it everything settings now has is
+    /// both correct and idempotent, and needs no record of what was added.
+    fn adopt_imported_records(&mut self) {
+        self.store
+            .lock()
+            .adopt_saved(&self.settings.saved_agents, &self.settings.saved_workspaces);
     }
 }
 
@@ -166,14 +184,14 @@ impl Render for ImportWindow {
 /// can open a second Import window past the single-instance check. `run` and
 /// the window tests both register through here, so the tests exercise the
 /// wiring the app actually installs.
-pub(crate) fn register_import_action(cx: &mut App) {
+pub(crate) fn register_import_action(store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     let handle: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
     cx.on_action(move |_: &crate::app_bootstrap::OpenImport, cx| {
           // Reload from disk rather than reusing a clone captured at
           // bootstrap: an import writes to the store, and importing into a
           // stale snapshot would overwrite anything saved since.
           let settings = knot_core::Settings::load().unwrap_or_default();
-          open_import_window(&handle, settings, cx);
+          open_import_window(&handle, settings, Arc::clone(&store), cx);
       });
 }
 
@@ -183,7 +201,8 @@ pub(crate) fn register_import_action(cx: &mut App) {
 /// window fails its update, which is the same test the settings and About
 /// windows use, and is why no close observer is needed to clear the handle.
 pub(crate) fn open_import_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
-                                 settings: knot_core::Settings, cx: &mut App) {
+                                 settings: knot_core::Settings,
+                                 store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
        && existing.update(cx, |_, window, _| window.activate_window())
                   .is_ok()
@@ -194,7 +213,7 @@ pub(crate) fn open_import_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
                 // Every window tracks the OS appearance, so a light/dark flip
                 // re-resolves the system palette and repaints.
                 observe_system_appearance(window);
-                let view = cx.new(|cx| ImportWindow::new(settings, cx));
+                let view = cx.new(|cx| ImportWindow::new(settings, store, cx));
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),

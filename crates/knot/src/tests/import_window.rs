@@ -11,11 +11,14 @@
 //! `import_window::register_import_action`, the same call `run` makes, so the
 //! window handle these assertions exercise is the one the app installs.
 
+use std::sync::Arc;
+
 use gpui_kit::component::Root;
 use gpui_kit::{
     AnyWindowHandle, AppContext, Context, IntoElement, Render, TestAppContext, Window,
     WindowOptions, div,
 };
+use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::app_bootstrap::OpenImport;
@@ -37,7 +40,7 @@ impl Render for Blank {
 fn app_with_one_window(cx: &mut TestAppContext) -> AnyWindowHandle {
     cx.update(|cx| {
           gpui_kit::init(cx);
-          register_import_action(cx);
+          register_import_action(Arc::new(Mutex::new(knot_agents::AgentStore::new())), cx);
           let window = cx.open_window(WindowOptions::default(), |window, cx| {
                              let view = cx.new(|_| Blank);
                              cx.new(|cx| Root::new(view, window, cx))
