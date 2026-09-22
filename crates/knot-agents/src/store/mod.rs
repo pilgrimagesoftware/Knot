@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use knot_core::{ActivationMode, Workspace};
+use knot_core::{ActivationMode, Capabilities, CostTier, Workspace};
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -42,6 +42,11 @@ pub struct CreateOptions {
     /// Defaults to `Passive` - deliberately not the load default a record
     /// with no stored mode gets (`Active`, see `knot_core::SavedAgent`).
     pub activation_mode: ActivationMode,
+    /// Registry metadata. All three default to "nothing declared", which is
+    /// what an agent created without them should read as.
+    pub description:     String,
+    pub capabilities:    Capabilities,
+    pub cost_tier:       CostTier,
 }
 
 /// Fields an edit may change. `name`/`avatar` always apply and never trigger
@@ -58,6 +63,13 @@ pub struct EditRequest {
     /// Applied verbatim; changing it never triggers a restart, per
     /// `agent-lifecycle`'s "Activation mode" requirement.
     pub activation_mode:     ActivationMode,
+    /// Registry metadata, applied verbatim. Like `activation_mode`, none of
+    /// it triggers a restart: re-tagging an agent says nothing about the
+    /// session it already has, and interrupting one to record a label would
+    /// throw away the work it is doing.
+    pub description:         String,
+    pub capabilities:        Capabilities,
+    pub cost_tier:           CostTier,
 }
 
 /// An agent removed by [`AgentStore::remove`], in cascade order (companions

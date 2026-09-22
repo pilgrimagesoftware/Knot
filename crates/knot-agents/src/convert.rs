@@ -26,6 +26,9 @@ pub fn from_saved(saved: &SavedAgent) -> Agent {
             persona_id:      saved.persona_id,
             view_mode:       view_mode_for(&saved.agent_type),
             activation_mode: saved.activation_mode,
+            description:     saved.description.clone(),
+            capabilities:    saved.capabilities.clone(),
+            cost_tier:       saved.cost_tier,
             session_config:  saved.session_config.clone(),
 
             activated:          false,
@@ -66,6 +69,9 @@ pub fn to_saved(agent: &Agent, remember_conversation: bool) -> SavedAgent {
                  persona_id:      agent.persona_id,
                  view_mode:       agent.view_mode,
                  activation_mode: agent.activation_mode,
+                 description:     agent.description.clone(),
+                 capabilities:    agent.capabilities.clone(),
+                 cost_tier:       agent.cost_tier,
                  session_config:  agent.session_config.clone(),
                  session_id:      remember_conversation.then(|| agent.session_id.clone())
                                                        .flatten(),
@@ -200,6 +206,49 @@ mod tests {
 
         assert_eq!(reloaded.activation_mode, knot_core::ActivationMode::Passive);
         assert!(!reloaded.activated);
+    }
+
+    /// Registry metadata is durable, so it must survive the round trip
+    /// while the runtime fields beside it still reset.
+    #[test]
+    fn registry_metadata_survives_the_round_trip_while_runtime_state_resets() {
+        let mut saved = saved_agent();
+        saved.description = "Reviews Rust diffs".to_string();
+        saved.capabilities = ["rust", "code-review"].iter().collect();
+        saved.cost_tier = knot_core::CostTier::High;
+
+        let mut agent = from_saved(&saved);
+        agent.state = AgentState::Running;
+        agent.is_registered = true;
+
+        assert_eq!(agent.description, "Reviews Rust diffs");
+        assert!(agent.capabilities.contains("code-review"));
+        assert_eq!(agent.cost_tier, knot_core::CostTier::High);
+
+        let reloaded = from_saved(&to_saved(&agent, false));
+
+        assert_eq!(reloaded.description, "Reviews Rust diffs");
+        assert!(reloaded.capabilities.contains("rust"));
+        assert_eq!(reloaded.cost_tier, knot_core::CostTier::High);
+        assert_eq!(reloaded.state, AgentState::Idle);
+        assert!(!reloaded.is_registered);
+    }
+
+    /// `agent-lifecycle` - "Legacy record without registry fields".
+    #[test]
+    fn legacy_record_without_registry_fields_loads_with_defaults() {
+        let json = format!(r#"{{"id":"{}","name":"A","avatar":"x","folder":"/tmp"}}"#,
+                           Uuid::new_v4());
+        let saved: SavedAgent = serde_json::from_str(&json).unwrap();
+
+        let agent = from_saved(&saved);
+
+        assert_eq!(agent.description, "");
+        assert!(agent.capabilities.is_empty());
+        assert_eq!(agent.cost_tier, knot_core::CostTier::Medium);
+        // And nothing about how it launches changed.
+        assert_eq!(agent.agent_type, "claude");
+        assert_eq!(agent.activation_mode, knot_core::ActivationMode::Active);
     }
 
     #[test]

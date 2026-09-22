@@ -1,0 +1,20 @@
+[package]
+name = "knot-tasks"
+version = "1.12.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+uuid.workspace = true
+# For `Capabilities` only. Reusing the normalized tag type is the point:
+# a second, unnormalized tag representation here would reintroduce exactly
+# the mismatch that type exists to prevent. `knot-core` brings no runtime,
+# no UI and no MCP types with it, so the crate stays testable on its own.
+knot-core = { path = "../knot-core" }
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -7,9 +7,11 @@
 mod agent;
 mod convert;
 mod error;
+mod registry;
 mod store;
 
 pub use agent::{Agent, AgentState};
 pub use convert::{from_saved, to_saved};
 pub use error::{AgentError, Result};
+pub use registry::{RegistryEntry, RegistryQuery, RegistryStatus, RegistryView, visible_to};
 pub use store::{AgentStore, CreateOptions, EditRequest, RemovedAgent};

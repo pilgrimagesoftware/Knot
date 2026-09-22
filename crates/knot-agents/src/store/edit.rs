@@ -18,6 +18,11 @@ impl AgentStore {
             // Deliberately does not set `needs_restart`: changing when an
             // agent would start says nothing about the session it already has.
             agent.activation_mode = req.activation_mode;
+            // Registry metadata, for the same reason: a label is not a
+            // launch parameter.
+            agent.description = req.description;
+            agent.capabilities = req.capabilities;
+            agent.cost_tier = req.cost_tier;
             if let Some(agent_type) = &req.agent_type
                && *agent_type != agent.agent_type
             {
