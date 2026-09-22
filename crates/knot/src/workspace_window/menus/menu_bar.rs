@@ -212,7 +212,9 @@ pub(in crate::workspace_window) fn with_agents_menu_actions(el: gpui_kit::Div,
     let el = if selected.snapshot.entries.contains(&AgentMenuEntry::OpenIn) {
         let folder = selected.targets.folder.clone();
         el.on_action(move |action: &AgentMenuOpenInApp, _window, _app| {
-              open_in::open_folder(action.app_id.as_ref(), &folder);
+              if let Some(app) = open_in::OpenInApp::from_id(action.app_id.as_ref()) {
+                  open_in::open_folder(app, &folder);
+              }
           })
     }
     else {

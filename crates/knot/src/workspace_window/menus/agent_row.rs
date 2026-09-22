@@ -136,7 +136,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             AgentMenuEntry::MoveToWorkspace => {
                 let targets = targets.clone();
                 let move_targets = move_targets.clone();
-                menu.submenu("Move to Workspace", window, cx, move |mut submenu, _, _| {
+                let move_title = AgentMenuEntry::MoveToWorkspace.label().unwrap_or_default();
+                menu.submenu(move_title, window, cx, move |mut submenu, _, _| {
                         for (workspace_id, workspace_name) in &move_targets {
                             let targets = targets.clone();
                             let workspace_id = *workspace_id;
@@ -152,15 +153,16 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             }
             AgentMenuEntry::OpenIn => {
                 let folder = targets.folder.clone();
-                menu.submenu("Open In…", window, cx, move |mut submenu, _, _| {
+                let open_in_title = AgentMenuEntry::OpenIn.label().unwrap_or_default();
+                menu.submenu(open_in_title, window, cx, move |mut submenu, _, _| {
                         for item in open_in::open_in_entries() {
                             submenu = match item {
                                 open_in::OpenInEntry::Separator => submenu.separator(),
                                 open_in::OpenInEntry::App(app_entry) => {
                                     let folder = folder.clone();
-                                    submenu.item(PopupMenuItem::new(app_entry.label).on_click(
+                                    submenu.item(PopupMenuItem::new(app_entry.label()).on_click(
                                     move |_, _window, _app| {
-                                        open_in::open_folder(app_entry.id, &folder);
+                                        open_in::open_folder(app_entry, &folder);
                                     },
                                 ))
                                 }
@@ -172,7 +174,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             AgentMenuEntry::MarkdownFiles => {
                 let targets = targets.clone();
                 let history = markdown_history.clone();
-                menu.submenu("Markdown Files", window, cx, move |mut submenu, _, _| {
+                let markdown_title = AgentMenuEntry::MarkdownFiles.label().unwrap_or_default();
+                menu.submenu(markdown_title, window, cx, move |mut submenu, _, _| {
                         for file in &history {
                             let targets = targets.clone();
                             let file = file.clone();
@@ -379,15 +382,18 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
-            let description = format!("Remove \"{}\"? This closes its session and cannot be \
-                                       undone.",
-                                      targets.name);
-            confirm_then(window, app, "Remove Agent", description, move |app| {
-                targets.window_entity.update(app, |view, cx| {
-                                         view.remove_agent(targets.id);
-                                         cx.notify();
-                                     });
-            });
+            let description = knot_core::l10n::t_with("menu.agent.confirm.remove_body",
+                                                      &[("name", &targets.name)]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.agent.confirm.remove_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      view.remove_agent(targets.id);
+                                                      cx.notify();
+                                                  });
+                         });
         }
         // Handled by the builder, which needs `Window`/`Context` to make
         // a submenu, or carries no action at all.

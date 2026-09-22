@@ -319,7 +319,7 @@ fn render_permission_prompt(panel_state: &PanelState, request: &PermissionReques
                 .gap_2()
                 .child(
                     Button::new("panel-permission-allow")
-                        .label("Allow")
+                        .label(knot_core::l10n::t("panel.allow"))
                         .primary()
                         .small()
                         .on_click(move |_: &ClickEvent, _, _| {
@@ -328,7 +328,7 @@ fn render_permission_prompt(panel_state: &PanelState, request: &PermissionReques
                 )
                 .child(
                     Button::new("panel-permission-deny")
-                        .label("Deny")
+                        .label(knot_core::l10n::t("panel.deny"))
                         .ghost()
                         .small()
                         .on_click(move |_: &ClickEvent, _, _| {

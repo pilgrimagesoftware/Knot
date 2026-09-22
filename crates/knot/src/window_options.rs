@@ -68,10 +68,8 @@ pub(crate) fn agent_window_options(title: &str, cx: &App) -> WindowOptions {
 /// titlebar rather than an in-body heading (`knot-ui-conventions`). Shorter
 /// than the agent editor - it holds one field and two buttons.
 pub(crate) fn broadcast_window_options(cx: &App) -> WindowOptions {
-    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title:
-                                                                   Some("Broadcast to All \
-                                                                           Agents"
-                                                                                  .into()),
+    let title = knot_core::l10n::t("broadcast.window_title");
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.into()),
                                                                ..Default::default() }),
                     window_bounds: Some(WindowBounds::centered(size(px(480.), px(280.)), cx)),
                     window_min_size: Some(size(px(360.), px(220.))),
