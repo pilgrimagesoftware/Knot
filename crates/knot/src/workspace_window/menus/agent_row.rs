@@ -382,15 +382,18 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
-            let description = format!("Remove \"{}\"? This closes its session and cannot be \
-                                       undone.",
-                                      targets.name);
-            confirm_then(window, app, "Remove Agent", description, move |app| {
-                targets.window_entity.update(app, |view, cx| {
-                                         view.remove_agent(targets.id);
-                                         cx.notify();
-                                     });
-            });
+            let description = knot_core::l10n::t_with("menu.agent.confirm.remove_body",
+                                                      &[("name", &targets.name)]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.agent.confirm.remove_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      view.remove_agent(targets.id);
+                                                      cx.notify();
+                                                  });
+                         });
         }
         // Handled by the builder, which needs `Window`/`Context` to make
         // a submenu, or carries no action at all.

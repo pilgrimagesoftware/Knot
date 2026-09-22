@@ -74,7 +74,7 @@ impl Render for WorkspaceWindow {
             else {
                 return v_flex().size_full()
                                .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
-                               .child("Workspace no longer exists.");
+                               .child(knot_core::l10n::t("workspace.missing"));
             };
             let agents =
                 workspace.agent_ids

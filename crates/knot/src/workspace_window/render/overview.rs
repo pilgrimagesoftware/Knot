@@ -5,7 +5,6 @@
 //! they need and wires their callbacks back to the window.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui_kit::Context;
@@ -49,22 +48,18 @@ impl WorkspaceWindow {
                                 store.workspaces()
                                      .iter()
                                      .find(|workspace| workspace.id == self.workspace_id);
-                            let (name, color_hex, dash_agents) =
-                                match workspace {
-                                    Some(workspace) => {
-                                        let dash_agents = workspace
-                        .agent_ids
-                        .iter()
-                        .filter_map(|id| store.agent(*id))
-                        .filter(|agent| !agent.is_companion)
-                        .map(|agent| {
-                            let folder_name = PathBuf::from(&agent.folder)
-                                .file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| agent.folder.clone());
-                            let git_stats =
+                            let (name, color_hex, dash_agents) = match workspace {
+                                Some(workspace) => {
+                                    let dash_agents = workspace.agent_ids
+                                                               .iter()
+                                                               .filter_map(|id| store.agent(*id))
+                                                               .filter(|agent| !agent.is_companion)
+                                                               .map(|agent| {
+                                                                   let folder_name =
+                                                                       agent.folder_name();
+                                                                   let git_stats =
                                 dashboard_diff_stats.get(&agent.id).copied().flatten();
-                            dashboard::DashboardAgent {
+                                                                   dashboard::DashboardAgent {
                                 id: agent.id,
                                 avatar: agent
                                     .avatar
@@ -80,14 +75,14 @@ impl WorkspaceWindow {
                                 git_stats,
                                 is_running: agent.activated,
                             }
-                        })
-                        .collect::<Vec<_>>();
-                                        (workspace.name.clone(),
-                                         workspace.color_hex.clone(),
-                                         dash_agents)
-                                    }
-                                    None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
-                                };
+                                                               })
+                                                               .collect::<Vec<_>>();
+                                    (workspace.name.clone(),
+                                     workspace.color_hex.clone(),
+                                     dash_agents)
+                                }
+                                None => (String::new(), "#1B4FB2".to_string(), Vec::new()),
+                            };
                             dashboard::DashboardWorkspace { id: self.workspace_id,
                                                             name,
                                                             color_hex,
@@ -160,12 +155,14 @@ impl WorkspaceWindow {
                     .child(div().size_full()
                                 .p_6()
                                 .overflow_hidden()
-                                .child(dashboard::workspace_section(dashboard_workspace,
-                                                                    false,
-                                                                    cx.theme().muted_foreground,
-                                                                    on_agent_tap,
-                                                                    on_workspace_nav,
-                                                                    on_add_agent)))
+                                .child(dashboard::workspace_section(
+                        dashboard_workspace,
+                        false,
+                        cx.theme().muted_foreground,
+                        dashboard::WorkspaceSectionCallbacks { on_agent_tap,
+                                                               on_workspace_nav,
+                                                               on_add_agent },
+                    )))
                     .into_any_element()
         })
     }
