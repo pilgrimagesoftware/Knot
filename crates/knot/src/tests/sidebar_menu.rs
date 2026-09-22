@@ -3,19 +3,19 @@
 
 use uuid::Uuid;
 
+use crate::app_state::AgentListBackgroundEntry;
 use crate::app_state::SidebarMenuFacts;
 use crate::app_state::sidebar_background_menu_entries;
 use crate::tests::workspace;
 use crate::workspace_window::sidebar_menu_facts;
 use crate::workspace_window::workspace_agent_ids;
 
-/// The background menu's labels paired with their enabled flag, separators
-/// rendered as `"-"` - order, divider placement and enablement in one value.
-fn background_menu_labels(facts: SidebarMenuFacts) -> Vec<(&'static str, bool)> {
+/// The background menu's entries paired with their enabled flag - order,
+/// divider placement and enablement in one value. The entry rather than its
+/// label, so a copy edit in `en.yml` cannot fail these.
+fn background_menu_entries(facts: SidebarMenuFacts) -> Vec<(AgentListBackgroundEntry, bool)> {
     sidebar_background_menu_entries(facts).into_iter()
-                                          .map(|item| {
-                                              (item.entry.label().unwrap_or("-"), item.enabled)
-                                          })
+                                          .map(|item| (item.entry, item.enabled))
                                           .collect()
 }
 
@@ -23,37 +23,37 @@ fn background_menu_labels(facts: SidebarMenuFacts) -> Vec<(&'static str, bool)> 
 /// rather than omits, so its shape never changes.
 #[test]
 fn sidebar_background_menu_keeps_its_shape_and_offers_only_new_agent_when_empty() {
-    assert_eq!(background_menu_labels(SidebarMenuFacts::default()),
-               vec![("New Agent", true),
-                    ("Restart All", false),
-                    ("Close All", false),
-                    ("Deactivate All", false),
-                    ("-", false),
-                    ("Broadcast to All Agents…", false)]);
+    assert_eq!(background_menu_entries(SidebarMenuFacts::default()),
+               vec![(AgentListBackgroundEntry::NewAgent, true),
+                    (AgentListBackgroundEntry::RestartAll, false),
+                    (AgentListBackgroundEntry::CloseAll, false),
+                    (AgentListBackgroundEntry::DeactivateAll, false),
+                    (AgentListBackgroundEntry::Separator, false),
+                    (AgentListBackgroundEntry::Broadcast, false)]);
 }
 
 #[test]
 fn sidebar_background_menu_cannot_deactivate_a_workspace_of_stopped_agents() {
-    assert_eq!(background_menu_labels(SidebarMenuFacts { agent_count:   3,
-                                                         running_count: 0, }),
-               vec![("New Agent", true),
-                    ("Restart All", true),
-                    ("Close All", true),
-                    ("Deactivate All", false),
-                    ("-", false),
-                    ("Broadcast to All Agents…", true)]);
+    assert_eq!(background_menu_entries(SidebarMenuFacts { agent_count:   3,
+                                                          running_count: 0, }),
+               vec![(AgentListBackgroundEntry::NewAgent, true),
+                    (AgentListBackgroundEntry::RestartAll, true),
+                    (AgentListBackgroundEntry::CloseAll, true),
+                    (AgentListBackgroundEntry::DeactivateAll, false),
+                    (AgentListBackgroundEntry::Separator, false),
+                    (AgentListBackgroundEntry::Broadcast, true)]);
 }
 
 #[test]
 fn sidebar_background_menu_enables_every_item_with_a_running_agent() {
-    assert_eq!(background_menu_labels(SidebarMenuFacts { agent_count:   3,
-                                                         running_count: 1, }),
-               vec![("New Agent", true),
-                    ("Restart All", true),
-                    ("Close All", true),
-                    ("Deactivate All", true),
-                    ("-", false),
-                    ("Broadcast to All Agents…", true)]);
+    assert_eq!(background_menu_entries(SidebarMenuFacts { agent_count:   3,
+                                                          running_count: 1, }),
+               vec![(AgentListBackgroundEntry::NewAgent, true),
+                    (AgentListBackgroundEntry::RestartAll, true),
+                    (AgentListBackgroundEntry::CloseAll, true),
+                    (AgentListBackgroundEntry::DeactivateAll, true),
+                    (AgentListBackgroundEntry::Separator, false),
+                    (AgentListBackgroundEntry::Broadcast, true)]);
 }
 
 /// A workspace of three agents, one of them owning a shell companion, in a

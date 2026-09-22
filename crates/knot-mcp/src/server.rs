@@ -194,11 +194,17 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         state.sessions.create_session(Uuid::nil()).id
     }
     else if let Some(session_id) = session_id {
-        if state.sessions.session(&session_id).is_none() {
-            return session_error_response(request.id, "Invalid or expired MCP session");
+        if state.sessions.session(&session_id).is_some() {
+            state.sessions.touch(&session_id);
+            session_id
         }
-        state.sessions.touch(&session_id);
-        session_id
+        else {
+            // The client's session outlived the server's TTL (e.g. a paused
+            // session resuming after `DEFAULT_SESSION_TIMEOUT`). Reissue a
+            // fresh session instead of erroring so the client self-heals
+            // without a manual `/mcp reconnect` or restart.
+            state.sessions.create_session(Uuid::nil()).id
+        }
     }
     else {
         state.sessions.create_session(Uuid::nil()).id
@@ -229,11 +235,6 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         resp.headers_mut().insert(SESSION_HEADER, value);
     }
     resp
-}
-
-fn session_error_response(id: Option<JsonRpcId>, message: &str) -> Response {
-    let response = JsonRpcResponse::error(id, -32000, message);
-    (StatusCode::BAD_REQUEST, axum::Json(response)).into_response()
 }
 
 fn json_rpc_error_response(code: i64, message: String) -> Response {

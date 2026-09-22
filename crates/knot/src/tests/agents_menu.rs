@@ -103,11 +103,14 @@ fn the_agents_menu_keeps_items_a_companion_cannot_use() {
                                                  is_shell: true,
                                                  ..AgentMenuFacts::EVERY_ITEM });
 
-    for hidden in ["Fork Agent", "Duplicate Agent", "Register Agent"] {
+    for entry in [AgentMenuEntry::ForkAgent,
+                  AgentMenuEntry::DuplicateAgent,
+                  AgentMenuEntry::RegisterAgent]
+    {
+        let hidden = entry.label().expect("a labelled entry");
         assert!(!companion.contains(&hidden),
-                "a companion's context menu omits {hidden}");
-        assert!(labels.iter().any(|label| label == hidden),
-                "the Agents menu keeps {hidden}");
+                "a companion's context menu omits {entry:?}");
+        assert!(labels.contains(&hidden), "the Agents menu keeps {entry:?}");
     }
 }
 
@@ -122,16 +125,16 @@ fn the_agents_menu_submenus_come_from_the_snapshot() {
                                                                "Second".to_string())],
                                        markdown_history: vec![PathBuf::from("/tmp/notes/plan.md")], };
 
-    let move_targets = submenu_items(&snapshot, "Move to Workspace");
+    let move_targets = submenu_items(&snapshot, &entry_label(AgentMenuEntry::MoveToWorkspace));
     assert_eq!(move_targets, vec!["Second".to_string()]);
 
     // The file name, not the path - a full path makes the submenu
     // unreadable, and the context menu labels these the same way.
-    assert_eq!(submenu_items(&snapshot, "Markdown Files"),
+    assert_eq!(submenu_items(&snapshot, &entry_label(AgentMenuEntry::MarkdownFiles)),
                vec!["plan.md".to_string()]);
 
     // Open In… is a fixed list, so it needs nothing from the snapshot.
-    assert!(submenu_items(&snapshot, "Open In…").contains(&"Finder".to_string()));
+    assert!(submenu_items(&snapshot, &entry_label(AgentMenuEntry::OpenIn)).contains(&"Finder".to_string()));
 }
 
 /// With no agent selected the submenus keep their positions, empty and
@@ -144,14 +147,16 @@ fn the_agents_menu_submenus_come_from_the_snapshot() {
 fn the_agents_menu_disables_its_submenus_with_nothing_selected() {
     let empty = AgentMenuSnapshot::default();
     let labels = agents_menu_labels(&empty);
-    for title in ["Move to Workspace", "Open In…", "Markdown Files"] {
-        assert!(labels.iter().any(|label| label == title),
-                "{title} should still be present");
-        assert!(submenu(&empty, title).disabled,
+    for title in [AgentMenuEntry::MoveToWorkspace,
+                  AgentMenuEntry::OpenIn,
+                  AgentMenuEntry::MarkdownFiles].map(entry_label)
+    {
+        assert!(labels.contains(&title), "{title} should still be present");
+        assert!(submenu(&empty, &title).disabled,
                 "{title} should be disabled");
     }
-    assert!(submenu_items(&empty, "Move to Workspace").is_empty());
-    assert!(submenu_items(&empty, "Markdown Files").is_empty());
+    assert!(submenu_items(&empty, &entry_label(AgentMenuEntry::MoveToWorkspace)).is_empty());
+    assert!(submenu_items(&empty, &entry_label(AgentMenuEntry::MarkdownFiles)).is_empty());
 }
 
 /// A submenu the selected agent cannot use is disabled too - a companion
@@ -166,10 +171,17 @@ fn the_agents_menu_disables_the_submenus_a_companion_cannot_use() {
     let snapshot = AgentMenuSnapshot { entries: agent_context_menu_entries(facts),
                                        ..AgentMenuSnapshot::default() };
 
-    assert!(submenu(&snapshot, "Move to Workspace").disabled);
-    assert!(submenu(&snapshot, "Markdown Files").disabled);
-    assert!(!submenu(&snapshot, "Open In…").disabled,
+    assert!(submenu(&snapshot, &entry_label(AgentMenuEntry::MoveToWorkspace)).disabled);
+    assert!(submenu(&snapshot, &entry_label(AgentMenuEntry::MarkdownFiles)).disabled);
+    assert!(!submenu(&snapshot, &entry_label(AgentMenuEntry::OpenIn)).disabled,
             "Open In… applies to every agent");
+}
+
+/// The menu title an entry carries, for finding the submenu it opens. Taken
+/// from the entry rather than written out, so these tests name the item and
+/// not its English copy.
+fn entry_label(entry: AgentMenuEntry) -> String {
+    entry.label().expect("a labelled entry")
 }
 
 /// The submenu titled `title`.
