@@ -4,9 +4,6 @@ use gpui_kit::ParentElement;
 use gpui_kit::Styled;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::button::Button;
-use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
 use knot_core::AppearanceMode;
 
@@ -50,31 +47,23 @@ impl SettingsWindow {
                 Self::group(knot_core::l10n::t("settings.general.appearance"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.appearance"),
-                        Button::new("appearance-picker")
-                            .label(appearance_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    // Driven off `AppearanceMode::ALL`, so a
-                                    // new variant appears in the picker
-                                    // without anyone remembering to add it.
-                                    let mut menu = menu;
-                                    for mode in AppearanceMode::ALL.iter().copied() {
-                                        let label = Self::appearance_label(mode);
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, _, app| {
-                                                settings_window.update(app, |view, _| {
-                                                    view.settings.appearance_mode = mode;
-                                                    view.persist();
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+                        // Driven off `AppearanceMode::ALL`, so a new variant
+                        // appears in the picker without anyone remembering to
+                        // add it.
+                        Self::dropdown("appearance-picker",
+                                       appearance_label,
+                                       AppearanceMode::ALL.iter()
+                                                          .copied()
+                                                          .map(|mode| {
+                                                              (Self::appearance_label(mode).into(),
+                                                               mode)
+                                                          })
+                                                          .collect(),
+                                       settings_window.clone(),
+                                       |view, mode, _, _| {
+                                           view.settings.appearance_mode = *mode;
+                                           view.persist();
+                                       }),
                     ))
                     .child(Self::hint(
                         cx,
