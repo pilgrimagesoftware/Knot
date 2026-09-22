@@ -156,7 +156,7 @@ impl WorkspaceWindow {
     /// interrupted session work": a turn can start between the poll's
     /// eligibility check and this call, and the direct path would prompt
     /// straight over it. Queueing instead leaves the running turn to
-    /// finish, and the drain in `panel_needs_repaint` delivers the nudge
+    /// finish, and `deliver_waiting_prompts` delivers the nudge
     /// once it does.
     ///
     /// Returns whether the nudge was taken - sent or queued. `false` means
