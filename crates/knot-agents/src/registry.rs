@@ -132,7 +132,7 @@ impl<'a> RegistryView<'a> {
             self.visible_agents(caller_id)
                 .into_iter()
                 .filter(|agent| agent.capabilities.contains_all(&query.capabilities))
-                .map(|agent| self.entry_for_agent(agent))
+                .map(|agent| self.entry_for(agent))
                 .collect();
         if query.include_templates {
             entries.extend(self.bench
@@ -144,21 +144,8 @@ impl<'a> RegistryView<'a> {
         entries
     }
 
-    /// Every agent in `caller_id`'s workspace, minus companions it does not
-    /// own. Mirrors the visibility rule `list-agents` already applies.
     fn visible_agents(&self, caller_id: Uuid) -> Vec<&'a Agent> {
-        self.store
-            .workspaces()
-            .iter()
-            .find(|workspace| workspace.agent_ids.contains(&caller_id))
-            .map(|workspace| {
-                workspace.agent_ids
-                         .iter()
-                         .filter_map(|id| self.store.agent(*id))
-                         .filter(|agent| !agent.is_companion || agent.created_by == Some(caller_id))
-                         .collect()
-            })
-            .unwrap_or_default()
+        visible_to(self.store, caller_id)
     }
 
     fn tools(&self, agent_type: &str) -> Vec<String> {
@@ -167,7 +154,10 @@ impl<'a> RegistryView<'a> {
         tools
     }
 
-    fn entry_for_agent(&self, agent: &Agent) -> RegistryEntry {
+    /// Projects one live agent, for a caller that already knows which
+    /// agents it wants (the `list-agents` crew list, which keeps workspace
+    /// order rather than ranking).
+    pub fn entry_for(&self, agent: &Agent) -> RegistryEntry {
         RegistryEntry { id:           agent.id,
                         name:         agent.name.clone(),
                         folder:       agent.folder.clone(),
@@ -191,6 +181,26 @@ impl<'a> RegistryView<'a> {
                         cost_tier:    bench.cost_tier,
                         status:       RegistryStatus::Template, }
     }
+}
+
+/// Every agent `caller_id` may see: the agents in its workspace, minus
+/// companions it does not own, in workspace order.
+///
+/// One copy of the rule, shared by the registry and by the `list-agents`
+/// tool. Two copies would drift, and the one that drifted would leak an
+/// agent across a workspace boundary.
+pub fn visible_to(store: &AgentStore, caller_id: Uuid) -> Vec<&Agent> {
+    store.workspaces()
+         .iter()
+         .find(|workspace| workspace.agent_ids.contains(&caller_id))
+         .map(|workspace| {
+             workspace.agent_ids
+                      .iter()
+                      .filter_map(|id| store.agent(*id))
+                      .filter(|agent| !agent.is_companion || agent.created_by == Some(caller_id))
+                      .collect()
+         })
+         .unwrap_or_default()
 }
 
 #[cfg(test)]

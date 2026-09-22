@@ -86,13 +86,13 @@
 
 ## 5. Registry MCP surface
 
-- [ ] 5.1 Extend the `list-agents` payload with description, capability tags,
+- [x] 5.1 Extend the `list-agents` payload with description, capability tags,
   reachable tools and cost tier; verify tests for the registry-fields and
   undescribed-agent scenarios in the `mcp-tools` delta
-- [ ] 5.2 Add the `describe-agents` handler with `capabilities` and
+- [x] 5.2 Add the `describe-agents` handler with `capabilities` and
   `includeTemplates` arguments; verify tests for query-by-tag,
   templates-excluded and no-match-is-not-an-error
-- [ ] 5.3 Register `describe-agents` in the catalogue with a typed JSON input
+- [x] 5.3 Register `describe-agents` in the catalogue with a typed JSON input
   schema; verify the `tools/list` test asserts the new tool count and that
   every tool still declares an object schema
 

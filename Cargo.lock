@@ -3901,6 +3901,7 @@ version = "1.12.0"
 dependencies = [
  "async-trait",
  "knot-activity",
+ "knot-agent-launch",
  "knot-agents",
  "knot-core",
  "knot-discovery",

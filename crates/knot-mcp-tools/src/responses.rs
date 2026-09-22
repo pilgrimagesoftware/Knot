@@ -4,14 +4,30 @@
 
 use serde::Serialize;
 
+/// One agent (or deployable template) as a caller sees it.
+///
+/// Carries the registry fields alongside the identity ones so a listing is
+/// self-sufficient: everything needed to choose a candidate, without a
+/// second call to interpret it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInfo {
     pub id:            String,
     pub name:          String,
     pub folder:        String,
+    /// The automatic state for a live agent; `template` for a bench entry,
+    /// which has no session and so no state to report.
     pub status:        String,
     pub is_registered: bool,
+    pub description:   String,
+    pub capabilities:  Vec<String>,
+    pub tools:         Vec<String>,
+    pub cost_tier:     String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DescribeAgentsResponse {
+    pub candidates: Vec<AgentInfo>,
 }
 
 #[derive(Debug, Serialize)]

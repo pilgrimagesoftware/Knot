@@ -52,8 +52,23 @@ fn tool_catalog() -> Vec<ToolDefinition> {
                 ("sessionId", "string", "Your internal session ID.")],
               &["agentId"]),
          tool(consts::LIST_AGENTS,
-              "List all registered agents with their status (name, folder, working/idle)",
+              "List all registered agents with their status (name, folder, working/idle), \
+               each with its description, capability tags, reachable tools and cost tier",
               &[("agentId", "string", "Your agent ID")],
+              &["agentId"]),
+         tool(consts::DESCRIBE_AGENTS,
+              "Find agents by capability - answers 'who can do X'. Returns candidates \
+               carrying every requested tag, cheapest-idle-first, across live agents and \
+               deployable bench templates. Omit capabilities to list everything visible. \
+               No match is an empty list, not an error.",
+              &[("agentId", "string", "Your agent ID"),
+                ("capabilities",
+                 "array",
+                 "Capability tags a candidate must all carry, e.g. [\"rust\", \"testing\"]. \
+                  Omit to list every visible candidate."),
+                ("includeTemplates",
+                 "boolean",
+                 "Include deployable bench templates as well as live agents (default true)")],
               &["agentId"]),
          tool(consts::SEND_MESSAGE,
               "Send a message to another agent by name or ID",
@@ -146,6 +161,10 @@ impl ToolCatalog for McpToolCatalog {
         let result = match name {
             consts::REGISTER_AGENT => agents::register_agent(&mut self.agents.lock(), &arguments),
             consts::LIST_AGENTS => agents::list_agents(&self.agents.lock(), &arguments),
+            consts::DESCRIBE_AGENTS => {
+                let bench_agents = self.bench_agents.lock();
+                agents::describe_agents(&self.agents.lock(), &bench_agents, &arguments)
+            }
             consts::SEND_MESSAGE => messaging::send_message(&self.agents.lock(),
                                                             &mut self.messages.lock(),
                                                             self.notifier.as_ref(),

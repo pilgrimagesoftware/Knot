@@ -1,5 +1,6 @@
 pub const REGISTER_AGENT: &str = "register-agent";
 pub const LIST_AGENTS: &str = "list-agents";
+pub const DESCRIBE_AGENTS: &str = "describe-agents";
 pub const SEND_MESSAGE: &str = "send-message";
 pub const CHECK_MESSAGES: &str = "check-messages";
 pub const BROADCAST_MESSAGE: &str = "broadcast-message";

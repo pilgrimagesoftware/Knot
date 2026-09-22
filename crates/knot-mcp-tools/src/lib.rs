@@ -256,9 +256,9 @@ mod tests {
     }
 
     #[test]
-    fn lists_exactly_the_thirteen_tools_with_object_schemas() {
+    fn lists_exactly_the_catalogued_tools_with_object_schemas() {
         let defs = catalog().list();
-        assert_eq!(defs.len(), 13);
+        assert_eq!(defs.len(), 14);
         for def in &defs {
             assert_eq!(def.input_schema.schema_type, "object");
         }
@@ -266,6 +266,7 @@ mod tests {
         let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
         for expected in ["register-agent",
                          "list-agents",
+                         "describe-agents",
                          "send-message",
                          "check-messages",
                          "broadcast-message",
