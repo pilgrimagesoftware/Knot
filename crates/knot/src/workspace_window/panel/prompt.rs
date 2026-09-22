@@ -22,12 +22,18 @@ use gpui_kit::component::input::TextareaState;
 use uuid::Uuid;
 
 use crate::panel_session;
-use crate::workspace_window::PANEL_INPUT_ROWS_COLLAPSED;
-use crate::workspace_window::PANEL_INPUT_ROWS_EXPANDED;
-use crate::workspace_window::PromptOrigin;
-use crate::workspace_window::QueuedPanelPrompt;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::prompt_queue;
+use crate::workspace_window::prompt_queue::PromptOrigin;
+use crate::workspace_window::prompt_queue::QueuedPanelPrompt;
+
+/// How far the prompt box grows with its content before it starts
+/// scrolling, collapsed and expanded. It auto-grows rather than sitting at
+/// a fixed height: a fixed height fights the textarea's own layout, so a
+/// second line made it scroll and jump on every keystroke instead of
+/// simply getting taller.
+const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
+const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
 
 impl WorkspaceWindow {
     /// Opens the native file/image picker and attaches the chosen paths to
