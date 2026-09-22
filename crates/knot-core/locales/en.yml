@@ -128,6 +128,9 @@ settings:
     personas: "Personas"
     none_defined: "No personas defined."
     delete_persona: "Delete Persona"
+    delete_body: "This permanently deletes \"%{name}\". This can't be undone."
+    edit: "Edit persona"
+    add: "Add Persona…"
     restore_defaults: "Restore Defaults"
   autopilot:
     blurb: "Automatically detect when agents need input and take action — no need to babysit your agents. Only available with Claude Code."
