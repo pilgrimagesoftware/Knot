@@ -155,14 +155,16 @@
 
 ## 9. Shipped Orchestrator persona
 
-- [ ] 9.1 Add an "Orchestrator" system persona to the shipped defaults in
+- [x] 9.1 Add an "Orchestrator" system persona to the shipped defaults in
   `crates/knot-core/src/consts.rs` with a stable id, instructing the query →
   plan → dispatch method and naming no teammate; verify the existing
   install-on-startup test picks it up and restore-defaults restores it
   unchanged
-- [ ] 9.2 Confirm the persona text contains no agent names or counts; verify
-  by inspection against `agent-registry` - "A roster is obtained by query,
-  never stored as text"
+- [x] 9.2 Confirm the persona text contains no agent names or counts;
+  verified by a test rather than by inspection, since prose drifts -
+  `the_orchestrator_persona_names_a_method_and_no_teammates` asserts it
+  names every task tool and no agent type or sibling persona, against
+  `agent-registry` - "A roster is obtained by query, never stored as text"
 
 ## 10. Verification
 

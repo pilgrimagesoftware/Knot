@@ -290,9 +290,9 @@ fn default_personas_install_once() {
     let dir = tempdir().unwrap();
     let mut s = Settings::with_store_path(dir.path().join("settings.json"));
     s.install_default_personas().unwrap();
-    assert_eq!(s.personas.len(), 6);
+    assert_eq!(s.personas.len(), DEFAULT_PERSONAS.len());
     s.install_default_personas().unwrap();
-    assert_eq!(s.personas.len(), 6);
+    assert_eq!(s.personas.len(), DEFAULT_PERSONAS.len());
 }
 
 #[test]
@@ -373,7 +373,9 @@ fn restore_default_personas_reverts_edits_and_adds_missing() {
 
     s.restore_default_personas().unwrap();
 
-    assert_eq!(s.personas.len(), 7);
+    assert_eq!(s.personas.len(),
+               DEFAULT_PERSONAS.len() + 1,
+               "the defaults plus the user's own");
     let restored = s.personas.iter().find(|p| p.id == id).unwrap();
     assert_eq!(restored.name, name);
     assert_eq!(restored.instructions, instructions);
@@ -392,7 +394,7 @@ fn deleted_default_persona_not_reinstalled() {
                                 persona_type: PersonaType::System,
                                 state:        PersonaState::Deleted, }];
     s.install_default_personas().unwrap();
-    assert_eq!(s.personas.len(), 6);
+    assert_eq!(s.personas.len(), DEFAULT_PERSONAS.len());
     assert_eq!(s.personas
                 .iter()
                 .filter(|p| p.state == PersonaState::Deleted)
@@ -450,4 +452,56 @@ fn compact_tool_calls_round_trips_through_the_store() {
 
     let reloaded = Settings::load_from(&path).unwrap();
     assert!(reloaded.agent_panel_compact_tool_calls);
+}
+
+/// The Orchestrator persona describes a *method*, never a team.
+///
+/// `agent-registry` - "A roster is obtained by query, never stored as
+/// text". A teammate named here is a copy of state that goes stale the
+/// first time an agent is added or removed, and nothing would catch it,
+/// which is the whole reason the registry exists. Checked rather than left
+/// to review, because prose drifts.
+#[test]
+fn the_orchestrator_persona_names_a_method_and_no_teammates() {
+    let (_, name, instructions) = DEFAULT_PERSONAS.iter()
+                                                  .find(|(_, name, _)| *name == "Orchestrator")
+                                                  .expect("the Orchestrator persona ships");
+    assert_eq!(*name, "Orchestrator");
+
+    // It has to point at the tools, or it describes nothing actionable.
+    for tool in ["describe-agents",
+                 "plan-tasks",
+                 "dispatch-task",
+                 "complete-task",
+                 "task-status",
+                 "send-message"]
+    {
+        assert!(instructions.contains(tool),
+                "the persona should name {tool}");
+    }
+
+    // And it must not name an agent, an agent type, or how many there are -
+    // every one of those goes stale without warning.
+    let lowered = instructions.to_lowercase();
+    for stale in ["claude", "codex", "opencode", "gemini", "copilot", "shell"] {
+        assert!(!lowered.contains(stale),
+                "the persona must not name the agent type {stale}");
+    }
+    for (_, other, _) in DEFAULT_PERSONAS.iter()
+                                         .filter(|(_, other, _)| *other != "Orchestrator")
+    {
+        assert!(!instructions.contains(other),
+                "the persona must not name {other}");
+    }
+}
+
+/// A shipped default is matched by id across installs, so two entries
+/// sharing one would overwrite each other on startup.
+#[test]
+fn every_shipped_persona_has_a_distinct_id() {
+    let mut ids: Vec<&str> = DEFAULT_PERSONAS.iter().map(|(id, _, _)| *id).collect();
+    ids.sort_unstable();
+    let count = ids.len();
+    ids.dedup();
+    assert_eq!(ids.len(), count, "two shipped personas share an id");
 }
