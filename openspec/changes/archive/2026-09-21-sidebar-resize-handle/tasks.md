@@ -1,5 +1,15 @@
 # Tasks
 
+> **Archived with nine tasks unrun.** Everything that could be checked without
+> the running app was done and is green: `make` (fmt-check, size-check, clippy
+> `-D warnings`, the full suite, build), plus unit tests for the stored scalar
+> and the compact predicate. The nine tasks still marked `[ ]` below all need a
+> human dragging the divider in a running Knot - the bounds during a drag, the
+> header alignment at several widths, one-write-per-drag, the multi-window and
+> reopen scenarios, the terminal pane's reflow, the breakpoint both ways, and
+> the walk through `specs/agent-list-ui/spec.md`. They were never run. The
+> shipped behaviour rests on the code review and the unit tests alone.
+
 ## 1. The stored width (`knot-core`)
 
 - [x] 1.1 Add `SIDEBAR_WIDTH_DEFAULT` (250.0), `SIDEBAR_WIDTH_MIN` (120.0), `SIDEBAR_WIDTH_MAX` (400.0) and `SIDEBAR_COMPACT_BREAKPOINT` (160.0) to `crates/knot-core/src/consts.rs`, the minimum's doc comment deriving 120 from the 80px the title bar reserves for the traffic lights; verify `make lint` reports no unused constant once 1.2 and 3.x reference them.
