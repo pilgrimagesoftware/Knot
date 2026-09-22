@@ -26,20 +26,20 @@
 
 ## 2. The registry projection
 
-- [ ] 2.1 Add a registry view that projects live agents plus bench templates
+- [x] 2.1 Add a registry view that projects live agents plus bench templates
   into candidates carrying id, description, tags, reachable tools, cost tier
   and status, computed from `agents_snapshot()` and `Settings::bench_agents`
   with no new stored collection; verify a test that a bench entry projects
   with status `template` and a live agent projects with its automatic state
-- [ ] 2.2 Implement tag matching (all requested tags must be present) and
+- [x] 2.2 Implement tag matching (all requested tags must be present) and
   the ranking order - idle live, then other live, then templates; within
   each, ascending cost tier, then name; verify tests for the
   cheapest-idle-first, busy-outranked-by-idle, and all-tags-must-match
   scenarios in `agent-registry`
-- [ ] 2.3 Apply the existing visibility rules (caller's workspace; companions
+- [x] 2.3 Apply the existing visibility rules (caller's workspace; companions
   only if owned by the caller) to registry results; verify a test that an
   unowned companion carrying a queried tag is absent from the candidates
-- [ ] 2.4 Verify an empty result for an unmatched tag is a success, not an
+- [x] 2.4 Verify an empty result for an unmatched tag is a success, not an
   error, with a test asserting the candidate list is empty and no error is
   raised
 
