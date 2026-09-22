@@ -69,7 +69,8 @@ pub(crate) struct WorkspaceDragPreview;
 
 impl Render for WorkspaceDragPreview {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div().p_2().child("Workspace")
+        div().p_2()
+             .child(knot_core::l10n::t("workspace_manager.workspace"))
     }
 }
 
@@ -87,14 +88,14 @@ impl WorkspaceManager {
     fn save_name(&mut self, name: String, editing_id: Option<Uuid>, window: &mut Window,
                  cx: &mut Context<Self>) {
         if name.is_empty() {
-            self.error = Some("Workspace name cannot be empty.".to_string());
+            self.error = Some(knot_core::l10n::t("workspace_manager.error_name_empty"));
             cx.notify();
             return;
         }
         let mut store = self.store.lock();
         if let Some(id) = editing_id {
             if !store.rename_workspace(id, name) {
-                self.error = Some("Workspace no longer exists.".to_string());
+                self.error = Some(knot_core::l10n::t("workspace_manager.error_missing"));
                 cx.notify();
                 return;
             }
@@ -168,7 +169,7 @@ impl WorkspaceManager {
 
     fn delete(&mut self, id: Uuid, cx: &mut Context<Self>) {
         if !self.store.lock().remove_workspace(id) {
-            self.error = Some("At least one workspace must remain.".to_string());
+            self.error = Some(knot_core::l10n::t("workspace_manager.error_last_workspace"));
         }
         else {
             self.persist();
@@ -195,7 +196,7 @@ impl WorkspaceManager {
         let manager = cx.entity();
         window.open_alert_dialog(cx, move |alert, _, _| {
                   let manager = manager.clone();
-                  alert.title("Delete Workspace?")
+                  alert.title(knot_core::l10n::t("workspace_manager.delete_title"))
                        .description(format!("Delete \"{name}\" and its agents?"))
                        .confirm()
                        .on_ok(move |_, _, app| {
@@ -291,7 +292,7 @@ impl Render for WorkspaceManager {
                     Button::new(format!("open-workspace-{id}"))
                         .icon(IconName::ExternalLink)
                         .ghost()
-                        .tooltip("Open workspace")
+                        .tooltip(knot_core::l10n::t("workspace_manager.open"))
                         .on_click(cx.listener(move |manager, _: &ClickEvent, _window, cx| {
                             manager.open(id, cx);
                         })),
@@ -300,7 +301,7 @@ impl Render for WorkspaceManager {
                     Button::new(format!("rename-workspace-{id}"))
                         .icon(IconName::FileText)
                         .ghost()
-                        .tooltip("Rename workspace")
+                        .tooltip(knot_core::l10n::t("workspace_manager.rename"))
                         .on_click(cx.listener(move |manager, _: &ClickEvent, window, cx| {
                             manager.open_workspace_dialog(Some(id), window, cx);
                         })),
@@ -309,7 +310,7 @@ impl Render for WorkspaceManager {
                     Button::new(format!("delete-workspace-{id}"))
                         .icon(IconName::Delete)
                         .danger()
-                        .tooltip("Delete workspace")
+                        .tooltip(knot_core::l10n::t("workspace_manager.delete"))
                         .on_click(cx.listener(move |manager, _: &ClickEvent, window, cx| {
                             manager.request_delete(id, window, cx);
                         })),
@@ -341,7 +342,7 @@ impl Render for WorkspaceManager {
                             .gap_2()
                             .items_center()
                             .child(app_titlebar_icon())
-                            .child("Workspaces"),
+                            .child(knot_core::l10n::t("workspace_manager.title")),
                     ),
             )
             .child(
@@ -375,7 +376,7 @@ impl Render for WorkspaceManager {
                                 Button::new("new-workspace")
                                     .icon(IconName::Plus)
                                     .primary()
-                                    .tooltip("New workspace")
+                                    .tooltip(knot_core::l10n::t("workspace_manager.new"))
                                     .on_click(cx.listener(
                                         |manager, _: &ClickEvent, window, cx| {
                                             manager.open_workspace_dialog(None, window, cx);
@@ -447,7 +448,7 @@ impl Render for WorkspaceManager {
                                             .gap_2()
                                             .child(
                                                 Button::new("cancel-workspace-dialog")
-                                                    .label("Cancel")
+                                                    .label(knot_core::l10n::t("workspace_manager.cancel"))
                                                     .on_click(cx.listener(
                                                         |manager, _: &ClickEvent, window, cx| {
                                                             manager.cancel_workspace_dialog(
