@@ -99,7 +99,7 @@ impl AgentEditor {
     fn agent_rows(&self, personas: Vec<knot_core::Persona>, cx: &mut Context<Self>)
                   -> Vec<gpui_kit::AnyElement> {
         let mut rows = vec![self.agent_type_row(cx)];
-        if self.agent_type == "shell" && self.edit_target.is_none() {
+        if knot_core::agent_type::is_shell(&self.agent_type) && self.edit_target.is_none() {
             rows.push(self.shell_command_row(cx));
         }
         if !personas.is_empty() {
@@ -123,7 +123,7 @@ impl AgentEditor {
                     knot_core::l10n::t("agent_editor.coding_agent"),
                     div()
                         .text_color(cx.theme().muted_foreground)
-                        .child(SettingsWindow::agent_type_label("shell")),
+                        .child(SettingsWindow::agent_type_label(knot_core::agent_type::SHELL)),
                 )
                 .into_any_element()
         }
@@ -138,16 +138,14 @@ impl AgentEditor {
                             move |mut menu, _, _| {
                                 // Matches the Swift reference's `availableAgents`
                                 // list (`CodingSettingsView.swift`).
-                                for (agent_type, label) in [
-                                    ("claude", "Claude"),
-                                    ("codex", "Codex"),
-                                    ("opencode", "OpenCode"),
-                                    ("gemini", "Gemini"),
-                                    ("copilot", "Copilot"),
-                                    ("custom1", "Custom 1"),
-                                    ("custom2", "Custom 2"),
-                                    ("shell", "Shell"),
-                                ] {
+                                // Every known type, including the user's own
+                                // custom commands - this is where an agent's
+                                // type is chosen, so the roster is offered
+                                // whole.
+                                for (agent_type, label) in
+                                    knot_core::agent_type::ALL.iter()
+                                                              .map(|kind| (kind.id, kind.label))
+                                {
                                     let editor = editor.clone();
                                     menu = menu.item(PopupMenuItem::new(label).on_click(
                                         move |_, _, app| {

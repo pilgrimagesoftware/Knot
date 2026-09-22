@@ -260,7 +260,8 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         // its folder before it exists.
         AgentMenuEntry::NewCompanion => {
             let prefill = AgentPrefill { folder: Some(targets.folder.clone()),
-                                         agent_type: Some("shell".to_string()),
+                                         agent_type:
+                                             Some(knot_core::agent_type::SHELL.to_string()),
                                          created_by: Some(targets.id),
                                          is_companion: true,
                                          ..Default::default() };

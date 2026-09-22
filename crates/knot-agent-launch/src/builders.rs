@@ -42,7 +42,7 @@ pub enum LaunchPlan {
 /// path; every other type launches through its registered ACP adapter (see
 /// `acp_adapter`) - there is no Terminal fallback for non-shell agents.
 pub fn plan_launch(request: &LaunchRequest<'_>) -> LaunchPlan {
-    if request.agent_type != "shell"
+    if !knot_core::agent_type::is_shell(request.agent_type)
        && let Some(config) = crate::adapter::acp_adapter(request.agent_type)
     {
         return LaunchPlan::Adapter(config);

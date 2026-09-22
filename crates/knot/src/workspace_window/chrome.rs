@@ -25,7 +25,6 @@ use gpui_kit::px;
 use uuid::Uuid;
 
 use crate::app_support::single_line;
-use crate::consts;
 use crate::workspace_window::DetailLineSize;
 
 /// One labelled detail line on an agent row: a leading icon saying what the
@@ -79,7 +78,7 @@ pub(crate) fn detail_line(icon: gpui_kit::assets::IconName, text: String, size: 
 /// agent whose process exits is removed, an ACP agent whose adapter exits
 /// is not.
 pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
-    agent_type == consts::SHELL_AGENT_TYPE
+    knot_core::agent_type::is_shell(agent_type)
 }
 
 /// A stable GPUI element key for a [`Uuid`]-identified row.
