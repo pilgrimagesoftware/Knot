@@ -186,11 +186,24 @@ impl WorkspaceWindow {
                       });
         let subscription = cx.subscribe_in(&input,
                                            window,
-                                           move |view: &mut Self, _, event, window, cx| {
-                                               if let InputEvent::PressEnter { shift, .. } = event
-                                                  && *shift == shift_to_send
-                                               {
-                                                   view.send_panel_prompt(id, window, cx);
+                                           move |view: &mut Self, input, event, window, cx| {
+                                               match event {
+                                                   InputEvent::PressEnter { shift, .. }
+                                                       if *shift == shift_to_send =>
+                                                   {
+                                                       view.send_panel_prompt(id, window, cx);
+                                                   }
+                                                   // Focus leaving the input closes the
+                                                   // slash lookup, per its dismissal rules
+                                                   // - a popup left open behind another
+                                                   // pane is exactly what the shared
+                                                   // dismissal path exists to prevent.
+                                                   InputEvent::Blur => {
+                                                       let input = input.clone();
+                                                       view.dismiss_panel_lookup(id, &input, cx);
+                                                       cx.notify();
+                                                   }
+                                                   _ => {}
                                                }
                                            });
         self.panel_prompt_inputs.insert(id, input.clone());
@@ -365,7 +378,9 @@ impl WorkspaceWindow {
                             // the answer this prompt gets, so the
                             // composer must not stay blocked waiting for
                             // a `TurnEnd` that will never arrive.
-                            recorder.error(format!("The agent could not answer: {error}"));
+                            recorder.error(knot_core::l10n::t_with("panel.error_answer",
+                                                                   &[("error",
+                                                                      &error.to_string())]));
                             eprintln!("failed to send panel prompt: {error}");
                         }
                     });
@@ -444,7 +459,9 @@ impl WorkspaceWindow {
                                             .await
                                             .map_err(|error| error.to_string());
                         if let Err(error) = &result {
-                            recorder.error(format!("The agent could not answer: {error}"));
+                            recorder.error(knot_core::l10n::t_with("panel.error_answer",
+                                                                   &[("error",
+                                                                      &error.to_string())]));
                         }
                         {
                             let mut results = results.lock();

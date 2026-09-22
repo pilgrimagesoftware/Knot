@@ -12,6 +12,8 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::group_box::GroupBox;
 use gpui_kit::component::group_box::GroupBoxVariants;
+use gpui_kit::component::menu::DropdownMenu;
+use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::div;
 use gpui_kit::px;
 use gpui_kit::rgb;
@@ -135,5 +137,45 @@ impl SettingsWindow {
                   #[cfg(target_os = "macos")]
                   native_font_panel::open(target, &name, size);
               })
+    }
+
+    /// A picker: a button showing the current value, whose dropdown lists
+    /// `options` and applies the one chosen.
+    ///
+    /// Five panes wrote this out - the button, the caret, the menu, an item
+    /// per option, and a closure per item cloning the window entity - all
+    /// differing only in the option list and what the choice does. `select`
+    /// receives the window and the chosen value, so a setter that needs the
+    /// `Window` (the coding pane's, which re-reads fonts) and one that does
+    /// not use the same helper.
+    pub(crate) fn dropdown<T>(id: impl Into<gpui_kit::ElementId>,
+                              current: impl Into<gpui_kit::SharedString>,
+                              options: Vec<(gpui_kit::SharedString, T)>,
+                              settings_window: gpui_kit::Entity<SettingsWindow>,
+                              select: impl Fn(&mut SettingsWindow,
+                                 &T,
+                                 &mut gpui_kit::Window,
+                                 &mut Context<SettingsWindow>)
+                              + Clone
+                              + 'static)
+                              -> impl IntoElement
+        where T: Clone + 'static {
+        Button::new(id).label(current.into())
+                       .dropdown_caret(true)
+                       .dropdown_menu(move |menu, _, _| {
+                           let mut menu = menu;
+                           for (label, value) in options.clone() {
+                               let settings_window = settings_window.clone();
+                               let select = select.clone();
+                               menu = menu.item(PopupMenuItem::new(label).on_click(move |_, window, app| {
+                                   let value = value.clone();
+                                   let select = select.clone();
+                                   settings_window.update(app, |view, cx| {
+                                                      select(view, &value, window, cx);
+                                                  });
+                               }));
+                           }
+                           menu
+                       })
     }
 }

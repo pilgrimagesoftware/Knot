@@ -34,6 +34,11 @@ agent:
   companion: "Shell companion"
 
 panel:
+  # Failures the panel records into the conversation itself, where the
+  # user reads them beside the turn they belong to.
+  error_first_turn: "The agent could not start its first turn: %{error}"
+  error_registration: "The agent could not be registered: %{error}"
+  error_answer: "The agent could not answer: %{error}"
   allow: "Allow"
   deny: "Deny"
   close: "Close"
@@ -62,6 +67,17 @@ panel:
   replace_composer_body: "What you typed will be replaced by the queued message you are editing."
   retry_connect: "Try again"
   context_usage: "Context usage"
+  lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  command:
+    broadcast: "Send a message to every other agent in the workspace"
+    check: "Check messages sent to this agent"
+    create_agent: "Create a new agent in the workspace"
+    list_agents: "List the agents in the workspace"
+    list_repos: "List the repositories in the source folder"
+    list_worktrees: "List a repository's worktrees"
+    send: "Send a message to one other agent"
+    show_markdown: "Display a markdown file in Knot's preview pane"
+    worktree: "Isolate this work in a new worktree"
   summary:
     calls_one: "%{count} tool call"
     calls_other: "%{count} tool calls"
@@ -112,6 +128,9 @@ settings:
     personas: "Personas"
     none_defined: "No personas defined."
     delete_persona: "Delete Persona"
+    delete_body: "This permanently deletes \"%{name}\". This can't be undone."
+    edit: "Edit persona"
+    add: "Add Persona…"
     restore_defaults: "Restore Defaults"
   autopilot:
     blurb: "Automatically detect when agents need input and take action — no need to babysit your agents. Only available with Claude Code."
@@ -248,6 +267,8 @@ agent_editor:
   save: "Save"
   add: "Add Agent"
   cancel: "Cancel"
+  no_folder: "No folder selected"
+  persona_none: "None"
   error_choose_folder: "Choose a folder."
   error_enter_name: "Enter a name."
 
@@ -259,6 +280,11 @@ workspace_manager:
   rename: "Rename workspace"
   delete: "Delete workspace"
   delete_title: "Delete Workspace?"
+  new_title: "New Workspace"
+  rename_title: "Rename Workspace"
+  save: "Save"
+  create: "Create"
+  error_save: "Could not save workspace: %{error}"
   cancel: "Cancel"
   error_name_empty: "Workspace name cannot be empty."
   error_missing: "Workspace no longer exists."
