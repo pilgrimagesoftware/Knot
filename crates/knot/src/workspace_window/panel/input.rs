@@ -256,7 +256,7 @@ impl WorkspaceWindow {
                             .icon(gpui_kit::component::Icon::new(
                                 gpui_kit::assets::IconName::Paperclip,
                             ))
-                            .tooltip("Attach files or images")
+                            .tooltip(knot_core::l10n::t("panel.attach_context"))
                             .ghost()
                             .small()
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
@@ -283,7 +283,7 @@ impl WorkspaceWindow {
                     .child(if turn_active {
                         Button::new("panel-stop-prompt")
                             .child(div().size(px(10.)).rounded(px(1.)).bg(rgb(0xFFFFFF)))
-                            .tooltip("Stop")
+                            .tooltip(knot_core::l10n::t("panel.stop"))
                             .bg(rgb(0xEF4444))
                             .text_color(rgb(0xFFFFFF))
                             .flex_shrink_0()

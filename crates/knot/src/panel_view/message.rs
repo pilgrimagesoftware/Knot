@@ -210,7 +210,7 @@ pub(super) fn render_response_actions(text: String, user_index: Option<usize>, i
         .children(user_index.map(|user_index| {
             Button::new(("panel-scroll-to-user", index as u64))
                 .icon(IconName::ArrowUp)
-                .tooltip("Scroll to your message")
+                .tooltip(knot_core::l10n::t("panel.scroll_to_your_message"))
                 .ghost()
                 .small()
                 .on_click(move |_: &ClickEvent, _, _| {
@@ -224,7 +224,7 @@ pub(super) fn render_response_actions(text: String, user_index: Option<usize>, i
         .child(
             Button::new(("panel-scroll-to-top", index as u64))
                 .icon(IconName::ChevronsUp)
-                .tooltip("Scroll to top")
+                .tooltip(knot_core::l10n::t("panel.scroll_to_top"))
                 .ghost()
                 .small()
                 .on_click(move |_: &ClickEvent, _, _| {

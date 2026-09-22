@@ -22,14 +22,29 @@ git:
 
 workspace:
   manager: "Workspaces"
+  name_placeholder: "Workspace name"
+  missing: "Workspace no longer exists."
+  choose_agent: "Choose an agent from the sidebar"
 
 sidebar:
   new_agent: "New agent"
+  width_error: "Could not save the sidebar width: %{error}"
 
 agent:
   companion: "Shell companion"
 
 panel:
+  allow: "Allow"
+  deny: "Deny"
+  close: "Close"
+  stop: "Stop"
+  running: "Running…"
+  connecting: "Connecting to agent…"
+  select_agent_to_start: "Select this agent in the sidebar to start it."
+  attach_context: "Attach files or images"
+  scroll_to_latest: "Scroll to latest"
+  scroll_to_your_message: "Scroll to your message"
+  scroll_to_top: "Scroll to top"
   copy_prompt: "Copy prompt"
   copy_response: "Copy response"
   copied_prompt: "Copied prompt to clipboard"
@@ -164,6 +179,12 @@ menu:
     deactivate: "Deactivate"
     restart_agent: "Restart Agent"
     remove_agent: "Remove Agent"
+    # What the two confirming row actions ask before they run.
+    confirm:
+      restart_title: "Restart Agent"
+      restart_body: "Restart \"%{name}\"? Its session will be cleared."
+      remove_title: "Remove Agent"
+      remove_body: "Remove \"%{name}\"? This closes its session and cannot be undone."
   # The agent list's background menu, over the workspace rather than
   # any one agent.
   sidebar:
@@ -172,6 +193,14 @@ menu:
     close_all: "Close All"
     deactivate_all: "Deactivate All"
     broadcast: "Broadcast to All Agents…"
+    # The bulk actions' confirmations. %{agents} is a localized count and
+    # noun together ("1 agent", "3 agents"), so the sentence can put them
+    # where its own grammar needs them.
+    confirm:
+      restart_all_title: "Restart All"
+      restart_all_body: "Restart %{agents}? Every session is cleared and cannot be recovered."
+      close_all_title: "Close All"
+      close_all_body: "Close %{agents}? This closes every session and cannot be undone."
 
 quit:
   working_title: "Agents are still working"
@@ -234,6 +263,7 @@ workspace_manager:
   error_last_workspace: "At least one workspace must remain."
 
 broadcast:
+  window_title: "Broadcast to All Agents"
   placeholder: "Message every agent in this workspace…"
   send: "Send"
   cancel: "Cancel"
