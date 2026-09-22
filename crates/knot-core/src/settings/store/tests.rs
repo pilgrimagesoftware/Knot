@@ -3,6 +3,7 @@
 use tempfile::tempdir;
 
 use super::*;
+use crate::CostTier;
 
 fn agent_id() -> Uuid {
     Uuid::new_v4()
@@ -504,4 +505,43 @@ fn every_shipped_persona_has_a_distinct_id() {
     let count = ids.len();
     ids.dedup();
     assert_eq!(ids.len(), count, "two shipped personas share an id");
+}
+
+/// Task 10.3: a store written before the agent registry existed carries no
+/// `description`, `capabilities` or `costTier` on any of its records. It has
+/// to load without error and read back undescribed, untagged and mid-priced:
+/// the guarantee `openspec/specs/agent-registry/spec.md` makes about records
+/// that predate it.
+#[test]
+fn a_document_written_before_the_registry_loads_with_the_registry_defaults() {
+    let (_dir, settings) = load_document(
+                                         r#"{
+            "savedAgents": [
+                {
+                    "id": "11111111-1111-4111-8111-111111111111",
+                    "name": "Old Agent",
+                    "folder": "/tmp/old"
+                }
+            ],
+            "benchAgents": [
+                {
+                    "id": "22222222-2222-4222-8222-222222222222",
+                    "name": "Old Template",
+                    "folder": "/tmp/bench"
+                }
+            ]
+        }"#,
+    );
+
+    let agent = &settings.saved_agents[0];
+    assert_eq!(agent.name, "Old Agent");
+    assert_eq!(agent.description, "");
+    assert!(agent.capabilities.is_empty());
+    assert_eq!(agent.cost_tier, CostTier::Medium);
+
+    let bench = &settings.bench_agents[0];
+    assert_eq!(bench.name, "Old Template");
+    assert_eq!(bench.description, "");
+    assert!(bench.capabilities.is_empty());
+    assert_eq!(bench.cost_tier, CostTier::Medium);
 }

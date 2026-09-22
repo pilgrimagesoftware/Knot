@@ -168,10 +168,10 @@
 
 ## 10. Verification
 
-- [ ] 10.1 Run `make` and verify the whole gate passes: `fmt-check`,
+- [x] 10.1 Run `make` and verify the whole gate passes: `fmt-check`,
   `size-check`, `lint`, `test`, `build`
-- [ ] 10.2 Verify no crate-wide `allow` was added and every per-item allow
+- [x] 10.2 Verify no crate-wide `allow` was added and every per-item allow
   carries a reason comment, per `.claude/rules/rust-structure.md`
-- [ ] 10.3 Verify a pre-existing `settings.json` from before this change
+- [x] 10.3 Verify a pre-existing `settings.json` from before this change
   loads with no error and every agent reads back with an empty description,
   no tags, and cost tier `medium`
