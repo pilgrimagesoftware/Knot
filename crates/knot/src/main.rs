@@ -18,6 +18,7 @@ mod dashboard;
 mod macos;
 mod markdown_view;
 mod open_in;
+mod panel_commands;
 mod panel_session;
 mod panel_state;
 mod panel_view;

@@ -2,21 +2,21 @@
 
 ## 1. The registry
 
-- [ ] 1.1 Add a `panel_commands` module with a documented in-code built-in
+- [x] 1.1 Add a `panel_commands` module with a documented in-code built-in
       command list (token + description, seeded from
       `plugin/claude/commands/*.md`) and unit tests asserting every entry has
       a slash-free token and a non-empty description.
-- [ ] 1.2 Add a skill registry provider that scans the selected agent's
+- [x] 1.2 Add a skill registry provider that scans the selected agent's
       configured skill roots for `SKILL.md` frontmatter (name + description).
       Unit tests: a root with two skills yields two entries; a missing root
       yields none without error.
-- [ ] 1.3 Define the shared entry type and the registry interface both sources
+- [x] 1.3 Define the shared entry type and the registry interface both sources
       implement. Verify a test that wires both sources behind the interface
       and filters by token prefix.
 
 ## 2. Token detection
 
-- [ ] 2.1 Implement slash-token detection from the prompt input's value and
+- [x] 2.1 Implement slash-token detection from the prompt input's value and
       caret (leading `/` on the caret's line, filter text up to end of token).
       Unit tests: `/` alone, `/p`, token in the middle of prose (no popup),
       and `/p mid-edit` (token ends at whitespace).
