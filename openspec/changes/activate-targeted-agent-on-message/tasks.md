@@ -15,7 +15,7 @@
 
 - [x] 3.1 In `crates/knot/src/workspace_window/repaint.rs::panel_needs_repaint`, drain the activation queue each poll (same shape as the existing `waiting` / `drain_panel_prompt` loop): for each queued id that belongs to an agent in this window's workspace, call `ensure_session` (`crates/knot/src/workspace_window/sessions.rs`) and fold whether anything was drained into the function's dirty-check return, matching how `prompt_picked_up` was wired up for the queued-message repaint fix. Verify with `cargo check -p knot`.
 - [x] 3.2 Confirm an id belonging to a different, closed, or non-matching workspace is left in the queue rather than dropped, so whichever window does own that workspace can still pick it up - or document in a code comment why it's safe to drop if a workspace can never legitimately go unclaimed. Verify by reading `ensure_session`'s existing guards and, if a workspace check is added here, exercising it with a test or manual repro.
-- [ ] 3.3 Verify end-to-end by manual repro: deactivate an agent, have another agent in the same workspace send it a direct message via the MCP tool, and confirm the sidebar row shows it as running without any user interaction.
+- [x] 3.3 Verify end-to-end by manual repro: deactivate an agent, have another agent in the same workspace send it a direct message via the MCP tool, and confirm the sidebar row shows it as running without any user interaction.
 
 ## 4. Spec conformance
 
