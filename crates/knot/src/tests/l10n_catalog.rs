@@ -245,6 +245,24 @@ fn every_settings_tab_label_resolves() {
     }
 }
 
+/// The three failures a panel writes into the conversation itself. Each
+/// embeds the underlying error, so a body that lost its placeholder would
+/// report a failure without saying what failed.
+#[test]
+fn panel_transcript_errors_resolve_and_keep_their_cause() {
+    for key in ["panel.error_first_turn",
+                "panel.error_registration",
+                "panel.error_answer"]
+    {
+        let message = knot_core::l10n::t_with(key, &[("error", "connection refused")]);
+        assert_ne!(message, key, "{key} is missing from the catalog");
+        assert!(message.contains("connection refused"),
+                "{key} must carry the cause: {message}");
+        assert!(!message.contains("%{error}"),
+                "{key} left its placeholder unfilled");
+    }
+}
+
 /// The chrome a panel draws around a conversation - two decision buttons,
 /// four icon-only controls whose tooltip is their only name, and the two
 /// lines a panel shows when it has no conversation yet.

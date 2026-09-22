@@ -34,6 +34,11 @@ agent:
   companion: "Shell companion"
 
 panel:
+  # Failures the panel records into the conversation itself, where the
+  # user reads them beside the turn they belong to.
+  error_first_turn: "The agent could not start its first turn: %{error}"
+  error_registration: "The agent could not be registered: %{error}"
+  error_answer: "The agent could not answer: %{error}"
   allow: "Allow"
   deny: "Deny"
   close: "Close"

@@ -365,7 +365,9 @@ impl WorkspaceWindow {
                             // the answer this prompt gets, so the
                             // composer must not stay blocked waiting for
                             // a `TurnEnd` that will never arrive.
-                            recorder.error(format!("The agent could not answer: {error}"));
+                            recorder.error(knot_core::l10n::t_with("panel.error_answer",
+                                                                   &[("error",
+                                                                      &error.to_string())]));
                             eprintln!("failed to send panel prompt: {error}");
                         }
                     });
@@ -444,7 +446,9 @@ impl WorkspaceWindow {
                                             .await
                                             .map_err(|error| error.to_string());
                         if let Err(error) = &result {
-                            recorder.error(format!("The agent could not answer: {error}"));
+                            recorder.error(knot_core::l10n::t_with("panel.error_answer",
+                                                                   &[("error",
+                                                                      &error.to_string())]));
                         }
                         {
                             let mut results = results.lock();
