@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::app_state::state_color;
 use crate::app_state::state_label;
+use crate::app_support::single_line;
 use crate::consts;
 
 pub(crate) const CARD_WIDTH: f32 = 280.;
@@ -167,7 +168,7 @@ fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
                                                       .overflow_hidden()
                                                       .whitespace_nowrap()
                                                       .text_ellipsis()
-                                                      .child(folder_name)))
+                                                      .child(single_line(&folder_name))))
                            // The same working indicator the sidebar row
                            // carries, from the same shared implementation,
                            // so the two surfaces cannot drift. It sits
@@ -189,7 +190,7 @@ fn agent_card(agent: &DashboardAgent, muted: gpui_kit::Hsla,
                                                          .overflow_hidden()
                                                          .whitespace_nowrap()
                                                          .text_ellipsis()
-                                                         .child(header_title)
+                                                         .child(single_line(&header_title))
                                                 }))
             .children(git_stats.filter(|stats| stats.files_changed > 0)
                                .map(|stats| {
