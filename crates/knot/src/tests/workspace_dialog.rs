@@ -63,7 +63,6 @@ fn manager(
                                                         editing_id: None,
                                                         workspace_dialog_id: None,
                                                         show_workspace_dialog: false,
-                                                        delete_workspace_id: None,
                                                         error: None,
                                                         _name_subscription: name_subscription,
                                                         _mcp_stop: None }
