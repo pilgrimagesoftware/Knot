@@ -16,6 +16,9 @@ use gpui_kit::Action;
 use gpui_kit::App;
 use gpui_kit::Keystroke;
 use gpui_kit::TestAppContext;
+// Only the macOS assertions name gpui's text actions: elsewhere it binds
+// them to different keys, and those assertions are compiled out.
+#[cfg(target_os = "macos")]
 use gpui_kit::base::input;
 
 use crate::agent_menu::AgentMenuDuplicateAgent;
@@ -107,10 +110,13 @@ fn the_agents_menu_carries_the_reference_shortcuts(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-d", &AgentMenuDuplicateAgent);
           assert_bound(cx, "cmd-r", &AgentMenuRestartAgent);
           assert_bound(cx, "cmd-w", &CloseWindow);
-          // Still gpui's, not ours: cmd-f is the platform's find key, and
-          // is left for whatever find this port grows.
-          assert_bound(cx, "cmd-f", &input::Search);
       });
+    // Still gpui's, not ours: cmd-f is the platform's find key, and is left
+    // for whatever find this port grows. Asserted on macOS only because
+    // that is where gpui spells Search's key `cmd-f`; see
+    // `the_edit_menu_leaves_the_text_keys_with_gpui`.
+    #[cfg(target_os = "macos")]
+    cx.update(|cx| assert_bound(cx, "cmd-f", &input::Search));
     assert!(!agent_menu_key_bindings().iter().any(|binding| {
                                                  binding.action().partial_eq(&AgentMenuRemoveAgent)
                                              }),
@@ -122,6 +128,12 @@ fn the_agents_menu_carries_the_reference_shortcuts(cx: &mut TestAppContext) {
 /// keys would resolve to those instead - and, being context-less and added
 /// later, ours would win the tie and cut, copy, paste and undo would stop
 /// working in every text field.
+///
+/// macOS only. gpui binds these to `cmd-*` there and to `ctrl-c`, `ctrl-y`
+/// and friends elsewhere, and the menu bar whose key equivalents they are
+/// is AppKit's; the rule holds on every platform but the keystrokes that
+/// express it do not, so only the Mac's are pinned.
+#[cfg(target_os = "macos")]
 #[gpui_kit::test]
 fn the_edit_menu_leaves_the_text_keys_with_gpui(cx: &mut TestAppContext) {
     app_with_bindings(cx);

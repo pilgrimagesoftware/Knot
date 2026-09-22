@@ -52,6 +52,12 @@
       actions, that ⌘W still resolves to Close Window and ⌘F still to gpui's
       Search, and that Remove Agent is in no binding. Done as
       `the_agents_menu_carries_the_reference_shortcuts`.
+- [x] 4.4 Gate the assertions that name gpui's own text actions to macOS.
+      gpui binds those to `ctrl-c`, `ctrl-y` and friends off the Mac, so
+      CI's ubuntu leg failed on keystrokes that do not exist there. The rule
+      holds on every platform; the keystrokes expressing it do not, and the
+      menu bar they belong to is AppKit's. Our own bindings stay asserted
+      everywhere.
 
 ## 5. Verification
 
@@ -59,11 +65,19 @@
       pass for the workspace.
 - [ ] 5.2 Open the app and walk every menu, confirming each item listed in
       the spec's table shows its key - greyed on the items with no behavior
-      yet - and that About Knot, Show All, Zoom and the Agents items show
-      none.
+      yet - and that About Knot, Show All and Zoom show none.
+
+      Not performed. Left open deliberately at the point of merge rather
+      than checked off unverified: it needs the app on screen, and the
+      automated tests cover the bindings the menu reads its key equivalents
+      from, not their drawing.
 - [ ] 5.3 In the running app, confirm Edit > Copy enables with a settings
       text field focused and copies the selection, and that ⌘C in a terminal
-      pane still copies the terminal's selection.
+      pane still copies the terminal's selection. Not performed - see 5.2.
+      This is the one worth doing first: the terminal's fall-through rests
+      on AppKit declining a disabled item's key equivalent, which is
+      reasoned from the platform's behavior rather than observed here.
 - [ ] 5.4 In the running app, confirm ⌘D duplicates the selected agent and
       ⌘R restarts it with its confirmation, that both do nothing with no
-      agent selected, and that ⌥⌘F forks while ⌘F does nothing.
+      agent selected, and that ⌥⌘F forks while ⌘F does nothing. Not
+      performed - see 5.2.
