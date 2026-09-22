@@ -9,58 +9,63 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
+use knot_core::AiProvider;
+use knot_core::AutopilotAction;
 
 use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
-    pub(crate) fn ai_provider_label(provider: &str) -> &'static str {
+    pub(crate) fn ai_provider_label(provider: AiProvider) -> &'static str {
         match provider {
-            "anthropic" => "Anthropic",
-            "google" => "Google",
-            _ => "OpenAI",
+            AiProvider::OpenAi => "OpenAI",
+            AiProvider::Anthropic => "Anthropic",
+            AiProvider::Google => "Google",
         }
     }
 
     /// Hardcoded model for each AI provider (cheapest/fastest options),
     /// matching the Swift reference's `AppSettings.aiModel(for:)`.
-    pub(crate) fn ai_model_for(provider: &str) -> &'static str {
+    pub(crate) fn ai_model_for(provider: AiProvider) -> &'static str {
         match provider {
-            "anthropic" => "claude-haiku-4-5",
-            "google" => "gemini-flash-lite-latest",
-            "openai" => "gpt-5-mini",
-            _ => "",
+            AiProvider::OpenAi => "gpt-5-mini",
+            AiProvider::Anthropic => "claude-haiku-4-5",
+            AiProvider::Google => "gemini-flash-lite-latest",
         }
     }
 
-    pub(crate) fn autopilot_action_label(action: &str) -> &'static str {
+    pub(crate) fn autopilot_action_label(action: AutopilotAction) -> &'static str {
         match action {
-            "ask" => "Ask me",
-            "continue" => "Auto-continue",
-            "custom" => "Custom",
-            _ => "Mark conversation",
+            AutopilotAction::Mark => "Mark conversation",
+            AutopilotAction::Ask => "Ask me",
+            AutopilotAction::Continue => "Auto-continue",
+            AutopilotAction::Custom => "Custom",
         }
     }
 
-    pub(crate) fn autopilot_action_description(action: &str) -> &'static str {
+    pub(crate) fn autopilot_action_description(action: AutopilotAction) -> &'static str {
         match action {
-            "ask" => "Show a dialog letting you switch to the agent, dismiss, or auto-continue.",
-            "continue" => "Automatically send \"yes, continue\" to the agent.",
-            "custom" => {
+            AutopilotAction::Mark => {
+                "Set the agent status to indicate input is needed and send a notification."
+            }
+            AutopilotAction::Ask => {
+                "Show a dialog letting you switch to the agent, dismiss, or auto-continue."
+            }
+            AutopilotAction::Continue => "Automatically send \"yes, continue\" to the agent.",
+            AutopilotAction::Custom => {
                 "Use your own prompt to decide what to reply. The LLM response is injected \
                  directly into the agent."
             }
-            _ => "Set the agent status to indicate input is needed and send a notification.",
         }
     }
 
-    fn select_ai_provider(&mut self, provider: &str, cx: &mut Context<Self>) {
-        self.settings.ai_provider = provider.to_string();
+    fn select_ai_provider(&mut self, provider: AiProvider, cx: &mut Context<Self>) {
+        self.settings.ai_provider = provider;
         self.persist();
         cx.notify();
     }
 
-    fn select_autopilot_action(&mut self, action: &str, cx: &mut Context<Self>) {
-        self.settings.autopilot_action = action.to_string();
+    fn select_autopilot_action(&mut self, action: AutopilotAction, cx: &mut Context<Self>) {
+        self.settings.autopilot_action = action;
         self.persist();
         cx.notify();
     }
@@ -81,12 +86,12 @@ impl SettingsWindow {
     pub(crate) fn render_autopilot(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
         let autopilot_enabled = self.settings.autopilot_enabled;
-        let ai_provider = self.settings.ai_provider.clone();
-        let autopilot_action = self.settings.autopilot_action.clone();
-        let provider_label = Self::ai_provider_label(&ai_provider);
-        let model_name = Self::ai_model_for(&ai_provider);
-        let action_label = Self::autopilot_action_label(&autopilot_action);
-        let is_custom_action = autopilot_action == "custom";
+        let ai_provider = self.settings.ai_provider;
+        let autopilot_action = self.settings.autopilot_action;
+        let provider_label = Self::ai_provider_label(ai_provider);
+        let model_name = Self::ai_model_for(ai_provider);
+        let action_label = Self::autopilot_action_label(autopilot_action);
+        let is_custom_action = autopilot_action == AutopilotAction::Custom;
 
         v_flex()
             .gap_3()
@@ -124,11 +129,11 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |menu, _, _| {
                                     let mut menu = menu;
-                                    for (label, value) in [
-                                        ("OpenAI", "openai"),
-                                        ("Anthropic", "anthropic"),
-                                        ("Google", "google"),
-                                    ] {
+                                    // Driven off `AiProvider::ALL`, so a new
+                                    // provider reaches the picker with its
+                                    // variant rather than a second list.
+                                    for value in AiProvider::ALL.iter().copied() {
+                                        let label = Self::ai_provider_label(value);
                                         menu = menu.item(PopupMenuItem::new(label).on_click({
                                             let settings_window = settings_window.clone();
                                             move |_, _, app| {
@@ -164,12 +169,8 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |menu, _, _| {
                                     let mut menu = menu;
-                                    for (label, value) in [
-                                        ("Mark conversation", "mark"),
-                                        ("Ask me", "ask"),
-                                        ("Auto-continue", "continue"),
-                                        ("Custom", "custom"),
-                                    ] {
+                                    for value in AutopilotAction::ALL.iter().copied() {
+                                        let label = Self::autopilot_action_label(value);
                                         menu = menu.item(PopupMenuItem::new(label).on_click({
                                             let settings_window = settings_window.clone();
                                             move |_, _, app| {
@@ -191,7 +192,7 @@ impl SettingsWindow {
                         .into_any_element()
                     }))
                     .children((!is_custom_action).then(|| {
-                        Self::hint(cx, Self::autopilot_action_description(&autopilot_action))
+                        Self::hint(cx, Self::autopilot_action_description(autopilot_action))
                             .into_any_element()
                     })),
             )

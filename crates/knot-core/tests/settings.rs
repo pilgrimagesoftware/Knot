@@ -2,7 +2,7 @@
 //! Swift `CodingKeys` shape must load field-for-field, and re-serializing it
 //! must reproduce the same keys.
 
-use knot_core::{PersonaState, PersonaType, Settings};
+use knot_core::{AiProvider, AppearanceMode, AutopilotAction, PersonaState, PersonaType, Settings};
 use uuid::Uuid;
 
 const FIXTURE: &str = include_str!("fixtures/settings_swift_shape.json");
@@ -15,7 +15,7 @@ fn loads_swift_shaped_document() {
 
     let s = Settings::load_from(&path).unwrap();
 
-    assert_eq!(s.appearance_mode, "dark");
+    assert_eq!(s.appearance_mode, AppearanceMode::Dark);
     assert!(!s.restore_layout_on_launch);
     assert!(!s.restore_conversation_on_launch);
     assert!(s.keep_in_menu_bar);
@@ -36,9 +36,9 @@ fn loads_swift_shaped_document() {
 
     // Fixture predates the autopilot scalars; decode-tolerant defaults apply.
     assert!(!s.autopilot_enabled);
-    assert_eq!(s.ai_provider, "openai");
+    assert_eq!(s.ai_provider, AiProvider::OpenAi);
     assert_eq!(s.ai_api_key, "");
-    assert_eq!(s.autopilot_action, "mark");
+    assert_eq!(s.autopilot_action, AutopilotAction::Mark);
     assert_eq!(s.autopilot_custom_prompt, "");
 
     // Fixture predates the voice scalars; decode-tolerant defaults apply.
@@ -166,4 +166,46 @@ fn a_written_sidebar_width_survives_a_reload() {
 
     let reloaded = Settings::load_from(&path).unwrap();
     assert_eq!(reloaded.sidebar_width, 180.0);
+}
+
+/// The whole compatibility claim of #224 in one test: an existing settings
+/// file keeps its meaning, and a rewritten one keeps its shape. If these
+/// strings ever change, every user's stored appearance and autopilot choice
+/// silently resets.
+#[test]
+fn the_vocabulary_wire_format_is_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path,
+                   r#"{"appearanceMode":"dark","aiProvider":"google","autopilotAction":"continue"}"#).unwrap();
+
+    let loaded = Settings::load_from(&path).unwrap();
+    assert_eq!(loaded.appearance_mode, AppearanceMode::Dark);
+    assert_eq!(loaded.ai_provider, AiProvider::Google);
+    assert_eq!(loaded.autopilot_action, AutopilotAction::Continue);
+
+    loaded.persist().unwrap();
+    let written: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(written["appearanceMode"], "dark");
+    assert_eq!(written["aiProvider"], "google");
+    assert_eq!(written["autopilotAction"], "continue");
+}
+
+/// A corrupt value degrades to the default rather than failing the document -
+/// which holds every agent, workspace and persona.
+#[test]
+fn a_corrupt_vocabulary_value_does_not_take_the_document_down() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    // `mcpServerPort` rather than a font field: an unmarked document also goes
+    // through the font-role migration, which moves font values around and
+    // would make this test about the wrong thing.
+    std::fs::write(&path, r#"{"appearanceMode":"aut0","mcpServerPort":9111}"#).unwrap();
+
+    let loaded = Settings::load_from(&path).unwrap();
+
+    assert_eq!(loaded.appearance_mode, AppearanceMode::default());
+    assert_eq!(loaded.mcp_server_port, 9111,
+               "the rest of the document survived");
 }

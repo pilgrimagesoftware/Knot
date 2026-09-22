@@ -1,11 +1,15 @@
 //! The settings window's label lookups and its tab set.
 //!
-//! Every one of these maps a stored `String` to display text with a
-//! catch-all default, which is why the defaults are asserted too: an
-//! unrecognized value is indistinguishable from the real default.
+//! Every one of these maps a stored enum variant to display text. The match
+//! is exhaustive, so what these assert is that each variant has a label and
+//! that no two share one - there is no catch-all default left to test, which
+//! is the point of #224.
 
 use std::collections::BTreeSet;
 
+use knot_core::AiProvider;
+use knot_core::AppearanceMode;
+use knot_core::AutopilotAction;
 use uuid::Uuid;
 
 use crate::settings_window::SettingsTab;
@@ -13,16 +17,29 @@ use crate::settings_window::SettingsWindow;
 use crate::tests::workspace;
 
 #[test]
-fn appearance_label_maps_known_modes() {
-    assert_eq!(SettingsWindow::appearance_label("system"), "System");
-    assert_eq!(SettingsWindow::appearance_label("light"), "Light");
-    assert_eq!(SettingsWindow::appearance_label("dark"), "Dark");
+fn appearance_label_names_every_mode() {
+    assert_eq!(SettingsWindow::appearance_label(AppearanceMode::Auto),
+               "Auto");
+    assert_eq!(SettingsWindow::appearance_label(AppearanceMode::System),
+               "System");
+    assert_eq!(SettingsWindow::appearance_label(AppearanceMode::Light),
+               "Light");
+    assert_eq!(SettingsWindow::appearance_label(AppearanceMode::Dark),
+               "Dark");
 }
 
+/// There is no "defaults to Auto" case left to test: an unrecognized value
+/// cannot reach the label function any more, because it is resolved to a
+/// variant - and reported - at the settings boundary instead. That is the
+/// whole point of #224.
 #[test]
-fn appearance_label_defaults_to_auto() {
-    assert_eq!(SettingsWindow::appearance_label("auto"), "Auto");
-    assert_eq!(SettingsWindow::appearance_label("anything-else"), "Auto");
+fn every_mode_has_a_distinct_label() {
+    let labels: std::collections::HashSet<_> =
+        AppearanceMode::ALL.iter()
+                           .map(|m| SettingsWindow::appearance_label(*m))
+                           .collect();
+
+    assert_eq!(labels.len(), AppearanceMode::ALL.len());
 }
 
 #[test]
@@ -90,50 +107,54 @@ fn persona_preview_truncates_long_instructions_with_ellipsis() {
 }
 
 #[test]
-fn ai_provider_label_maps_known_providers() {
-    assert_eq!(SettingsWindow::ai_provider_label("openai"), "OpenAI");
-    assert_eq!(SettingsWindow::ai_provider_label("anthropic"), "Anthropic");
-    assert_eq!(SettingsWindow::ai_provider_label("google"), "Google");
+fn ai_provider_label_names_every_provider() {
+    assert_eq!(SettingsWindow::ai_provider_label(AiProvider::OpenAi),
+               "OpenAI");
+    assert_eq!(SettingsWindow::ai_provider_label(AiProvider::Anthropic),
+               "Anthropic");
+    assert_eq!(SettingsWindow::ai_provider_label(AiProvider::Google),
+               "Google");
 }
 
-#[test]
-fn ai_provider_label_defaults_to_openai() {
-    assert_eq!(SettingsWindow::ai_provider_label("anything-else"), "OpenAI");
-}
-
+/// Every provider names a model. The old `_ => ""` arm meant an
+/// unrecognized provider silently asked for no model at all.
 #[test]
 fn ai_model_for_matches_swift_reference_defaults() {
-    assert_eq!(SettingsWindow::ai_model_for("openai"), "gpt-5-mini");
-    assert_eq!(SettingsWindow::ai_model_for("anthropic"),
+    assert_eq!(SettingsWindow::ai_model_for(AiProvider::OpenAi),
+               "gpt-5-mini");
+    assert_eq!(SettingsWindow::ai_model_for(AiProvider::Anthropic),
                "claude-haiku-4-5");
-    assert_eq!(SettingsWindow::ai_model_for("google"),
+    assert_eq!(SettingsWindow::ai_model_for(AiProvider::Google),
                "gemini-flash-lite-latest");
-    assert_eq!(SettingsWindow::ai_model_for("anything-else"), "");
+
+    for provider in AiProvider::ALL {
+        assert!(!SettingsWindow::ai_model_for(*provider).is_empty(),
+                "{provider} has no model");
+    }
 }
 
 #[test]
-fn autopilot_action_label_maps_known_actions() {
-    assert_eq!(SettingsWindow::autopilot_action_label("mark"),
+fn autopilot_action_label_names_every_action() {
+    assert_eq!(SettingsWindow::autopilot_action_label(AutopilotAction::Mark),
                "Mark conversation");
-    assert_eq!(SettingsWindow::autopilot_action_label("ask"), "Ask me");
-    assert_eq!(SettingsWindow::autopilot_action_label("continue"),
+    assert_eq!(SettingsWindow::autopilot_action_label(AutopilotAction::Ask),
+               "Ask me");
+    assert_eq!(SettingsWindow::autopilot_action_label(AutopilotAction::Continue),
                "Auto-continue");
-    assert_eq!(SettingsWindow::autopilot_action_label("custom"), "Custom");
+    assert_eq!(SettingsWindow::autopilot_action_label(AutopilotAction::Custom),
+               "Custom");
 }
 
-#[test]
-fn autopilot_action_label_defaults_to_mark() {
-    assert_eq!(SettingsWindow::autopilot_action_label("anything-else"),
-               "Mark conversation");
-}
-
+/// Driven off `ALL` rather than a hand-written list, so a new action cannot
+/// be added without a description to go with it.
 #[test]
 fn autopilot_action_description_is_distinct_per_action() {
-    let descriptions: BTreeSet<&str> = ["mark", "ask", "continue", "custom"]
-        .iter()
-        .map(|action| SettingsWindow::autopilot_action_description(action))
-        .collect();
-    assert_eq!(descriptions.len(), 4);
+    let descriptions: BTreeSet<&str> =
+        AutopilotAction::ALL.iter()
+                            .map(|action| SettingsWindow::autopilot_action_description(*action))
+                            .collect();
+
+    assert_eq!(descriptions.len(), AutopilotAction::ALL.len());
 }
 
 #[test]
