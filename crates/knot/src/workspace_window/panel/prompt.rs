@@ -396,7 +396,9 @@ impl WorkspaceWindow {
         };
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
-                        let _ = session.cancel().await;
+                        if let Err(error) = session.cancel().await {
+                            eprintln!("failed to cancel agent {id}'s turn: {error}");
+                        }
                     });
         cx.notify();
     }

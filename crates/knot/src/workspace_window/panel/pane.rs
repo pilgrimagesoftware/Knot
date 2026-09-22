@@ -93,7 +93,10 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _, _window, cx| {
                                 {
                                     let mut store = view.store.lock();
-                                    let _ = store.clear_markdown_panel(id);
+                                    if let Err(error) = store.clear_markdown_panel(id) {
+                                        eprintln!("failed to close the markdown panel: \
+                                                   {error}");
+                                    }
                                 }
                                 cx.notify();
                             })),
