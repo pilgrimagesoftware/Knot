@@ -155,3 +155,43 @@ fn settings_window_labels_resolve() {
         assert!(!value.is_empty(), "{key} resolves to an empty string");
     }
 }
+
+/// The agent editor, the workspace manager and the broadcast sheet had no
+/// catalog references at all before #223. Harvested from the source, so a
+/// label added without an entry fails rather than shipping its key.
+#[test]
+fn dialog_labels_resolve() {
+    for key in ["agent_editor.activation",
+                "agent_editor.activation_hint",
+                "agent_editor.avatar",
+                "agent_editor.cancel",
+                "agent_editor.coding_agent",
+                "agent_editor.command",
+                "agent_editor.error_choose_folder",
+                "agent_editor.error_enter_name",
+                "agent_editor.folder",
+                "agent_editor.name",
+                "agent_editor.persona",
+                "agent_editor.shell_command",
+                "agent_editor.title_edit",
+                "agent_editor.title_new",
+                "broadcast.cancel",
+                "broadcast.placeholder",
+                "broadcast.send",
+                "workspace_manager.cancel",
+                "workspace_manager.delete",
+                "workspace_manager.delete_title",
+                "workspace_manager.error_last_workspace",
+                "workspace_manager.error_missing",
+                "workspace_manager.error_name_empty",
+                "workspace_manager.new",
+                "workspace_manager.open",
+                "workspace_manager.rename",
+                "workspace_manager.title",
+                "workspace_manager.workspace"]
+    {
+        let value = knot_core::l10n::t(key);
+        assert_ne!(value, key, "{key} is missing from the catalog");
+        assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+}

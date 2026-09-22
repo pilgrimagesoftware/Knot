@@ -69,7 +69,7 @@ pub(crate) fn open_broadcast_sheet(on_send: impl Fn(String, &mut Window, &mut Ap
         cx.open_window(options, move |window, cx| {
               let message = cx.new(|cx| {
                                   TextareaState::new(window, cx)
-                        .placeholder("Message every agent in this workspace…")
+                        .placeholder(knot_core::l10n::t("broadcast.placeholder"))
                         .auto_grow(4, 16)
                               });
               cx.new(|cx| {
@@ -120,11 +120,11 @@ impl Render for BroadcastSheet {
                 .child(h_flex().flex_shrink_0()
                                .justify_end()
                                .gap_2()
-                               .child(Button::new("cancel-broadcast").label("Cancel")
+                               .child(Button::new("cancel-broadcast").label(knot_core::l10n::t("broadcast.cancel"))
                                                                      .on_click(|_, window, _| {
                                                                          window.remove_window()
                                                                      }))
-                               .child(Button::new("send-broadcast").label("Send")
+                               .child(Button::new("send-broadcast").label(knot_core::l10n::t("broadcast.send"))
                                                                    .primary()
                                                                    .disabled(!can_send)
                                                                    .on_click(cx.listener(
