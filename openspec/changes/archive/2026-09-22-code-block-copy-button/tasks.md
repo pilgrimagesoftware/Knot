@@ -56,13 +56,13 @@
 - [x] 4.1 Run `make` and confirm the full gate passes: `fmt-check`,
       `size-check` (`markdown_view.rs` must stay under 700 lines), `lint`,
       `test`, `build`
-- [ ] 4.2 Run the app, send a prompt whose answer contains a fenced code block,
+- [x] 4.2 Run the app, send a prompt whose answer contains a fenced code block,
       and confirm against the spec's scenarios: the button sits in the block's
       upper-right corner without hovering, clicking it puts the block's code
       alone on the clipboard, the confirmation notification appears, a second
       block copies its own content, and an inline code span has no button
-- [ ] 4.3 Open a Markdown file for an agent with `display-markdown` and confirm
+- [x] 4.3 Open a Markdown file for an agent with `display-markdown` and confirm
       the same control appears on its code blocks, per the spec's "The Markdown
       pane carries the same control" scenario
-- [ ] 4.4 Confirm "copy response" on the same message still copies the whole
+- [x] 4.4 Confirm "copy response" on the same message still copies the whole
       response, code block included, per the spec's last scenario
