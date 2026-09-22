@@ -58,7 +58,7 @@ pub(crate) struct AgentPrefill {
 /// rejects.
 pub(crate) fn created_agent_type(creating_a_companion: bool, chosen: &str) -> String {
     if creating_a_companion {
-        "shell".to_string()
+        knot_core::agent_type::SHELL.to_string()
     }
     else {
         chosen.to_string()
@@ -177,7 +177,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                               editing.as_ref()
                                                      .map(|a| a.agent_type.clone())
                                                      .or_else(|| prefill.agent_type.clone())
-                                                     .unwrap_or_else(|| "claude".to_string()),
+                                                     .unwrap_or_else(|| knot_core::agent_type::DEFAULT.to_string()),
                                           persona_id,
                                           activation_mode:
                                               editing.as_ref()

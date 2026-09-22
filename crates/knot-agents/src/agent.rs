@@ -29,7 +29,7 @@ pub enum AgentState {
 /// The single place that decides this, consulted by `create`, `edit`, and
 /// `from_saved` so a non-shell agent can never end up in `Terminal`.
 pub fn view_mode_for(agent_type: &str) -> ViewMode {
-    if agent_type == "shell" {
+    if knot_core::agent_type::is_shell(agent_type) {
         ViewMode::Terminal
     }
     else {
@@ -101,7 +101,7 @@ pub struct Agent {
 impl Agent {
     /// Whether this is a plain shell agent (no AI).
     pub fn is_shell(&self) -> bool {
-        self.agent_type == "shell"
+        knot_core::agent_type::is_shell(&self.agent_type)
     }
 
     /// The last component of the agent's folder, for the places that label

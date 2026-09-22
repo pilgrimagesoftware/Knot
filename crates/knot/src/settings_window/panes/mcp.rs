@@ -118,12 +118,20 @@ impl SettingsWindow {
                 Self::group(knot_core::l10n::t("settings.mcp.install_command"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.mcp.agent"),
+// The agents that have an MCP server to register with:
+                        // not a shell, and not a custom command whose
+                        // registration Knot knows nothing about.
                         Self::dropdown("mcp-agent-type-picker",
                                        agent_type_label,
-                                       ["claude", "codex", "opencode", "gemini", "copilot"].map(|value| {
-                                           (SettingsWindow::agent_type_label(value).into(), value)
-                                       })
-                                       .to_vec(),
+                                       knot_core::agent_type::ALL.iter()
+                                                                 .filter(|kind| {
+                                                                     !kind.is_custom
+                                                                     && !kind.is_shell
+                                                                 })
+                                                                 .map(|kind| {
+                                                                     (kind.label.into(), kind.id)
+                                                                 })
+                                                                 .collect(),
                                        settings_window.clone(),
                                        |view, value, _, cx| view.select_mcp_agent_type(value, cx)),
                     ))
