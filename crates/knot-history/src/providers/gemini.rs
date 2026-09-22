@@ -12,7 +12,7 @@ use time::format_description::well_known::Rfc3339;
 use crate::consts::{GEMINI_TMP_DIR, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::title::{extract_title, is_valid_title};
+use crate::providers::{first_title, resolve_title};
 
 pub struct GeminiProvider;
 
@@ -60,37 +60,24 @@ fn find_chat_file(chats_dir: &Path, session_id: &str) -> Option<PathBuf> {
 }
 
 /// Parse a Gemini chat file for the first `user` message text.
+///
+/// One JSON document rather than a line-delimited log, so the entries come
+/// from its `messages` array; the scan over them is the shared one.
 fn title_from_chat_file(path: &Path) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
     let json: Value = serde_json::from_str(&content).ok()?;
-    let messages = json.get("messages")?.as_array()?;
+    let messages = json.get("messages")?.as_array()?.clone();
 
-    for message in messages {
+    first_title(messages, |message| {
         if message.get("type").and_then(Value::as_str) != Some("user") {
-            continue;
+            return None;
         }
-        let Some(text) = message.get("content")
-                                .and_then(Value::as_array)
-                                .and_then(|arr| arr.first())
-                                .and_then(|first| first.get("text"))
-                                .and_then(Value::as_str)
-        else {
-            continue;
-        };
-        if !is_valid_title(text) {
-            continue;
-        }
-        return extract_title(text);
-    }
-    None
-}
-
-fn resolve_title(log_message: &str, session_id: &str, chats_dir: &Path) -> String {
-    if is_valid_title(log_message) {
-        return crate::title::truncate(log_message);
-    }
-    find_chat_file(chats_dir, session_id).and_then(|path| title_from_chat_file(&path))
-                                         .unwrap_or_default()
+        message.get("content")
+               .and_then(Value::as_array)
+               .and_then(|content| content.first())
+               .and_then(|first| first.get("text"))
+               .and_then(Value::as_str)
+    })
 }
 
 impl HistoryProvider for GeminiProvider {
@@ -133,7 +120,11 @@ impl HistoryProvider for GeminiProvider {
         sorted.into_iter()
               .take(MAX_SESSIONS)
               .map(|(session_id, (message, timestamp))| {
-                  SessionSummary { title: resolve_title(&message, &session_id, &chats_dir),
+                  let title = resolve_title(&message, || {
+                      find_chat_file(&chats_dir, &session_id).as_deref()
+                                                             .and_then(title_from_chat_file)
+                  });
+                  SessionSummary { title,
                                    id: session_id,
                                    timestamp,
                                    message_count: 0 }
