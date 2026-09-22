@@ -116,6 +116,7 @@ impl AgentStore {
         if let Some(position) = self.agents.iter().position(|agent| agent.id == id) {
             let was_registered = self.agents[position].is_registered;
             self.agents.remove(position);
+            self.forget_agent_pull_requests(id);
             for workspace in &mut self.workspaces {
                 workspace.agent_ids.retain(|agent_id| *agent_id != id);
                 workspace.active_agent_ids

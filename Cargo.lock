@@ -3767,6 +3767,7 @@ dependencies = [
  "knot-agents",
  "knot-core",
  "knot-discovery",
+ "knot-forge",
  "knot-git",
  "knot-history",
  "knot-mcp",
@@ -3855,6 +3856,15 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+]
+
+[[package]]
+name = "knot-forge"
+version = "1.13.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

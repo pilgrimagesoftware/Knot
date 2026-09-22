@@ -38,6 +38,15 @@ pub(crate) const WORKING_INDICATOR_MIN_REPAINT: Duration = Duration::from_millis
 /// repaints - see `workspace_window::sessions`.
 pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 
+/// How stale a pull request's fetched state may get before the Pull Requests
+/// view asks for it again.
+///
+/// Far longer than a diff stat's two seconds: this is a network round trip
+/// through `gh`, and a pull request's title and status change on a human
+/// timescale rather than a keystroke's. A list of twenty rows therefore costs
+/// twenty `gh` runs a minute while it is open, and none while it is not.
+pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
+
 /// How often the settings window drains the native font panel's selections.
 ///
 /// The panel is an AppKit window with no callback into GPUI, so its choice is
@@ -70,6 +79,27 @@ pub(crate) const COLOR_STOPPED: u32 = 0x6B7280;
 
 /// Muted text on a dashboard card.
 pub(crate) const COLOR_CARD_MUTED: u32 = 0x888888;
+
+/// Amber: a pull request that is open but cannot land - a conflict, a red
+/// check, a draft. Distinct from [`COLOR_RUNNING`]'s orange, which is about
+/// an agent rather than a pull request, and further from green so the two
+/// open states are told apart at a glance.
+pub(crate) const COLOR_PULL_REQUEST_BLOCKED: u32 = 0xEAB308;
+
+/// Purple: a merged pull request. The one state with no counterpart in the
+/// agent palette, and the colour GitHub itself uses for it.
+pub(crate) const COLOR_PULL_REQUEST_MERGED: u32 = 0xA855F7;
+
+/// How much of a pull request row's state colour reaches its background.
+///
+/// Low enough that the row's text keeps the theme's contrast in both light
+/// and dark - the colour is a tint identifying the state, not a fill
+/// competing with the title on top of it.
+pub(crate) const PULL_REQUEST_ROW_TINT: f32 = 0.10;
+
+/// How much reaches its border, where there is no text to stay legible
+/// against and the colour does the identifying.
+pub(crate) const PULL_REQUEST_ROW_BORDER_TINT: f32 = 0.55;
 
 /// The colour a workspace gets when it has none, or when the one it has
 /// stored will not parse.

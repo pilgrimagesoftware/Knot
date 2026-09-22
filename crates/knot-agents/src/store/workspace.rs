@@ -64,6 +64,7 @@ impl AgentStore {
         for agent_id in workspace.agent_ids {
             self.remove(agent_id);
         }
+        self.forget_workspace_pull_requests(id);
         if self.current_workspace_id == Some(id) {
             self.current_workspace_id = self.workspaces
                                             .get(index.saturating_sub(1))

@@ -287,6 +287,71 @@ fn default_persona_state() -> PersonaState {
     PersonaState::Enabled
 }
 
+// ---------------------------------------------------------------------------
+// SavedPullRequest
+// ---------------------------------------------------------------------------
+
+/// A pull request Knot saw in an agent's output.
+///
+/// The record is evidence of what was seen, not a copy of the pull request:
+/// no title, no number, no status. Those are fetched and refreshed, because a
+/// merged pull request shown as open after a restart is worse than a blank,
+/// and there is no way to know a remembered status is still true.
+///
+/// Identity is the agent plus the canonical URL: the same pull request seen by
+/// two agents is two records, because who opened it is part of what is
+/// recorded.
+///
+/// The Swift reference has no counterpart, so the field names here are chosen
+/// rather than inherited.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedPullRequest {
+    /// The canonical URL, as `knot_core::pull_request_url::PullRequestUrl`
+    /// renders it - never the decorated form the output carried, so two
+    /// spellings of one pull request are one record.
+    pub url:          String,
+    /// The agent whose output carried the URL.
+    pub agent_id:     Uuid,
+    /// The workspace that agent belonged to when the URL was seen. Held on
+    /// the record rather than looked up through the agent, so a list can be
+    /// built for a workspace without walking every agent.
+    pub workspace_id: Uuid,
+    /// When the URL was first seen, in seconds since the Unix epoch.
+    ///
+    /// Seconds rather than a formatted timestamp because the only thing the
+    /// store does with it is order rows newest-first, and an integer cannot
+    /// sort wrong across time zones the way a string can. Formatting it for
+    /// a person is the view's business.
+    pub first_seen:   i64,
+}
+
+impl SavedPullRequest {
+    /// A record of `url`, seen now, against `agent_id` in `workspace_id`.
+    #[must_use]
+    pub fn new(url: impl Into<String>, agent_id: Uuid, workspace_id: Uuid) -> Self {
+        Self { url: url.into(),
+               agent_id,
+               workspace_id,
+               first_seen: now_unix() }
+    }
+
+    /// Whether this record is the same pull request seen by the same agent -
+    /// which is what makes recording idempotent.
+    #[must_use]
+    pub fn is_same_sighting(&self, url: &str, agent_id: Uuid) -> bool {
+        self.agent_id == agent_id && self.url == url
+    }
+}
+
+/// Seconds since the Unix epoch, or `0` if the clock is set before it.
+fn now_unix() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                                .map_or(0, |since| {
+                                    i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
+                                })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,6 +477,61 @@ mod tests {
         let json = serde_json::to_string(&ws).unwrap();
         let back: Workspace = serde_json::from_str(&json).unwrap();
         assert_eq!(ws, back);
+    }
+
+    // --- SavedPullRequest --------------------------------------------------
+
+    #[test]
+    fn saved_pull_request_round_trips_in_camel_case() {
+        let record = SavedPullRequest { url:
+                                            "https://github.com/acme/widget/pull/42".to_string(),
+                                        agent_id:     id(),
+                                        workspace_id: id(),
+                                        first_seen:   1_758_566_400, };
+
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("\"agentId\""), "camelCase key: {json}");
+        assert!(json.contains("\"workspaceId\""), "camelCase key: {json}");
+        assert!(json.contains("\"firstSeen\""), "camelCase key: {json}");
+
+        let back: SavedPullRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, record);
+    }
+
+    /// The record is evidence of a sighting, not a copy of the pull request.
+    /// A status persisted here would be shown as current after a restart
+    /// when it is not.
+    #[test]
+    fn saved_pull_request_carries_no_fetched_state() {
+        let json = serde_json::to_string(&SavedPullRequest::new("https://github.com/a/b/pull/1",
+                                                                id(),
+                                                                id())).unwrap();
+
+        for absent in ["title", "number", "state", "status", "isDraft"] {
+            assert!(!json.contains(absent),
+                    "{absent} must not be persisted: {json}");
+        }
+    }
+
+    #[test]
+    fn a_new_saved_pull_request_is_stamped_with_the_current_time() {
+        let record = SavedPullRequest::new("https://github.com/a/b/pull/1", id(), id());
+
+        // 2026-01-01, comfortably in the past whenever this runs.
+        assert!(record.first_seen > 1_767_225_600, "{}", record.first_seen);
+    }
+
+    /// Idempotence is per agent: the same URL from a second agent is a second
+    /// record, because who opened it is part of what is recorded.
+    #[test]
+    fn a_sighting_matches_only_the_same_url_from_the_same_agent() {
+        let agent = id();
+        let other_agent = id();
+        let record = SavedPullRequest::new("https://github.com/a/b/pull/1", agent, id());
+
+        assert!(record.is_same_sighting("https://github.com/a/b/pull/1", agent));
+        assert!(!record.is_same_sighting("https://github.com/a/b/pull/2", agent));
+        assert!(!record.is_same_sighting("https://github.com/a/b/pull/1", other_agent));
     }
 
     /// A workspace saved before window frames were remembered must still

@@ -1,4 +1,4 @@
-# Spec Delta
+# pull-request-tracking Specification
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Defines how Knot notices that an agent has opened a pull request, what it
 records about it, how that record's state is kept current, and the view that
 lists a workspace's pull requests and opens one in a browser.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: A pull request URL in an agent's output is recorded
 
@@ -185,9 +185,20 @@ first within each group, so the most recent work is at the top.
 A workspace with no recorded pull requests SHALL say so rather than showing an
 empty list.
 
-The launcher row SHALL show a count of the workspace's recorded pull requests
-when there is at least one, and SHALL show a selected background while the Pull
-Requests view is the one being shown.
+The launcher row SHALL show how many of the workspace's recorded pull requests
+are open, how many are merged and how many are closed, so the state of the
+session's output is readable without opening the view. A draft pull request
+SHALL count as open, matching the forge's own vocabulary, in which draft is a
+property of an open pull request rather than a fourth state.
+
+A state Knot has not fetched SHALL NOT be guessed at. Where no state is known -
+before the view has been shown for the first time, or where the tool that reads
+state is unavailable - the row SHALL show the total count instead. Where some
+are known and others are not, the row SHALL show the states it knows and count
+the rest as pending, rather than folding them into any state.
+
+The row SHALL show a selected background while the Pull Requests view is the one
+being shown.
 
 #### Scenario: The launcher sits in the sidebar
 
@@ -213,6 +224,31 @@ Requests view is the one being shown.
   open
 - **THEN** the launcher row's count becomes 2 without the user reopening the
   window
+
+#### Scenario: The breakdown reflects the fetched states
+
+- **WHEN** the workspace has four recorded pull requests whose states have been
+  fetched - two open, one of them draft, one merged and one closed
+- **THEN** the launcher row shows two open, one merged and one closed
+
+#### Scenario: A state changes while the window is open
+
+- **WHEN** a listed pull request is merged on GitHub and the next refresh runs
+- **THEN** the launcher row's breakdown moves that one from open to merged
+  without the user reopening the window
+
+#### Scenario: No state has been fetched yet
+
+- **WHEN** the workspace window is opened after a restart and the Pull Requests
+  view has not been shown
+- **THEN** the launcher row shows the total count of records rather than a
+  breakdown
+
+#### Scenario: Only some states are known
+
+- **WHEN** three pull requests have state and one request failed
+- **THEN** the launcher row shows the three by state and counts the fourth as
+  pending
 
 ### Requirement: A listed pull request opens in the browser
 

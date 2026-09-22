@@ -418,11 +418,16 @@ pub(crate) fn stale_session_ids(session_ids: &[Uuid], live_ids: &BTreeSet<Uuid>)
 /// agent type)` via the `knot-history` provider registry.
 pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::AgentStore {
     if !settings.restore_layout_on_launch {
+        // No recorded pull requests either: every one of them names an agent
+        // that is not being restored, and a record with no agent has nothing
+        // to show it under - the same rule that drops a removed agent's
+        // records.
         return knot_agents::AgentStore::new();
     }
 
     let mut store = knot_agents::AgentStore::from_saved(&settings.saved_agents,
                                                         settings.saved_workspaces.clone());
+    store.set_pull_requests(settings.pull_requests.clone());
 
     if settings.restore_conversation_on_launch {
         let persisted: BTreeMap<Uuid, String> =

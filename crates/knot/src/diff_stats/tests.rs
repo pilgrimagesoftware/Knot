@@ -1,8 +1,15 @@
-//! Unit tests for [`super`]. No `git` here: what this module decides is
-//! *when* to ask and *whether the answer changed*, both of which are the
-//! reason a dashboard can draw a card without running a subprocess.
+//! Unit tests for [`super`]. No `git` here: what this decides is *when* to
+//! ask and *whether the answer changed*, both of which are the reason a
+//! dashboard can draw a card without running a subprocess.
 
-use super::*;
+use std::time::Duration;
+
+use uuid::Uuid;
+
+use super::{DiffStatsCache, MAX_AGE};
+
+/// Always claims, so a test can record twice without waiting out a TTL.
+const ALWAYS: Duration = Duration::ZERO;
 
 fn stats(insertions: u64) -> Option<knot_git::DiffStats> {
     Some(knot_git::DiffStats { insertions,
@@ -15,12 +22,12 @@ fn a_fresh_entry_is_not_asked_for_again() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
-    let writer = cache.claim_refresh(id)
+    let writer = cache.claim_refresh(id, MAX_AGE)
                       .expect("the first ask claims a refresh");
     writer.record(stats(1));
 
-    assert!(cache.claim_refresh(id).is_none(),
-            "a stat within DIFF_STATS_MAX_AGE must not spawn a second `git`");
+    assert!(cache.claim_refresh(id, MAX_AGE).is_none(),
+            "a stat within MAX_AGE must not spawn a second `git`");
 }
 
 /// Claiming marks the request before the answer arrives, so a `git` call
@@ -30,9 +37,9 @@ fn a_refresh_in_flight_is_not_claimed_twice() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
-    let _in_flight = cache.claim_refresh(id).expect("claimed");
+    let _in_flight = cache.claim_refresh(id, MAX_AGE).expect("claimed");
 
-    assert!(cache.claim_refresh(id).is_none());
+    assert!(cache.claim_refresh(id, MAX_AGE).is_none());
 }
 
 #[test]
@@ -40,21 +47,25 @@ fn a_recorded_stat_reaches_the_snapshot() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
-    cache.claim_refresh(id).expect("claimed").record(stats(3));
+    cache.claim_refresh(id, MAX_AGE)
+         .expect("claimed")
+         .record(stats(3));
 
     assert_eq!(cache.snapshot().get(&id), Some(&stats(3)));
 }
 
-/// The distinction the render path depends on: a missing entry is "not
-/// asked yet", a recorded `None` is "asked, and the folder is not a git
-/// checkout" - which must stop the card saying it is still working.
+/// The distinction the render path depends on: a missing entry is "not asked
+/// yet", a recorded `None` is "asked, and the folder is not a git checkout" -
+/// which must stop the card saying it is still working.
 #[test]
 fn a_folder_that_is_not_a_repository_records_an_answer() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
     assert_eq!(cache.snapshot().get(&id), None);
-    cache.claim_refresh(id).expect("claimed").record(None);
+    cache.claim_refresh(id, MAX_AGE)
+         .expect("claimed")
+         .record(None);
 
     assert_eq!(cache.snapshot().get(&id), Some(&None));
 }
@@ -64,34 +75,48 @@ fn the_changed_flag_is_set_once_and_cleared_by_reading_it() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
-    cache.claim_refresh(id).expect("claimed").record(stats(1));
+    cache.claim_refresh(id, MAX_AGE)
+         .expect("claimed")
+         .record(stats(1));
 
     assert!(cache.take_changed());
     assert!(!cache.take_changed(), "reading the flag clears it");
 }
 
-/// Most refreshes find the same numbers. Repainting for those would undo
-/// the point of the cache, so only a *different* stat counts as a change.
+/// Most refreshes find the same numbers. Repainting for those would undo the
+/// point of the cache, so only a *different* stat counts as a change.
 #[test]
 fn an_unchanged_stat_does_not_ask_for_a_repaint() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
-    cache.claim_refresh(id).expect("claimed").record(stats(1));
-    assert!(cache.take_changed());
+    cache.claim_refresh(id, ALWAYS)
+         .expect("claimed")
+         .record(stats(1));
+    assert!(cache.take_changed(), "the first answer is new");
 
-    cache.forget(id);
-    cache.claim_refresh(id).expect("claimed").record(stats(1));
-    assert!(cache.take_changed(),
-            "the entry was forgotten, so this is new");
-
-    cache.claim_refresh(id);
-    let writer = DiffStatsWriter { id,
-                                   values: Arc::clone(&cache.values),
-                                   dirty: Arc::clone(&cache.dirty) };
-    writer.record(stats(1));
+    cache.claim_refresh(id, ALWAYS)
+         .expect("claimed")
+         .record(stats(1));
 
     assert!(!cache.take_changed(), "the same numbers must not repaint");
+}
+
+#[test]
+fn a_changed_stat_does_ask_for_a_repaint() {
+    let mut cache = DiffStatsCache::default();
+    let id = Uuid::new_v4();
+
+    cache.claim_refresh(id, ALWAYS)
+         .expect("claimed")
+         .record(stats(1));
+    cache.take_changed();
+
+    cache.claim_refresh(id, ALWAYS)
+         .expect("claimed")
+         .record(stats(2));
+
+    assert!(cache.take_changed());
 }
 
 #[test]
@@ -99,10 +124,12 @@ fn forgetting_an_agent_drops_its_value_and_its_request_time() {
     let mut cache = DiffStatsCache::default();
     let id = Uuid::new_v4();
 
-    cache.claim_refresh(id).expect("claimed").record(stats(1));
-    cache.forget(id);
+    cache.claim_refresh(id, MAX_AGE)
+         .expect("claimed")
+         .record(stats(1));
+    cache.forget(&id);
 
     assert_eq!(cache.snapshot().get(&id), None);
-    assert!(cache.claim_refresh(id).is_some(),
+    assert!(cache.claim_refresh(id, MAX_AGE).is_some(),
             "a forgotten agent is asked for again rather than staying fresh");
 }

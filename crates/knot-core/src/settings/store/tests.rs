@@ -4,6 +4,8 @@
 //! `legacy/tests.rs`; everything here is about a store already in the
 //! per-document arrangement.
 
+mod pull_requests;
+
 use std::fs;
 
 use tempfile::TempDir;

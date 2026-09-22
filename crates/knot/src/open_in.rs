@@ -117,6 +117,19 @@ pub(crate) fn open_folder(app: OpenInApp, folder: &str) {
     }
 }
 
+/// Opens `url` in the user's default browser, returning whether it worked.
+///
+/// The same `/usr/bin/open` path as [`open_folder`], with no `-a`: the point
+/// is the browser the user has chosen, not one Knot picked. A pull request
+/// opens there rather than in an embedded view, so it arrives already signed
+/// in, with the user's extensions and their session.
+///
+/// The return value is read, unlike `open_folder`'s: a row that could not be
+/// opened has to say so rather than looking like it did nothing.
+pub(crate) fn open_url(url: &str) -> bool {
+    run_open(&[], url)
+}
+
 #[cfg(target_os = "macos")]
 fn run_open(arguments: &[&str], folder: &str) -> bool {
     Command::new("/usr/bin/open").args(arguments)

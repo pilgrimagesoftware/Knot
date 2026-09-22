@@ -1,5 +1,6 @@
 mod lifecycle;
 mod persistence;
+mod pull_requests;
 mod workspace;
 
 use super::*;

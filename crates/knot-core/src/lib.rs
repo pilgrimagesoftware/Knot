@@ -12,12 +12,13 @@ pub mod consts;
 pub mod error;
 pub mod import;
 pub mod l10n;
+pub mod pull_request_url;
 pub mod settings;
 
 pub use error::{Error, Result};
 pub use l10n::t;
 pub use settings::{
     ActivationMode, AiProvider, AppearanceMode, AutopilotAction, BenchAgent, Capabilities,
-    CostTier, Persona, PersonaState, PersonaType, SavedAgent, SavedWindowBounds, Settings,
-    UnknownVariant, ViewMode, Workspace, detect_source_base_folder,
+    CostTier, Persona, PersonaState, PersonaType, SavedAgent, SavedPullRequest, SavedWindowBounds,
+    Settings, UnknownVariant, ViewMode, Workspace, detect_source_base_folder,
 };

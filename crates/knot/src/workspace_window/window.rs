@@ -38,6 +38,18 @@ pub(crate) struct WorkspaceWindow {
     /// Last known diff stat per agent, refreshed off the render path - see
     /// `refresh_diff_stats`.
     pub(super) diff_stats:                       crate::diff_stats::DiffStatsCache,
+    /// Last known state per recorded pull request URL, refreshed off the
+    /// render path and only while the Pull Requests view is showing - see
+    /// `refresh_pull_request_states`. Never persisted: a merged pull request
+    /// shown as open after a restart is worse than a blank.
+    pub(super) pull_request_states:              crate::pull_request_state::PullRequestStateCache,
+    /// What the last `gh` probe found, and so which single message the Pull
+    /// Requests view shows. Probed once per view opening rather than once
+    /// per row.
+    pub(super) forge_status:                     crate::pull_request_state::ForgeStatus,
+    /// Set when a pull request could not be handed to a browser, so the view
+    /// can say so. A click that silently did nothing reads as a broken row.
+    pub(super) pull_request_open_failed:         bool,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off

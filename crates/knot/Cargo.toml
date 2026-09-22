@@ -13,6 +13,7 @@ knot-acp = { path = "../knot-acp" }
 knot-agent-launch = { path = "../knot-agent-launch" }
 knot-core = { path = "../knot-core" }
 knot-agents = { path = "../knot-agents" }
+knot-forge = { path = "../knot-forge" }
 knot-git = { path = "../knot-git" }
 knot-activity = { path = "../knot-activity" }
 knot-discovery = { path = "../knot-discovery" }

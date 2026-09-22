@@ -20,6 +20,20 @@ impl PanelState {
         }
     }
 
+    /// Scan a tool call's content for pull request URLs as it is folded in.
+    ///
+    /// Here rather than over the rendered card because this runs once per
+    /// event, on the ACP drain, and the card is redrawn every frame. Only
+    /// text is scanned: a diff's body is a patch, not output an agent
+    /// printed.
+    fn note_pull_requests_in(&mut self, content: &[ToolCallContent]) {
+        for item in content {
+            if let ToolCallContent::Text(text) = item {
+                self.note_pull_request_urls(text);
+            }
+        }
+    }
+
     fn apply_update(&mut self, update: SessionUpdate) {
         match update {
             SessionUpdate::Usage { used, size } if size > 0 => {
@@ -32,6 +46,7 @@ impl PanelState {
                                            title,
                                            status,
                                            content, } => {
+                self.note_pull_requests_in(&content);
                 self.messages
                     .push(PanelMessage::ToolCall(ToolCallCard { id: tool_call_id,
                                                                 kind,
@@ -43,6 +58,7 @@ impl PanelState {
                                             status,
                                             title,
                                             content, } => {
+                self.note_pull_requests_in(&content);
                 if let Some(card) = self.tool_call_mut(&tool_call_id) {
                     // Absent fields mean "unchanged", per the ACP spec's
                     // partial updates - only overwrite what arrived.
@@ -64,9 +80,10 @@ impl PanelState {
             // card content rather than being dropped.
             SessionUpdate::ToolCallResult { tool_call_id,
                                             output, } => {
+                let rendered = render_json(&output);
+                self.note_pull_request_urls(&rendered);
                 if let Some(card) = self.tool_call_mut(&tool_call_id) {
-                    card.content
-                        .push(ToolCallContent::Text(render_json(&output)));
+                    card.content.push(ToolCallContent::Text(rendered));
                 }
             }
             SessionUpdate::Diff { path, diff } => {

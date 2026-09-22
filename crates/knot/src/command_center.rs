@@ -98,7 +98,8 @@ impl CommandCenterWindow {
                  .collect::<Vec<_>>()
         };
         for (id, folder) in folders {
-            let Some(writer) = self.diff_stats.claim_refresh(id)
+            let Some(writer) = self.diff_stats
+                                   .claim_refresh(id, crate::diff_stats::MAX_AGE)
             else {
                 continue;
             };

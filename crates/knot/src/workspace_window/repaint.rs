@@ -74,6 +74,9 @@ impl WorkspaceWindow {
                              .and_then(|id| self.sessions.get(&id))
                              .and_then(|session| session.lock().grid())
                              .is_some_and(|grid| grid.lock().take_dirty());
+        // Every agent's taps, not just the selected one's: an agent working
+        // in an unselected pane is the case this feature exists for.
+        let pull_requests_recorded = self.drain_pull_requests();
         let prompts_completed = self.drain_prompt_results();
         self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
@@ -85,6 +88,7 @@ impl WorkspaceWindow {
            || activated
            || prompts_completed
            || prompts_sent
+           || pull_requests_recorded
         {
             cx.notify();
         }
