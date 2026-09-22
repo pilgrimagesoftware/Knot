@@ -135,6 +135,34 @@ Prefer one struct per key over N maps keyed alike. Where the maps already
 exist, teardown belongs in one function and every new field must be added to
 it in the same commit.
 
+## `mod.rs` declares; it does not implement
+
+A `mod.rs` holds module declarations, re-exports, and the doc comment saying
+what the module owns. Implementation goes in sibling files named for what they
+do - `import_window/window.rs` for the entity and its lifecycle,
+`import_window/pane.rs` for what it draws.
+
+Unlike the rest of these rules, this one is a standing decision rather than a
+postmortem: it was adopted while moving the Import surface out of the settings
+window, before it had cost anything. The reasoning is that the 700-line limit
+is a ceiling, not a target, and it is the only signal that had been enforcing
+placement at all. `import_window` would have been 443 lines in one `mod.rs` -
+comfortably legal, and still wrong, because nothing about the name says where
+the rendering is.
+
+Six `mod.rs` files predate the rule: `agent_editor` (438 lines),
+`panel_state` (352), `panel_view` (348), `settings_window` (324),
+`about_window` (313) and `workspace_window` (290). They are a backlog, not
+exceptions - tracked in issue #300, one module per PR so a regression is
+bisectable to a single split. The rule applies to all of them; only the timing
+is open. Grandfathering has to be argued for, not assumed, or a rule that the
+codebase visibly breaks in six places stops being a rule.
+
+A `mod.rs` that is only declarations and re-exports also makes the module's
+shape readable in one screen, which is the same argument as splitting by
+concern: you should be able to see what a module is made of without reading
+what it does.
+
 ## Orphaned files
 
 Rust emits no diagnostic for a `.rs` file that no `mod` declares - it is
