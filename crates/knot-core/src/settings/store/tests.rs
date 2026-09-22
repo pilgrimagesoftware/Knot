@@ -1,11 +1,31 @@
 //! Unit tests for [`super`].
+//!
+//! Migration from the legacy single document has its own suite in
+//! `legacy/tests.rs`; everything here is about a store already in the
+//! per-document arrangement.
 
+use std::fs;
+
+use tempfile::TempDir;
 use tempfile::tempdir;
 
 use super::*;
+use crate::consts::{
+    AGENTS_FILE, BENCH_FILE, DOCUMENT_TEMP_EXTENSION, PERSONAS_FILE, PREFERENCES_FILE,
+    RECENT_REPOS_FILE, WORKSPACES_FILE,
+};
 
 fn agent_id() -> Uuid {
     Uuid::new_v4()
+}
+
+/// Writes `document` as the store's preferences and loads it back, so each
+/// decode case reads as the document it is about.
+fn load_document(document: &str) -> (TempDir, Settings) {
+    let dir = tempdir().unwrap();
+    fs::write(dir.path().join(PREFERENCES_FILE), document).unwrap();
+    let settings = Settings::load_from_root(dir.path()).unwrap();
+    (dir, settings)
 }
 
 #[test]
@@ -20,40 +40,21 @@ fn default_scalars() {
 
 #[test]
 fn legacy_settings_blob_defaults_restore_conversation_off() {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path, r#"{"restoreLayoutOnLaunch":true}"#).unwrap();
-    let s = Settings::load_from(&path).unwrap();
+    let (_dir, s) = load_document(r#"{"restoreLayoutOnLaunch":true}"#);
     assert!(s.restore_layout_on_launch);
     assert!(!s.restore_conversation_on_launch);
 }
 
 #[test]
 fn persisted_sf_mono_upgrades_to_the_new_terminal_font_default() {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path, r#"{"terminalFontName":"SF Mono"}"#).unwrap();
-    let s = Settings::load_from(&path).unwrap();
+    let (_dir, s) = load_document(r#"{"terminalFontName":"SF Mono"}"#);
     assert_eq!(s.terminal_font_name, "JetBrains Mono");
 }
 
 #[test]
 fn persisted_custom_terminal_font_is_not_overridden() {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path, r#"{"terminalFontName":"Fira Code"}"#).unwrap();
-    let s = Settings::load_from(&path).unwrap();
+    let (_dir, s) = load_document(r#"{"terminalFontName":"Fira Code"}"#);
     assert_eq!(s.terminal_font_name, "Fira Code");
-}
-
-/// Writes `document` to a fresh store and loads it back, so each font-role
-/// migration case reads as the document it is about.
-fn load_document(document: &str) -> (tempfile::TempDir, Settings) {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path, document).unwrap();
-    let settings = Settings::load_from(&path).unwrap();
-    (dir, settings)
 }
 
 #[test]
@@ -168,19 +169,15 @@ fn a_non_numeric_sidebar_width_leaves_the_default() {
 }
 
 #[test]
-fn missing_file_yields_defaults() {
+fn a_store_with_no_documents_yields_defaults() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    let s = Settings::load_from(&path).unwrap();
-    assert_eq!(s, Settings::with_store_path(&path));
+    let s = Settings::load_from_root(dir.path()).unwrap();
+    assert_eq!(s, Settings::with_store_root(dir.path()));
 }
 
 #[test]
-fn corrupt_file_yields_defaults() {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path, "{ not json").unwrap();
-    let s = Settings::load_from(&path).unwrap();
+fn corrupt_preferences_yield_defaults() {
+    let (_dir, s) = load_document("{ not json");
     assert_eq!(s.mcp_server_port, 8767);
     assert!(s.saved_agents.is_empty());
 }
@@ -188,24 +185,142 @@ fn corrupt_file_yields_defaults() {
 #[test]
 fn scalar_persists_across_reload() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    let mut s = Settings::with_store_path(&path);
+    let mut s = Settings::with_store_root(dir.path());
     s.mcp_server_port = 9000;
     s.persist().unwrap();
-    let reloaded = Settings::load_from(&path).unwrap();
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
     assert_eq!(reloaded.mcp_server_port, 9000);
 }
 
+/// The collections are their own documents now, so the preferences document
+/// must not carry them: a key left behind would be written on every scalar
+/// edit and read back as a second, stale copy of the collection.
 #[test]
-fn one_broken_collection_does_not_sink_the_rest() {
+fn the_preferences_document_holds_no_collection_keys() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path,
-              r#"{"mcpServerPort":9100,"savedAgents":"broken","recentRepos":["a","b"]}"#).unwrap();
-    let s = Settings::load_from(&path).unwrap();
-    assert_eq!(s.mcp_server_port, 9100);
-    assert!(s.saved_agents.is_empty());
-    assert_eq!(s.recent_repos, vec!["a", "b"]);
+    let mut s = Settings::with_store_root(dir.path());
+    s.recent_repos = vec!["alpha".to_string()];
+    s.personas = vec![persona("Rookie", PersonaType::User, PersonaState::Enabled)];
+
+    s.persist().unwrap();
+
+    let written = fs::read_to_string(dir.path().join(PREFERENCES_FILE)).unwrap();
+    for key in ["savedAgents",
+                "savedWorkspaces",
+                "personas",
+                "benchAgents",
+                "recentRepos"]
+    {
+        assert!(!written.contains(key),
+                "preferences document must not carry `{key}`:\n{written}");
+    }
+    assert!(written.contains("mcpServerPort"));
+}
+
+#[test]
+fn a_whole_surface_persist_writes_every_document() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    s.mcp_server_port = 9100;
+    s.saved_agents = Vec::new();
+    s.recent_repos = vec!["alpha".to_string(), "beta".to_string()];
+    s.personas = vec![persona("Rookie", PersonaType::User, PersonaState::Enabled)];
+    s.bench_agents = vec![BenchAgent::new(agent_id(), "bench", None, "/repo")];
+
+    s.persist().unwrap();
+
+    for file in [PREFERENCES_FILE,
+                 AGENTS_FILE,
+                 WORKSPACES_FILE,
+                 PERSONAS_FILE,
+                 BENCH_FILE,
+                 RECENT_REPOS_FILE]
+    {
+        assert!(dir.path().join(file).exists(), "{file} was not written");
+    }
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
+    assert_eq!(reloaded.mcp_server_port, 9100);
+    assert_eq!(reloaded.recent_repos, vec!["alpha", "beta"]);
+    assert_eq!(reloaded.personas.len(), 1);
+    assert_eq!(reloaded.bench_agents.len(), 1);
+}
+
+/// Every document beside the one being written, as bytes.
+fn other_documents(dir: &TempDir, written: &str) -> Vec<(String, Vec<u8>)> {
+    [PREFERENCES_FILE,
+     AGENTS_FILE,
+     WORKSPACES_FILE,
+     PERSONAS_FILE,
+     BENCH_FILE,
+     RECENT_REPOS_FILE].into_iter()
+                       .filter(|file| *file != written)
+                       .map(|file| (file.to_string(), fs::read(dir.path().join(file)).unwrap()))
+                       .collect()
+}
+
+#[test]
+fn saving_a_persona_leaves_every_other_document_untouched() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    s.recent_repos = vec!["alpha".to_string()];
+    s.persist().unwrap();
+    let before = other_documents(&dir, PERSONAS_FILE);
+
+    s.add_persona("Rookie", "be helpful").unwrap();
+
+    assert_eq!(other_documents(&dir, PERSONAS_FILE), before);
+    assert_eq!(Settings::load_from_root(dir.path()).unwrap().personas.len(),
+               1);
+}
+
+#[test]
+fn setting_a_scalar_leaves_every_collection_untouched() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    s.recent_repos = vec!["alpha".to_string()];
+    s.personas = vec![persona("Rookie", PersonaType::User, PersonaState::Enabled)];
+    s.persist().unwrap();
+    let before = other_documents(&dir, PREFERENCES_FILE);
+
+    s.mcp_server_port = 9200;
+    s.persist_preferences().unwrap();
+
+    assert_eq!(other_documents(&dir, PREFERENCES_FILE), before);
+    assert_eq!(Settings::load_from_root(dir.path()).unwrap()
+                                                   .mcp_server_port,
+               9200);
+}
+
+#[test]
+fn one_corrupt_collection_costs_only_itself() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    s.mcp_server_port = 9300;
+    s.recent_repos = vec!["alpha".to_string(), "beta".to_string()];
+    s.personas = vec![persona("Rookie", PersonaType::User, PersonaState::Enabled)];
+    s.persist().unwrap();
+    fs::write(dir.path().join(PERSONAS_FILE), "{ not json").unwrap();
+
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
+
+    assert!(reloaded.personas.is_empty());
+    assert_eq!(reloaded.mcp_server_port, 9300);
+    assert_eq!(reloaded.recent_repos, vec!["alpha", "beta"]);
+}
+
+#[test]
+fn corrupt_preferences_cost_only_the_scalars() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    s.mcp_server_port = 9400;
+    s.recent_repos = vec!["alpha".to_string()];
+    s.persist().unwrap();
+    fs::write(dir.path().join(PREFERENCES_FILE), "{ not json").unwrap();
+
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
+
+    assert_eq!(reloaded.mcp_server_port, MCP_PORT_DEFAULT);
+    assert_eq!(reloaded.recent_repos, vec!["alpha"]);
 }
 
 #[test]
@@ -221,8 +336,7 @@ fn detect_picks_first_existing() {
 #[test]
 fn init_source_folder_runs_once() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    let mut s = Settings::with_store_path(&path);
+    let mut s = Settings::with_store_root(dir.path());
     s.init_source_folder().unwrap();
     assert!(s.source_folder_detected);
     s.source_base_folder = "/explicit".to_string();
@@ -233,7 +347,7 @@ fn init_source_folder_runs_once() {
 #[test]
 fn recent_repos_moves_to_front_and_caps() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut s = Settings::with_store_root(dir.path());
     for name in ["c", "b", "a"] {
         s.add_recent_repo(name).unwrap();
     }
@@ -250,7 +364,7 @@ fn recent_repos_moves_to_front_and_caps() {
 #[test]
 fn bench_replaces_same_folder() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut s = Settings::with_store_root(dir.path());
     s.add_bench_agent(BenchAgent::new(agent_id(), "old", None, "/repo"))
      .unwrap();
     s.add_bench_agent(BenchAgent::new(agent_id(), "new", None, "/repo"))
@@ -259,25 +373,21 @@ fn bench_replaces_same_folder() {
     assert_eq!(s.bench_agents[0].name, "new");
 }
 
+fn persona(name: &str, persona_type: PersonaType, state: PersonaState) -> Persona {
+    Persona { id: agent_id(),
+              name: name.to_string(),
+              instructions: String::new(),
+              persona_type,
+              state }
+}
+
 #[test]
 fn active_personas_excludes_deleted_and_sorts_ci() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
-    s.personas = vec![Persona { id:           agent_id(),
-                                name:         "beta".to_string(),
-                                instructions: String::new(),
-                                persona_type: PersonaType::User,
-                                state:        PersonaState::Enabled, },
-                      Persona { id:           agent_id(),
-                                name:         "Alpha".to_string(),
-                                instructions: String::new(),
-                                persona_type: PersonaType::User,
-                                state:        PersonaState::Enabled, },
-                      Persona { id:           agent_id(),
-                                name:         "gone".to_string(),
-                                instructions: String::new(),
-                                persona_type: PersonaType::System,
-                                state:        PersonaState::Deleted, },];
+    let mut s = Settings::with_store_root(dir.path());
+    s.personas = vec![persona("beta", PersonaType::User, PersonaState::Enabled),
+                      persona("Alpha", PersonaType::User, PersonaState::Enabled),
+                      persona("gone", PersonaType::System, PersonaState::Deleted),];
     let names: Vec<&str> = s.active_personas()
                             .iter()
                             .map(|p| p.name.as_str())
@@ -288,7 +398,7 @@ fn active_personas_excludes_deleted_and_sorts_ci() {
 #[test]
 fn default_personas_install_once() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut s = Settings::with_store_root(dir.path());
     s.install_default_personas().unwrap();
     assert_eq!(s.personas.len(), 6);
     s.install_default_personas().unwrap();
@@ -298,7 +408,7 @@ fn default_personas_install_once() {
 #[test]
 fn add_update_and_lookup_persona() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut s = Settings::with_store_root(dir.path());
     let id = s.add_persona("Rookie", "be helpful").unwrap().id;
     assert_eq!(s.personas.len(), 1);
     assert_eq!(s.persona(id).unwrap().name, "Rookie");
@@ -315,31 +425,19 @@ fn add_update_and_lookup_persona() {
 #[test]
 fn persona_lookup_excludes_deleted() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
-    s.personas = vec![Persona { id:           agent_id(),
-                                name:         "gone".to_string(),
-                                instructions: String::new(),
-                                persona_type: PersonaType::System,
-                                state:        PersonaState::Deleted, }];
+    let mut s = Settings::with_store_root(dir.path());
+    s.personas = vec![persona("gone", PersonaType::System, PersonaState::Deleted)];
     assert!(s.persona(s.personas[0].id).is_none());
 }
 
 #[test]
 fn remove_persona_soft_deletes_system_and_hard_deletes_user() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
-    let system_id = agent_id();
-    let user_id = agent_id();
-    s.personas = vec![Persona { id:           system_id,
-                                name:         "System".to_string(),
-                                instructions: String::new(),
-                                persona_type: PersonaType::System,
-                                state:        PersonaState::Enabled, },
-                      Persona { id:           user_id,
-                                name:         "User".to_string(),
-                                instructions: String::new(),
-                                persona_type: PersonaType::User,
-                                state:        PersonaState::Enabled, },];
+    let mut s = Settings::with_store_root(dir.path());
+    s.personas = vec![persona("System", PersonaType::System, PersonaState::Enabled),
+                      persona("User", PersonaType::User, PersonaState::Enabled),];
+    let system_id = s.personas[0].id;
+    let user_id = s.personas[1].id;
 
     s.remove_persona(system_id).unwrap();
     assert_eq!(s.personas.len(), 2);
@@ -357,7 +455,7 @@ fn remove_persona_soft_deletes_system_and_hard_deletes_user() {
 #[test]
 fn restore_default_personas_reverts_edits_and_adds_missing() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut s = Settings::with_store_root(dir.path());
     let (id, name, instructions) = DEFAULT_PERSONAS[0];
     let id = Uuid::parse_str(id).unwrap();
     s.personas = vec![Persona { id,
@@ -365,11 +463,7 @@ fn restore_default_personas_reverts_edits_and_adds_missing() {
                                 instructions: "different".to_string(),
                                 persona_type: PersonaType::System,
                                 state: PersonaState::Disabled },
-                      Persona { id:           agent_id(),
-                                name:         "Mine".to_string(),
-                                instructions: "keep me".to_string(),
-                                persona_type: PersonaType::User,
-                                state:        PersonaState::Enabled, },];
+                      persona("Mine", PersonaType::User, PersonaState::Enabled),];
 
     s.restore_default_personas().unwrap();
 
@@ -384,7 +478,7 @@ fn restore_default_personas_reverts_edits_and_adds_missing() {
 #[test]
 fn deleted_default_persona_not_reinstalled() {
     let dir = tempdir().unwrap();
-    let mut s = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut s = Settings::with_store_root(dir.path());
     let (id, _, _) = DEFAULT_PERSONAS[0];
     s.personas = vec![Persona { id:           Uuid::parse_str(id).unwrap(),
                                 name:         "custom".to_string(),
@@ -403,51 +497,47 @@ fn deleted_default_persona_not_reinstalled() {
 #[test]
 fn persist_leaves_no_temporary_file_behind() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join(SETTINGS_FILE);
-    let settings = Settings::with_store_path(&path);
+    let settings = Settings::with_store_root(dir.path());
 
     settings.persist().unwrap();
 
-    assert!(path.exists());
-    assert!(!path.with_extension(SETTINGS_TEMP_EXTENSION).exists());
+    let preferences = dir.path().join(PREFERENCES_FILE);
+    assert!(preferences.exists());
+    assert!(!preferences.with_extension(DOCUMENT_TEMP_EXTENSION).exists());
 }
 
 #[test]
 fn persist_replaces_a_stale_temporary_file_rather_than_reusing_it() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join(SETTINGS_FILE);
-    let temporary = path.with_extension(SETTINGS_TEMP_EXTENSION);
+    let preferences = dir.path().join(PREFERENCES_FILE);
+    let temporary = preferences.with_extension(DOCUMENT_TEMP_EXTENSION);
     // What an interrupted write would leave: a partial document that
     // must not become the next persisted one.
     fs::write(&temporary, "{ not json").unwrap();
 
-    let mut settings = Settings::with_store_path(&path);
+    let mut settings = Settings::with_store_root(dir.path());
     settings.ui_font_size = 17.0;
     settings.persist().unwrap();
 
     assert!(!temporary.exists());
-    let reloaded = Settings::load_from(&path).unwrap();
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
     assert_eq!(reloaded.ui_font_size, 17.0);
 }
 
 #[test]
 fn legacy_settings_blob_defaults_compact_tool_calls_off() {
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    fs::write(&path, r#"{"restoreLayoutOnLaunch":true}"#).unwrap();
-    let s = Settings::load_from(&path).unwrap();
+    let (_dir, s) = load_document(r#"{"restoreLayoutOnLaunch":true}"#);
     assert!(!s.agent_panel_compact_tool_calls);
 }
 
 #[test]
 fn compact_tool_calls_round_trips_through_the_store() {
     let dir = tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    let mut s = Settings::load_from(&path).unwrap();
+    let mut s = Settings::load_from_root(dir.path()).unwrap();
     assert!(!s.agent_panel_compact_tool_calls);
     s.agent_panel_compact_tool_calls = true;
     s.persist().unwrap();
 
-    let reloaded = Settings::load_from(&path).unwrap();
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
     assert!(reloaded.agent_panel_compact_tool_calls);
 }

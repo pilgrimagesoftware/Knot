@@ -53,7 +53,7 @@ impl WorkspaceManager {
         self.settings.saved_agents =
             store.saved_agents(self.settings.restore_conversation_on_launch);
         self.settings.saved_workspaces = store.saved_workspaces();
-        if let Err(error) = self.settings.persist() {
+        if let Err(error) = self.settings.persist_roster() {
             self.error = Some(knot_core::l10n::t_with("workspace_manager.error_save",
                                                       &[("error", &error.to_string())]));
         }

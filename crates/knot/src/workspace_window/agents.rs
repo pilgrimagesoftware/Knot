@@ -134,7 +134,7 @@ impl WorkspaceWindow {
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
         }
-        if let Err(error) = self.settings.persist() {
+        if let Err(error) = self.settings.persist_roster() {
             // Not surfaced in the window: the roster is written after every
             // change, so the next one retries, and a dialog per keystroke
             // would be worse than the loss it warns about. Logged because a
