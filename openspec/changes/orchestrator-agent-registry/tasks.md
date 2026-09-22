@@ -76,11 +76,11 @@
 
 ## 4. Split `knot-mcp-tools` before it outgrows the cap
 
-- [ ] 4.1 Move the tool catalogue and the `ToolCatalog::call` dispatch match
+- [x] 4.1 Move the tool catalogue and the `ToolCatalog::call` dispatch match
   out of `crates/knot-mcp-tools/src/lib.rs` into a new `catalog.rs`; verify
   `make size-check`, `make lint` and `make test` all pass with the existing
   thirteen tools unchanged
-- [ ] 4.2 Confirm the new module is declared and reachable (`mod` in
+- [x] 4.2 Confirm the new module is declared and reachable (`mod` in
   `lib.rs`, re-exported where the old paths were used); verify the existing
   `crates/knot-mcp/tests/http.rs` suite passes untouched
 
