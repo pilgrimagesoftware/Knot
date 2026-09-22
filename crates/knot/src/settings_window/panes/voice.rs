@@ -43,14 +43,13 @@ impl SettingsWindow {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Voice input allows you to speak commands to your agents using \
-                     push-to-talk. Hold the configured key to record, release to stop.",
+                        knot_core::l10n::t("settings.voice.blurb"),
                     ),
             )
             .child(
-                Self::group("Engine")
+                Self::group(knot_core::l10n::t("settings.voice.engine"))
                     .child(Self::row(
-                        "Enable voice input",
+                        knot_core::l10n::t("settings.voice.enable"),
                         Switch::new("voice-enabled")
                             .checked(voice_enabled)
                             .on_click({
@@ -65,20 +64,20 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "Engine",
+                        knot_core::l10n::t("settings.voice.engine"),
                         Button::new("voice-engine-picker")
-                            .label("Apple SpeechAnalyzer")
+                            .label(knot_core::l10n::t("settings.voice.engine_apple"))
                             .disabled(true),
                     ))
                     .child(Self::hint(
                         cx,
-                        "Uses on-device speech recognition. No data is sent to the cloud.",
+                        knot_core::l10n::t("settings.voice.engine_hint"),
                     )),
             )
             .child(
-                Self::group("Input")
+                Self::group(knot_core::l10n::t("settings.voice.input"))
                     .child(Self::row(
-                        "Push-to-Talk Key",
+                        knot_core::l10n::t("settings.voice.push_to_talk"),
                         div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
@@ -86,7 +85,7 @@ impl SettingsWindow {
                             .child(key_name),
                     ))
                     .child(Self::row(
-                        "Auto-insert transcription",
+                        knot_core::l10n::t("settings.voice.auto_insert"),
                         Switch::new("voice-auto-insert")
                             .checked(voice_auto_insert)
                             .disabled(!voice_enabled)

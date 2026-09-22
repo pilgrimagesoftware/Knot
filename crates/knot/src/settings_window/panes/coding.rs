@@ -122,8 +122,8 @@ impl SettingsWindow {
         v_flex()
             .gap_3()
             .child(
-                Self::group("Source Folder").child(Self::row(
-                    "Folder",
+                Self::group(knot_core::l10n::t("settings.coding.source_folder")).child(Self::row(
+                    knot_core::l10n::t("settings.coding.folder"),
                     h_flex()
                         .flex_1()
                         .justify_between()
@@ -161,9 +161,9 @@ impl SettingsWindow {
                                             window.open_alert_dialog(app, move |alert, _, _| {
                                                 let settings_window = settings_window.clone();
                                                 alert
-                                                    .title("Clear Source Folder")
+                                                    .title(knot_core::l10n::t("settings.coding.clear_source_folder"))
                                                     .description(
-                                                        "The source folder path will be cleared.",
+                                                        knot_core::l10n::t("settings.coding.clear_source_folder_body"),
                                                     )
                                                     .confirm()
                                                     .on_ok(move |_, _, app| {
@@ -180,9 +180,9 @@ impl SettingsWindow {
                 )),
             )
             .child(
-                Self::group("Agent Options")
+                Self::group(knot_core::l10n::t("settings.coding.agent_options"))
                     .child(Self::row(
-                        "Coding agent",
+                        knot_core::l10n::t("settings.coding.coding_agent"),
                         Button::new("coding-agent-type-picker")
                             .label(agent_type_label)
                             .dropdown_caret(true)
@@ -212,7 +212,7 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "Options",
+                        knot_core::l10n::t("settings.coding.options"),
                         Input::new(&self.agent_options_input).flex_1(),
                     )),
             )
