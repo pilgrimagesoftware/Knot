@@ -66,14 +66,13 @@ impl SettingsWindow {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Knot runs a local MCP server so coding agents can coordinate with each \
-                     other and control the app.",
+                        knot_core::l10n::t("settings.mcp.blurb"),
                     ),
             )
             .child(
-                Self::group("Server Settings")
+                Self::group(knot_core::l10n::t("settings.mcp.server_settings"))
                     .child(Self::row(
-                        "Enable MCP server",
+                        knot_core::l10n::t("settings.mcp.enable"),
                         Switch::new("mcp-server-enabled")
                             .checked(mcp_server_enabled)
                             .on_click({
@@ -88,11 +87,11 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "Port",
+                        knot_core::l10n::t("settings.mcp.port"),
                         Input::new(&self.mcp_port_input).w(px(100.)),
                     ))
                     .child(Self::text_row(
-                        "URL",
+                        knot_core::l10n::t("settings.mcp.url"),
                         h_flex()
                             .gap_2()
                             .items_center()
@@ -119,9 +118,9 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group("Installation Command")
+                Self::group(knot_core::l10n::t("settings.mcp.install_command"))
                     .child(Self::row(
-                        "Agent",
+                        knot_core::l10n::t("settings.mcp.agent"),
                         Button::new("mcp-agent-type-picker")
                             .label(agent_type_label)
                             .dropdown_caret(true)
@@ -150,7 +149,7 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::text_row(
-                        "Command",
+                        knot_core::l10n::t("settings.mcp.command"),
                         h_flex()
                             .flex_1()
                             .min_w_0()
@@ -161,7 +160,7 @@ impl SettingsWindow {
                                     .flex_1()
                                     .min_w_0()
                                     .text_sm()
-                                    .child("No manual setup needed.")
+                                    .child(knot_core::l10n::t("settings.mcp.no_setup"))
                                     .into_any_element()
                             } else {
                                 Self::mono_text(cx, install_command.clone())

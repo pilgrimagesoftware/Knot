@@ -94,7 +94,7 @@ impl SettingsWindow {
         let list = if personas.is_empty() {
             div().text_sm()
                  .text_color(cx.theme().muted_foreground)
-                 .child("No personas defined.")
+                 .child(knot_core::l10n::t("settings.personas.none_defined"))
                  .into_any_element()
         }
         else {
@@ -166,7 +166,7 @@ impl SettingsWindow {
                                                         let settings_window =
                                                             settings_window.clone();
                                                         alert
-                                                        .title("Delete Persona")
+                                                        .title(knot_core::l10n::t("settings.personas.delete_persona"))
                                                         .description(format!(
                                                             "This permanently deletes \"{name}\". \
                                                              This can't be undone."
@@ -196,7 +196,7 @@ impl SettingsWindow {
                         .child(list);
 
         v_flex().gap_3().child(
-            Self::group("Personas")
+            Self::group(knot_core::l10n::t("settings.personas.personas"))
                 .child(
                     h_flex()
                         .justify_between()
@@ -228,11 +228,9 @@ impl SettingsWindow {
                                     window.open_alert_dialog(app, move |alert, _, _| {
                                         let settings_window = settings_window.clone();
                                         alert
-                                            .title("Restore Defaults")
+                                            .title(knot_core::l10n::t("settings.personas.restore_defaults"))
                                             .description(
-                                                "Resets built-in personas to their \
-                                                     original name and instructions. \
-                                                     Personas you created are not affected.",
+                                                knot_core::l10n::t("settings.personas.restore_defaults_body"),
                                             )
                                             .confirm()
                                             .on_ok(move |_, _, app| {

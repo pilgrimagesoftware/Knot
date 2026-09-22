@@ -57,13 +57,13 @@ pub(crate) fn open_persona_editor(parent: WeakEntity<SettingsWindow>,
                   // re-resolves the system palette and repaints.
                   observe_system_appearance(window);
                   let name_input = cx.new(|cx| {
-                                         InputState::new(window, cx).placeholder("Persona name")
+                                         InputState::new(window, cx).placeholder(knot_core::l10n::t("settings.persona_editor.name_placeholder"))
                                                                     .default_value(name)
                                      });
                   name_input.update(cx, |state, cx| state.focus(window, cx));
                   let instructions_input = cx.new(|cx| {
                                                  TextareaState::new(window, cx)
-                .placeholder("Instructions")
+                .placeholder(knot_core::l10n::t("settings.persona_editor.instructions"))
                 .default_value(instructions)
                                              });
                   let view = cx.new(|_| PersonaEditor { parent,
@@ -121,14 +121,14 @@ impl Render for PersonaEditor {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(div().w(px(100.)).text_right().child("Name"))
+                    .child(div().w(px(100.)).text_right().child(knot_core::l10n::t("settings.persona_editor.name")))
                     .child(Input::new(&self.name_input).flex_1()),
             )
             .child(
                 h_flex()
                     .flex_1()
                     .gap_2()
-                    .child(div().w(px(100.)).text_right().child("Instructions"))
+                    .child(div().w(px(100.)).text_right().child(knot_core::l10n::t("settings.persona_editor.instructions")))
                     .child(
                         Textarea::new(&self.instructions_input)
                             .flex_1()
@@ -148,12 +148,12 @@ impl Render for PersonaEditor {
                     .gap_2()
                     .child(
                         Button::new("cancel-persona-editor")
-                            .label("Cancel")
+                            .label(knot_core::l10n::t("settings.persona_editor.cancel"))
                             .on_click(|_, window, _| window.remove_window()),
                     )
                     .child(
                         Button::new("save-persona-editor")
-                            .label("Save")
+                            .label(knot_core::l10n::t("settings.persona_editor.save"))
                             .primary()
                             .on_click(cx.listener(|editor, _, window, cx| editor.save(window, cx))),
                     ),
