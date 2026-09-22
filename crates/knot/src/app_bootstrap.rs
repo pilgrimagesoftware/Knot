@@ -26,6 +26,8 @@ use crate::agent_menu::agents_menu;
 use crate::app_state::build_agent_store;
 use crate::app_state::notification_response_agent_id;
 use crate::app_support;
+use crate::app_support::Activation;
+use crate::app_support::ActivationQueue;
 use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
@@ -38,7 +40,7 @@ use crate::workspace_manager::WorkspaceManager;
 pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::Settings, notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                               awaiting_input: AwaitingInputQueue)
+                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
                                -> tokio::sync::oneshot::Sender<()> {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
     std::thread::spawn(move || {
@@ -66,6 +68,7 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                 knot_mcp_tools::McpToolCatalog::new(agents, repos_rx, notifier)
                     .with_message_store(messages)
                     .with_awaiting_input_queue(awaiting_input)
+                    .with_activation_queue(activation)
                     .with_settings(settings.clone()),
             );
                    catalog.set_bench_agents(settings.bench_agents.clone());
@@ -229,11 +232,13 @@ pub(crate) fn run() {
     let notifier = Arc::new(QueuedNotifier::new());
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
+    let activation = Arc::new(Mutex::new(Vec::new()));
     let mcp_stop = start_mcp_server(Arc::clone(&store),
                                     settings.clone(),
                                     Arc::clone(&notifier),
                                     Arc::clone(&messages),
-                                    Arc::clone(&awaiting_input));
+                                    Arc::clone(&awaiting_input),
+                                    Arc::clone(&activation));
 
     gpui_kit::application()
                            // `Assets` only embeds gpui-component's own curated icon subset; our
@@ -308,6 +313,7 @@ pub(crate) fn run() {
                                // selected, and so disabled; a workspace
                                // window claims it once one is.
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
+                               cx.set_global(Activation(Arc::clone(&activation)));
                                cx.set_global(AgentsMenuState::default());
                                set_app_menus(&AgentMenuSnapshot::default(), cx);
 

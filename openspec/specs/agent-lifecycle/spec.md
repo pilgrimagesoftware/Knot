@@ -395,8 +395,12 @@ activation mode intact.
 
 Deactivating SHALL NOT remove the agent, SHALL NOT remove its companions, and
 SHALL NOT take it out of any workspace. A deactivated agent SHALL NOT start
-again on its own for as long as its workspace stays open; selecting it starts
-it, whatever its activation mode.
+again on its own for as long as its workspace stays open, with two
+exceptions: selecting it starts it, whatever its activation mode, and a
+direct message addressed to it (see `mcp-messaging`'s "Direct send activates
+a deactivated recipient") starts it the same way. Nothing else - a broadcast
+reaching it, another agent's session starting, a poll or a timer - starts a
+deactivated agent.
 
 Deactivating an agent SHALL first deactivate every companion it owns, since a
 companion has no session of its own to keep once its owner's is gone.
@@ -422,3 +426,15 @@ companion has no session of its own to keep once its owner's is gone.
 
 - **WHEN** an agent owning two shell companions is deactivated
 - **THEN** both companions are deactivated first, then the owner
+
+#### Scenario: A direct message starts a deactivated agent
+
+- **WHEN** another agent in the same workspace sends a direct message to a
+  deactivated agent
+- **THEN** the deactivated agent starts, in either activation mode
+
+#### Scenario: A broadcast does not start a deactivated agent
+
+- **WHEN** another agent broadcasts to its workspace and a deactivated agent
+  is among the eligible recipients
+- **THEN** that agent stays stopped

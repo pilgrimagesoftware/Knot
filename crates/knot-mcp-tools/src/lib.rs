@@ -35,6 +35,12 @@ use crate::lookup::state_string;
 
 type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 
+/// Recipients a direct `send-message` delivered to while they were not
+/// activated, for the app to start. Held as an `Option` because the catalog
+/// is constructed in tests and benches with no window to drain it; see
+/// `messaging::send_message`.
+pub type ActivationQueue = Arc<Mutex<Vec<Uuid>>>;
+
 /// The concrete `ToolCatalog` for the thirteen tools in
 /// `openspec/specs/mcp-tools/spec.md`. Holds every piece of shared state a
 /// handler needs; each `call` locks only what that tool touches.
@@ -47,6 +53,7 @@ pub struct McpToolCatalog {
     settings:       Mutex<Option<Settings>>,
     trackers:       Mutex<HashMap<Uuid, Tracker>>,
     awaiting_input: Mutex<Option<AwaitingInputQueue>>,
+    activation:     Mutex<Option<ActivationQueue>>,
 }
 
 impl McpToolCatalog {
@@ -63,7 +70,8 @@ impl McpToolCatalog {
                bench_agents: Mutex::new(Vec::new()),
                settings: Mutex::new(None),
                trackers: Mutex::new(HashMap::new()),
-               awaiting_input: Mutex::new(None) }
+               awaiting_input: Mutex::new(None),
+               activation: Mutex::new(None) }
     }
 
     pub fn with_message_store(mut self, messages: Arc<Mutex<MessageStore>>) -> Self {
@@ -73,6 +81,11 @@ impl McpToolCatalog {
 
     pub fn with_awaiting_input_queue(self, queue: AwaitingInputQueue) -> Self {
         *self.awaiting_input.lock() = Some(queue);
+        self
+    }
+
+    pub fn with_activation_queue(self, queue: ActivationQueue) -> Self {
+        *self.activation.lock() = Some(queue);
         self
     }
 
@@ -374,6 +387,7 @@ impl ToolCatalog for McpToolCatalog {
             consts::SEND_MESSAGE => messaging::send_message(&self.agents.lock(),
                                                             &mut self.messages.lock(),
                                                             self.notifier.as_ref(),
+                                                            self.activation.lock().as_ref(),
                                                             &arguments),
             consts::CHECK_MESSAGES => messaging::check_messages(&self.agents.lock(),
                                                                 &mut self.messages.lock(),

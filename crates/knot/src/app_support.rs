@@ -36,6 +36,27 @@ pub(crate) struct AwaitingInput(pub(crate) AwaitingInputQueue);
 
 impl gpui_kit::Global for AwaitingInput {}
 
+pub(crate) type ActivationQueue = Arc<Mutex<Vec<Uuid>>>;
+
+/// The activation queue, reachable from any window.
+///
+/// The MCP tool catalog pushes a recipient's id whenever a direct
+/// `send-message` was delivered to an agent that is not activated; the
+/// workspace window that owns the agent drains it and starts the session,
+/// as `mcp-messaging`'s "Direct send activates a deactivated recipient"
+/// requires. A global for the same reason [`AwaitingInput`] is one: every
+/// workspace window needs it, and the tool layer runs off the main thread
+/// with no window to call.
+///
+/// Ids belonging to another workspace stay in the queue rather than being
+/// dropped, so the window that does own them can still pick them up - the
+/// draining window is whichever repaints first, not necessarily the right
+/// one.
+#[derive(Clone)]
+pub(crate) struct Activation(pub(crate) ActivationQueue);
+
+impl gpui_kit::Global for Activation {}
+
 /// Which setting a font panel session is editing. Plain data, referenced
 /// from platform-independent UI code (button labels/handlers); only the
 /// panel-driving logic that reads/writes it is macOS-only, in
