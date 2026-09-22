@@ -82,7 +82,13 @@ impl WorkspaceWindow {
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
         }
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist() {
+            // Not surfaced in the window: the roster is written after every
+            // change, so the next one retries, and a dialog per keystroke
+            // would be worse than the loss it warns about. Logged because a
+            // failure here is what makes a relaunch come back empty.
+            eprintln!("failed to persist the agent roster: {error}");
+        }
     }
 
     /// Every agent id in this window's workspace, snapshotted.
@@ -94,11 +100,19 @@ impl WorkspaceWindow {
     /// All" requirement - the row menu's Restart Agent applied once per
     /// agent, with a single persist at the end.
     pub(super) fn restart_all_agents(&mut self) {
-        for id in self.workspace_agent_ids() {
-            {
-                let mut store = self.store.lock();
-                let _ = store.restart(id);
+        let ids = self.workspace_agent_ids();
+        {
+            // One lock for the whole roster rather than one per agent: the
+            // restarts are independent, and reacquiring between them lets
+            // another window see the workspace half restarted.
+            let mut store = self.store.lock();
+            for id in &ids {
+                if let Err(error) = store.restart(*id) {
+                    eprintln!("failed to restart agent {id}: {error}");
+                }
             }
+        }
+        for id in ids {
             self.remove_session(id);
             self.panel_states.remove(&id);
         }
@@ -149,7 +163,9 @@ impl WorkspaceWindow {
             }
             if let Some(session) = self.sessions.get(&id) {
                 let mut session = session.lock();
-                let _ = session.send_text(text);
+                if let Err(error) = session.send_text(text) {
+                    eprintln!("failed to broadcast to agent {id}: {error}");
+                }
             }
         }
     }

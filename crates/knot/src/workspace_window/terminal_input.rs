@@ -37,7 +37,9 @@ impl WorkspaceWindow {
         let current = session.lock().grid().map(|grid| grid.lock().size());
         if current != Some(size) {
             let mut session = session.lock();
-            let _ = session.resize(size);
+            if let Err(error) = session.resize(size) {
+                eprintln!("failed to resize the terminal: {error}");
+            }
         }
     }
 
@@ -70,7 +72,9 @@ impl WorkspaceWindow {
         };
         {
             let mut session = session.lock();
-            let _ = session.send_text(&text);
+            if let Err(error) = session.send_text(&text) {
+                eprintln!("failed to send to the terminal: {error}");
+            }
         }
     }
 
@@ -122,8 +126,10 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        if let Ok(text) = String::from_utf8(bytes) {
-            let _ = session.lock().send_text(&text);
+        if let Ok(text) = String::from_utf8(bytes)
+           && let Err(error) = session.lock().send_text(&text)
+        {
+            eprintln!("failed to paste into the terminal: {error}");
         }
     }
 

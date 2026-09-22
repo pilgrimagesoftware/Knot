@@ -230,7 +230,12 @@ impl WorkspaceWindow {
     pub(super) fn remove_session(&mut self, id: Uuid) {
         if let Some(session) = self.sessions.remove(&id) {
             let mut session = session.lock();
-            let _ = session.shutdown();
+            // Best-effort: dropping the session is what kills the child, so
+            // a failed shutdown leaks nothing. Logged because it means the
+            // agent never saw the polite exit.
+            if let Err(error) = session.shutdown() {
+                eprintln!("failed to shut down agent {id}'s terminal: {error}");
+            }
         }
         self.panel_phases.remove(&id);
         // Drop the list with the session: its scroll handler captured the
