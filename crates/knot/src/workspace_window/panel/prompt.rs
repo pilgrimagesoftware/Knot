@@ -419,7 +419,7 @@ impl WorkspaceWindow {
     }
 
     /// Returns whether a queued prompt was just picked up (moved to
-    /// `in_flight`) - the caller feeds this into `panel_needs_repaint`'s
+    /// `in_flight`) - the caller feeds this into `deliver_waiting_prompts`'s
     /// dirty check, since flipping that flag changes what the queue row
     /// shows (waiting vs. in flight) with nothing else marking the frame
     /// dirty.
