@@ -401,10 +401,15 @@ impl WorkspaceWindow {
         cx.notify();
     }
 
-    pub(in crate::workspace_window) fn drain_panel_prompt(&mut self, id: Uuid) {
+    /// Returns whether a queued prompt was just picked up (moved to
+    /// `in_flight`) - the caller feeds this into `panel_needs_repaint`'s
+    /// dirty check, since flipping that flag changes what the queue row
+    /// shows (waiting vs. in flight) with nothing else marking the frame
+    /// dirty.
+    pub(in crate::workspace_window) fn drain_panel_prompt(&mut self, id: Uuid) -> bool {
         let Some(slot) = self.panel_sessions.get(&id)
         else {
-            return;
+            return false;
         };
         let mut candidate = || -> Option<_> {
             let guard = slot.lock();
@@ -429,7 +434,7 @@ impl WorkspaceWindow {
         };
         let Some((session, recorder, text, prompt_id)) = candidate()
         else {
-            return;
+            return false;
         };
         let results = Arc::clone(&self.panel_prompt_results);
         self.runtime.spawn(async move {
@@ -444,5 +449,6 @@ impl WorkspaceWindow {
                             results.push((id, prompt_id, result));
                         }
                     });
+        true
     }
 }
