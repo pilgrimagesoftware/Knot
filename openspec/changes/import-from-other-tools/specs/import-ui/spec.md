@@ -120,6 +120,11 @@ Imported workspaces and agents SHALL be added to the live store the open
 windows render from, not only to the settings document. A record written to
 settings alone is invisible until the application is restarted.
 
+Every open window SHALL be scheduled to redraw when an import completes.
+Rendering from shared state is not enough on its own: a window that is not
+scheduled for a paint goes on showing the frame it last drew, so an import
+that correctly updated the store still appeared to have done nothing.
+
 The live copy of a record SHALL win over an incoming one: an agent the
 application already holds has session state that an imported copy does not,
 so a record whose identifier is already present is left as it is.

@@ -78,9 +78,10 @@ failed one looked identical.
       that identifiers survive, that an adopted workspace is still there in
       what the store writes back to settings, that a held record is not
       replaced, and that adopting twice adds nothing.
-- [x] 4a.2 Put what an import wrote into the live store, so an open workspace
-      manager shows it without a restart. Verify in the app with the manager
-      open.
+- [x] 4a.2 Put what an import wrote into the live store, and schedule every
+      open window to redraw, so an open workspace manager shows it without a
+      restart. Both halves are needed: the store update alone left the manager
+      painting its last frame. Verify in the app with the manager open.
 - [x] 4a.3 Make the outcome of every import visible: a pure summariser that
       is never silent, a failure drawn distinctly from a summary, and the
       panel pinned outside the scrolling region so a long list cannot push it

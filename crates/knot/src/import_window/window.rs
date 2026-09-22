@@ -115,10 +115,12 @@ impl ImportWindow {
 
         let result = knot_core::import::import_definitions(&mut self.settings, &selected);
         // Personas live only in settings - the store holds agents and
-        // workspaces - so there is nothing to adopt here.
+        // workspaces - so there is nothing to adopt here. The other windows
+        // still have to be redrawn: an imported persona shows up in the
+        // settings window's Personas pane.
         self.outcome = Some(summarise(result, &self.sources.subagents.unreadable));
         self.subagent_selection.clear();
-        cx.notify();
+        self.redraw_every_window(cx);
     }
 
     pub(super) fn import_selected_workspaces(&mut self, cx: &mut Context<Self>) {
@@ -131,7 +133,7 @@ impl ImportWindow {
         }
         self.outcome = Some(summarise(result, &source.unreadable));
         self.workspace_selection.clear();
-        cx.notify();
+        self.redraw_every_window(cx);
     }
 }
 
@@ -147,6 +149,19 @@ impl ImportWindow {
         self.store
             .lock()
             .adopt_saved(&self.settings.saved_agents, &self.settings.saved_workspaces);
+    }
+
+    /// Redraw this window and every other one.
+    ///
+    /// `cx.notify()` marks only this window dirty. The other windows render
+    /// from the shared store and from settings, so after an import their last
+    /// painted frame is stale - and nothing else is going to repaint them,
+    /// which is why an imported workspace kept not appearing in an open
+    /// workspace manager even once it was in the store. Reading live state
+    /// does not cause a paint; being scheduled for one does.
+    fn redraw_every_window(&self, cx: &mut Context<Self>) {
+        cx.notify();
+        cx.refresh_windows();
     }
 }
 
