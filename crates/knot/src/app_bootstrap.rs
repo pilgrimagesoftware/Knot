@@ -327,7 +327,7 @@ observe_system_appearance(window);
                 // open workspaces were listed there.
                 window.set_window_title(&knot_core::l10n::t("workspace.manager"));
                 let name_input =
-                    cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
+                    cx.new(|cx| InputState::new(window, cx).placeholder(knot_core::l10n::t("workspace.name_placeholder")));
                 let view = cx.new(|cx| {
                     let name_subscription = cx.subscribe(
                         &name_input,
