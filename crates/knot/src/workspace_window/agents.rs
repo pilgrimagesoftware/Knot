@@ -10,6 +10,7 @@ use gpui_kit::Context;
 use uuid::Uuid;
 
 use crate::app_support::Activation;
+use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::prompt_queue::PromptOrigin;
 use crate::workspace_window::workspace_agent_ids;
@@ -55,6 +56,22 @@ impl WorkspaceWindow {
     pub(super) fn select_agent(&mut self, id: Uuid) {
         self.selected_agent = Some(id);
         self.store.lock().set_activated(id, true);
+    }
+
+    /// Brings `id` to the front of this window: selects it, leaves the
+    /// dashboard for the terminal view, and starts its session.
+    ///
+    /// This is what a window opened for a particular agent shows on its first
+    /// frame, so it is also what a window *raised* for one has to show - the
+    /// two paths call this rather than agreeing by hand
+    /// (`openspec/specs/window-lifecycle`, "A workspace has at most one
+    /// window").
+    pub(crate) fn reveal_agent(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        self.select_agent(id);
+        self.view_mode = WorkspaceViewMode::Terminal;
+        self.ensure_session(id);
+        self.ensure_panel_session(id);
+        cx.notify();
     }
 
     /// Starts every agent a direct message activated, per `mcp-messaging`'s

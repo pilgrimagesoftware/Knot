@@ -8,8 +8,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::v_flex;
@@ -152,9 +154,10 @@ impl WorkspaceWindow {
             };
 
             v_flex().size_full()
-                    .child(div().size_full()
+                    .child(div().id("workspace-dashboard-grid")
+                                .size_full()
                                 .p_6()
-                                .overflow_hidden()
+                                .overflow_y_scroll()
                                 .child(dashboard::workspace_section(
                         dashboard_workspace,
                         false,

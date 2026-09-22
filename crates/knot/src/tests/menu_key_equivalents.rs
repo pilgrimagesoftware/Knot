@@ -28,13 +28,14 @@ use crate::agent_menu::AgentMenuRemoveAgent;
 use crate::agent_menu::AgentMenuRestartAgent;
 use crate::agent_menu::agent_menu_key_bindings;
 use crate::app_bootstrap::CloseWindow;
-use crate::app_bootstrap::EnterFullScreen;
 use crate::app_bootstrap::HideApp;
 use crate::app_bootstrap::HideOthers;
 use crate::app_bootstrap::KnotHelp;
 use crate::app_bootstrap::MinimizeWindow;
 use crate::app_bootstrap::NewWorkspace;
+use crate::app_bootstrap::OpenCommandCenter;
 use crate::app_bootstrap::OpenSettings;
+use crate::app_bootstrap::OpenWorkspaces;
 use crate::app_bootstrap::Quit;
 use crate::app_bootstrap::install_actions_and_keys;
 
@@ -89,9 +90,18 @@ fn standard_menu_items_carry_their_platform_shortcut(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-alt-h", &HideOthers);
           assert_bound(cx, "cmd-n", &NewWorkspace);
           assert_bound(cx, "cmd-w", &CloseWindow);
-          assert_bound(cx, "cmd-ctrl-f", &EnterFullScreen);
           assert_bound(cx, "cmd-m", &MinimizeWindow);
           assert_bound(cx, "cmd-shift-/", &KnotHelp);
+      });
+}
+
+/// The Window menu's two openers, which unlike the items above are wired.
+#[gpui_kit::test]
+fn the_window_menu_openers_carry_their_shortcuts(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert_bound(cx, "cmd-alt-0", &OpenCommandCenter);
+          assert_bound(cx, "cmd-0", &OpenWorkspaces);
       });
 }
 

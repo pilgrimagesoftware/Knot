@@ -1,4 +1,5 @@
 use gpui_kit::App;
+use gpui_kit::Bounds;
 use gpui_kit::Pixels;
 use gpui_kit::SharedString;
 use gpui_kit::Size;
@@ -8,6 +9,7 @@ use gpui_kit::component::TitleBar;
 use gpui_kit::px;
 use gpui_kit::size;
 
+use crate::consts;
 use crate::settings_window::SettingsTab;
 use crate::settings_window::SettingsWindow;
 
@@ -51,16 +53,119 @@ pub(crate) fn manager_window_options(cx: &App) -> WindowOptions {
     toolkit_bar_window(size(px(800.), px(600.)), size(px(640.), px(420.)), cx)
 }
 
-/// `saved` is the workspace's last known window frame, restored verbatim so
-/// reopening puts the window back where the user left it; `None` (a
-/// workspace never opened before) centres a default-sized window instead.
-pub(crate) fn workspace_window_options(saved: Option<knot_core::SavedWindowBounds>, cx: &App)
-                                       -> WindowOptions {
+/// Reconciles a remembered window frame with the displays actually attached,
+/// reporting `None` when nothing sensible can be made of it and the caller
+/// should fall back to its default placement.
+///
+/// The rules, in order (`openspec/specs/window-lifecycle`, "A restored window
+/// opens where the user can reach it"):
+///
+/// - Bounds already inside an attached display are used unchanged.
+/// - A size no attached display can hold falls back.
+/// - Otherwise the frame is moved - never resized - by the smallest offset that
+///   puts its top edge and a usable part of its width on the display it
+///   overlaps most.
+/// - A frame overlapping no display at all falls back.
+///
+/// Moving rather than resizing is deliberate: the size the user chose is
+/// information, and a resize would also be written back by the bounds observer
+/// and so become permanent.
+pub(crate) fn reconcile_bounds(saved: Bounds<Pixels>, displays: &[Bounds<Pixels>])
+                               -> Option<Bounds<Pixels>> {
+    if displays.is_empty() {
+        return None;
+    }
+    if displays.iter()
+               .any(|display| contains_rect(display, &saved))
+    {
+        return Some(saved);
+    }
+    if !displays.iter().any(|display| {
+                           saved.size.width <= display.size.width
+                           && saved.size.height <= display.size.height
+                       })
+    {
+        return None;
+    }
+    let display =
+        displays.iter()
+                .max_by(|a, b| overlap_area(&saved, a).total_cmp(&overlap_area(&saved, b)))?;
+    if overlap_area(&saved, display) <= 0. {
+        return None;
+    }
+    Some(nudge_onto(saved, display))
+}
+
+/// Whether `outer` wholly contains `inner`.
+fn contains_rect(outer: &Bounds<Pixels>, inner: &Bounds<Pixels>) -> bool {
+    inner.origin.x >= outer.origin.x
+    && inner.origin.y >= outer.origin.y
+    && inner.origin.x + inner.size.width <= outer.origin.x + outer.size.width
+    && inner.origin.y + inner.size.height <= outer.origin.y + outer.size.height
+}
+
+/// How much of `frame` lies on `display`, as an area - what picks the display
+/// a frame straddling two of them is pulled onto.
+fn overlap_area(frame: &Bounds<Pixels>, display: &Bounds<Pixels>) -> f32 {
+    let overlap = frame.intersect(display);
+    if overlap.is_empty() {
+        return 0.;
+    }
+    f32::from(overlap.size.width) * f32::from(overlap.size.height)
+}
+
+/// Moves `frame` the least it can so its grab strip is on `display`.
+///
+/// Each axis is clamped independently to the nearest legal origin, which is
+/// what makes the move minimal.
+fn nudge_onto(frame: Bounds<Pixels>, display: &Bounds<Pixels>) -> Bounds<Pixels> {
+    let left = f32::from(display.origin.x);
+    let top = f32::from(display.origin.y);
+    let right = left + f32::from(display.size.width);
+    let bottom = top + f32::from(display.size.height);
+    let width = f32::from(frame.size.width);
+
+    // At least `WINDOW_MIN_VISIBLE_WIDTH` of the window has to be on screen at
+    // each edge, so it can neither hide off the right nor off the left.
+    let visible = consts::WINDOW_MIN_VISIBLE_WIDTH.min(width);
+    let x = f32::from(frame.origin.x).clamp(left - (width - visible), right - visible);
+    // The whole title bar, not a sliver of it - and never above the top edge,
+    // where macOS puts the menu bar.
+    let strip = consts::WINDOW_GRAB_STRIP_HEIGHT.min(f32::from(frame.size.height));
+    let y = f32::from(frame.origin.y).clamp(top, (bottom - strip).max(top));
+
+    Bounds { origin: gpui_kit::point(px(x), px(y)),
+             size:   frame.size, }
+}
+
+/// Where a workspace window should actually open, given what was remembered
+/// for it and the displays attached now.
+///
+/// `None` - nothing remembered, or nothing sensible to be made of it - leaves
+/// the centred default placement.
+///
+/// The caller keeps this to tell its own placement apart from a move the user
+/// made: the remembered frame must survive a reopen on a smaller display
+/// (`openspec/specs/window-lifecycle`, "Reconciliation is not written back"),
+/// so what this returns must never be persisted as though the user chose it.
+pub(crate) fn reconciled_workspace_bounds(saved: Option<knot_core::SavedWindowBounds>, cx: &App)
+                                          -> Option<Bounds<Pixels>> {
+    let saved = saved?;
+    let frame = Bounds { origin: gpui_kit::point(px(saved.x), px(saved.y)),
+                         size:   size(px(saved.width), px(saved.height)), };
+    let displays = cx.displays()
+                     .iter()
+                     .map(|display| display.visible_bounds())
+                     .collect::<Vec<_>>();
+    reconcile_bounds(frame, &displays)
+}
+
+/// `placed` is where the window should open, from
+/// [`reconciled_workspace_bounds`]; `None` centres a default-sized window.
+pub(crate) fn workspace_window_options(placed: Option<Bounds<Pixels>>, cx: &App) -> WindowOptions {
     let mut options = toolkit_bar_window(size(px(960.), px(640.)), size(px(760.), px(520.)), cx);
-    if let Some(saved) = saved {
-        let origin = gpui_kit::point(px(saved.x), px(saved.y));
-        let size = size(px(saved.width), px(saved.height));
-        options.window_bounds = Some(WindowBounds::Windowed(gpui_kit::Bounds { origin, size }));
+    if let Some(placed) = placed {
+        options.window_bounds = Some(WindowBounds::Windowed(placed));
     }
     // AppKit places the traffic lights at a fixed offset, and the toolkit's
     // default (9px) centres them in its own ~30px bar. This window's bar is

@@ -4,9 +4,11 @@ use std::sync::Arc;
 use gpui_kit::App;
 use gpui_kit::AppContext;
 use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Render;
+use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::h_flex;
@@ -45,9 +47,15 @@ impl CommandCenterWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
                        messages: Arc<Mutex<knot_messaging::MessageStore>>,
                        settings: knot_core::Settings, cx: &mut App) {
-        let options = command_center_window_options(cx);
-        if let Err(error) =
-            cx.open_window(options, move |window, cx| {
+        // One Command Center: it shows every workspace, so a second copy shows
+        // exactly what the first does (`openspec/specs/window-lifecycle`).
+        crate::window_registry::activate_or_open(
+                                                 crate::window_registry::WindowKey::CommandCenter,
+                                                 cx,
+                                                 move |cx| {
+                                                     let options =
+                                                         command_center_window_options(cx);
+                                                     match cx.open_window(options, move |window, cx| {
                   // Every window tracks the OS appearance, so a light/dark flip
                   // re-resolves the system palette and repaints.
                   observe_system_appearance(window);
@@ -61,9 +69,15 @@ impl CommandCenterWindow {
                                                        diff_stats: DiffStatsCache::default() });
                   cx.new(|cx| Root::new(view, window, cx))
               })
-        {
-            eprintln!("failed to open command center window: {error}");
-        }
+            {
+                Ok(window) => Some(window.into()),
+                Err(error) => {
+                    eprintln!("failed to open command center window: {error}");
+                    None
+                },
+            }
+                                                 },
+        );
     }
 
     /// Asks for a fresh diff stat for every agent with a card, for the ones
@@ -324,11 +338,18 @@ impl Render for CommandCenterWindow {
                     })),
             )
             .child(
+                // The grid is the Command Center's whole purpose and grows
+                // with every workspace and agent, so it scrolls rather than
+                // being clipped. Its parent does not scroll, per
+                // knot-ui-conventions: a scroll region nested in another one
+                // steals the outer gesture.
                 v_flex()
+                    .id("command-center-grid")
                     .flex_1()
+                    .min_h_0()
                     .gap_6()
                     .p_6()
-                    .overflow_hidden()
+                    .overflow_y_scroll()
                     .children(sections),
             )
             .children(crate::app_support::root_overlays(window, cx))
