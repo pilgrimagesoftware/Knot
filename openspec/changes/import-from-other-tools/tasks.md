@@ -1,9 +1,13 @@
 ## 1. The import surface
 
-- [x] 1.1 Add an `Import` tab to the settings window, with a section per
-      source and an empty-state message per section. Verify with the existing
-      settings-tab tests that the new tab appears in `SettingsTab::ALL`, has a
-      distinct label, and that tab switching still preserves window state.
+The surface is a window of its own, not a settings pane: an import is an
+action run once, not a preference kept. See `specs/import-ui/spec.md`.
+
+- [x] 1.1 Add an `Import` window opened from File ▸ Import…, with a section
+      per source and an empty-state message per section. Single-instance, like
+      About and Settings. Verify that dispatching the menu action opens it,
+      that choosing it again raises rather than duplicates, that it reopens
+      after being closed, and that `SettingsTab::ALL` no longer names Import.
 - [x] 1.2 Add the shared result type an import returns - added, skipped as
       already present, and unreadable records by name - and render it in a
       section after an import runs. Verify with a unit test that a result

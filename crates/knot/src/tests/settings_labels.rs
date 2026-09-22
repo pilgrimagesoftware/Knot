@@ -247,9 +247,9 @@ fn settings_tab_labels_are_distinct() {
     assert_eq!(labels.len(), SettingsTab::ALL.len());
 }
 
-/// The seven ported panes, in the Swift reference's order, followed by the
-/// tabs Knot has added since. Import is Knot's own - Skwad has no equivalent -
-/// so it comes after the ported set rather than being slotted among it.
+/// The seven ported panes, in the Swift reference's order, and nothing else.
+/// Settings holds what the user configures; an import is something they run,
+/// and lives in its own window off the File menu - see `tests::import_window`.
 #[test]
 fn settings_tab_covers_every_swift_pane() {
     assert_eq!(SettingsTab::ALL.to_vec(),
@@ -259,15 +259,7 @@ fn settings_tab_covers_every_swift_pane() {
                     SettingsTab::Autopilot,
                     SettingsTab::Voice,
                     SettingsTab::Mcp,
-                    SettingsTab::Terminal,
-                    SettingsTab::Import]);
-}
-
-/// Task 1.1: the Import tab is in the tab set, with a label of its own.
-#[test]
-fn settings_tab_includes_import() {
-    assert!(SettingsTab::ALL.contains(&SettingsTab::Import));
-    assert_eq!(SettingsTab::Import.label(), "Import");
+                    SettingsTab::Terminal]);
 }
 
 /// Every tab needs a target height, or switching to it resizes the window to
@@ -278,34 +270,4 @@ fn every_tab_has_a_target_height() {
         assert!(SettingsWindow::pane_target_height(tab) > gpui_kit::px(0.),
                 "{tab:?} has no target height");
     }
-}
-
-/// A workspace row says what comes with it, so the choice is made on what it
-/// actually brings across rather than on a name alone.
-#[test]
-fn a_workspace_import_label_names_its_agent_count() {
-    let mut workspace = knot_core::Workspace { id:                    Uuid::new_v4(),
-                                               name:                  "WIP".into(),
-                                               color_hex:             "#46A857".into(),
-                                               agent_ids:             vec![Uuid::new_v4(),
-                                                                           Uuid::new_v4()],
-                                               layout_mode:           "single".into(),
-                                               active_agent_ids:      Vec::new(),
-                                               focused_pane_index:    0,
-                                               split_ratio:           0.5,
-                                               split_ratio_secondary: None,
-                                               show_dashboard:        None,
-                                               is_detached:           None,
-                                               window_bounds:         None, };
-
-    assert_eq!(SettingsWindow::workspace_import_label(&workspace),
-               "WIP (2 agents)");
-
-    workspace.agent_ids.pop();
-    assert_eq!(SettingsWindow::workspace_import_label(&workspace),
-               "WIP (1 agent)");
-
-    workspace.agent_ids.clear();
-    assert_eq!(SettingsWindow::workspace_import_label(&workspace),
-               "WIP (0 agents)");
 }

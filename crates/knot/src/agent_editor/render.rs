@@ -77,7 +77,7 @@ impl AgentEditor {
                     .gap_2()
                     .child(Input::new(&self.avatar_input).w(px(48.)))
                     .child(
-                        SettingsWindow::icon_button(
+                        crate::controls::icon_button(
                             "agent-avatar-picker",
                             "icons/face-grinning.svg",
                             knot_core::l10n::t("agent_editor.choose_character"),
@@ -290,7 +290,7 @@ impl AgentEditor {
                             }),
                     )
                     .child(
-                        SettingsWindow::icon_button(
+                        crate::controls::icon_button(
                             "choose-agent-folder",
                             "icons/folder-open.svg",
                             knot_core::l10n::t("agent_editor.choose_folder"),

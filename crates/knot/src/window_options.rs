@@ -94,6 +94,23 @@ pub(crate) fn about_window_options(cx: &App) -> WindowOptions {
                     ..WindowOptions::default() }
 }
 
+/// The Import window's size. Resizable, unlike About: both lists scroll
+/// inside fixed-height regions, so a taller window shows more of them at
+/// once, which is the whole reason to drag it.
+///
+/// It carries a title on every platform, including macOS: unlike the About
+/// box, the window's body does not name itself, and an untitled window is
+/// also left out of the macOS Window menu.
+pub(crate) fn import_window_options(cx: &App) -> WindowOptions {
+    WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions {
+                        title: Some(knot_core::l10n::t("import.title").into()),
+                        ..Default::default()
+                    }),
+                    window_bounds: Some(WindowBounds::centered(size(px(520.), px(600.)), cx)),
+                    window_min_size: Some(size(px(420.), px(360.))),
+                    ..WindowOptions::default() }
+}
+
 /// Fixed width for the settings window; only height varies per pane.
 pub(crate) const SETTINGS_WINDOW_WIDTH: gpui_kit::Pixels = px(620.);
 

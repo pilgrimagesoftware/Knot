@@ -9,7 +9,6 @@ pub(super) mod appearance;
 pub(super) mod autopilot;
 pub(super) mod coding;
 pub(super) mod general;
-pub(super) mod import;
 pub(super) mod mcp;
 pub(super) mod personas;
 pub(super) mod voice;

@@ -93,7 +93,7 @@ impl SettingsWindow {
         v_flex()
             .gap_3()
             .child(
-                Self::group(knot_core::l10n::t("settings.autopilot.enable_group"))
+                crate::controls::group(knot_core::l10n::t("settings.autopilot.enable_group"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.autopilot.enable"),
                         Switch::new("autopilot-enabled")
@@ -115,7 +115,7 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.autopilot.provider_group"))
+                crate::controls::group(knot_core::l10n::t("settings.autopilot.provider_group"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.autopilot.provider"),
                         // Driven off `AiProvider::ALL`, so a new provider
@@ -145,7 +145,7 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.autopilot.action_group"))
+                crate::controls::group(knot_core::l10n::t("settings.autopilot.action_group"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.autopilot.on_input"),
                         Self::dropdown("autopilot-action-picker",

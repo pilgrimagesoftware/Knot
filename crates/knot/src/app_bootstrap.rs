@@ -32,6 +32,7 @@ use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;
+use crate::import_window::register_import_action;
 use crate::quit_guard;
 use crate::settings_window::open_settings_window;
 use crate::window_options::manager_window_options;
@@ -105,6 +106,7 @@ actions!(knot_app,
           ShowAllWindows,
           AboutKnot,
           OpenSettings,
+          OpenImport,
           PanelPermissionAllow,
           PanelPermissionDeny,
           PanelOpenPermissionSelector]);
@@ -198,6 +200,8 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
         Menu::new("File").items([
             MenuItem::action("New Workspace", gpui_kit::NoAction).disabled(true),
             MenuItem::separator(),
+            MenuItem::action("Import…", OpenImport),
+            MenuItem::separator(),
             MenuItem::action("Close Window", gpui_kit::NoAction).disabled(true),
         ]),
         Menu::new("Edit").items([
@@ -241,6 +245,9 @@ fn install_actions_and_keys(settings: &knot_core::Settings,
     // Holds its own window handle; see
     // `about_window::register_about_action`.
     register_about_action(settings.title_font_name.clone().into(), cx);
+    // Holds its own window handle, and reloads the store when it opens; see
+    // `import_window::register_import_action`.
+    register_import_action(cx);
     cx.on_action(hide_app);
     cx.on_action(hide_others);
     cx.on_action(show_all_windows);

@@ -120,7 +120,7 @@ impl SettingsWindow {
         v_flex()
             .gap_3()
             .child(
-                Self::group(knot_core::l10n::t("settings.coding.source_folder")).child(Self::row(
+                crate::controls::group(knot_core::l10n::t("settings.coding.source_folder")).child(Self::row(
                     knot_core::l10n::t("settings.coding.folder"),
                     h_flex()
                         .flex_1()
@@ -130,7 +130,7 @@ impl SettingsWindow {
                             h_flex()
                                 .gap_1()
                                 .child(
-                                    Self::icon_button(
+                                    crate::controls::icon_button(
                                         "coding-choose-source-folder",
                                         "icons/folder-open.svg",
                                         "Choose source folder",
@@ -146,7 +146,7 @@ impl SettingsWindow {
                                     }),
                                 )
                                 .child(
-                                    Self::icon_button(
+                                    crate::controls::icon_button(
                                         "coding-clear-source-folder",
                                         "icons/x.svg",
                                         "Clear source folder",
@@ -178,7 +178,7 @@ impl SettingsWindow {
                 )),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.coding.agent_options"))
+                crate::controls::group(knot_core::l10n::t("settings.coding.agent_options"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.coding.coding_agent"),
 // Every type but the user's own custom commands, which

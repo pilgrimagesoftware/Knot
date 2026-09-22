@@ -67,7 +67,7 @@ impl SettingsWindow {
                     ),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.mcp.server_settings"))
+                crate::controls::group(knot_core::l10n::t("settings.mcp.server_settings"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.mcp.enable"),
                         Switch::new("mcp-server-enabled")
@@ -97,7 +97,7 @@ impl SettingsWindow {
                                     .text_color(cx.theme().muted_foreground),
                             )
                             .child(
-                                Self::icon_button(
+                                crate::controls::icon_button(
                                     "mcp-copy-url",
                                     "icons/copy.svg",
                                     "Copy URL",
@@ -115,7 +115,7 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group(knot_core::l10n::t("settings.mcp.install_command"))
+                crate::controls::group(knot_core::l10n::t("settings.mcp.install_command"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.mcp.agent"),
 // The agents that have an MCP server to register with:
@@ -157,7 +157,7 @@ impl SettingsWindow {
                                     .into_any_element()
                             })
                             .child(
-                                Self::icon_button(
+                                crate::controls::icon_button(
                                     "mcp-copy-install-command",
                                     "icons/copy.svg",
                                     "Copy command",

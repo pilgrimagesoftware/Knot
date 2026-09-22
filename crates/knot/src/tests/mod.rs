@@ -12,6 +12,7 @@ mod about_window;
 mod agent_context_menu;
 mod agent_signals;
 mod agents_menu;
+mod import_window;
 mod l10n_catalog;
 mod layout_model;
 mod markdown_view;

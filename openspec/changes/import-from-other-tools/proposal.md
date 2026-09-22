@@ -18,8 +18,9 @@ Two sources are sitting on disk right now:
 
 ## What Changes
 
-- Add an **Import** tab to the settings window, the single place both imports
-  live.
+- Add an **Import window**, opened from File ▸ Import…, the single place both
+  imports live. It is a window rather than a settings pane: an import is an
+  action the user runs once, not a preference Knot keeps.
 - **Import personas from subagent definitions.** A provider per coding-agent
   tool finds that tool's subagent definitions and offers them; the user picks
   which to import, and each becomes a `user` persona.
@@ -49,8 +50,9 @@ Two sources are sitting on disk right now:
   already has - which sources are read, what each contributes, and the rules
   every import obeys (additive only, idempotent, partial failure tolerated).
 
-### Modified Capabilities
-- `settings-ui`: adds the Import tab and what it shows.
+### New Capabilities
+- `import-ui`: the Import window - where an import is run from, what it shows
+  before it writes anything, and what it reports afterwards.
 
 ## Impact
 
@@ -58,8 +60,11 @@ Two sources are sitting on disk right now:
   reader; both produce records the existing settings store already holds.
   Reading a `.plist` needs a plist parser - the first new third-party
   dependency this port has taken on for a feature.
-- `crates/knot`: the Import tab, its two panes, and the selection list each
-  import presents before it does anything.
+- `crates/knot`: the Import window, its two sections, and the selection list
+  each import presents before it does anything. The two control constructors
+  it shares with the settings window (`group`, `icon_button`) move out of
+  `SettingsWindow` into `crate::controls`, which the agent editor and
+  workspace manager were already reaching for by name.
 - No change to `knot-git`, `knot-discovery`, the MCP server, or how agents
   launch. Nothing here touches a running agent.
 - Skwad is read-only throughout. Import never writes to its preferences, so a

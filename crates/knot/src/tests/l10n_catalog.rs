@@ -272,21 +272,22 @@ fn every_settings_tab_label_resolves() {
     }
 }
 
-/// The Import tab draws every word it shows from the catalog, empty states
-/// included - and an empty state is exactly the copy a missing key would
-/// replace with a key string, since it only appears when there is nothing
-/// else on screen to notice.
+/// The Import window draws every word it shows from the catalog, its title
+/// and empty states included - and an empty state is exactly the copy a
+/// missing key would replace with a key string, since it only appears when
+/// there is nothing else on screen to notice.
 #[test]
-fn import_pane_labels_resolve() {
-    for key in ["settings.import.personas_title",
-                "settings.import.personas_none",
-                "settings.import.workspaces_title",
-                "settings.import.workspaces_none",
-                "settings.import.import_selected",
-                "settings.import.import_count",
-                "settings.import.result_title",
-                "settings.import.nothing_to_do",
-                "settings.import.refresh"]
+fn import_window_labels_resolve() {
+    for key in ["import.title",
+                "import.personas_title",
+                "import.personas_none",
+                "import.workspaces_title",
+                "import.workspaces_none",
+                "import.import_selected",
+                "import.import_count",
+                "import.result_title",
+                "import.nothing_to_do",
+                "import.refresh"]
     {
         assert_ne!(knot_core::l10n::t(key),
                    key,

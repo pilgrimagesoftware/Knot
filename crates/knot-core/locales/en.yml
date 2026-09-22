@@ -103,7 +103,6 @@ settings:
     voice: "Voice"
     mcp: "MCP"
     appearance: "Appearance"
-    import: "Import"
   general:
     appearance: "Appearance"
     appearance_hint: "Derives color scheme from terminal background color."
@@ -163,16 +162,6 @@ settings:
     agent: "Agent"
     command: "Command"
     no_setup: "No manual setup needed."
-  import:
-    personas_title: "Personas from subagent definitions"
-    personas_none: "No subagent definitions found."
-    workspaces_title: "Workspaces from Skwad"
-    workspaces_none: "No Skwad installation found, so there is nothing to import."
-    import_selected: "Import"
-    import_count: "Import %{count}"
-    result_title: "Last import"
-    nothing_to_do: "Nothing to import."
-    refresh: "Look again"
   appearance:
     fonts: "Fonts"
     ui: "UI"
@@ -308,7 +297,16 @@ broadcast:
   cancel: "Cancel"
 
 import:
-  tab: "Import"
+  title: "Import"
+  personas_title: "Personas from subagent definitions"
+  personas_none: "No subagent definitions found."
+  workspaces_title: "Workspaces from Skwad"
+  workspaces_none: "No Skwad installation found, so there is nothing to import."
+  import_selected: "Import"
+  import_count: "Import %{count}"
+  result_title: "Last import"
+  nothing_to_do: "Nothing to import."
+  refresh: "Look again"
   result:
     added: "Added %{count}: %{names}"
     skipped: "Already present, left alone (%{count}): %{names}"

@@ -10,7 +10,7 @@ use crate::settings_window::SettingsWindow;
 impl SettingsWindow {
     pub(crate) fn render_appearance(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex().gap_3().child(
-            Self::group(knot_core::l10n::t("settings.appearance.fonts"))
+            crate::controls::group(knot_core::l10n::t("settings.appearance.fonts"))
                 .child(Self::row(
                     knot_core::l10n::t("settings.appearance.ui"),
                     Self::font_picker_button(

@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::BTreeSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -30,7 +29,6 @@ use gpui_kit::div;
 use gpui_kit::px;
 use gpui_kit::size;
 use parking_lot::Mutex;
-use uuid::Uuid;
 
 // macOS-only: the module it names is `cfg(target_os = "macos")`, and so
 // is every use of it here.
@@ -129,10 +127,6 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                   ai_api_key_input,
                                                   autopilot_custom_prompt_input,
                                                   mcp_port_input,
-                                                  import_sources: None,
-                                                  import_subagent_selection: BTreeSet::new(),
-                                                  import_workspace_selection: BTreeSet::new(),
-                                                  import_result: None,
                                                   _agent_options_subscription:
                                                       agent_options_subscription,
                                                   _ai_api_key_subscription:
@@ -203,18 +197,16 @@ pub(crate) enum SettingsTab {
     Voice,
     Mcp,
     Terminal,
-    Import,
 }
 
 impl SettingsTab {
-    pub(crate) const ALL: [SettingsTab; 8] = [SettingsTab::General,
+    pub(crate) const ALL: [SettingsTab; 7] = [SettingsTab::General,
                                               SettingsTab::Coding,
                                               SettingsTab::Personas,
                                               SettingsTab::Autopilot,
                                               SettingsTab::Voice,
                                               SettingsTab::Mcp,
-                                              SettingsTab::Terminal,
-                                              SettingsTab::Import];
+                                              SettingsTab::Terminal];
 
     /// The tab's title. `Terminal` is titled "Appearance": the pane grew
     /// from terminal appearance into the window's look as a whole, and the
@@ -228,7 +220,6 @@ impl SettingsTab {
             SettingsTab::Voice => knot_core::l10n::t("settings.tabs.voice"),
             SettingsTab::Mcp => knot_core::l10n::t("settings.tabs.mcp"),
             SettingsTab::Terminal => knot_core::l10n::t("settings.tabs.appearance"),
-            SettingsTab::Import => knot_core::l10n::t("settings.tabs.import"),
         }
     }
 }
@@ -246,16 +237,6 @@ pub(crate) struct SettingsWindow {
     ai_api_key_input: Entity<InputState>,
     autopilot_custom_prompt_input: Entity<InputState>,
     mcp_port_input: Entity<InputState>,
-    /// What the Import tab last found on disk, scanned when the tab is
-    /// entered rather than per frame - see `panes::import`.
-    import_sources: Option<panes::import::ImportSources>,
-    /// Subagent definitions ticked for import, keyed by the path they were
-    /// read from, which is unique where a name is not.
-    import_subagent_selection: BTreeSet<String>,
-    /// Skwad workspaces ticked for import.
-    import_workspace_selection: BTreeSet<Uuid>,
-    /// The last import's summary, shown until another import replaces it.
-    import_result: Option<knot_core::import::ImportResult>,
     _agent_options_subscription: Subscription,
     _ai_api_key_subscription: Subscription,
     _autopilot_custom_prompt_subscription: Subscription,
@@ -283,7 +264,6 @@ impl SettingsWindow {
             SettingsTab::Voice => px(520.),
             SettingsTab::Mcp => px(600.),
             SettingsTab::Terminal => px(380.),
-            SettingsTab::Import => px(600.),
         }
     }
 
@@ -301,16 +281,6 @@ impl SettingsWindow {
                                         let tab = SettingsTab::ALL[*index];
                                         settings_window.update(app, |view, cx| {
                                                            view.selected_tab = tab;
-                                                           // Entering Import is
-                                                           // what triggers the
-                                                           // scan: reading two
-                                                           // directories and a
-                                                           // plist is I/O, and
-                                                           // the render path
-                                                           // must not do it.
-                                                           if tab == SettingsTab::Import {
-                                                               view.ensure_import_sources();
-                                                           }
                                                            cx.notify();
                                                        });
                                         window.resize(size(SETTINGS_WINDOW_WIDTH,
@@ -329,17 +299,14 @@ impl Render for SettingsWindow {
             SettingsTab::Voice => self.render_voice(cx).into_any_element(),
             SettingsTab::Mcp => self.render_mcp(cx).into_any_element(),
             SettingsTab::Terminal => self.render_appearance(cx).into_any_element(),
-            SettingsTab::Import => self.render_import(cx).into_any_element(),
         };
 
-        // Personas and Import manage their own scroll regions (only the list
-        // scrolls, the title/action row stays pinned) - scrolling the body too
-        // would let both containers move at once and make the group's
-        // title/border appear to drift.
+        // Personas manages its own scroll region (only the list scrolls, the
+        // title/action row stays pinned) - scrolling the body too would let
+        // both containers move at once and make the group's title/border
+        // appear to drift.
         let mut settings_body = div().id("settings-body").flex_1();
-        settings_body = if matches!(self.selected_tab,
-                                    SettingsTab::Personas | SettingsTab::Import)
-        {
+        settings_body = if matches!(self.selected_tab, SettingsTab::Personas) {
             settings_body.overflow_hidden()
         }
         else {
