@@ -96,9 +96,9 @@ impl SettingsWindow {
         v_flex()
             .gap_3()
             .child(
-                Self::group("Enable")
+                Self::group(knot_core::l10n::t("settings.autopilot.enable_group"))
                     .child(Self::row(
-                        "Enable autopilot",
+                        knot_core::l10n::t("settings.autopilot.enable"),
                         Switch::new("autopilot-enabled")
                             .checked(autopilot_enabled)
                             .on_click({
@@ -114,14 +114,13 @@ impl SettingsWindow {
                     ))
                     .child(Self::hint(
                         cx,
-                        "Automatically detect when agents need input and take action — no need \
-                         to babysit your agents. Only available with Claude Code.",
+                        knot_core::l10n::t("settings.autopilot.blurb"),
                     )),
             )
             .child(
-                Self::group("AI Provider")
+                Self::group(knot_core::l10n::t("settings.autopilot.provider_group"))
                     .child(Self::row(
-                        "Provider",
+                        knot_core::l10n::t("settings.autopilot.provider"),
                         Button::new("autopilot-provider-picker")
                             .label(provider_label)
                             .dropdown_caret(true)
@@ -148,20 +147,20 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "API Key",
+                        knot_core::l10n::t("settings.autopilot.api_key"),
                         Input::new(&self.ai_api_key_input)
                             .font_family(cx.theme().mono_font_family.clone())
                             .flex_1(),
                     ))
                     .child(Self::text_row(
-                        "Model",
+                        knot_core::l10n::t("settings.autopilot.model"),
                         Self::mono_text(cx, model_name).text_color(cx.theme().muted_foreground),
                     )),
             )
             .child(
-                Self::group("Action")
+                Self::group(knot_core::l10n::t("settings.autopilot.action_group"))
                     .child(Self::row(
-                        "When input is detected",
+                        knot_core::l10n::t("settings.autopilot.on_input"),
                         Button::new("autopilot-action-picker")
                             .label(action_label)
                             .dropdown_caret(true)
@@ -186,7 +185,7 @@ impl SettingsWindow {
                     ))
                     .children(is_custom_action.then(|| {
                         Self::row(
-                            "Custom prompt",
+                            knot_core::l10n::t("settings.autopilot.custom_prompt"),
                             Input::new(&self.autopilot_custom_prompt_input).flex_1(),
                         )
                         .into_any_element()
