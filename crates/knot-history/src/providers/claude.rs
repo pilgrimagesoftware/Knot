@@ -11,6 +11,7 @@ use time::OffsetDateTime;
 use crate::consts::{CLAUDE_PROJECTS_DIR, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
+use crate::providers::jsonl_entries;
 use crate::title::{extract_title, format_command_message, is_valid_title};
 
 pub struct ClaudeProvider;
@@ -39,15 +40,10 @@ fn parse_session_file(path: &Path) -> Option<ParsedSession> {
     let mut title: Option<String> = None;
     let mut message_count = 0usize;
 
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let Ok(json) = serde_json::from_str::<Value>(trimmed)
-        else {
-            continue;
-        };
+    // Not the shared `first_title` scan: this one counts every message as
+    // it goes, and its title needs a slash command expanded before it can
+    // be judged - so it walks the shared entry iterator itself.
+    for json in jsonl_entries(&content) {
         let Some(entry_type) = json.get("type").and_then(Value::as_str)
         else {
             continue;

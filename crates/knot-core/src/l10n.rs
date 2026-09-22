@@ -65,6 +65,18 @@ mod tests {
         assert_eq!(t("panel.context_usage"), "Context usage");
     }
 
+    /// The code-block copy control's pair. Asserted as resolving rather than
+    /// as its English copy, per the catalogue-key contract: the renderer that
+    /// reads them needs a `Window` and an `App`, so a key missing from the
+    /// catalogue would otherwise surface only as the raw key drawn in a
+    /// tooltip.
+    #[test]
+    fn code_block_copy_keys_resolve() {
+        for key in ["panel.copy_code", "panel.copied_code"] {
+            assert_ne!(t(key), key, "{key} should resolve to its localized copy");
+        }
+    }
+
     #[test]
     fn unknown_key_falls_back_to_key_string() {
         assert_eq!(t("does.not.exist"), "does.not.exist");
