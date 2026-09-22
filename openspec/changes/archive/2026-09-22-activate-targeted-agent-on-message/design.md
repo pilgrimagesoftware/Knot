@@ -110,6 +110,39 @@ itself the way `PromptOrigin` does (which exists because the message's
 Nothing downstream needs to know later whether a given message triggered
 activation.
 
+**Activation is the flag plus both `ensure_*`, drained beside the repaint
+poll rather than inside it.**
+
+Two corrections to the sketch above, found while implementing:
+
+`ensure_session` alone cannot start a message recipient. It is the PTY path
+and returns early for anything `runs_a_terminal_process` rejects, and
+messaging already refuses shell agents as recipients - so every recipient
+this change can reach starts through `ensure_panel_session` instead. Both
+also return early while `agent.activated` is clear, which the store flag
+only leaves set through `set_activated`. So the drain does exactly what the
+sidebar's click handler does minus the selection: `set_activated(id, true)`,
+then `ensure_session` and `ensure_panel_session`. Neither half alone starts
+anything, which is why the spec's "the same way selecting it in the UI does"
+is the whole instruction. The selection itself is deliberately not changed -
+a message addressed to a background agent is not a request to change what
+the user is looking at.
+
+The drain lives in `WorkspaceWindow::activate_messaged_agents`
+(`workspace_window/agents.rs`), called from the repaint poll in `open.rs`
+immediately before `panel_needs_repaint`, with its return folded into the
+same `cx.notify()` condition. Not inside `panel_needs_repaint`, which takes
+no `Context` and so cannot reach a global; this matches
+`raise_awaiting_notifications`, the existing queue drain, which is a sibling
+of the poll for the same reason. Ordering it before the repaint checks means
+a session started this frame has its slot in place when they run.
+
+The claim step is a free `claim_activations` function so the put-back is
+testable without a window: dropping an entry this window does not own would
+strand a stopped agent whose own window merely had not polled yet, and it
+would fail silently - the message is already delivered, and nothing else
+ever starts the recipient.
+
 ## Risks / Trade-offs
 
 - **[Risk]** The activation queue could grow if a workspace's window never

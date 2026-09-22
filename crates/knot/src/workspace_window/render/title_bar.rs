@@ -86,7 +86,7 @@ impl WorkspaceWindow {
                 }
                 None => div().text_lg()
                              .text_color(cx.theme().muted_foreground)
-                             .child("Choose an agent from the sidebar")
+                             .child(knot_core::l10n::t("workspace.choose_agent"))
                              .into_any_element(),
             }
         }
