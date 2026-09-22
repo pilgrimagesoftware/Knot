@@ -279,15 +279,19 @@ impl AgentEditor {
             // both its id and its resume target with the fork flag set -
             // `CreateOptions` has no field for any of the three, because
             // every other creation path starts a session from scratch.
-            if let Some(session) = self.prefill.session_id.clone() {
-                let _ = store.fork_session(id, session);
+            if let Some(session) = self.prefill.session_id.clone()
+               && let Err(error) = store.fork_session(id, session)
+            {
+                eprintln!("failed to fork the agent's session: {error}");
             }
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
             id
         };
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist() {
+            eprintln!("failed to persist the agent roster: {error}");
+        }
         (self.on_created)(created_id, window, cx);
         window.remove_window();
     }
@@ -339,7 +343,9 @@ impl AgentEditor {
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
         }
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist() {
+            eprintln!("failed to persist the agent roster: {error}");
+        }
         (self.on_created)(id, window, cx);
         window.remove_window();
     }
