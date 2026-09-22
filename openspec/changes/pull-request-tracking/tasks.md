@@ -2,15 +2,15 @@
 
 ## 1. URL detection
 
-- [ ] 1.1 Add `crates/knot-core/src/pull_request_url.rs` with a
+- [x] 1.1 Add `crates/knot-core/src/pull_request_url.rs` with a
       `PullRequestUrl { host, owner, repo, number }` type and
       `scan_pull_request_urls(&str)`; verify unit tests cover a bare URL, a
       `/files` suffix, a `#issuecomment-…` fragment, an issues URL, a repo root
       URL, a non-GitHub host, and several URLs in one string
-- [ ] 1.2 Give `PullRequestUrl` a canonical `Display` that drops any suffix, so
+- [x] 1.2 Give `PullRequestUrl` a canonical `Display` that drops any suffix, so
       two spellings of one pull request compare equal; verify a test asserting
       the `/files` and bare forms produce the same canonical string
-- [ ] 1.3 Add a byte-stream scanner with a carry buffer for chunk boundaries;
+- [x] 1.3 Add a byte-stream scanner with a carry buffer for chunk boundaries;
       verify a test that feeds one URL one byte at a time still yields it, and
       one that feeds 1 MB of unrelated output yields nothing
 
@@ -33,17 +33,17 @@
 
 ## 3. Forge client
 
-- [ ] 3.1 Create the `knot-forge` crate with a `ForgeError` thiserror enum, a
+- [x] 3.1 Create the `knot-forge` crate with a `ForgeError` thiserror enum, a
       `Result` alias and a `consts.rs`, wired into the workspace and the root
       `Cargo.toml` dependency list; verify `cargo build --workspace` succeeds
-- [ ] 3.2 Implement `probe() -> ForgeAvailability` (`Missing | Unauthenticated |
+- [x] 3.2 Implement `probe() -> ForgeAvailability` (`Missing | Unauthenticated |
       Ready`) over `gh auth status`; verify tests with a stubbed runner for all
       three outcomes
-- [ ] 3.3 Implement `pull_request_state(url)` over
+- [x] 3.3 Implement `pull_request_state(url)` over
       `gh pr view <url> --json number,title,state,isDraft,statusCheckRollup`
       with the 30s timeout; verify tests parsing a real captured payload for
       open, draft, merged and closed, and one with an unknown extra field
-- [ ] 3.4 Verify a missing field leaves that part of the state absent rather
+- [x] 3.4 Verify a missing field leaves that part of the state absent rather
       than failing the parse; add that test
 
 ## 4. Detection taps
