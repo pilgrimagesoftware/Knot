@@ -25,6 +25,7 @@ use crate::app_support::app_titlebar_icon;
 use crate::app_support::observe_system_appearance;
 use crate::consts;
 use crate::dashboard;
+use crate::diff_stats::DiffStatsCache;
 use crate::window_options::command_center_window_options;
 use crate::workspace_window::WorkspaceWindow;
 
@@ -33,6 +34,10 @@ pub(crate) struct CommandCenterWindow {
     messages:       Arc<Mutex<knot_messaging::MessageStore>>,
     settings:       knot_core::Settings,
     dashboard_sort: dashboard::DashboardSort,
+    /// Diff stats per agent card. This window shows every workspace's
+    /// agents, so it is the worst place to run `git` where the card is
+    /// drawn - which is what it did.
+    diff_stats:     DiffStatsCache,
 }
 
 impl CommandCenterWindow {
@@ -51,11 +56,50 @@ impl CommandCenterWindow {
                                                        messages,
                                                        settings,
                                                        dashboard_sort:
-                                                           dashboard::DashboardSort::default() });
+                                                           dashboard::DashboardSort::default(),
+                                                       diff_stats: DiffStatsCache::default() });
                   cx.new(|cx| Root::new(view, window, cx))
               })
         {
             eprintln!("failed to open command center window: {error}");
+        }
+    }
+
+    /// Asks for a fresh diff stat for every agent with a card, for the ones
+    /// whose cached stat has aged out.
+    ///
+    /// Called from the render path, which it is allowed to be because it
+    /// starts no `git` there: the claim is a map lookup and an `Instant`
+    /// compare, and the subprocess runs on a background thread. The answer
+    /// reaches the next frame through `cx.notify`, so a card that has no
+    /// stat yet simply draws without one and gains it a moment later.
+    fn refresh_diff_stats(&mut self, cx: &mut Context<Self>) {
+        let folders = {
+            let store = self.store.lock();
+            store.agents()
+                 .iter()
+                 .filter(|agent| !agent.is_companion)
+                 .map(|agent| (agent.id, agent.folder.clone()))
+                 .collect::<Vec<_>>()
+        };
+        for (id, folder) in folders {
+            let Some(writer) = self.diff_stats.claim_refresh(id)
+            else {
+                continue;
+            };
+            let view = cx.entity();
+            cx.spawn(async move |_this, cx| {
+                  let stats = cx.background_executor()
+                                .spawn(async move { Repository::open(&folder).diff_stats().ok() })
+                                .await;
+                  writer.record(stats);
+                  cx.update(|app| {
+                        view.update(app, |_view, cx| {
+                                cx.notify();
+                            });
+                    });
+              })
+              .detach();
         }
     }
 
@@ -82,6 +126,8 @@ impl CommandCenterWindow {
 impl Render for CommandCenterWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
+        self.refresh_diff_stats(cx);
+        let diff_stats = self.diff_stats.snapshot();
         let dashboard_workspaces = {
             let store = self.store.lock();
             store.workspaces()
@@ -94,7 +140,9 @@ impl Render for CommandCenterWindow {
                                                 .map(|agent| {
                                                     let folder_name = agent.folder_name();
                                                     let git_stats =
-                                          Repository::open(&agent.folder).diff_stats().ok();
+                                                        diff_stats.get(&agent.id)
+                                                                  .copied()
+                                                                  .flatten();
                                                     dashboard::DashboardAgent { id: agent.id,
                                                                   avatar: agent.avatar
                                                                                .graphemes(true)

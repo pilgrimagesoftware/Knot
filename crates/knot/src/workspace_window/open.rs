@@ -86,9 +86,7 @@ impl WorkspaceWindow {
                             let mut window = WorkspaceWindow {
                     exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
-                    diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
-                    diff_stats_requested: BTreeMap::new(),
-                    diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    diff_stats: crate::diff_stats::DiffStatsCache::default(),
                     open_config_selector: None,
                     store,
                     messages,
