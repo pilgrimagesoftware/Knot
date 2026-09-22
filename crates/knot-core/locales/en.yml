@@ -61,6 +61,15 @@ panel:
     expand: "Show these tool calls"
 
 settings:
+  title: "Settings"
+  tabs:
+    general: "General"
+    coding: "Coding"
+    personas: "Personas"
+    autopilot: "Autopilot"
+    voice: "Voice"
+    mcp: "MCP"
+    appearance: "Appearance"
   general:
     appearance: "Appearance"
     appearance_hint: "Derives color scheme from terminal background color."
@@ -139,6 +148,30 @@ settings:
 
 menu:
   agents: "Agents"
+  # One agent row's context menu, and the menu bar's Agents menu,
+  # which is built from the same entry list.
+  agent:
+    new_companion: "New Companion…"
+    new_shell_companion: "New Shell Companion"
+    edit_agent: "Edit Agent…"
+    fork_agent: "Fork Agent"
+    duplicate_agent: "Duplicate Agent"
+    move_to_workspace: "Move to Workspace"
+    save_to_bench: "Save to Bench"
+    open_in: "Open In…"
+    markdown_files: "Markdown Files"
+    register_agent: "Register Agent"
+    deactivate: "Deactivate"
+    restart_agent: "Restart Agent"
+    remove_agent: "Remove Agent"
+  # The agent list's background menu, over the workspace rather than
+  # any one agent.
+  sidebar:
+    new_agent: "New Agent"
+    restart_all: "Restart All"
+    close_all: "Close All"
+    deactivate_all: "Deactivate All"
+    broadcast: "Broadcast to All Agents…"
 
 quit:
   working_title: "Agents are still working"
