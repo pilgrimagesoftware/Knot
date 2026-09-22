@@ -102,7 +102,7 @@ pub(crate) const SETTINGS_WINDOW_WIDTH: gpui_kit::Pixels = px(620.);
 pub(crate) fn settings_window_options(cx: &App) -> WindowOptions {
     WindowOptions {
         titlebar: Some(gpui_kit::TitlebarOptions {
-            title: Some("Settings".into()),
+            title: Some(knot_core::l10n::t("settings.title").into()),
             ..Default::default()
         }),
         window_bounds: Some(WindowBounds::centered(

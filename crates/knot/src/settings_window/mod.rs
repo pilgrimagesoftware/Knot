@@ -207,15 +207,18 @@ impl SettingsTab {
                                               SettingsTab::Mcp,
                                               SettingsTab::Terminal];
 
-    pub(crate) fn label(self) -> &'static str {
+    /// The tab's title. `Terminal` is titled "Appearance": the pane grew
+    /// from terminal appearance into the window's look as a whole, and the
+    /// title followed while the variant did not.
+    pub(crate) fn label(self) -> String {
         match self {
-            SettingsTab::General => "General",
-            SettingsTab::Coding => "Coding",
-            SettingsTab::Personas => "Personas",
-            SettingsTab::Autopilot => "Autopilot",
-            SettingsTab::Voice => "Voice",
-            SettingsTab::Mcp => "MCP",
-            SettingsTab::Terminal => "Appearance",
+            SettingsTab::General => knot_core::l10n::t("settings.tabs.general"),
+            SettingsTab::Coding => knot_core::l10n::t("settings.tabs.coding"),
+            SettingsTab::Personas => knot_core::l10n::t("settings.tabs.personas"),
+            SettingsTab::Autopilot => knot_core::l10n::t("settings.tabs.autopilot"),
+            SettingsTab::Voice => knot_core::l10n::t("settings.tabs.voice"),
+            SettingsTab::Mcp => knot_core::l10n::t("settings.tabs.mcp"),
+            SettingsTab::Terminal => knot_core::l10n::t("settings.tabs.appearance"),
         }
     }
 }

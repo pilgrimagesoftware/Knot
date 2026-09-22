@@ -225,19 +225,18 @@ fn settings_tab_default_is_general() {
 
 #[test]
 fn settings_tab_labels_are_distinct() {
-    let labels: BTreeSet<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
+    let labels: BTreeSet<String> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
     assert_eq!(labels.len(), SettingsTab::ALL.len());
 }
 
 #[test]
 fn settings_tab_covers_every_swift_pane() {
-    let labels: Vec<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
-    assert_eq!(labels,
-               vec!["General",
-                    "Coding",
-                    "Personas",
-                    "Autopilot",
-                    "Voice",
-                    "MCP",
-                    "Appearance"]);
+    assert_eq!(SettingsTab::ALL.to_vec(),
+               vec![SettingsTab::General,
+                    SettingsTab::Coding,
+                    SettingsTab::Personas,
+                    SettingsTab::Autopilot,
+                    SettingsTab::Voice,
+                    SettingsTab::Mcp,
+                    SettingsTab::Terminal]);
 }
