@@ -93,19 +93,26 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
                                            edit_target },
                       move |_id, _window, app| {
                           window_entity.update(app, |view, cx| {
-                              // Freshly loaded, not this window's snapshot: the
-                              // sidebar row resolves the agent's persona name
-                              // from `view.settings.personas`, which was taken
-                              // when the window opened. Assigning a persona
-                              // added since then (or via this same edit, on an
-                              // agent that had none) would resolve to nothing
-                              // and the row would keep showing no persona line.
-                              view.settings =
-                                  knot_core::Settings::load().unwrap_or_else(|_| {
-                                                                  view.settings.clone()
-                                                              });
-                              cx.notify();
-                          });
+                                           // Freshly loaded, not this window's
+                                           // snapshot: the
+                                           // sidebar row resolves the agent's
+                                           // persona name
+                                           // from `view.settings.personas`,
+                                           // which was taken
+                                           // when the window opened. Assigning
+                                           // a persona
+                                           // added since then (or via this same
+                                           // edit, on an
+                                           // agent that had none) would resolve
+                                           // to nothing
+                                           // and the row would keep showing no
+                                           // persona line.
+                                           view.settings =
+                                               knot_core::Settings::load().unwrap_or_else(|_| {
+                                                                              view.settings.clone()
+                                                                          });
+                                           cx.notify();
+                                       });
                       },
                       app);
 }
@@ -129,7 +136,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             AgentMenuEntry::MoveToWorkspace => {
                 let targets = targets.clone();
                 let move_targets = move_targets.clone();
-                menu.submenu("Move to Workspace", window, cx, move |mut submenu, _, _| {
+                let move_title = AgentMenuEntry::MoveToWorkspace.label().unwrap_or_default();
+                menu.submenu(move_title, window, cx, move |mut submenu, _, _| {
                         for (workspace_id, workspace_name) in &move_targets {
                             let targets = targets.clone();
                             let workspace_id = *workspace_id;
@@ -145,15 +153,16 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             }
             AgentMenuEntry::OpenIn => {
                 let folder = targets.folder.clone();
-                menu.submenu("Open In…", window, cx, move |mut submenu, _, _| {
+                let open_in_title = AgentMenuEntry::OpenIn.label().unwrap_or_default();
+                menu.submenu(open_in_title, window, cx, move |mut submenu, _, _| {
                         for item in open_in::open_in_entries() {
                             submenu = match item {
                                 open_in::OpenInEntry::Separator => submenu.separator(),
                                 open_in::OpenInEntry::App(app_entry) => {
                                     let folder = folder.clone();
-                                    submenu.item(PopupMenuItem::new(app_entry.label).on_click(
+                                    submenu.item(PopupMenuItem::new(app_entry.label()).on_click(
                                     move |_, _window, _app| {
-                                        open_in::open_folder(app_entry.id, &folder);
+                                        open_in::open_folder(app_entry, &folder);
                                     },
                                 ))
                                 }
@@ -165,7 +174,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             AgentMenuEntry::MarkdownFiles => {
                 let targets = targets.clone();
                 let history = markdown_history.clone();
-                menu.submenu("Markdown Files", window, cx, move |mut submenu, _, _| {
+                let markdown_title = AgentMenuEntry::MarkdownFiles.label().unwrap_or_default();
+                menu.submenu(markdown_title, window, cx, move |mut submenu, _, _| {
                         for file in &history {
                             let targets = targets.clone();
                             let file = file.clone();
