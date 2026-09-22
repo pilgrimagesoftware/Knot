@@ -267,6 +267,8 @@ agent_editor:
   save: "Save"
   add: "Add Agent"
   cancel: "Cancel"
+  no_folder: "No folder selected"
+  persona_none: "None"
   error_choose_folder: "Choose a folder."
   error_enter_name: "Enter a name."
 

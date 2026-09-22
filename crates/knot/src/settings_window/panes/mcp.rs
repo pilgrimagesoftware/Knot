@@ -6,10 +6,7 @@ use gpui_kit::Styled;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::div;
 use gpui_kit::px;
@@ -121,35 +118,22 @@ impl SettingsWindow {
                 Self::group(knot_core::l10n::t("settings.mcp.install_command"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.mcp.agent"),
-                        Button::new("mcp-agent-type-picker")
-                            .label(agent_type_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    let mut menu = menu;
-                                    // The agents that have an MCP server to
-                                    // register with: not a shell, and not a
-                                    // custom command whose registration Knot
-                                    // knows nothing about.
-                                    for (label, value) in
-                                        knot_core::agent_type::ALL
-                                            .iter()
-                                            .filter(|kind| !kind.is_custom && !kind.is_shell)
-                                            .map(|kind| (kind.label, kind.id))
-                                    {
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, _, app| {
-                                                settings_window.update(app, |view, cx| {
-                                                    view.select_mcp_agent_type(value, cx);
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+// The agents that have an MCP server to register with:
+                        // not a shell, and not a custom command whose
+                        // registration Knot knows nothing about.
+                        Self::dropdown("mcp-agent-type-picker",
+                                       agent_type_label,
+                                       knot_core::agent_type::ALL.iter()
+                                                                 .filter(|kind| {
+                                                                     !kind.is_custom
+                                                                     && !kind.is_shell
+                                                                 })
+                                                                 .map(|kind| {
+                                                                     (kind.label.into(), kind.id)
+                                                                 })
+                                                                 .collect(),
+                                       settings_window.clone(),
+                                       |view, value, _, cx| view.select_mcp_agent_type(value, cx)),
                     ))
                     .child(Self::text_row(
                         knot_core::l10n::t("settings.mcp.command"),
