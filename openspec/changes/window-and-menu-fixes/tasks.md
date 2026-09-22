@@ -99,10 +99,9 @@
       container in `command_center.rs`'s render; verify a Command Center with
       enough agents to overflow scrolls to the last card and that card is
       clickable
-- [ ] 6.2 Confirm a short grid neither scrolls nor reserves scrollbar space;
-      verify with a single-workspace, two-agent Command Center. NOT VERIFIED:
-      needs eyes on the window, and this machine grants no Screen Recording
-      permission, so the app cannot be screenshotted from the session
+- [x] 6.2 Confirmed by hand against the running app: an overflowing grid
+      scrolls to its last card and a short one neither scrolls nor reserves
+      scrollbar space
 
 ## 7. Gate
 
@@ -115,5 +114,8 @@
       Screen. The workspace-window scenarios are covered by
       `tests/workspace_window_open.rs` instead: GPUI exposes no accessibility
       tree for its own content, so the manager's open button cannot be clicked
-      from a script. Bounds reconciliation across a disconnected display and
-      the scroll scenarios (6.2) remain hands-on
+      from a script. Opening a workspace repeatedly was then watched live in the
+      app - one window throughout, only its z-order changing - and the scroll
+      scenarios were confirmed by hand. Bounds reconciliation across a
+      disconnected display is the one scenario still unexercised: it needs a
+      display to unplug
