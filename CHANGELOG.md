@@ -1,4 +1,60 @@
 
+## 1.12.0 - 2026-09-22
+
+### Added
+- Add an Agents menu to the application menu bar
+- Show the working indicator on the sidebar row and dashboard card
+- Delete queued messages and show retry as an icon
+- Edit a queued message in the composer
+- Adopt the macOS system palette for app chrome
+- Add the sidebar background context menu
+- Add t_with for localized text with a value in it
+- Warn before quitting while agents are working
+- Operate the workspace name dialog from the keyboard
+- Preview each font picker in the family it names
+- Replace the About alert dialog with a window
+- Copy build details by clicking them, and credit Skwad
+- Swap the UI and title font roles, with a load-time migration
+- Render Markdown headers in the title font
+- Persist per-agent Panel session setup
+- Collapse a turn's tool calls into one summary line
+- Actually raise the desktop notifications the spec requires
+- Make the workspace sidebar resizable
+
+
+### Changed
+- Delete orphaned source files and dead diff classifier
+- Split the tests grab-bag by subject
+- Split workspace_window into per-concern modules
+- Split settings_window into one module per tab
+- Enforce the file-size limit, drop the crate-wide dead-code allow
+- Replace std Mutex with parking_lot to delete the poisoning split
+- Cut the registration prompt to what agents act on
+- Give every module explicit imports, drop the glob prelude
+- Make the settings vocabularies enums, not strings
+
+
+### Documentation
+- Base PRs on develop and merge with a merge commit
+- Derive the worktree path from the checkout root
+- State the worktree convention in AGENTS.md and the .agents skills
+- Update every remaining reference to the renamed make targets
+- Correct the embedded-font doc comment for the swapped roles
+
+
+### Fixed
+- Scroll the persona picker and drop deleted personas
+- Focus the workspace window root so the Agents menu enables
+- Drop the working indicator from the sidebar agent row
+- Deliver the font panel's choice to the settings window
+- Stop leaking adapter processes, memory and git subprocesses
+- Gate the macOS-only palette math by cfg, not by a blanket allow
+- Gate the Rgba import with the code that uses it
+- Queue the inbox nudge instead of prompting over a live turn
+- Gate the macOS-only imports the explicit-import pass left bare
+
+
+
 ## 1.11.0 - 2026-09-21
 
 ### Added
