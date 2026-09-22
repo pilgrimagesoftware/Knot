@@ -110,8 +110,9 @@ impl WorkspaceWindow {
                           .filter(|(_, queue)| !queue.is_empty())
                           .map(|(id, _)| *id)
                           .collect::<Vec<_>>();
+        let mut prompt_picked_up = false;
         for id in waiting {
-            self.drain_panel_prompt(id);
+            prompt_picked_up |= self.drain_panel_prompt(id);
         }
         let Some(id) = self.selected_agent
         else {
@@ -139,6 +140,11 @@ impl WorkspaceWindow {
         if indicator_due {
             self.working_indicator_last_repaint = std::time::Instant::now();
         }
-        phase_changed || events_arrived || indicator_due || stats_changed || prompt_results_changed
+        phase_changed
+        || events_arrived
+        || indicator_due
+        || stats_changed
+        || prompt_results_changed
+        || prompt_picked_up
     }
 }
