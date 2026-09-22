@@ -336,7 +336,8 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
         // turn is the first thing the panel shows, and an agent that
         // refuses it (an exhausted daily quota, say) otherwise leaves the
         // panel sitting on a prompt that never answers.
-        recorder.error(format!("The agent could not start its first turn: {error}"));
+        recorder.error(knot_core::l10n::t_with("panel.error_first_turn",
+                                               &[("error", &error.to_string())]));
         eprintln!("failed to send panel registration prompt: {error}");
     }
 }
