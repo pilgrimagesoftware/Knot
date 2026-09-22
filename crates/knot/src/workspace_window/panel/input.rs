@@ -30,6 +30,7 @@ use gpui_kit::px;
 use gpui_kit::rgb;
 use uuid::Uuid;
 
+use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::PERMISSION_SELECTOR_ID;
@@ -77,6 +78,10 @@ impl WorkspaceWindow {
                                             let state = handle.state();
                                             state.lock().context_usage
                                         });
+        // Built before the element chain below, which borrows `self`
+        // immutably: the lookup's registry is memoized per agent, so
+        // producing the popup needs `&mut self`.
+        let lookup = self.render_panel_lookup(id, input, cx);
         v_flex()
             .flex_shrink_0()
             .gap_2()
@@ -110,7 +115,12 @@ impl WorkspaceWindow {
                                     .text_ellipsis()
                                     .text_xs()
                                     .font_family(cx.theme().mono_font_family.clone())
-                                    .child(prompt.text.clone()),
+                                    // The row is flattened, `prompt.text`
+                                    // is not: a prompt written across
+                                    // several lines waits as one row, and
+                                    // the agent still receives it as the
+                                    // user wrote it.
+                                    .child(single_line(&prompt.text)),
                             )
                             .child(
                                 Button::new(("panel-queued-prompt-status", element_key(prompt_id)))
@@ -235,6 +245,11 @@ impl WorkspaceWindow {
                             )
                     }))
             }))
+            // The slash lookup sits directly above the prompt row: inside
+            // the input area, so the conversation's scroll container cannot
+            // clip it, and above the caret rather than over the line being
+            // typed.
+            .children(lookup)
             // Attach, prompt, and Send share one row (`items_center`, so
             // the two buttons sit centred against the prompt box however
             // tall it is); the send hint shares the row below with the
@@ -250,7 +265,7 @@ impl WorkspaceWindow {
                             .icon(gpui_kit::component::Icon::new(
                                 gpui_kit::assets::IconName::Paperclip,
                             ))
-                            .tooltip("Attach files or images")
+                            .tooltip(knot_core::l10n::t("panel.attach_context"))
                             .ghost()
                             .small()
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
@@ -258,9 +273,9 @@ impl WorkspaceWindow {
                             })),
                     )
                     .child(
-                        div()
+                        self.wire_panel_lookup_keys(div()
                             .flex_1()
-                            .min_w_0()
+                            .min_w_0(), id, input, cx)
                             .capture_action::<Paste>({
                                 let entity = cx.entity();
                                 move |_, _, app| {
@@ -277,7 +292,7 @@ impl WorkspaceWindow {
                     .child(if turn_active {
                         Button::new("panel-stop-prompt")
                             .child(div().size(px(10.)).rounded(px(1.)).bg(rgb(0xFFFFFF)))
-                            .tooltip("Stop")
+                            .tooltip(knot_core::l10n::t("panel.stop"))
                             .bg(rgb(0xEF4444))
                             .text_color(rgb(0xFFFFFF))
                             .flex_shrink_0()

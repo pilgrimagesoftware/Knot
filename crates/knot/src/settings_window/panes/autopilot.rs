@@ -4,10 +4,7 @@ use gpui_kit::ParentElement;
 use gpui_kit::Styled;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
 use knot_core::AiProvider;
 use knot_core::AutopilotAction;
@@ -96,9 +93,9 @@ impl SettingsWindow {
         v_flex()
             .gap_3()
             .child(
-                Self::group("Enable")
+                crate::controls::group(knot_core::l10n::t("settings.autopilot.enable_group"))
                     .child(Self::row(
-                        "Enable autopilot",
+                        knot_core::l10n::t("settings.autopilot.enable"),
                         Switch::new("autopilot-enabled")
                             .checked(autopilot_enabled)
                             .on_click({
@@ -114,79 +111,61 @@ impl SettingsWindow {
                     ))
                     .child(Self::hint(
                         cx,
-                        "Automatically detect when agents need input and take action — no need \
-                         to babysit your agents. Only available with Claude Code.",
+                        knot_core::l10n::t("settings.autopilot.blurb"),
                     )),
             )
             .child(
-                Self::group("AI Provider")
+                crate::controls::group(knot_core::l10n::t("settings.autopilot.provider_group"))
                     .child(Self::row(
-                        "Provider",
-                        Button::new("autopilot-provider-picker")
-                            .label(provider_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    let mut menu = menu;
-                                    // Driven off `AiProvider::ALL`, so a new
-                                    // provider reaches the picker with its
-                                    // variant rather than a second list.
-                                    for value in AiProvider::ALL.iter().copied() {
-                                        let label = Self::ai_provider_label(value);
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, _, app| {
-                                                settings_window.update(app, |view, cx| {
-                                                    view.select_ai_provider(value, cx);
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+                        knot_core::l10n::t("settings.autopilot.provider"),
+                        // Driven off `AiProvider::ALL`, so a new provider
+                        // reaches the picker with its variant rather than a
+                        // second list.
+                        Self::dropdown("autopilot-provider-picker",
+                                       provider_label,
+                                       AiProvider::ALL.iter()
+                                                      .copied()
+                                                      .map(|value| {
+                                                          (Self::ai_provider_label(value).into(),
+                                                           value)
+                                                      })
+                                                      .collect(),
+                                       settings_window.clone(),
+                                       |view, value, _, cx| view.select_ai_provider(*value, cx)),
                     ))
                     .child(Self::row(
-                        "API Key",
+                        knot_core::l10n::t("settings.autopilot.api_key"),
                         Input::new(&self.ai_api_key_input)
                             .font_family(cx.theme().mono_font_family.clone())
                             .flex_1(),
                     ))
                     .child(Self::text_row(
-                        "Model",
+                        knot_core::l10n::t("settings.autopilot.model"),
                         Self::mono_text(cx, model_name).text_color(cx.theme().muted_foreground),
                     )),
             )
             .child(
-                Self::group("Action")
+                crate::controls::group(knot_core::l10n::t("settings.autopilot.action_group"))
                     .child(Self::row(
-                        "When input is detected",
-                        Button::new("autopilot-action-picker")
-                            .label(action_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    let mut menu = menu;
-                                    for value in AutopilotAction::ALL.iter().copied() {
-                                        let label = Self::autopilot_action_label(value);
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, _, app| {
-                                                settings_window.update(app, |view, cx| {
-                                                    view.select_autopilot_action(value, cx);
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+                        knot_core::l10n::t("settings.autopilot.on_input"),
+                        Self::dropdown("autopilot-action-picker",
+                                       action_label,
+                                       AutopilotAction::ALL.iter()
+                                                           .copied()
+                                                           .map(|value| {
+                                                               (Self::autopilot_action_label(value)
+                                                                    .into(),
+                                                                value)
+                                                           })
+                                                           .collect(),
+                                       settings_window.clone(),
+                                       |view, value, _, cx| {
+                                           view.select_autopilot_action(*value, cx);
+                                       }),
                     ))
                     .children(is_custom_action.then(|| {
                         Self::row(
-                            "Custom prompt",
+                            knot_core::l10n::t("settings.autopilot.custom_prompt"),
                             Input::new(&self.autopilot_custom_prompt_input).flex_1(),
                         )
                         .into_any_element()

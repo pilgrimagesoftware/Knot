@@ -3,12 +3,38 @@ pub const APP_NAME: &str = "Knot";
 pub const ORG_QUALIFIER: &str = "com";
 pub const ORG_NAME: &str = "Pilgrimage Software";
 
-pub const SETTINGS_FILE: &str = "settings.json";
+/// The preferences document, holding every scalar setting. Lives in the
+/// platform's user-preferences directory, apart from the collections below.
+pub const PREFERENCES_FILE: &str = "preferences.json";
 
-/// Extension for the temporary file [`crate::Settings::persist`] writes
-/// before renaming it over [`SETTINGS_FILE`], so an interrupted write
-/// never leaves the real document truncated.
-pub const SETTINGS_TEMP_EXTENSION: &str = "json.tmp";
+/// The saved-agents collection, one of the durable data documents.
+pub const AGENTS_FILE: &str = "agents.json";
+
+/// The saved-workspaces collection.
+pub const WORKSPACES_FILE: &str = "workspaces.json";
+
+/// The personas collection.
+pub const PERSONAS_FILE: &str = "personas.json";
+
+/// The bench-templates collection.
+pub const BENCH_FILE: &str = "bench.json";
+
+/// The recent-repositories collection.
+pub const RECENT_REPOS_FILE: &str = "recent-repos.json";
+
+/// The single document every setting used to live in, read once on load and
+/// renamed to [`LEGACY_MIGRATED_EXTENSION`] after its values have been
+/// distributed across the documents above.
+pub const LEGACY_SETTINGS_FILE: &str = "settings.json";
+
+/// Extension the migrated legacy document is renamed to, so it is never read
+/// again but stays recoverable by hand.
+pub const LEGACY_MIGRATED_EXTENSION: &str = "json.migrated";
+
+/// Extension for the temporary file each document is written to before being
+/// renamed into place, so an interrupted write never leaves a real document
+/// truncated.
+pub const DOCUMENT_TEMP_EXTENSION: &str = "json.tmp";
 
 /// Distinct from Skwad's default (8766) so a Knot instance doesn't fight a
 /// running Skwad instance over the same port.
@@ -84,7 +110,15 @@ pub const VOICE_PUSH_TO_TALK_KEY_DEFAULT: i32 = 54;
 
 /// Shipped system personas: (fixed id, name, instructions). Fixed ids let the
 /// same persona be matched across installs and updates.
-pub const DEFAULT_PERSONAS: [(&str, &str, &str); 6] = [("A1000001-0000-0000-0000-000000000001",
+///
+/// The first six describe *how to write code*. "Orchestrator" is a
+/// different kind - it describes *how to coordinate other agents* - but it
+/// rides the same mechanism, since both are instruction text injected as a
+/// system prompt. It deliberately names no teammate: a roster written into
+/// a prompt is a copy of state that goes stale the first time the team
+/// changes, which is what the agent registry exists to prevent. See
+/// `openspec/specs/agent-registry/spec.md`.
+pub const DEFAULT_PERSONAS: [(&str, &str, &str); 7] = [("A1000001-0000-0000-0000-000000000001",
                                                         "Kent Beck",
                                                         "Write the simplest code that could possibly work, then refactor. Practice TDD religiously: red, green, refactor. Favor small steps and continuous feedback. Design emerges from refactoring, not upfront planning. Value communication, simplicity, and courage. When in doubt, write a test first."),
                                                        ("A1000001-0000-0000-0000-000000000002",
@@ -101,4 +135,36 @@ pub const DEFAULT_PERSONAS: [(&str, &str, &str); 6] = [("A1000001-0000-0000-0000
                                                         "Focus deeply on the technical problem at hand. Optimize ruthlessly where it matters - understand the hardware and the data. Prefer straightforward, linear code over complex abstractions. Static analysis and assertions catch bugs early. Write code that is easy to reason about locally. Pragmatism over dogma. Ship working software and iterate."),
                                                        ("A1000001-0000-0000-0000-000000000006",
                                                         "Dave Farley",
-                                                        "Design for continuous delivery: every change should be deployable. Write tests at every level - unit, integration, acceptance. Work in small, incremental steps that keep the system always releasable. Decouple components to enable independent deployment. Automate everything that can be automated. Favor evolutionary design over big upfront architecture. Fast feedback loops are essential.")];
+                                                        "Design for continuous delivery: every change should be deployable. Write tests at every level - unit, integration, acceptance. Work in small, incremental steps that keep the system always releasable. Decouple components to enable independent deployment. Automate everything that can be automated. Favor evolutionary design over big upfront architecture. Fast feedback loops are essential."),
+                                                       ("A1000001-0000-0000-0000-000000000007",
+                                                        "Orchestrator",
+                                                        "You coordinate other agents. Before dispatching work that spans more than one agent or more than one task, find out who is available and commit a plan.\n\n1. Call describe-agents to see who can do what. Ask by capability, never by name: the team changes, and the registry is the only current record of it. Do not assume a teammate exists.\n2. Call plan-tasks with a small graph - one task per unit of work, each naming what it depends on. Assign a task to an agent, or to the capabilities an agent must carry, or leave it unassigned until you know.\n3. Call dispatch-task as each task becomes ready. It refuses a task whose dependencies are unfinished and tells you what it is waiting for.\n4. Call complete-task once an outcome is known, so the tasks behind it unblock. Call task-status to see where the plan stands.\n\nWork that is one task for one agent needs no plan; send it with send-message.\n\nPrefer the cheapest agent that can start now - describe-agents already ranks candidates that way. Let the plan be the record of what you intend, rather than describing it in prose.")];
+
+// ---------------------------------------------------------------------------
+// Data import
+// ---------------------------------------------------------------------------
+
+/// Where Claude Code keeps its subagent definitions, relative to the home
+/// directory for the user-level set and to a project folder for its own.
+pub const CLAUDE_AGENTS_SUBPATH: &str = ".claude/agents";
+
+/// The only file extension a subagent definition is read from.
+pub const SUBAGENT_DEFINITION_EXTENSION: &str = "md";
+
+/// The line that opens and closes a definition's frontmatter block.
+pub const FRONTMATTER_DELIMITER: &str = "---";
+
+/// The one frontmatter key a definition is read for. Every other key is
+/// dropped, per `openspec/specs/data-import/spec.md`.
+pub const SUBAGENT_NAME_KEY: &str = "name:";
+
+/// The macOS preferences domain Skwad, Knot's predecessor, stores its
+/// collections under.
+pub const SKWAD_PREFERENCES_DOMAIN: &str = "com.kochava.skwad";
+
+/// Skwad's preference keys, each holding a JSON document stored as data, in
+/// the record shapes Knot's own settings already read.
+pub const SKWAD_WORKSPACES_KEY: &str = "savedWorkspacesData";
+pub const SKWAD_AGENTS_KEY: &str = "savedAgentsData";
+pub const SKWAD_PERSONAS_KEY: &str = "personasData";
+pub const SKWAD_BENCH_AGENTS_KEY: &str = "benchAgentsData";

@@ -1,11 +1,9 @@
 //! Creating an agent from this window, and the header facts a new or
 //! selected one contributes.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui_kit::App;
-use gpui_kit::AppContext;
 use gpui_kit::Context;
 use gpui_kit::IntoElement;
 use gpui_kit::Styled;
@@ -55,53 +53,6 @@ impl WorkspaceWindow {
                         .any(|candidate| candidate.eq_ignore_ascii_case(category))
                                                        })
                       })
-    }
-
-    // SUPERSEDED: the inline new-agent form this submits was replaced by the
-    // agent editor (`open_new_agent_dialog`). Kept with its sibling fields
-    // until the form itself is removed - see the PR that added this note.
-    #[allow(dead_code)]
-    pub(super) fn create_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let folder = self.new_agent_folder_input
-                         .read(cx)
-                         .value()
-                         .trim()
-                         .to_string();
-        if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
-            self.error = Some("Choose an existing agent folder.".to_string());
-            cx.notify();
-            return false;
-        }
-        let name = self.new_agent_name_input
-                       .read(cx)
-                       .value()
-                       .trim()
-                       .to_string();
-        let id = {
-            let mut store = self.store.lock();
-            store.set_current_workspace(self.workspace_id);
-            store.create(folder,
-                         knot_agents::CreateOptions { name: (!name.is_empty()).then_some(name),
-                                                      ..Default::default() })
-        };
-        {
-            let store = self.store.lock();
-            self.settings.saved_agents =
-                store.saved_agents(self.settings.restore_conversation_on_launch);
-            self.settings.saved_workspaces = store.saved_workspaces();
-        }
-        let _ = self.settings.persist();
-        self.select_agent(id);
-        self.show_new_agent = false;
-        self.error = None;
-        cx.update_entity(&self.new_agent_name_input, |input, input_cx| {
-              input.clean(window, input_cx);
-          });
-        cx.update_entity(&self.new_agent_folder_input, |input, input_cx| {
-              input.clean(window, input_cx);
-          });
-        cx.notify();
-        true
     }
 
     pub(super) fn open_new_agent_dialog(&mut self, cx: &mut Context<Self>) {

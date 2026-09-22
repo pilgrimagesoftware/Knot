@@ -58,7 +58,7 @@ pub(crate) struct AgentPrefill {
 /// rejects.
 pub(crate) fn created_agent_type(creating_a_companion: bool, chosen: &str) -> String {
     if creating_a_companion {
-        "shell".to_string()
+        knot_core::agent_type::SHELL.to_string()
     }
     else {
         chosen.to_string()
@@ -110,19 +110,19 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
     let settings = knot_core::Settings::load().unwrap_or(settings);
     let editing = edit_target.and_then(|id| store.lock().agent(id).cloned());
     let title = if editing.is_some() {
-        "Edit Agent"
+        knot_core::l10n::t("agent_editor.title_edit")
     }
     else {
-        "New Agent"
+        knot_core::l10n::t("agent_editor.title_new")
     };
-    let options = agent_window_options(title, cx);
+    let options = agent_window_options(&title, cx);
     let _ =
         cx.open_window(options, move |window, cx| {
               // Every window tracks the OS appearance, so a light/dark flip
               // re-resolves the system palette and repaints.
               observe_system_appearance(window);
               let name_input = cx.new(|cx| {
-                                     InputState::new(window, cx).placeholder("Name")
+                                     InputState::new(window, cx).placeholder(knot_core::l10n::t("agent_editor.name"))
                                                    .default_value(editing.as_ref()
                                                                          .map(|a| a.name.clone())
                                                                          .or_else(|| {
@@ -131,7 +131,31 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                                          .unwrap_or_default())
                                  });
               let shell_command_input =
-                  cx.new(|cx| InputState::new(window, cx).placeholder("Shell command (optional)"));
+                  cx.new(|cx| InputState::new(window, cx).placeholder(knot_core::l10n::t("agent_editor.shell_command")));
+              let description_input = cx.new(|cx| {
+                  InputState::new(window, cx)
+                      .placeholder(knot_core::l10n::t("agent_editor.description_placeholder"))
+                      .default_value(editing.as_ref()
+                                            .map(|a| a.description.clone())
+                                            .unwrap_or_default())
+              });
+              // Comma-separated, because a tag set is short and typing one
+              // is faster than managing a chip list for it. `Capabilities`
+              // normalizes whatever is typed, so spacing and case here do
+              // not matter.
+              let capabilities_input = cx.new(|cx| {
+                  InputState::new(window, cx)
+                      .placeholder(knot_core::l10n::t("agent_editor.capabilities_placeholder"))
+                      .default_value(editing.as_ref()
+                                            .map(|a| {
+                                                a.capabilities
+                                                 .iter()
+                                                 .cloned()
+                                                 .collect::<Vec<String>>()
+                                                 .join(", ")
+                                            })
+                                            .unwrap_or_default())
+              });
               let avatar_input = cx.new(|cx| {
                                        InputState::new(window, cx).default_value(
                 editing
@@ -167,6 +191,12 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                           name_input,
                                           shell_command_input,
                                           avatar_input,
+                                          description_input,
+                                          capabilities_input,
+                                          cost_tier:
+                                              editing.as_ref()
+                                                     .map(|a| a.cost_tier)
+                                                     .unwrap_or_default(),
                                           _avatar_subscription: avatar_subscription,
                                           _name_subscription: name_subscription,
                                           folder_path: editing.as_ref()
@@ -177,7 +207,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                               editing.as_ref()
                                                      .map(|a| a.agent_type.clone())
                                                      .or_else(|| prefill.agent_type.clone())
-                                                     .unwrap_or_else(|| "claude".to_string()),
+                                                     .unwrap_or_else(|| knot_core::agent_type::DEFAULT.to_string()),
                                           persona_id,
                                           activation_mode:
                                               editing.as_ref()
@@ -194,6 +224,13 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
           });
 }
 
+/// Splits the capabilities field into tags. `Capabilities` trims,
+/// lowercases and drops empties, so this only has to decide where one tag
+/// ends and the next begins.
+pub(crate) fn parse_capability_tags(raw: &str) -> knot_core::Capabilities {
+    raw.split(',').collect()
+}
+
 pub(crate) struct AgentEditor {
     store:                Arc<Mutex<knot_agents::AgentStore>>,
     settings:             knot_core::Settings,
@@ -201,6 +238,9 @@ pub(crate) struct AgentEditor {
     name_input:           Entity<InputState>,
     shell_command_input:  Entity<InputState>,
     avatar_input:         Entity<InputState>,
+    description_input:    Entity<InputState>,
+    capabilities_input:   Entity<InputState>,
+    cost_tier:            knot_core::CostTier,
     _avatar_subscription: Subscription,
     _name_subscription:   Subscription,
     folder_path:          String,
@@ -231,6 +271,16 @@ pub(crate) struct AgentEditor {
 
 pub(crate) type AgentCreatedCallback = dyn Fn(Uuid, &mut Window, &mut App);
 
+/// What both submit paths take from the form once it is known to be
+/// valid. Deliberately not the whole form: the fields each path reads
+/// alone - a shell command when creating, a persona when editing - stay
+/// where they are used.
+struct AgentFields {
+    folder: String,
+    name:   String,
+    avatar: String,
+}
+
 impl AgentEditor {
     /// Whether the form has everything required to submit - the primary
     /// button ("Add Agent" or "Save") is disabled until this is true.
@@ -240,26 +290,45 @@ impl AgentEditor {
         && PathBuf::from(self.folder_path.trim()).is_dir()
     }
 
-    fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// The three fields both submit paths read, validated and trimmed, or
+    /// `None` with `self.error` set and a repaint asked for.
+    ///
+    /// Create and edit validated these identically, in the same order,
+    /// with the same two messages - so a rule changed in one was a rule
+    /// changed in one. A caller's whole response to invalid input is now
+    /// the `else` arm of a `let`.
+    fn validated_fields(&mut self, cx: &mut Context<Self>) -> Option<AgentFields> {
         let folder = self.folder_path.trim().to_string();
         if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
-            self.error = Some("Choose a folder.".to_string());
+            self.error = Some(knot_core::l10n::t("agent_editor.error_choose_folder"));
             cx.notify();
-            return;
+            return None;
         }
         let name = self.name_input.read(cx).value().trim().to_string();
         if name.is_empty() {
-            self.error = Some("Enter a name.".to_string());
+            self.error = Some(knot_core::l10n::t("agent_editor.error_enter_name"));
             cx.notify();
-            return;
+            return None;
         }
-        let avatar = self.avatar_input.read(cx).value().trim().to_string();
+        Some(AgentFields { folder,
+                           name,
+                           avatar: self.avatar_input.read(cx).value().trim().to_string() })
+    }
+
+    fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(AgentFields { folder,
+                               name,
+                               avatar, }) = self.validated_fields(cx)
+        else {
+            return;
+        };
         // Defence in depth for the same invariant the form states above.
         let agent_type = created_agent_type(self.creating_a_companion(), &self.agent_type);
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
+        let description = self.description_input.read(cx).value().trim().to_string();
+        let capabilities = parse_capability_tags(&self.capabilities_input.read(cx).value());
         let created_id = {
             let mut store = self.store.lock();
-            store.set_current_workspace(self.workspace_id);
             let id = store.create(
                 folder,
                 knot_agents::CreateOptions {
@@ -272,6 +341,10 @@ impl AgentEditor {
                     created_by: self.prefill.created_by,
                     is_companion: self.prefill.is_companion,
                     activation_mode: self.activation_mode,
+                    workspace_id: Some(self.workspace_id),
+                    description,
+                    capabilities,
+                    cost_tier: self.cost_tier,
                 },
             );
             // A fork continues the source's conversation rather than
@@ -279,15 +352,19 @@ impl AgentEditor {
             // both its id and its resume target with the fork flag set -
             // `CreateOptions` has no field for any of the three, because
             // every other creation path starts a session from scratch.
-            if let Some(session) = self.prefill.session_id.clone() {
-                let _ = store.fork_session(id, session);
+            if let Some(session) = self.prefill.session_id.clone()
+               && let Err(error) = store.fork_session(id, session)
+            {
+                eprintln!("failed to fork the agent's session: {error}");
             }
             self.settings.saved_agents =
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
             id
         };
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist_roster() {
+            eprintln!("failed to persist the agent roster: {error}");
+        }
         (self.on_created)(created_id, window, cx);
         window.remove_window();
     }
@@ -300,21 +377,16 @@ impl AgentEditor {
         else {
             return;
         };
-        let folder = self.folder_path.trim().to_string();
-        if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
-            self.error = Some("Choose a folder.".to_string());
-            cx.notify();
+        let Some(AgentFields { folder,
+                               name,
+                               avatar, }) = self.validated_fields(cx)
+        else {
             return;
-        }
-        let name = self.name_input.read(cx).value().trim().to_string();
-        if name.is_empty() {
-            self.error = Some("Enter a name.".to_string());
-            cx.notify();
-            return;
-        }
-        let avatar = self.avatar_input.read(cx).value().trim().to_string();
+        };
         let agent_type = self.agent_type.clone();
         let persona_changed = self.persona_id != self.original_persona_id;
+        let description = self.description_input.read(cx).value().trim().to_string();
+        let capabilities = parse_capability_tags(&self.capabilities_input.read(cx).value());
         {
             let mut store = self.store.lock();
             let result = store.edit(
@@ -328,6 +400,9 @@ impl AgentEditor {
                     persona_changed,
                     relocate_companions: false,
                     activation_mode: self.activation_mode,
+                    description,
+                    capabilities,
+                    cost_tier: self.cost_tier,
                 },
             );
             if let Err(error) = result {
@@ -339,7 +414,9 @@ impl AgentEditor {
                 store.saved_agents(self.settings.restore_conversation_on_launch);
             self.settings.saved_workspaces = store.saved_workspaces();
         }
-        let _ = self.settings.persist();
+        if let Err(error) = self.settings.persist_roster() {
+            eprintln!("failed to persist the agent roster: {error}");
+        }
         (self.on_created)(id, window, cx);
         window.remove_window();
     }
@@ -356,7 +433,7 @@ impl AgentEditor {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Choose Agent Folder".into()),
+            prompt: Some(knot_core::l10n::t("agent_editor.choose_folder_prompt").into()),
         });
         let editor = cx.entity();
         cx.spawn(async move |_this, cx| {

@@ -34,6 +34,7 @@ use gpui_kit::rgb;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
@@ -47,6 +48,82 @@ impl WorkspaceWindow {
     /// no UI ever read, so an agent calling the tool appeared to be
     /// ignored. Closing the pane clears the file but keeps the history, so
     /// the menu can bring it back.
+    /// The content pane for an agent's diagram: a committed task plan, or
+    /// anything else an agent showed with `view-mermaid`.
+    ///
+    /// Same chrome as the markdown pane, because it is the same kind of
+    /// thing - something an agent put in front of the user, which the user
+    /// closes when done with it.
+    pub(in crate::workspace_window) fn render_mermaid_pane(&self, id: Uuid, source: &str,
+                                                           title: Option<&str>,
+                                                           cx: &mut Context<Self>)
+                                                           -> gpui_kit::AnyElement {
+        let heading = title.map(str::to_string)
+                           .unwrap_or_else(|| knot_core::l10n::t("plan.title"));
+        // Nothing parseable is not an error: the agent showed something
+        // this build cannot draw, and saying so beats an empty pane, which
+        // reads as a bug.
+        let body = crate::plan_view::plan_diagram(source, cx).unwrap_or_else(|| {
+                                                                 div().text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(knot_core::l10n::t("plan.empty"))
+                            .into_any_element()
+                                                             });
+        v_flex()
+            .size_full()
+            .child(
+                h_flex()
+                    .w_full()
+                    .flex_shrink_0()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .font_semibold()
+                            .child(single_line(&heading)),
+                    )
+                    .child(
+                        Button::new("mermaid-pane-close")
+                            .icon(IconName::Close)
+                            .ghost()
+                            .small()
+                            .tooltip("Close")
+                            .on_click(cx.listener(move |view, _, _window, cx| {
+                                {
+                                    let mut store = view.store.lock();
+                                    if let Err(error) = store.clear_mermaid_panel(id) {
+                                        eprintln!("failed to close the diagram panel: \
+                                                   {error}");
+                                    }
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .id(("mermaid-pane", id.as_u128() as u64))
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .min_w_0()
+                    .overflow_scroll()
+                    .p_4()
+                    .child(body),
+            )
+            .into_any_element()
+    }
+
     pub(in crate::workspace_window) fn render_markdown_pane(&self, id: Uuid, file: &Path,
                                                             cx: &mut Context<Self>)
                                                             -> gpui_kit::AnyElement {
@@ -81,18 +158,21 @@ impl WorkspaceWindow {
                             .whitespace_nowrap()
                             .text_ellipsis()
                             .font_semibold()
-                            .child(title),
+                            .child(single_line(&title)),
                     )
                     .child(
                         Button::new("markdown-pane-close")
                             .icon(IconName::Close)
                             .ghost()
                             .small()
-                            .tooltip("Close")
+                            .tooltip(knot_core::l10n::t("panel.close"))
                             .on_click(cx.listener(move |view, _, _window, cx| {
                                 {
                                     let mut store = view.store.lock();
-                                    let _ = store.clear_markdown_panel(id);
+                                    if let Err(error) = store.clear_markdown_panel(id) {
+                                        eprintln!("failed to close the markdown panel: \
+                                                   {error}");
+                                    }
                                 }
                                 cx.notify();
                             })),
@@ -140,7 +220,7 @@ impl WorkspaceWindow {
                             .child(format!("{name} is not running")))
                 .child(div().text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Select this agent in the sidebar to start it."))
+                            .child(knot_core::l10n::t("panel.select_agent_to_start")))
                 .into_any_element()
     }
 
@@ -166,7 +246,7 @@ impl WorkspaceWindow {
                         .justify_center()
                         .gap_1()
                         .child(div().text_color(rgb(0x9CA3AF))
-                                    .child("Connecting to agent…"))
+                                    .child(knot_core::l10n::t("panel.connecting")))
                         .child(div().text_xs().text_color(rgb(0x6B7280)).child(step))
                         .into_any_element()
             }
@@ -339,7 +419,7 @@ impl WorkspaceWindow {
                                 div().absolute().bottom_3().right_4().child(
                                     Button::new("panel-scroll-to-bottom")
                                         .icon(IconName::ChevronDown)
-                                        .tooltip("Scroll to latest")
+                                        .tooltip(knot_core::l10n::t("panel.scroll_to_latest"))
                                         .small()
                                         .on_click(move |_: &ClickEvent, _, _| {
                                             list_to_bottom.scroll_to_end();

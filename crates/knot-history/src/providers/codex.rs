@@ -4,14 +4,32 @@ use std::fs;
 use std::path::PathBuf;
 
 use rusqlite::{Connection, OpenFlags, params};
+use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::consts::{CODEX_DB_PATH, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::title::{extract_title, is_valid_title};
+use crate::providers::{Maybe, first_title, jsonl_entries, maybe_text, resolve_title};
 
 pub struct CodexProvider;
+
+/// One line of a Codex rollout file. Codex nests both the kind and the text
+/// under `payload`; a line without one is not a rollout entry at all.
+#[derive(Deserialize)]
+struct Entry {
+    payload: Payload,
+}
+
+#[derive(Deserialize)]
+struct Payload {
+    #[serde(rename = "type")]
+    payload_type: String,
+    /// A string on a `user_message`; other payload kinds put other shapes
+    /// here, and none of those is a title.
+    #[serde(default)]
+    message:      Maybe<String>,
+}
 
 fn db_path() -> Option<PathBuf> {
     Some(home_dir()?.join(CODEX_DB_PATH))
@@ -20,37 +38,12 @@ fn db_path() -> Option<PathBuf> {
 /// Parse a Codex rollout JSONL file for the first real `user_message`.
 fn title_from_rollout(path: &str) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+    first_title(jsonl_entries::<Entry>(&content), |entry| {
+        if entry.payload.payload_type != "user_message" {
+            return None;
         }
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed)
-        else {
-            continue;
-        };
-        let payload = json.get("payload")?;
-        if payload.get("type").and_then(serde_json::Value::as_str) != Some("user_message") {
-            continue;
-        }
-        let Some(message) = payload.get("message").and_then(serde_json::Value::as_str)
-        else {
-            continue;
-        };
-        if !is_valid_title(message) {
-            continue;
-        }
-        return extract_title(message);
-    }
-    None
-}
-
-fn resolve_title(db_title: &str, rollout_path: &str) -> String {
-    if is_valid_title(db_title) {
-        return crate::title::truncate(db_title);
-    }
-    title_from_rollout(rollout_path).unwrap_or_default()
+        maybe_text(&entry.payload.message)
+    })
 }
 
 impl HistoryProvider for CodexProvider {
@@ -91,7 +84,7 @@ impl HistoryProvider for CodexProvider {
             .map(|(id, rollout_path, title, updated_at)| {
                 SessionSummary {
                 id,
-                title: resolve_title(&title, &rollout_path),
+                title: resolve_title(&title, || title_from_rollout(&rollout_path)),
                 timestamp: OffsetDateTime::from_unix_timestamp(updated_at)
                     .unwrap_or(OffsetDateTime::UNIX_EPOCH),
                 message_count: 0,

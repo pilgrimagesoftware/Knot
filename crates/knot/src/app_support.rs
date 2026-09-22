@@ -36,6 +36,27 @@ pub(crate) struct AwaitingInput(pub(crate) AwaitingInputQueue);
 
 impl gpui_kit::Global for AwaitingInput {}
 
+pub(crate) type ActivationQueue = Arc<Mutex<Vec<Uuid>>>;
+
+/// The activation queue, reachable from any window.
+///
+/// The MCP tool catalog pushes a recipient's id whenever a direct
+/// `send-message` was delivered to an agent that is not activated; the
+/// workspace window that owns the agent drains it and starts the session,
+/// as `mcp-messaging`'s "Direct send activates a deactivated recipient"
+/// requires. A global for the same reason [`AwaitingInput`] is one: every
+/// workspace window needs it, and the tool layer runs off the main thread
+/// with no window to call.
+///
+/// Ids belonging to another workspace stay in the queue rather than being
+/// dropped, so the window that does own them can still pick them up - the
+/// draining window is whichever repaints first, not necessarily the right
+/// one.
+#[derive(Clone)]
+pub(crate) struct Activation(pub(crate) ActivationQueue);
+
+impl gpui_kit::Global for Activation {}
+
 /// Which setting a font panel session is editing. Plain data, referenced
 /// from platform-independent UI code (button labels/handlers); only the
 /// panel-driving logic that reads/writes it is macOS-only, in
@@ -235,6 +256,25 @@ pub(crate) fn shorten_path(path: &str) -> String {
     std::env::var("HOME").ok()
                          .and_then(|home| path.strip_prefix(&home).map(|rest| format!("~{rest}")))
                          .unwrap_or_else(|| path.to_string())
+}
+
+/// Joins text onto one line: every run of whitespace - line breaks, tabs,
+/// runs of spaces - collapses to a single space, and both ends are trimmed.
+///
+/// Call this wherever a render declares a single line. The style flags do
+/// not achieve it on their own: `gpui::text_system::shape_text` splits its
+/// input on `\n` and shapes each piece as its own line before any wrapping
+/// or truncation decision, and `whitespace_nowrap` only disables *soft*
+/// wrapping. An element styled `whitespace_nowrap().text_ellipsis()`
+/// therefore still renders one line per line break, truncating each of them
+/// separately. Flattening the text first is what makes the declaration true;
+/// the width-based ellipsis then works as intended.
+///
+/// Presentational only. Flatten at the point of render, never on the way in,
+/// so what is stored, delivered to an agent, or drawn somewhere that permits
+/// several lines keeps the text as it was written.
+pub(crate) fn single_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Registers the embedded faces with CoreText as well as with GPUI's text

@@ -77,3 +77,52 @@ fn serializing_writes_the_stored_string_not_the_variant_name() {
     assert_eq!(serde_json::to_string(&AutopilotAction::Continue).unwrap(),
                r#""continue""#);
 }
+
+#[test]
+fn cost_tier_round_trips_through_its_stored_string() {
+    for tier in CostTier::ALL {
+        assert_eq!(tier.as_str().parse::<CostTier>(), Ok(*tier));
+    }
+    assert_eq!(CostTier::Low.as_str(), "low");
+    assert_eq!(CostTier::Medium.as_str(), "medium");
+    assert_eq!(CostTier::High.as_str(), "high");
+}
+
+#[test]
+fn cost_tier_round_trips_through_json() {
+    for tier in CostTier::ALL {
+        let encoded = serde_json::to_string(tier).unwrap();
+        assert_eq!(encoded, format!("\"{}\"", tier.as_str()));
+        assert_eq!(serde_json::from_str::<CostTier>(&encoded).unwrap(), *tier);
+    }
+}
+
+/// An undeclared tier must not silently read as a real one. `from_stored`
+/// reports what it could not read; only then does it fall back.
+#[test]
+fn cost_tier_reports_an_unknown_value_rather_than_guessing() {
+    assert_eq!("free".parse::<CostTier>(),
+               Err(UnknownVariant("free".to_string())));
+
+    let (tier, unknown) = CostTier::from_stored("free");
+    assert_eq!(tier, CostTier::Medium);
+    assert_eq!(unknown, Some(UnknownVariant("free".to_string())));
+}
+
+/// The registry ranks on this ordering, so it is part of the contract, not
+/// an accident of how the variants happen to be written.
+#[test]
+fn cost_tier_orders_cheapest_first() {
+    assert!(CostTier::Low < CostTier::Medium);
+    assert!(CostTier::Medium < CostTier::High);
+
+    let mut tiers = vec![CostTier::High, CostTier::Low, CostTier::Medium];
+    tiers.sort();
+    assert_eq!(tiers, vec![CostTier::Low, CostTier::Medium, CostTier::High]);
+}
+
+/// An agent nobody priced is mid-range, not free and not expensive.
+#[test]
+fn cost_tier_defaults_to_medium() {
+    assert_eq!(CostTier::default(), CostTier::Medium);
+}

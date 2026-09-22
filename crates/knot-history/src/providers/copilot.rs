@@ -4,16 +4,32 @@
 use std::fs;
 use std::path::PathBuf;
 
-use serde_json::Value;
+use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::consts::{COPILOT_SESSION_STATE_DIR, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::title::{extract_title, is_valid_title};
+use crate::providers::{Maybe, first_title, jsonl_entries, maybe_text, resolve_title};
 
 pub struct CopilotProvider;
+
+/// One line of `events.jsonl`. Copilot keeps each event's payload under
+/// `data`, whose shape follows the event kind.
+#[derive(Deserialize)]
+struct Event {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(default)]
+    data:       Maybe<EventData>,
+}
+
+#[derive(Deserialize)]
+struct EventData {
+    #[serde(default)]
+    content: Maybe<String>,
+}
 
 struct WorkspaceInfo {
     cwd:        String,
@@ -59,38 +75,12 @@ fn parse_workspace_yaml(content: &str) -> Option<WorkspaceInfo> {
 /// Parse `events.jsonl` for the first `user.message` event's content.
 fn title_from_events(path: &std::path::Path) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+    first_title(jsonl_entries::<Event>(&content), |event| {
+        if event.event_type != "user.message" {
+            return None;
         }
-        let Ok(json) = serde_json::from_str::<Value>(trimmed)
-        else {
-            continue;
-        };
-        if json.get("type").and_then(Value::as_str) != Some("user.message") {
-            continue;
-        }
-        let Some(message) = json.get("data")
-                                .and_then(|d| d.get("content"))
-                                .and_then(Value::as_str)
-        else {
-            continue;
-        };
-        if !is_valid_title(message) {
-            continue;
-        }
-        return extract_title(message);
-    }
-    None
-}
-
-fn resolve_title(summary: &str, session_dir: &std::path::Path) -> String {
-    if is_valid_title(summary) {
-        return crate::title::truncate(summary);
-    }
-    title_from_events(&session_dir.join("events.jsonl")).unwrap_or_default()
+        maybe_text(&event.data.known()?.content)
+    })
 }
 
 impl HistoryProvider for CopilotProvider {
@@ -115,7 +105,10 @@ impl HistoryProvider for CopilotProvider {
                        if info.cwd != folder {
                            return None;
                        }
-                       Some(SessionSummary { title: resolve_title(&info.summary, &session_dir),
+                       let title = resolve_title(&info.summary, || {
+                           title_from_events(&session_dir.join("events.jsonl"))
+                       });
+                       Some(SessionSummary { title,
                                              id,
                                              timestamp: info.updated_at,
                                              message_count: 0 })

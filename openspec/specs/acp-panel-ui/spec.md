@@ -104,6 +104,71 @@ without reopening the surface.
 - **THEN** the body text is redrawn in the new family and the headers are
   unchanged
 
+### Requirement: A rendered code block carries a copy control
+
+Every code block drawn on a Markdown surface — the panel's assistant messages
+and the Markdown pane opened for an agent — SHALL carry a copy control in the
+block's upper-right corner, inside the block's own background.
+
+Activating it SHALL place that block's code on the system clipboard and SHALL
+confirm with a transient notification, in the same style the panel's existing
+copy actions use. The text placed on the clipboard SHALL be the code as
+written inside the block: no fence markers, no language tag, and nothing from
+the surrounding prose.
+
+The control SHALL be present whenever the block is on screen, not only while
+the pointer is over it, and SHALL carry a localized tooltip naming what it
+copies. Its tooltip and its confirmation SHALL both be resolved through
+localization rather than carried as literal English in the renderer.
+
+Inline code spans SHALL NOT carry a copy control: only block-level code does.
+
+The control SHALL NOT change how the code itself is drawn — same monospace
+family, same block background, same wrapping — and SHALL NOT replace or
+disturb the response action bar's existing "copy response", which continues to
+copy the whole response.
+
+This diverges from the Swift app, which renders a code block as plain
+preformatted text in a web view with no copy affordance of any kind.
+
+#### Scenario: Copying one block's code
+
+- **WHEN** a response contains a fenced code block and the user activates that
+  block's copy control
+- **THEN** the system clipboard holds exactly the lines inside the fence, with
+  neither the fence markers nor the language tag, and a confirmation
+  notification is shown
+
+#### Scenario: Several code blocks in one response
+
+- **WHEN** a response contains three code blocks and the user activates the
+  second block's copy control
+- **THEN** the clipboard holds the second block's code alone, and the other two
+  blocks' contents are not included
+
+#### Scenario: The Markdown pane carries the same control
+
+- **WHEN** a Markdown file shown for an agent contains a code block
+- **THEN** that block carries the same copy control in the same corner, with
+  the same copied text, as a code block in an assistant message
+
+#### Scenario: Inline code is left alone
+
+- **WHEN** a response contains an inline code span in the middle of a sentence
+- **THEN** no copy control is drawn for that span
+
+#### Scenario: The control does not wait for a hover
+
+- **WHEN** a code block is on screen and the pointer is elsewhere
+- **THEN** the block's copy control is still drawn in its upper-right corner
+
+#### Scenario: Copying a response is unaffected
+
+- **WHEN** a response containing a code block is finished and the user
+  activates "copy response" on its action bar
+- **THEN** the clipboard holds the full response text, code block and prose
+  alike, exactly as it did before code blocks carried their own control
+
 ### Requirement: Tool-call rendering
 The system SHALL render each tool call as a distinct card showing its kind,
 input summary, and result (or in-progress state) once received, and SHALL
@@ -678,6 +743,16 @@ SHALL truncate with an ellipsis when it does not fit rather than wrap, and
 the status indicator SHALL remain visible on that same line. An expanded tool
 call SHALL NOT be affected.
 
+A title containing line breaks SHALL still render as one line. The header SHALL
+join it - each run of whitespace read as a single space - and then truncate it
+to the header's width, so a multi-line shell command reads as the beginning of
+that command rather than as every line of it. Declaring the line unwrappable is
+not sufficient: text is shaped one line per line break whether wrapping is
+permitted or not.
+
+The joined line SHALL keep the title's leading content: what identifies a call
+is how its command starts, so truncation takes from the end.
+
 #### Scenario: A long title ellipsizes when collapsed
 
 - **WHEN** a collapsed tool call's title is longer than the header's width
@@ -693,6 +768,58 @@ call SHALL NOT be affected.
 
 - **WHEN** the user expands a tool call whose title is long
 - **THEN** the header behaves as it does today and the title is free to wrap
+
+#### Scenario: A multi-line command collapses to one line
+
+- **WHEN** a collapsed tool call's title is a shell command spanning several
+  lines, such as a heredoc
+- **THEN** the header is one line tall, reading the start of that command with
+  its line breaks shown as spaces and ending in an ellipsis
+
+#### Scenario: An expanded card keeps the agent's own line breaks
+
+- **WHEN** the user expands a tool call whose title spans several lines
+- **THEN** the title is shown as the agent sent it, its line breaks intact
+
+#### Scenario: A short multi-line title needs no ellipsis
+
+- **WHEN** a collapsed tool call's title has a line break but is short enough
+  to fit once joined
+- **THEN** the header is one line tall, shows the whole title, and carries no
+  ellipsis
+
+### Requirement: A row that declares one line renders one line
+
+Wherever the panel renders text on a single line - a collapsed tool call's
+title, a queued prompt's row - it SHALL render one line regardless of what the
+text contains, including text the user or the agent supplied with line breaks in
+it.
+
+Such a row SHALL NOT grow to the height of its text. A queued multi-line prompt
+is a row in a list of what is waiting, and a row whose height is set by its
+content displaces the conversation around it.
+
+The text itself SHALL NOT be altered: joining line breaks is how the row is
+drawn, and what is stored, delivered to the agent, or shown when the same text
+is rendered somewhere that permits multiple lines SHALL be unchanged.
+
+#### Scenario: A queued multi-line prompt occupies one row
+
+- **WHEN** the user enqueues a prompt written across several lines
+- **THEN** its queued row is one line tall, its line breaks shown as spaces and
+  its text ellipsized if it does not fit
+
+#### Scenario: The delivered prompt is not the flattened one
+
+- **WHEN** that queued prompt is delivered to the agent
+- **THEN** the agent receives the prompt as the user wrote it, line breaks
+  included
+
+#### Scenario: The conversation shows the prompt in full
+
+- **WHEN** that prompt has been delivered and appears as a message in the
+  conversation
+- **THEN** it is shown as written, across as many lines as it needs
 
 ### Requirement: Input area context indicator
 The input area SHALL display a radial indicator in its bottom bar when the ACP

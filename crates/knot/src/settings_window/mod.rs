@@ -63,29 +63,29 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                 // Every window tracks the OS appearance, so a light/dark flip
                 // re-resolves the system palette and repaints.
                 observe_system_appearance(window);
-                let selected_agent_type = "claude".to_string();
+                let selected_agent_type = knot_core::agent_type::DEFAULT.to_string();
                 let initial_options = settings.agent_options
                                               .get(&selected_agent_type)
                                               .cloned()
                                               .unwrap_or_default();
                 let agent_options_input = cx.new(|cx| {
                                                 InputState::new(window, cx)
-                .placeholder("Extra CLI options")
+                .placeholder(knot_core::l10n::t("settings.input.extra_cli_options"))
                 .default_value(initial_options)
                                             });
                 let ai_api_key_input = cx.new(|cx| {
                                              InputState::new(window, cx)
-                .placeholder("API key")
+                .placeholder(knot_core::l10n::t("settings.input.api_key"))
                 .default_value(settings.ai_api_key.clone())
                                          });
                 let autopilot_custom_prompt_input = cx.new(|cx| {
                                                           InputState::new(window, cx)
-                .placeholder("Custom prompt")
+                .placeholder(knot_core::l10n::t("settings.input.custom_prompt"))
                 .default_value(settings.autopilot_custom_prompt.clone())
                                                       });
                 let mcp_port_input = cx.new(|cx| {
                                            InputState::new(window, cx)
-                .placeholder("Port")
+                .placeholder(knot_core::l10n::t("settings.input.port"))
                 .default_value(settings.mcp_server_port.to_string())
                                        });
                 let view = cx.new(|cx| {
@@ -121,7 +121,8 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                   store,
                                                   selected_tab: SettingsTab::General,
                                                   selected_agent_type,
-                                                  mcp_selected_agent_type: "claude".to_string(),
+                                                  mcp_selected_agent_type:
+                                                      knot_core::agent_type::DEFAULT.to_string(),
                                                   agent_options_input,
                                                   ai_api_key_input,
                                                   autopilot_custom_prompt_input,
@@ -207,15 +208,18 @@ impl SettingsTab {
                                               SettingsTab::Mcp,
                                               SettingsTab::Terminal];
 
-    pub(crate) fn label(self) -> &'static str {
+    /// The tab's title. `Terminal` is titled "Appearance": the pane grew
+    /// from terminal appearance into the window's look as a whole, and the
+    /// title followed while the variant did not.
+    pub(crate) fn label(self) -> String {
         match self {
-            SettingsTab::General => "General",
-            SettingsTab::Coding => "Coding",
-            SettingsTab::Personas => "Personas",
-            SettingsTab::Autopilot => "Autopilot",
-            SettingsTab::Voice => "Voice",
-            SettingsTab::Mcp => "MCP",
-            SettingsTab::Terminal => "Appearance",
+            SettingsTab::General => knot_core::l10n::t("settings.tabs.general"),
+            SettingsTab::Coding => knot_core::l10n::t("settings.tabs.coding"),
+            SettingsTab::Personas => knot_core::l10n::t("settings.tabs.personas"),
+            SettingsTab::Autopilot => knot_core::l10n::t("settings.tabs.autopilot"),
+            SettingsTab::Voice => knot_core::l10n::t("settings.tabs.voice"),
+            SettingsTab::Mcp => knot_core::l10n::t("settings.tabs.mcp"),
+            SettingsTab::Terminal => knot_core::l10n::t("settings.tabs.appearance"),
         }
     }
 }
@@ -241,7 +245,7 @@ pub(crate) struct SettingsWindow {
 
 impl SettingsWindow {
     fn persist(&self) {
-        if let Err(error) = self.settings.persist() {
+        if let Err(error) = self.settings.persist_preferences() {
             eprintln!("failed to persist settings: {error}");
         }
     }

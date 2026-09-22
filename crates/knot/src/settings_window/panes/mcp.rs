@@ -6,10 +6,7 @@ use gpui_kit::Styled;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::div;
 use gpui_kit::px;
@@ -66,14 +63,13 @@ impl SettingsWindow {
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
                     .child(
-                        "Knot runs a local MCP server so coding agents can coordinate with each \
-                     other and control the app.",
+                        knot_core::l10n::t("settings.mcp.blurb"),
                     ),
             )
             .child(
-                Self::group("Server Settings")
+                crate::controls::group(knot_core::l10n::t("settings.mcp.server_settings"))
                     .child(Self::row(
-                        "Enable MCP server",
+                        knot_core::l10n::t("settings.mcp.enable"),
                         Switch::new("mcp-server-enabled")
                             .checked(mcp_server_enabled)
                             .on_click({
@@ -88,11 +84,11 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "Port",
+                        knot_core::l10n::t("settings.mcp.port"),
                         Input::new(&self.mcp_port_input).w(px(100.)),
                     ))
                     .child(Self::text_row(
-                        "URL",
+                        knot_core::l10n::t("settings.mcp.url"),
                         h_flex()
                             .gap_2()
                             .items_center()
@@ -101,7 +97,7 @@ impl SettingsWindow {
                                     .text_color(cx.theme().muted_foreground),
                             )
                             .child(
-                                Self::icon_button(
+                                crate::controls::icon_button(
                                     "mcp-copy-url",
                                     "icons/copy.svg",
                                     "Copy URL",
@@ -119,38 +115,28 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group("Installation Command")
+                crate::controls::group(knot_core::l10n::t("settings.mcp.install_command"))
                     .child(Self::row(
-                        "Agent",
-                        Button::new("mcp-agent-type-picker")
-                            .label(agent_type_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    let mut menu = menu;
-                                    for (label, value) in [
-                                        ("Claude", "claude"),
-                                        ("Codex", "codex"),
-                                        ("OpenCode", "opencode"),
-                                        ("Gemini", "gemini"),
-                                        ("Copilot", "copilot"),
-                                    ] {
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, _, app| {
-                                                settings_window.update(app, |view, cx| {
-                                                    view.select_mcp_agent_type(value, cx);
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+                        knot_core::l10n::t("settings.mcp.agent"),
+// The agents that have an MCP server to register with:
+                        // not a shell, and not a custom command whose
+                        // registration Knot knows nothing about.
+                        Self::dropdown("mcp-agent-type-picker",
+                                       agent_type_label,
+                                       knot_core::agent_type::ALL.iter()
+                                                                 .filter(|kind| {
+                                                                     !kind.is_custom
+                                                                     && !kind.is_shell
+                                                                 })
+                                                                 .map(|kind| {
+                                                                     (kind.label.into(), kind.id)
+                                                                 })
+                                                                 .collect(),
+                                       settings_window.clone(),
+                                       |view, value, _, cx| view.select_mcp_agent_type(value, cx)),
                     ))
                     .child(Self::text_row(
-                        "Command",
+                        knot_core::l10n::t("settings.mcp.command"),
                         h_flex()
                             .flex_1()
                             .min_w_0()
@@ -161,7 +147,7 @@ impl SettingsWindow {
                                     .flex_1()
                                     .min_w_0()
                                     .text_sm()
-                                    .child("No manual setup needed.")
+                                    .child(knot_core::l10n::t("settings.mcp.no_setup"))
                                     .into_any_element()
                             } else {
                                 Self::mono_text(cx, install_command.clone())
@@ -171,7 +157,7 @@ impl SettingsWindow {
                                     .into_any_element()
                             })
                             .child(
-                                Self::icon_button(
+                                crate::controls::icon_button(
                                     "mcp-copy-install-command",
                                     "icons/copy.svg",
                                     "Copy command",

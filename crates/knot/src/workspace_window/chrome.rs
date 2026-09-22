@@ -24,7 +24,7 @@ use gpui_kit::point;
 use gpui_kit::px;
 use uuid::Uuid;
 
-use crate::consts;
+use crate::app_support::single_line;
 use crate::workspace_window::DetailLineSize;
 
 /// One labelled detail line on an agent row: a leading icon saying what the
@@ -42,6 +42,12 @@ pub(crate) fn detail_line(icon: gpui_kit::assets::IconName, text: String, size: 
                           font_family: String, font_size: gpui_kit::Pixels, cx: &App)
                           -> gpui_kit::AnyElement {
     let muted = cx.theme().muted_foreground;
+    // Flattened for every size, not only the truncating one. A Small line
+    // wraps by choice at its width; a line break in the text is not that
+    // choice, and would hard-break the row whichever branch it took. An
+    // agent can set a status carrying one through the `set-status` MCP tool,
+    // and a path may contain one.
+    let text = single_line(&text);
     let icon = match size {
         DetailLineSize::Small => Icon::new(icon).xsmall(),
         DetailLineSize::Body => Icon::new(icon).small(),
@@ -72,7 +78,7 @@ pub(crate) fn detail_line(icon: gpui_kit::assets::IconName, text: String, size: 
 /// agent whose process exits is removed, an ACP agent whose adapter exits
 /// is not.
 pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
-    agent_type == consts::SHELL_AGENT_TYPE
+    knot_core::agent_type::is_shell(agent_type)
 }
 
 /// A stable GPUI element key for a [`Uuid`]-identified row.

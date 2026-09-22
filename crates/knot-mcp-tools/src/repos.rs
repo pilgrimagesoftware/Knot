@@ -70,16 +70,15 @@ pub fn create_worktree(arguments: &serde_json::Value) -> ToolCallResult {
     }
 }
 
-pub fn create_worktree_path(repo_path: &str, branch_name: &str) -> Result<PathBuf, String> {
+pub fn create_worktree_path(repo_path: &str, branch_name: &str) -> crate::Result<PathBuf> {
     let repo_path_ref = Path::new(repo_path);
     if !is_working_tree(repo_path_ref) {
-        return Err(format!("Not a git repository: {repo_path}"));
+        return Err(crate::ToolError::NotARepository { path: repo_path_ref.to_path_buf(), });
     }
 
     let destination = knot_git::suggest_worktree_path(repo_path_ref, branch_name);
-    Repository::open(repo_path_ref).create_worktree(branch_name, &destination)
-                                   .map(|()| destination)
-                                   .map_err(|error| format!("Failed to create worktree: {error}"))
+    Repository::open(repo_path_ref).create_worktree(branch_name, &destination)?;
+    Ok(destination)
 }
 
 #[cfg(test)]
@@ -156,7 +155,7 @@ mod tests {
                                          "branchName": "feature",
                                      }));
         assert_eq!(result.is_error, Some(true));
-        assert!(result.content[0].text.contains("Not a git repository"));
+        assert!(result.content[0].text.contains("not a git repository"));
     }
 
     #[test]

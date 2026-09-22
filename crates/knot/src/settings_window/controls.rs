@@ -3,18 +3,13 @@ use gpui_kit::Context;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Styled;
-use gpui_kit::base::StyledExt;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::Icon;
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::button::ButtonVariants;
-use gpui_kit::component::group_box::GroupBox;
-use gpui_kit::component::group_box::GroupBoxVariants;
+use gpui_kit::component::menu::DropdownMenu;
+use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::div;
 use gpui_kit::px;
-use gpui_kit::rgb;
 
 use super::font::font_label;
 use crate::app_support::FontPanelTarget;
@@ -28,15 +23,6 @@ impl SettingsWindow {
     /// Right-aligned label column width shared by every settings row, so
     /// labels line up across a pane regardless of their length.
     const LABEL_WIDTH: f32 = 200.;
-
-    /// A titled, bordered card grouping related controls. The title is
-    /// deliberately larger than row content (`text_lg` vs. the default
-    /// `text_base` used by row labels/controls) - a section header should
-    /// never read smaller than what it's heading.
-    pub(crate) fn group(title: &'static str) -> GroupBox {
-        GroupBox::new().outline()
-                       .title(div().text_lg().font_semibold().child(title))
-    }
 
     /// A label + control row with the label right-aligned in a fixed-width
     /// column, matching the alignment convention already used by
@@ -90,23 +76,6 @@ impl SettingsWindow {
              .child(text.into())
     }
 
-    /// A small icon-only action button with a tooltip, used for utility
-    /// actions (choose/clear/add/edit/delete/copy) instead of a text label -
-    /// text buttons read as arbitrary activators, an icon reads as what it
-    /// does. `danger` tints destructive actions (clear/delete) red.
-    pub(crate) fn icon_button(id: impl Into<gpui_kit::ElementId>, icon_path: &'static str,
-                              tooltip: impl Into<gpui_kit::SharedString>, danger: bool)
-                              -> Button {
-        let mut icon = Icon::default().path(icon_path);
-        if danger {
-            // `.ghost()` and `.danger()` are both button *variants* - only one
-            // can apply, and ghost (no background) is what we want here - so
-            // tint the icon itself red instead of switching variants.
-            icon = icon.text_color(rgb(0xEF4444));
-        }
-        Button::new(id).icon(icon).tooltip(tooltip).ghost().small()
-    }
-
     /// A single "Family, Npt" button that opens the OS font panel
     /// (`NSFontPanel`) pre-selected to the current font/size for `target` -
     /// one control picks both, since the panel itself has a size field.
@@ -135,5 +104,45 @@ impl SettingsWindow {
                   #[cfg(target_os = "macos")]
                   native_font_panel::open(target, &name, size);
               })
+    }
+
+    /// A picker: a button showing the current value, whose dropdown lists
+    /// `options` and applies the one chosen.
+    ///
+    /// Five panes wrote this out - the button, the caret, the menu, an item
+    /// per option, and a closure per item cloning the window entity - all
+    /// differing only in the option list and what the choice does. `select`
+    /// receives the window and the chosen value, so a setter that needs the
+    /// `Window` (the coding pane's, which re-reads fonts) and one that does
+    /// not use the same helper.
+    pub(crate) fn dropdown<T>(id: impl Into<gpui_kit::ElementId>,
+                              current: impl Into<gpui_kit::SharedString>,
+                              options: Vec<(gpui_kit::SharedString, T)>,
+                              settings_window: gpui_kit::Entity<SettingsWindow>,
+                              select: impl Fn(&mut SettingsWindow,
+                                 &T,
+                                 &mut gpui_kit::Window,
+                                 &mut Context<SettingsWindow>)
+                              + Clone
+                              + 'static)
+                              -> impl IntoElement
+        where T: Clone + 'static {
+        Button::new(id).label(current.into())
+                       .dropdown_caret(true)
+                       .dropdown_menu(move |menu, _, _| {
+                           let mut menu = menu;
+                           for (label, value) in options.clone() {
+                               let settings_window = settings_window.clone();
+                               let select = select.clone();
+                               menu = menu.item(PopupMenuItem::new(label).on_click(move |_, window, app| {
+                                   let value = value.clone();
+                                   let select = select.clone();
+                                   settings_window.update(app, |view, cx| {
+                                                      select(view, &value, window, cx);
+                                                  });
+                               }));
+                           }
+                           menu
+                       })
     }
 }

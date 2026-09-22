@@ -14,20 +14,18 @@ use std::sync::Arc;
 
 use gpui_kit::App;
 use gpui_kit::AppContext;
-use gpui_kit::ClipboardItem;
 use gpui_kit::component::Root;
-use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::app_state::agent_selection_for_workspace;
 use crate::app_support::observe_system_appearance;
-use crate::consts;
 use crate::dashboard;
 use crate::window_options::workspace_window_options;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::repaint::spawn_repaint_poll;
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
@@ -74,10 +72,6 @@ impl WorkspaceWindow {
                   // behind whatever has focus - matching what the settings
                   // window already does when it reuses an open one.
                   window.activate_window();
-                  let new_agent_name_input =
-                      cx.new(|cx| InputState::new(window, cx).placeholder("Agent name (optional)"));
-                  let new_agent_folder_input =
-                      cx.new(|cx| InputState::new(window, cx).placeholder("Agent folder path"));
                   let selected_agent = select_agent.or_else(|| {
                                                        let store = store.lock();
                                                        agent_selection_for_workspace(&store,
@@ -91,9 +85,7 @@ impl WorkspaceWindow {
                             let mut window = WorkspaceWindow {
                     exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
-                    diff_stats: Arc::new(Mutex::new(BTreeMap::new())),
-                    diff_stats_requested: BTreeMap::new(),
-                    diff_stats_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    diff_stats: crate::diff_stats::DiffStatsCache::default(),
                     open_config_selector: None,
                     store,
                     messages,
@@ -124,11 +116,9 @@ impl WorkspaceWindow {
                     working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
+                    panel_lookups: BTreeMap::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
-                    new_agent_name_input,
-                    new_agent_folder_input,
-                    show_new_agent: false,
                     error: None,
                 };
                             // Matches the Swift reference: every agent in the
@@ -165,64 +155,10 @@ impl WorkspaceWindow {
                             }
                             window
                         });
-                  // Drains OSC 52 clipboard-store requests queued from the PTY
-                  // reader thread onto the OS pasteboard (see
-                  // `clipboard_writes`'s doc comment), and
-                  // repaints the terminal grid - the PTY reader
-                  // thread has no way to call `cx.notify()` itself, so without
-                  // this the grid only visibly updates on an unrelated UI event
-                  // (a keystroke, mouse move), making output look stalled after
-                  // e.g. pressing Enter.
-                  let notify_view = view.clone();
-                  let exited_drain = Arc::clone(&exited_sessions);
-                  cx.spawn(async move |cx| {
-                        loop {
-                            cx.background_executor()
-                              .timer(consts::REPAINT_POLL_INTERVAL)
-                              .await;
-                            let texts = std::mem::take(&mut *clipboard_writes.lock());
-                            let exited = std::mem::take(&mut *exited_drain.lock());
-                            for text in texts {
-                                cx.update(|app| {
-                                      app.write_to_clipboard(ClipboardItem::new_string(text));
-                                  });
-                            }
-                            cx.update(|app| {
-                                  notify_view.update(app, |view, cx| {
-                                                 // A shell companion whose
-                                                 // process exited has nothing
-                                                 // left to show, so close it
-                                                 // rather than leaving a dead
-                                                 // pane that looks hung.
-                                                 for id in &exited {
-                                                     view.remove_agent(*id);
-                                                     cx.notify();
-                                                 }
-                                                 // Messages arrive from
-                                                 // the MCP server on another
-                                                 // thread; this poll is
-                                                 // where an agent going idle
-                                                 // is noticed.
-                                                 view.deliver_inbox_nudges();
-                                                 view.raise_awaiting_notifications(cx);
-                                                 let grid_dirty =
-                                                     view.selected_agent
-                                                         .and_then(|id| view.sessions.get(&id))
-                                                         .and_then(|session| session.lock().grid())
-                                                         .is_some_and(|grid| {
-                                                             grid.lock().take_dirty()
-                                                         });
-                                                 let panel_dirty = view.panel_needs_repaint();
-                                                 let spinner_dirty = view.spinner_repaint_due();
-                                                 if grid_dirty || panel_dirty || spinner_dirty {
-                                                     cx.notify();
-                                                 }
-                                                 view.refresh_agents_menu(cx);
-                                             });
-                              });
-                        }
-                    })
-                    .detach();
+                  spawn_repaint_poll(view.clone(),
+                                     clipboard_writes,
+                                     Arc::clone(&exited_sessions),
+                                     cx);
                   // Remember where the user puts this workspace's window.
                   // The observer fires continuously through a drag, so the
                   // store's setter reports whether the frame actually

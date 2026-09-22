@@ -14,7 +14,6 @@ use gpui_kit::App;
 use gpui_kit::Context;
 use gpui_kit::Entity;
 use gpui_kit::Window;
-use gpui_kit::component::WindowExt;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use parking_lot::Mutex;
@@ -29,6 +28,7 @@ use crate::app_state::AgentMenuFacts;
 use crate::app_state::agent_context_menu_entries;
 use crate::open_in;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::menus::confirm_then;
 
 /// Everything the agent-row context menu's handlers need. Grouped so the
 /// builder takes one argument instead of seven, and so the row render can
@@ -92,7 +92,27 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
                                            insert_after,
                                            edit_target },
                       move |_id, _window, app| {
-                          window_entity.update(app, |_, cx| cx.notify());
+                          window_entity.update(app, |view, cx| {
+                                           // Freshly loaded, not this window's
+                                           // snapshot: the
+                                           // sidebar row resolves the agent's
+                                           // persona name
+                                           // from `view.settings.personas`,
+                                           // which was taken
+                                           // when the window opened. Assigning
+                                           // a persona
+                                           // added since then (or via this same
+                                           // edit, on an
+                                           // agent that had none) would resolve
+                                           // to nothing
+                                           // and the row would keep showing no
+                                           // persona line.
+                                           view.settings =
+                                               knot_core::Settings::load().unwrap_or_else(|_| {
+                                                                              view.settings.clone()
+                                                                          });
+                                           cx.notify();
+                                       });
                       },
                       app);
 }
@@ -116,7 +136,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             AgentMenuEntry::MoveToWorkspace => {
                 let targets = targets.clone();
                 let move_targets = move_targets.clone();
-                menu.submenu("Move to Workspace", window, cx, move |mut submenu, _, _| {
+                let move_title = AgentMenuEntry::MoveToWorkspace.label().unwrap_or_default();
+                menu.submenu(move_title, window, cx, move |mut submenu, _, _| {
                         for (workspace_id, workspace_name) in &move_targets {
                             let targets = targets.clone();
                             let workspace_id = *workspace_id;
@@ -132,15 +153,16 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             }
             AgentMenuEntry::OpenIn => {
                 let folder = targets.folder.clone();
-                menu.submenu("Open In…", window, cx, move |mut submenu, _, _| {
+                let open_in_title = AgentMenuEntry::OpenIn.label().unwrap_or_default();
+                menu.submenu(open_in_title, window, cx, move |mut submenu, _, _| {
                         for item in open_in::open_in_entries() {
                             submenu = match item {
                                 open_in::OpenInEntry::Separator => submenu.separator(),
                                 open_in::OpenInEntry::App(app_entry) => {
                                     let folder = folder.clone();
-                                    submenu.item(PopupMenuItem::new(app_entry.label).on_click(
+                                    submenu.item(PopupMenuItem::new(app_entry.label()).on_click(
                                     move |_, _window, _app| {
-                                        open_in::open_folder(app_entry.id, &folder);
+                                        open_in::open_folder(app_entry, &folder);
                                     },
                                 ))
                                 }
@@ -152,7 +174,8 @@ pub(crate) fn agent_row_context_menu(targets: &AgentMenuTargets, menu: PopupMenu
             AgentMenuEntry::MarkdownFiles => {
                 let targets = targets.clone();
                 let history = markdown_history.clone();
-                menu.submenu("Markdown Files", window, cx, move |mut submenu, _, _| {
+                let markdown_title = AgentMenuEntry::MarkdownFiles.label().unwrap_or_default();
+                menu.submenu(markdown_title, window, cx, move |mut submenu, _, _| {
                         for file in &history {
                             let targets = targets.clone();
                             let file = file.clone();
@@ -214,7 +237,9 @@ pub(super) fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: 
 pub(super) fn show_agent_markdown_file(targets: &AgentMenuTargets, file: &Path, app: &mut App) {
     {
         let mut store = targets.store.lock();
-        let _ = store.set_markdown_panel(targets.id, file.to_path_buf(), false);
+        if let Err(error) = store.set_markdown_panel(targets.id, file.to_path_buf(), false) {
+            eprintln!("failed to show {}: {error}", file.display());
+        }
     }
     targets.window_entity.update(app, |_, cx| cx.notify());
 }
@@ -235,7 +260,8 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         // its folder before it exists.
         AgentMenuEntry::NewCompanion => {
             let prefill = AgentPrefill { folder: Some(targets.folder.clone()),
-                                         agent_type: Some("shell".to_string()),
+                                         agent_type:
+                                             Some(knot_core::agent_type::SHELL.to_string()),
                                          created_by: Some(targets.id),
                                          is_companion: true,
                                          ..Default::default() };
@@ -322,6 +348,12 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
             entry.agent_type = source.agent_type.clone();
             entry.shell_command = source.shell_command.clone();
             entry.persona_id = source.persona_id;
+            // Registry metadata travels with the template, so a saved entry
+            // records a role and not just a folder. See
+            // `openspec/specs/agent-registry/spec.md`.
+            entry.description = source.description.clone();
+            entry.capabilities = source.capabilities.clone();
+            entry.cost_tier = source.cost_tier;
             if let Err(error) = settings.add_bench_agent(entry) {
                 eprintln!("failed to save the agent to the bench: {error}");
             }
@@ -334,58 +366,41 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         }
         AgentMenuEntry::RestartAgent => {
             let targets = targets.clone();
-            window.defer(app, move |window, app| {
-                      window.open_alert_dialog(app, move |alert, _, _| {
-                                let targets = targets.clone();
-                                alert.title("Restart Agent")
-                                     .description(format!("Restart \"{}\"? Its session will be \
-                                                           cleared.",
-                                                          targets.name))
-                                     .confirm()
-                                     .on_ok(move |_, _, app| {
-                                         {
-                                             let mut store = targets.store.lock();
-                                             let _ = store.restart(targets.id);
-                                         }
-                                         targets.window_entity.update(app, |view, cx| {
-                                                                  view.remove_session(targets.id);
-                                                                  view.panel_states
-                                                                      .remove(&targets.id);
-                                                                  // `restart` clears the
-                                                                  // persisted session ids;
-                                                                  // write them
-                                                                  // out so a
-                                                                  // relaunch doesn't resume
-                                                                  // the session
-                                                                  // just dropped.
-                                                                  //
-                                                                  view.persist_agents();
-                                                                  cx.notify();
-                                                              });
-                                         true
-                                     })
-                            });
-                  });
+            let description = format!("Restart \"{}\"? Its session will be cleared.", targets.name);
+            confirm_then(window, app, "Restart Agent", description, move |app| {
+                {
+                    let mut store = targets.store.lock();
+                    if let Err(error) = store.restart(targets.id) {
+                        eprintln!("failed to restart agent {}: {error}", targets.id);
+                    }
+                }
+                targets.window_entity.update(app, |view, cx| {
+                                         view.remove_session(targets.id);
+                                         view.panel_states.remove(&targets.id);
+                                         // `restart` clears the persisted
+                                         // session ids; write
+                                         // them out so a relaunch doesn't
+                                         // resume the session
+                                         // just dropped.
+                                         view.persist_agents();
+                                         cx.notify();
+                                     });
+            });
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
-            window.defer(app, move |window, app| {
-                      window.open_alert_dialog(app, move |alert, _, _| {
-                                let targets = targets.clone();
-                                alert.title("Remove Agent")
-                                     .description(format!("Remove \"{}\"? This closes its session \
-                                                           and cannot be undone.",
-                                                          targets.name))
-                                     .confirm()
-                                     .on_ok(move |_, _, app| {
-                                         targets.window_entity.update(app, |view, cx| {
-                                                                  view.remove_agent(targets.id);
-                                                                  cx.notify();
-                                                              });
-                                         true
-                                     })
-                            });
-                  });
+            let description = knot_core::l10n::t_with("menu.agent.confirm.remove_body",
+                                                      &[("name", &targets.name)]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.agent.confirm.remove_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      view.remove_agent(targets.id);
+                                                      cx.notify();
+                                                  });
+                         });
         }
         // Handled by the builder, which needs `Window`/`Context` to make
         // a submenu, or carries no action at all.

@@ -3,10 +3,19 @@
 use super::*;
 use crate::error::SessionEndCause;
 
+/// A fake agent running `script` under `sh`.
+///
+/// Six fixtures built this the same way and differed only in the script,
+/// which is the only part worth reading in any of them.
+fn sh_agent(script: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new("sh");
+    command.arg("-c").arg(script);
+    command
+}
+
 /// A fake agent handling `initialize` (with a configurable protocol
 /// version and resume capability) and `session/new`/`session/load`.
 fn fake_agent(protocol_version: u32, supports_resume: bool) -> Command {
-    let mut command = Command::new("sh");
     let script = format!(
                          r#"while IFS= read -r line; do
           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
@@ -18,15 +27,13 @@ fn fake_agent(protocol_version: u32, supports_resume: bool) -> Command {
           esac
         done"#
     );
-    command.arg("-c").arg(script);
-    command
+    sh_agent(script)
 }
 
 /// A fake agent whose `session/prompt` answers with a stop reason and
 /// sends no `turn_end` notification - which is how ACP actually ends a
 /// turn.
 fn prompting_agent() -> Command {
-    let mut command = Command::new("sh");
     let script = format!(
                          r#"while IFS= read -r line; do
           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
@@ -38,8 +45,7 @@ fn prompting_agent() -> Command {
           esac
         done"#
     );
-    command.arg("-c").arg(script);
-    command
+    sh_agent(script)
 }
 
 /// The turn-end event has to be synthesized from the `session/prompt`
@@ -117,7 +123,6 @@ async fn session_new_returns_session_id() {
 /// response advertises `mcpCapabilities.http` - required before an
 /// `http`-type `mcpServers` entry is valid per the ACP spec.
 fn logging_fake_agent(log_path: &std::path::Path, declares_http: bool) -> Command {
-    let mut command = Command::new("sh");
     let mcp_capabilities = if declares_http {
         r#"{\"http\":true}"#
     }
@@ -137,8 +142,7 @@ fn logging_fake_agent(log_path: &std::path::Path, declares_http: bool) -> Comman
         done"#,
                          log_path.display()
     );
-    command.arg("-c").arg(script);
-    command
+    sh_agent(script)
 }
 
 #[tokio::test]
@@ -211,9 +215,8 @@ async fn subprocess_exit_ends_session_and_resolves_pending_request_with_error() 
     // A subprocess that answers `initialize` then exits immediately,
     // simulating a crash mid-turn: the next request must resolve with
     // an error rather than hang.
-    let mut command = Command::new("sh");
-    command.arg("-c").arg(
-        r#"read -r line
+    let command = sh_agent(
+                           r#"read -r line
           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
           echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}""#,
     );
@@ -233,9 +236,8 @@ async fn subprocess_exit_ends_session_and_resolves_pending_request_with_error() 
 /// option back as one more text delta, so the test can assert the
 /// decision actually reached the agent.
 fn permission_flow_agent() -> Command {
-    let mut command = Command::new("sh");
-    command.arg("-c").arg(
-        r#"while IFS= read -r line; do
+    sh_agent(
+             r#"while IFS= read -r line; do
           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
           method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
           case "$method" in
@@ -257,8 +259,7 @@ fn permission_flow_agent() -> Command {
               ;;
           esac
         done"#,
-    );
-    command
+    )
 }
 
 #[tokio::test]
@@ -320,9 +321,8 @@ async fn permission_deny_decision_is_delivered_to_the_agent() {
 /// `session/new`, and answering `session/set_config_option` with an
 /// updated `currentValue`.
 fn config_options_agent() -> Command {
-    let mut command = Command::new("sh");
-    command.arg("-c").arg(
-        r#"while IFS= read -r line; do
+    sh_agent(
+             r#"while IFS= read -r line; do
           id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
           method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
           case "$method" in
@@ -338,8 +338,7 @@ fn config_options_agent() -> Command {
             *) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{}}" ;;
           esac
         done"#,
-    );
-    command
+    )
 }
 
 #[tokio::test]

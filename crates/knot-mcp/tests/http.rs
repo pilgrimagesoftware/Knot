@@ -71,7 +71,7 @@ async fn initialize_handshake_over_http() {
 }
 
 #[tokio::test]
-async fn invalid_mcp_session_is_rejected() {
+async fn unknown_mcp_session_self_heals_with_a_fresh_session() {
     let (mut server, base) = start_server(Arc::new(EmptyCatalog)).await;
     let client = reqwest::Client::new();
 
@@ -82,9 +82,13 @@ async fn invalid_mcp_session_is_rejected() {
                      .await
                      .unwrap();
 
-    assert_eq!(resp.status(), 400);
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["error"]["code"], -32000);
+    assert_eq!(resp.status(), 200);
+    let new_session_id = resp.headers()
+                             .get("Mcp-Session-Id")
+                             .expect("fresh session id issued")
+                             .to_str()
+                             .unwrap();
+    assert_ne!(new_session_id, "missing-session");
 
     server.stop();
 }
@@ -153,6 +157,9 @@ fn test_agent(name: &str, registered: bool) -> Agent {
             persona_id:         None,
             view_mode:          Default::default(),
             activation_mode:    Default::default(),
+            description:        String::new(),
+            capabilities:       Default::default(),
+            cost_tier:          Default::default(),
             session_config:     Default::default(),
             activated:          false,
             state:              AgentState::Idle,

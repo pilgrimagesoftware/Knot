@@ -7,7 +7,6 @@ use gpui_kit::AnyWindowHandle;
 use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
-use gpui_kit::component::input::InputState;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::resizable::ResizableState;
 use knot_terminal::PtyTransport;
@@ -28,7 +27,7 @@ mod creation;
 mod menus;
 mod notifications;
 mod open;
-mod panel;
+pub(crate) mod panel;
 mod render;
 mod repaint;
 mod sessions;
@@ -124,10 +123,7 @@ struct AgentRow {
 pub(crate) struct WorkspaceWindow {
     /// Last known diff stat per agent, refreshed off the render path - see
     /// `refresh_diff_stats`.
-    diff_stats:                       Arc<Mutex<BTreeMap<Uuid, Option<knot_git::DiffStats>>>>,
-    /// When each agent's diff stat was last *requested*, so the refresh
-    /// runs on a cadence rather than once per render. Main-thread only.
-    diff_stats_requested:             BTreeMap<Uuid, std::time::Instant>,
+    diff_stats:                       crate::diff_stats::DiffStatsCache,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off
@@ -135,8 +131,6 @@ pub(crate) struct WorkspaceWindow {
     exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
     /// Keeps the window-bounds observer alive for this window's lifetime.
     window_bounds_subscription:       Option<gpui_kit::Subscription>,
-    /// Set by a finished refresh so the repaint poll redraws the header.
-    diff_stats_dirty:                 Arc<std::sync::atomic::AtomicBool>,
     /// Which config selector's popover is open, by element id, or `None`
     /// when none is. One shared flag used to back all three: because every
     /// selector's `on_open_change` wrote it and the permission selector
@@ -235,15 +229,19 @@ pub(crate) struct WorkspaceWindow {
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     panel_input_expanded:             BTreeSet<Uuid>,
+    /// The slash lookup's state per Panel-mode agent: the memoized
+    /// command/skill registry, which entry is selected, and the token Esc
+    /// closed it on. Created on the agent's first lookup, since building it
+    /// reads skill roots off disk - see `panel::lookup`.
+    panel_lookups:                    BTreeMap<Uuid, panel::lookup::PanelLookup>,
     /// This window's handle, so the poll can tell whether it is the active
     /// window before replacing the app-wide menu bar - two open workspace
     /// windows must not fight over whose selection the Agents menu shows.
     window_handle:                    AnyWindowHandle,
     view_mode:                        WorkspaceViewMode,
     dashboard_sort:                   dashboard::DashboardSort,
-    new_agent_name_input:             Entity<InputState>,
-    new_agent_folder_input:           Entity<InputState>,
-    show_new_agent:                   bool,
+    /// The sidebar's one error line, for a failure the user caused and can
+    /// act on - currently only a sidebar width that could not be saved.
     error:                            Option<String>,
 }
 
@@ -256,10 +254,14 @@ impl Drop for WorkspaceWindow {
     /// orphaned adapter per panel agent - the same gap `remove_session`
     /// documents for a single agent, applied to the whole window.
     fn drop(&mut self) {
-        for session in self.sessions.values() {
+        for (id, session) in &self.sessions {
             {
                 let mut session = session.lock();
-                let _ = session.shutdown();
+                // As in `remove_session`: the drop below is the teardown,
+                // this is only the polite half of it.
+                if let Err(error) = session.shutdown() {
+                    eprintln!("failed to shut down agent {id}'s terminal: {error}");
+                }
             }
         }
         // Dropping the slot is what guarantees the teardown: it releases

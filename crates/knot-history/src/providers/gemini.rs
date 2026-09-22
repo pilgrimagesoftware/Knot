@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use serde::Deserialize;
 use serde_json::Value;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -12,9 +13,47 @@ use time::format_description::well_known::Rfc3339;
 use crate::consts::{GEMINI_TMP_DIR, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::title::{extract_title, is_valid_title};
+use crate::providers::{Maybe, first_title, maybe_text, resolve_title};
 
 pub struct GeminiProvider;
+
+/// A `chats/session-*.json` file: one document holding the whole
+/// conversation, rather than a line-delimited log.
+#[derive(Deserialize)]
+struct Chat {
+    messages: Vec<ChatMessage>,
+}
+
+#[derive(Deserialize)]
+struct ChatMessage {
+    #[serde(rename = "type")]
+    message_type: String,
+    /// The blocks of one turn. Gemini writes an array here; a turn whose
+    /// content is shaped some other way carries no title.
+    #[serde(default)]
+    content:      Maybe<Vec<ContentBlock>>,
+}
+
+#[derive(Deserialize)]
+struct ContentBlock {
+    #[serde(default)]
+    text: Maybe<String>,
+}
+
+/// One entry of `logs.json`: Gemini's own record of a prompt, which is where
+/// a session's id, summary and time come from.
+///
+/// Every field is required, so an entry missing one is skipped as malformed
+/// rather than read half-way.
+#[derive(Deserialize)]
+struct LogEntry {
+    #[serde(rename = "sessionId")]
+    session_id: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+    message:    String,
+    timestamp:  String,
+}
 
 fn base_dir() -> Option<PathBuf> {
     Some(home_dir()?.join(GEMINI_TMP_DIR))
@@ -60,37 +99,19 @@ fn find_chat_file(chats_dir: &Path, session_id: &str) -> Option<PathBuf> {
 }
 
 /// Parse a Gemini chat file for the first `user` message text.
+///
+/// One JSON document rather than a line-delimited log, so the entries come
+/// from its `messages` array; the scan over them is the shared one.
 fn title_from_chat_file(path: &Path) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
-    let json: Value = serde_json::from_str(&content).ok()?;
-    let messages = json.get("messages")?.as_array()?;
+    let chat: Chat = serde_json::from_str(&content).ok()?;
 
-    for message in messages {
-        if message.get("type").and_then(Value::as_str) != Some("user") {
-            continue;
+    first_title(chat.messages, |message| {
+        if message.message_type != "user" {
+            return None;
         }
-        let Some(text) = message.get("content")
-                                .and_then(Value::as_array)
-                                .and_then(|arr| arr.first())
-                                .and_then(|first| first.get("text"))
-                                .and_then(Value::as_str)
-        else {
-            continue;
-        };
-        if !is_valid_title(text) {
-            continue;
-        }
-        return extract_title(text);
-    }
-    None
-}
-
-fn resolve_title(log_message: &str, session_id: &str, chats_dir: &Path) -> String {
-    if is_valid_title(log_message) {
-        return crate::title::truncate(log_message);
-    }
-    find_chat_file(chats_dir, session_id).and_then(|path| title_from_chat_file(&path))
-                                         .unwrap_or_default()
+        maybe_text(&message.content.known()?.first()?.text)
+    })
 }
 
 impl HistoryProvider for GeminiProvider {
@@ -104,26 +125,22 @@ impl HistoryProvider for GeminiProvider {
         else {
             return Vec::new();
         };
-        let Ok(entries) = serde_json::from_str::<Vec<Value>>(&content)
+        // `Maybe` per entry rather than `Vec<LogEntry>` for the file: one
+        // entry that does not fit the shape is skipped, as it was when this
+        // read `Value`s, instead of costing the user every other session in
+        // the file.
+        let Ok(entries) = serde_json::from_str::<Vec<Maybe<LogEntry>>>(&content)
         else {
             return Vec::new();
         };
 
         let mut sessions: HashMap<String, (String, OffsetDateTime)> = HashMap::new();
-        for entry in &entries {
-            let (Some(session_id), Some(entry_type), Some(message), Some(timestamp_str)) =
-                (entry.get("sessionId").and_then(Value::as_str),
-                 entry.get("type").and_then(Value::as_str),
-                 entry.get("message").and_then(Value::as_str),
-                 entry.get("timestamp").and_then(Value::as_str))
-            else {
-                continue;
-            };
-            if entry_type != "user" {
+        for entry in entries.iter().filter_map(Maybe::known) {
+            if entry.entry_type != "user" {
                 continue;
             }
-            sessions.entry(session_id.to_owned())
-                    .or_insert_with(|| (message.to_owned(), parse_timestamp(timestamp_str)));
+            sessions.entry(entry.session_id.clone())
+                    .or_insert_with(|| (entry.message.clone(), parse_timestamp(&entry.timestamp)));
         }
 
         let mut sorted: Vec<_> = sessions.into_iter().collect();
@@ -133,7 +150,11 @@ impl HistoryProvider for GeminiProvider {
         sorted.into_iter()
               .take(MAX_SESSIONS)
               .map(|(session_id, (message, timestamp))| {
-                  SessionSummary { title: resolve_title(&message, &session_id, &chats_dir),
+                  let title = resolve_title(&message, || {
+                      find_chat_file(&chats_dir, &session_id).as_deref()
+                                                             .and_then(title_from_chat_file)
+                  });
+                  SessionSummary { title,
                                    id: session_id,
                                    timestamp,
                                    message_count: 0 }
@@ -157,6 +178,10 @@ impl HistoryProvider for GeminiProvider {
         else {
             return;
         };
+        // `Value`, not `LogEntry`: this path writes the file back out, and
+        // every entry it keeps has to survive the round trip byte for byte.
+        // Parsing into a struct would silently drop whatever fields Gemini
+        // records that Knot does not model.
         let Ok(mut entries) = serde_json::from_str::<Vec<Value>>(&content)
         else {
             return;

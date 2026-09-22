@@ -31,7 +31,7 @@ fn manager(
     cx: &mut TestAppContext)
     -> (Arc<Mutex<knot_agents::AgentStore>>, VisualTestContext, Entity<WorkspaceManager>) {
     let dir = tempfile::tempdir().expect("failed to make a temp settings directory");
-    let settings = knot_core::Settings::with_store_path(dir.path().join("settings.json"));
+    let settings = knot_core::Settings::with_store_root(dir.path());
     // The directory must outlive the test; leaking the handle keeps the
     // path valid and leaves the files for the OS to reap.
     std::mem::forget(dir);
@@ -63,7 +63,6 @@ fn manager(
                                                         editing_id: None,
                                                         workspace_dialog_id: None,
                                                         show_workspace_dialog: false,
-                                                        delete_workspace_id: None,
                                                         error: None,
                                                         _name_subscription: name_subscription,
                                                         _mcp_stop: None }

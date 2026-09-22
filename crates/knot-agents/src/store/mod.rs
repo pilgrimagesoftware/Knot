@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use knot_core::{ActivationMode, Workspace};
+use knot_core::{ActivationMode, Capabilities, CostTier, Workspace};
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -12,6 +12,8 @@ mod lifecycle;
 mod ordering;
 mod panels;
 mod persistence;
+
+pub use persistence::AdoptedCounts;
 mod workspace;
 
 #[cfg(test)]
@@ -33,9 +35,20 @@ pub struct CreateOptions {
     pub created_by:      Option<Uuid>,
     pub is_companion:    bool,
     pub insert_after:    Option<Uuid>,
+    /// Workspace to place the new agent in. Takes priority over inferring one
+    /// from `created_by`/`insert_after`. A caller that knows which workspace
+    /// it means must say so explicitly rather than relying on whichever
+    /// workspace happens to be "current" - that's ambient global state a
+    /// concurrent window or MCP call can change out from under it.
+    pub workspace_id:    Option<Uuid>,
     /// Defaults to `Passive` - deliberately not the load default a record
     /// with no stored mode gets (`Active`, see `knot_core::SavedAgent`).
     pub activation_mode: ActivationMode,
+    /// Registry metadata. All three default to "nothing declared", which is
+    /// what an agent created without them should read as.
+    pub description:     String,
+    pub capabilities:    Capabilities,
+    pub cost_tier:       CostTier,
 }
 
 /// Fields an edit may change. `name`/`avatar` always apply and never trigger
@@ -52,6 +65,13 @@ pub struct EditRequest {
     /// Applied verbatim; changing it never triggers a restart, per
     /// `agent-lifecycle`'s "Activation mode" requirement.
     pub activation_mode:     ActivationMode,
+    /// Registry metadata, applied verbatim. Like `activation_mode`, none of
+    /// it triggers a restart: re-tagging an agent says nothing about the
+    /// session it already has, and interrupting one to record a label would
+    /// throw away the work it is doing.
+    pub description:         String,
+    pub capabilities:        Capabilities,
+    pub cost_tier:           CostTier,
 }
 
 /// An agent removed by [`AgentStore::remove`], in cascade order (companions
@@ -97,31 +117,34 @@ impl AgentStore {
         self.agents.iter_mut().find(|a| a.id == id)
     }
 
+    /// Apply `f` to the agent with `id`, if the store still holds one.
+    ///
+    /// Every one-line setter below is this and nothing else. An unknown id
+    /// is not an error: an agent can be removed while a message about it is
+    /// still in flight, and the update is then simply dropped.
+    fn update(&mut self, id: Uuid, f: impl FnOnce(&mut Agent)) {
+        if let Some(agent) = self.agent_mut(id) {
+            f(agent);
+        }
+    }
+
     /// Mark whether this agent may start in this run. Set by selection and
     /// by `create` for an `Active` agent; cleared by deactivation. Runtime
     /// only - never persisted.
     pub fn set_activated(&mut self, id: Uuid, activated: bool) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.activated = activated;
-        }
+        self.update(id, |agent| agent.activated = activated);
     }
 
     pub fn set_registered(&mut self, id: Uuid, registered: bool) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.is_registered = registered;
-        }
+        self.update(id, |agent| agent.is_registered = registered);
     }
 
     pub fn set_session_id(&mut self, id: Uuid, session_id: String) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.session_id = Some(session_id);
-        }
+        self.update(id, |agent| agent.session_id = Some(session_id));
     }
 
     pub fn set_acp_session_id(&mut self, id: Uuid, session_id: String) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.acp_session_id = Some(session_id);
-        }
+        self.update(id, |agent| agent.acp_session_id = Some(session_id));
     }
 
     pub fn apply_acp_session_outcomes(&mut self, outcomes: &BTreeMap<Uuid, Option<String>>) {
@@ -133,26 +156,18 @@ impl AgentStore {
     }
 
     pub fn set_state(&mut self, id: Uuid, state: AgentState) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.state = state;
-        }
+        self.update(id, |agent| agent.state = state);
     }
 
     pub fn update_metadata(&mut self, id: Uuid, metadata: BTreeMap<String, String>) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.metadata.extend(metadata);
-        }
+        self.update(id, |agent| agent.metadata.extend(metadata));
     }
 
     pub fn set_status_text(&mut self, id: Uuid, status: String) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.status_text = status;
-        }
+        self.update(id, |agent| agent.status_text = status);
     }
 
     pub fn set_terminal_title(&mut self, id: Uuid, title: String) {
-        if let Some(agent) = self.agent_mut(id) {
-            agent.terminal_title = title;
-        }
+        self.update(id, |agent| agent.terminal_title = title);
     }
 }

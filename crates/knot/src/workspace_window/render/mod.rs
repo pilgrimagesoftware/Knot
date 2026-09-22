@@ -59,59 +59,53 @@ mod sidebar;
 mod sidebar_compact;
 mod title_bar;
 
-impl Render for WorkspaceWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // The title font (Manrope) applies explicitly to header and cell text
-        // that isn't the agent's name - the name keeps the app-wide UI font
-        // (Adamina), so it needs no override here.
-        let title_font_name = self.settings.title_font_name.clone();
-        let title_font_size = px(self.settings.title_font_size as f32);
-        let (_workspace_name, agents) = {
-            let store = self.store.lock();
-            let Some(workspace) = store.workspaces()
-                                       .iter()
-                                       .find(|workspace| workspace.id == self.workspace_id)
-            else {
-                return v_flex().size_full()
-                               .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
-                               .child("Workspace no longer exists.");
-            };
-            let agents =
-                workspace.agent_ids
-                         .iter()
-                         .filter_map(|id| store.agent(*id))
-                         .map(|agent| {
-                             let persona_name =
-                                 agent.persona_id.and_then(|id| {
-                                                     self.settings
-                                                         .personas
-                                                         .iter()
-                                                         .find(|persona| persona.id == id)
-                                                         .map(|persona| persona.name.clone())
-                                                 });
-                             AgentRow { id: agent.id,
-                                        avatar: agent.avatar.clone(),
-                                        name: agent.name.clone(),
-                                        folder: agent.folder.clone(),
-                                        state: agent.state,
-                                        is_shell: agent.is_shell(),
-                                        is_companion: agent.is_companion,
-                                        header_title: agent.header_title().to_string(),
-                                        persona_name,
-                                        agent_type: agent.agent_type.clone(),
-                                        is_running: agent.activated }
-                         })
-                         .collect::<Vec<_>>();
-            (workspace.name.clone(), agents)
-        };
+impl WorkspaceWindow {
+    /// The rows the sidebar draws, read from the store in one lock, or
+    /// `None` when this window's workspace is gone - which is a window that
+    /// can only say so.
+    fn agent_row_snapshot(&self) -> Option<Vec<AgentRow>> {
+        let store = self.store.lock();
+        let workspace = store.workspaces()
+                             .iter()
+                             .find(|workspace| workspace.id == self.workspace_id)?;
+        Some(workspace.agent_ids
+                      .iter()
+                      .filter_map(|id| store.agent(*id))
+                      .map(|agent| {
+                          let persona_name =
+                              agent.persona_id.and_then(|id| {
+                                                  self.settings
+                                                      .personas
+                                                      .iter()
+                                                      .find(|persona| persona.id == id)
+                                                      .map(|persona| persona.name.clone())
+                                              });
+                          AgentRow { id: agent.id,
+                                     avatar: agent.avatar.clone(),
+                                     name: agent.name.clone(),
+                                     folder: agent.folder.clone(),
+                                     state: agent.state,
+                                     is_shell: agent.is_shell(),
+                                     is_companion: agent.is_companion,
+                                     header_title: agent.header_title().to_string(),
+                                     persona_name,
+                                     agent_type: agent.agent_type.clone(),
+                                     is_running: agent.activated }
+                      })
+                      .collect())
+    }
 
-        let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
-
+    /// The work a frame does before it draws: match the terminal to its
+    /// pane, ask for diff stats that have aged out, and make sure something
+    /// holds focus.
+    ///
+    /// None of it draws, and none of it runs `git` here - `refresh_diff_stats`
+    /// is a map lookup and an `Instant` compare, with the subprocess behind
+    /// it running at most every `DIFF_STATS_MAX_AGE`.
+    fn prepare_frame(&mut self, is_dashboard: bool, window: &mut Window, cx: &mut Context<Self>) {
         if !is_dashboard && let Some(id) = self.selected_agent {
             self.resize_session_to_pane(id, window, cx);
         }
-        // A map lookup and an `Instant` compare per render; the `git`
-        // subprocess behind it runs at most every `DIFF_STATS_MAX_AGE`.
         if let Some(id) = self.selected_agent {
             let folder = self.store
                              .lock()
@@ -133,6 +127,134 @@ impl Render for WorkspaceWindow {
             window.focus(&self.root_focus.clone(), cx);
         }
 
+        // See `root_focus`: without this the Agents menu's items are never
+        // on the dispatch path macOS validates them against. Done here
+        // rather than beside the element it focuses, because the agent rows
+        // built afterwards borrow `cx` until the tree is assembled.
+        if window.focused(cx).is_none() {
+            window.focus(&self.root_focus.clone(), cx);
+        }
+    }
+
+    /// The sidebar's own title bar, which owns the traffic lights.
+    ///
+    /// Compact drops the application name and keeps the icon: at this width
+    /// the label has nowhere to go but into the traffic lights.
+    fn sidebar_title_bar(compact: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        TitleBar::new().h(px(window_options::WORKSPACE_TITLE_BAR_HEIGHT))
+                       .border_color(gpui_kit::transparent_black())
+                       .bg(cx.theme().title_bar)
+                       .child(h_flex().gap_2()
+                                      .items_center()
+                                      .child(app_titlebar_icon())
+                                      .when(!compact, |row| {
+                                          row.child(knot_core::l10n::t("app.name"))
+                                      }))
+    }
+
+    /// The row under the agent list. Compact keeps the icon and moves the
+    /// label into a tooltip, so the control still says what it does.
+    fn new_agent_button(&self, compact: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        h_flex().flex_shrink_0()
+                .h(px(48.))
+                .w_full()
+                .items_center()
+                .px_4()
+                .gap_2()
+                .when(compact, |row| row.justify_center())
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(Button::new("workspace-new-agent").icon(IconName::Plus)
+                                                         .when(!compact, |button| {
+                                                             button.label(knot_core::l10n::t("sidebar.new_agent"))
+                                                         })
+                                                         .when(compact, |button| {
+                                                             button.tooltip(knot_core::l10n::t("sidebar.new_agent"))
+                                                         })
+                                                         .ghost()
+                                                         .on_click(cx.listener(|view,
+                                                                    _: &ClickEvent,
+                                                                    _window,
+                                                                    cx| {
+                                                             view.open_new_agent_dialog(cx);
+                                                         })))
+    }
+
+    /// The sidebar column: the window's own title bar, the scrolling agent
+    /// list with the dashboard row above it, the error line, and the new
+    /// agent button.
+    fn sidebar_column(&self, compact: bool, dashboard_row: gpui_kit::AnyElement,
+                      agent_rows: Vec<gpui_kit::AnyElement>,
+                      background_targets: SidebarMenuTargets, cx: &mut Context<Self>)
+                      -> impl IntoElement + use<> {
+        // The sidebar column owns the traffic lights (Swift's own
+        // sidebar panel does the same - they sit within its width,
+        // not the content pane's). The content header below is a
+        // plain sibling row, not part of this TitleBar, so it
+        // starts at this column's true right edge with no gutter
+        // GPUI reserves inside TitleBar for the traffic lights -
+        // that's what kept misaligning it with the divider below.
+        v_flex().w_full()
+                .h_full()
+                .bg(cx.theme().title_bar)
+                .child(Self::sidebar_title_bar(compact, cx))
+                .child(
+                       div().id("workspace-agent-list")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .child(
+            v_flex().min_h_full()
+                    .gap_1()
+                    .p_4()
+                    .child(dashboard_row)
+                    .children(agent_rows)
+                    // The background menu hangs off a
+                    // filler below the rows rather
+                    // than off the scroll container:
+                    // in GPUI every hitbox under the
+                    // pointer counts as hovered, not
+                    // just the innermost, so a
+                    // container-level context menu
+                    // would open on top of the row's
+                    // own - which `agent-list-ui`
+                    // forbids. A sibling that claims
+                    // the leftover space is reached
+                    // only by a right-click that
+                    // missed every row.
+                    .child(
+                div().id("workspace-agent-list-background")
+                     .flex_1()
+                     .min_h(px(32.))
+                     .context_menu(move |menu, _, _| {
+                         sidebar_background_context_menu(&background_targets, menu)
+                     }),
+            ),
+        ),
+        )
+                .children(self.error
+                              .as_ref()
+                              .map(|error| div().text_sm().px_4().child(error.clone())))
+                .child(self.new_agent_button(compact, cx))
+    }
+}
+
+impl Render for WorkspaceWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The title font (Manrope) applies explicitly to header and cell text
+        // that isn't the agent's name - the name keeps the app-wide UI font
+        // (Adamina), so it needs no override here.
+        let title_font_name = self.settings.title_font_name.clone();
+        let title_font_size = px(self.settings.title_font_size as f32);
+        let Some(agents) = self.agent_row_snapshot()
+        else {
+            return v_flex().size_full()
+                           .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
+                           .child(knot_core::l10n::t("workspace.missing"));
+        };
+        let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
+
+        self.prepare_frame(is_dashboard, window, cx);
         // The one place the compact breakpoint is read. Every surface that
         // changes below it takes this `bool`, so none of them can disagree
         // about where compact begins.
@@ -210,108 +332,11 @@ impl Render for WorkspaceWindow {
                         // flexible one has to opt out or it takes the slack
                         // back on the frame after a drag.
                         .flex_none()
-                        .child(
-                // The sidebar column owns the traffic lights (Swift's own
-                // sidebar panel does the same - they sit within its width,
-                // not the content pane's). The content header below is a
-                // plain sibling row, not part of this TitleBar, so it
-                // starts at this column's true right edge with no gutter
-                // GPUI reserves inside TitleBar for the traffic lights -
-                // that's what kept misaligning it with the divider below.
-                v_flex()
-                    .w_full()
-                    .h_full()
-                    .bg(cx.theme().title_bar)
-                    .child(
-                        TitleBar::new()
-                            .h(px(window_options::WORKSPACE_TITLE_BAR_HEIGHT))
-                            .border_color(gpui_kit::transparent_black())
-                            .bg(cx.theme().title_bar)
-                            .child(
-                                // Compact drops the application name and
-                                // keeps the icon: at this width the label
-                                // has nowhere to go but into the traffic
-                                // lights.
-                                h_flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(app_titlebar_icon())
-                                    .when(!compact, |row| {
-                                        row.child(knot_core::l10n::t("app.name"))
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("workspace-agent-list")
-                            .flex_1()
-                            .min_h_0()
-                            .overflow_y_scroll()
-                            .child(v_flex().min_h_full()
-                                           .gap_1()
-                                           .p_4()
-                                           .child(dashboard_row)
-                                           .children(agent_rows)
-                                           // The background menu hangs off a
-                                           // filler below the rows rather
-                                           // than off the scroll container:
-                                           // in GPUI every hitbox under the
-                                           // pointer counts as hovered, not
-                                           // just the innermost, so a
-                                           // container-level context menu
-                                           // would open on top of the row's
-                                           // own - which `agent-list-ui`
-                                           // forbids. A sibling that claims
-                                           // the leftover space is reached
-                                           // only by a right-click that
-                                           // missed every row.
-                                           .child(div().id("workspace-agent-list-background")
-                                                       .flex_1()
-                                                       .min_h(px(32.))
-                                                       .context_menu(move |menu, _, _| {
-                                                           sidebar_background_context_menu(
-                                        &background_targets,
-                                        menu,
-                                    )
-                                                       }))),
-                    )
-                    .children(
-                        self.error
-                            .as_ref()
-                            .map(|error| div().text_sm().px_4().child(error.clone())),
-                    )
-                    .child(
-                        h_flex()
-                            .flex_shrink_0()
-                            .h(px(48.))
-                            .w_full()
-                            .items_center()
-                            .px_4()
-                            .gap_2()
-                            .when(compact, |row| row.justify_center())
-                            .border_t_1()
-                            .border_color(cx.theme().border)
-                            .child(
-                                Button::new("workspace-new-agent")
-                                    .icon(IconName::Plus)
-                                    // Compact keeps the icon and moves the
-                                    // label into a tooltip, so the control
-                                    // still says what it does.
-                                    .when(!compact, |button| {
-                                        button.label(knot_core::l10n::t("sidebar.new_agent"))
-                                    })
-                                    .when(compact, |button| {
-                                        button.tooltip(knot_core::l10n::t("sidebar.new_agent"))
-                                    })
-                                    .ghost()
-                                    .on_click(cx.listener(
-                                        |view, _: &ClickEvent, _window, cx| {
-                                            view.open_new_agent_dialog(cx);
-                                        },
-                                    )),
-                            )
-                    ),
-                        ))
+                        .child(self.sidebar_column(compact,
+                                                   dashboard_row,
+                                                   agent_rows,
+                                                   background_targets,
+                                                   cx)))
                     .child(resizable_panel().child(self.content_column(is_dashboard,
                                                                        dashboard_content,
                                                                        title_bar_left,

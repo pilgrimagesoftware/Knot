@@ -2,6 +2,22 @@ use std::collections::BTreeMap;
 
 use super::super::*;
 
+/// A workspace holding `agent_ids`, for the adoption tests below.
+fn workspace_named(name: &str, agent_ids: Vec<Uuid>) -> knot_core::Workspace {
+    knot_core::Workspace { id:                    Uuid::new_v4(),
+                           name:                  name.to_string(),
+                           color_hex:             "#000000".to_string(),
+                           agent_ids:             agent_ids.clone(),
+                           active_agent_ids:      agent_ids,
+                           layout_mode:           "single".to_string(),
+                           focused_pane_index:    0,
+                           split_ratio:           0.5,
+                           split_ratio_secondary: None,
+                           show_dashboard:        None,
+                           is_detached:           None,
+                           window_bounds:         None, }
+}
+
 #[test]
 fn restores_agents_into_a_default_workspace_when_layout_is_missing() {
     let saved = knot_core::SavedAgent::new(Uuid::new_v4(), "proj", None, "/tmp/proj");
@@ -152,4 +168,85 @@ fn a_legacy_agent_replays_an_empty_setup() {
     let id = saved.id;
     let store = AgentStore::from_saved(&[saved], Vec::new());
     assert!(store.session_config(id).is_empty());
+}
+
+/// An import adds records the store has never seen. They must arrive with the
+/// identifiers they already have: the import's own skip-if-present check is
+/// keyed on them, and a re-import would otherwise duplicate everything.
+#[test]
+fn adopting_saved_records_keeps_their_identifiers() {
+    let mut store = AgentStore::new();
+    let agent = knot_core::SavedAgent::new(Uuid::new_v4(), "imported", None, "/tmp/imported");
+    let workspace = workspace_named("SRE", vec![agent.id]);
+
+    let adopted = store.adopt_saved(std::slice::from_ref(&agent),
+                                    std::slice::from_ref(&workspace));
+
+    assert_eq!(adopted.agents, 1);
+    assert_eq!(adopted.workspaces, 1);
+    assert_eq!(store.agent(agent.id).map(|a| a.name.as_str()),
+               Some("imported"));
+    assert_eq!(store.workspaces().iter().map(|w| w.id).collect::<Vec<_>>(),
+               vec![workspace.id]);
+}
+
+/// The defect this exists for: an import wrote to settings while the store
+/// went on holding what it loaded at startup, so the next store-to-settings
+/// write put the old list back over the imported one.
+#[test]
+fn an_adopted_workspace_survives_a_round_trip_back_to_settings() {
+    let mut store = AgentStore::new();
+    let agent = knot_core::SavedAgent::new(Uuid::new_v4(), "imported", None, "/tmp/imported");
+    let workspace = workspace_named("SRE", vec![agent.id]);
+
+    store.adopt_saved(&[agent], std::slice::from_ref(&workspace));
+
+    let written_back = store.saved_workspaces();
+    assert!(written_back.iter().any(|w| w.id == workspace.id),
+            "the adopted workspace is missing from what the store writes back to settings");
+}
+
+/// The live copy wins: an agent the store already holds has session state an
+/// incoming record does not, so adopting must not replace it.
+#[test]
+fn adopting_a_record_the_store_already_holds_leaves_the_live_one_alone() {
+    let id = Uuid::new_v4();
+    let held = knot_core::SavedAgent::new(id, "live", None, "/tmp/live");
+    let mut store = AgentStore::from_saved(&[held], vec![workspace_named("Held", vec![id])]);
+    let incoming = knot_core::SavedAgent::new(id, "stale copy", None, "/tmp/elsewhere");
+
+    let adopted = store.adopt_saved(&[incoming], &[]);
+
+    assert_eq!(adopted.agents, 0, "an agent already held was adopted again");
+    assert_eq!(store.agents().len(), 1);
+    assert_eq!(store.agent(id).map(|a| a.name.as_str()), Some("live"));
+}
+
+/// Adopting twice is what a user re-running an import does.
+#[test]
+fn adopting_twice_adds_nothing_the_second_time() {
+    let mut store = AgentStore::new();
+    let agent = knot_core::SavedAgent::new(Uuid::new_v4(), "imported", None, "/tmp/imported");
+    let workspace = workspace_named("SRE", vec![agent.id]);
+
+    store.adopt_saved(std::slice::from_ref(&agent),
+                      std::slice::from_ref(&workspace));
+    let again = store.adopt_saved(&[agent], &[workspace]);
+
+    assert_eq!(again.agents, 0);
+    assert_eq!(again.workspaces, 0);
+    assert_eq!(store.agents().len(), 1);
+    assert_eq!(store.workspaces().len(), 1);
+}
+
+/// A store that held nothing has no current workspace, and a window with none
+/// selected renders an empty list however many were just adopted.
+#[test]
+fn adopting_into_an_empty_store_selects_a_current_workspace() {
+    let mut store = AgentStore::new();
+    let workspace = workspace_named("SRE", Vec::new());
+
+    store.adopt_saved(&[], std::slice::from_ref(&workspace));
+
+    assert_eq!(store.current_workspace_id(), Some(workspace.id));
 }

@@ -42,21 +42,39 @@ fn every_mode_has_a_distinct_label() {
     assert_eq!(labels.len(), AppearanceMode::ALL.len());
 }
 
+/// The window's label lookup is the roster's, so what this asserts is that
+/// the two have not drifted apart - not the copy itself.
 #[test]
 fn agent_type_label_maps_known_types() {
-    assert_eq!(SettingsWindow::agent_type_label("codex"), "Codex");
-    assert_eq!(SettingsWindow::agent_type_label("opencode"), "OpenCode");
-    assert_eq!(SettingsWindow::agent_type_label("gemini"), "Gemini");
-    assert_eq!(SettingsWindow::agent_type_label("copilot"), "Copilot");
-    assert_eq!(SettingsWindow::agent_type_label("custom1"), "Custom 1");
-    assert_eq!(SettingsWindow::agent_type_label("custom2"), "Custom 2");
-    assert_eq!(SettingsWindow::agent_type_label("shell"), "Shell");
+    for kind in knot_core::agent_type::ALL {
+        assert_eq!(SettingsWindow::agent_type_label(kind.id), kind.label);
+    }
 }
 
+/// An id this build does not know shows as itself. It used to draw as
+/// "Claude", which made a corrupt or misspelled value indistinguishable
+/// from the real default - the complaint #224 was filed over.
 #[test]
-fn agent_type_label_defaults_to_claude() {
-    assert_eq!(SettingsWindow::agent_type_label("claude"), "Claude");
-    assert_eq!(SettingsWindow::agent_type_label("anything-else"), "Claude");
+fn an_unknown_agent_type_shows_as_itself() {
+    assert_eq!(SettingsWindow::agent_type_label("anything-else"),
+               "anything-else");
+}
+
+/// Every vendor type has a mark of its own; the generic bot is for the
+/// user's custom commands and for types this build does not know.
+#[test]
+fn every_vendor_agent_type_has_its_own_icon() {
+    use gpui_kit::assets::IconName;
+    for kind in knot_core::agent_type::ALL.iter()
+                                          .filter(|kind| !kind.is_custom)
+    {
+        assert_ne!(SettingsWindow::agent_type_icon(kind.id),
+                   IconName::Bot,
+                   "{} falls back to the generic icon",
+                   kind.id);
+    }
+    assert_eq!(SettingsWindow::agent_type_icon("anything-else"),
+               IconName::Bot);
 }
 
 #[test]
@@ -225,19 +243,31 @@ fn settings_tab_default_is_general() {
 
 #[test]
 fn settings_tab_labels_are_distinct() {
-    let labels: BTreeSet<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
+    let labels: BTreeSet<String> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
     assert_eq!(labels.len(), SettingsTab::ALL.len());
 }
 
+/// The seven ported panes, in the Swift reference's order, and nothing else.
+/// Settings holds what the user configures; an import is something they run,
+/// and lives in its own window off the File menu - see `tests::import_window`.
 #[test]
 fn settings_tab_covers_every_swift_pane() {
-    let labels: Vec<&str> = SettingsTab::ALL.iter().map(|tab| tab.label()).collect();
-    assert_eq!(labels,
-               vec!["General",
-                    "Coding",
-                    "Personas",
-                    "Autopilot",
-                    "Voice",
-                    "MCP",
-                    "Appearance"]);
+    assert_eq!(SettingsTab::ALL.to_vec(),
+               vec![SettingsTab::General,
+                    SettingsTab::Coding,
+                    SettingsTab::Personas,
+                    SettingsTab::Autopilot,
+                    SettingsTab::Voice,
+                    SettingsTab::Mcp,
+                    SettingsTab::Terminal]);
+}
+
+/// Every tab needs a target height, or switching to it resizes the window to
+/// whatever the last tab wanted.
+#[test]
+fn every_tab_has_a_target_height() {
+    for tab in SettingsTab::ALL {
+        assert!(SettingsWindow::pane_target_height(tab) > gpui_kit::px(0.),
+                "{tab:?} has no target height");
+    }
 }
