@@ -176,6 +176,8 @@ fn dialog_labels_resolve() {
                 "agent_editor.coding_agent",
                 "agent_editor.command",
                 "agent_editor.error_choose_folder",
+                "agent_editor.no_folder",
+                "agent_editor.persona_none",
                 "agent_editor.error_enter_name",
                 "agent_editor.folder",
                 "agent_editor.name",
