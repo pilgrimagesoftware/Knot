@@ -12,6 +12,7 @@ pub mod consts;
 pub mod error;
 pub mod import;
 pub mod l10n;
+pub mod pull_request_url;
 pub mod settings;
 
 pub use error::{Error, Result};

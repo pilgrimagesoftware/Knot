@@ -168,3 +168,18 @@ pub const SKWAD_WORKSPACES_KEY: &str = "savedWorkspacesData";
 pub const SKWAD_AGENTS_KEY: &str = "savedAgentsData";
 pub const SKWAD_PERSONAS_KEY: &str = "personasData";
 pub const SKWAD_BENCH_AGENTS_KEY: &str = "benchAgentsData";
+
+/// The scheme a pull request URL is recognized under. GitHub serves nothing
+/// over plain HTTP, so a `http://` link is not one Knot records.
+pub const PULL_REQUEST_URL_SCHEME: &str = "https://";
+
+/// The host Knot recognizes without being told. Enterprise hosts are
+/// supplied by the forge layer, which is the only part that knows which ones
+/// are configured.
+pub const PULL_REQUEST_HOST_GITHUB: &str = "github.com";
+
+/// The longest a pull request URL can be and still parse, and so the most a
+/// stream scanner needs to carry across a chunk boundary: a 253-byte host, a
+/// 39-byte owner, a 100-byte repository, the scheme, the separators and the
+/// number, rounded up.
+pub const MAX_PULL_REQUEST_URL_LEN: usize = 512;
