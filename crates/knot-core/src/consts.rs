@@ -102,3 +102,32 @@ pub const DEFAULT_PERSONAS: [(&str, &str, &str); 6] = [("A1000001-0000-0000-0000
                                                        ("A1000001-0000-0000-0000-000000000006",
                                                         "Dave Farley",
                                                         "Design for continuous delivery: every change should be deployable. Write tests at every level - unit, integration, acceptance. Work in small, incremental steps that keep the system always releasable. Decouple components to enable independent deployment. Automate everything that can be automated. Favor evolutionary design over big upfront architecture. Fast feedback loops are essential.")];
+
+// ---------------------------------------------------------------------------
+// Data import
+// ---------------------------------------------------------------------------
+
+/// Where Claude Code keeps its subagent definitions, relative to the home
+/// directory for the user-level set and to a project folder for its own.
+pub const CLAUDE_AGENTS_SUBPATH: &str = ".claude/agents";
+
+/// The only file extension a subagent definition is read from.
+pub const SUBAGENT_DEFINITION_EXTENSION: &str = "md";
+
+/// The line that opens and closes a definition's frontmatter block.
+pub const FRONTMATTER_DELIMITER: &str = "---";
+
+/// The one frontmatter key a definition is read for. Every other key is
+/// dropped, per `openspec/specs/data-import/spec.md`.
+pub const SUBAGENT_NAME_KEY: &str = "name:";
+
+/// The macOS preferences domain Skwad, Knot's predecessor, stores its
+/// collections under.
+pub const SKWAD_PREFERENCES_DOMAIN: &str = "com.kochava.skwad";
+
+/// Skwad's preference keys, each holding a JSON document stored as data, in
+/// the record shapes Knot's own settings already read.
+pub const SKWAD_WORKSPACES_KEY: &str = "savedWorkspacesData";
+pub const SKWAD_AGENTS_KEY: &str = "savedAgentsData";
+pub const SKWAD_PERSONAS_KEY: &str = "personasData";
+pub const SKWAD_BENCH_AGENTS_KEY: &str = "benchAgentsData";
