@@ -14,6 +14,7 @@ mod notifications;
 mod open;
 pub(crate) mod panel;
 pub(crate) mod prompt_queue;
+mod pull_requests;
 mod render;
 mod repaint;
 mod sessions;

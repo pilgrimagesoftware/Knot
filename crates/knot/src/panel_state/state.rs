@@ -58,11 +58,44 @@ pub struct PanelState {
     /// user has never touched follows the mode's default, and a run that
     /// grows another call afterwards does not forget it was opened.
     tool_run_expanded:              HashSet<String>,
+    /// Pull request URLs seen in this session's tool-call text, canonical
+    /// and de-duplicated, waiting to be drained by the window that owns the
+    /// agent store.
+    ///
+    /// Buffered here rather than recorded here because this state is pure -
+    /// it knows nothing of which agent it belongs to, and nothing of the
+    /// store. The window drains it beside `take_dirty`, which is the poll
+    /// that already runs whenever this state has changed.
+    pull_request_urls:              Vec<String>,
 }
 
 impl PanelState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Take the pull request URLs seen since the last call.
+    ///
+    /// Drained rather than read so the window records each sighting once,
+    /// however often it polls. Recording is idempotent per agent anyway, so a
+    /// URL handed over twice costs nothing - this just keeps the buffer from
+    /// growing for the life of the session.
+    pub fn take_pull_request_urls(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pull_request_urls)
+    }
+
+    /// Note any pull request URLs in `text`, ignoring ones already buffered.
+    ///
+    /// A tool-call update replaces a card's content wholesale, so the same
+    /// text is folded in more than once; without the check the buffer would
+    /// grow with every re-render of a card that happens to mention one.
+    pub(super) fn note_pull_request_urls(&mut self, text: &str) {
+        for url in knot_core::pull_request_url::scan_pull_request_urls(text) {
+            let url = url.to_string();
+            if !self.pull_request_urls.contains(&url) {
+                self.pull_request_urls.push(url);
+            }
+        }
     }
 
     /// Clears the pending permission request once the caller has sent a

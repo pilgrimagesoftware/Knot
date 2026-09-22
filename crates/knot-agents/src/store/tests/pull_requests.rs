@@ -220,3 +220,22 @@ fn removing_a_workspace_drops_records_whose_agent_has_moved_away() {
 
     assert!(store.pull_requests().is_empty());
 }
+
+/// The two detection taps meet here. An agent whose URL reaches the store
+/// from both the panel buffer and the terminal buffer - the same poll tick
+/// draining both - must still be one record, because "a panel agent opened a
+/// pull request" and "a terminal agent opened one" are the same event to the
+/// user.
+#[test]
+fn the_same_url_from_both_taps_is_one_record() {
+    let (mut store, agent) = store_with_agent();
+
+    // What the window does with what it drained, in one tick.
+    let drained = [(agent, FIRST), (agent, FIRST)];
+    let recorded = drained.into_iter()
+                          .filter(|(id, url)| store.record_pull_request(*id, *url))
+                          .count();
+
+    assert_eq!(recorded, 1);
+    assert_eq!(store.pull_requests().len(), 1);
+}

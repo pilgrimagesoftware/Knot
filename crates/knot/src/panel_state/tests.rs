@@ -1,5 +1,7 @@
 //! Unit tests for [`super`].
 
+mod pull_requests;
+
 use knot_acp::ConfigOption;
 use knot_acp::PermissionRequest;
 use knot_acp::SessionEndCause;

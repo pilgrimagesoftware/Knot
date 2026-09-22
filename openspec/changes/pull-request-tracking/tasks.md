@@ -48,15 +48,15 @@
 
 ## 4. Detection taps
 
-- [ ] 4.1 Scan `ToolCallContent::Text` in `crates/knot/src/panel_state/` as it
+- [x] 4.1 Scan `ToolCallContent::Text` in `crates/knot/src/panel_state/` as it
       is folded in, recording through the store; verify a test that applies a
       `ToolCallResult` carrying a URL and asserts one record
-- [ ] 4.2 Scan the PTY byte stream in `knot-terminal` before it reaches the
+- [x] 4.2 Scan the PTY byte stream in `knot-terminal` before it reaches the
       grid, recording through the same call; verify a test that feeds a URL
       through the transport and asserts one record
-- [ ] 4.3 Verify the same URL arriving on both paths for one agent produces one
+- [x] 4.3 Verify the same URL arriving on both paths for one agent produces one
       record; add that test
-- [ ] 4.4 Benchmark the terminal scan against a flood of output and verify it
+- [x] 4.4 Benchmark the terminal scan against a flood of output and verify it
       does not measurably slow the grid feed; record the numbers in the PR
 
 ## 5. State cache
