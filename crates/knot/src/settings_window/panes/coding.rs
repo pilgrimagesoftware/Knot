@@ -8,10 +8,7 @@ use gpui_kit::Window;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::WindowExt;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::div;
 
 use crate::settings_window::SettingsWindow;
@@ -183,33 +180,19 @@ impl SettingsWindow {
                 Self::group(knot_core::l10n::t("settings.coding.agent_options"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.coding.coding_agent"),
-                        Button::new("coding-agent-type-picker")
-                            .label(agent_type_label)
-                            .dropdown_caret(true)
-                            .dropdown_menu({
-                                let settings_window = settings_window.clone();
-                                move |menu, _, _| {
-                                    let mut menu = menu;
-                                    for (label, value) in [
-                                        ("Claude", "claude"),
-                                        ("Codex", "codex"),
-                                        ("OpenCode", "opencode"),
-                                        ("Gemini", "gemini"),
-                                        ("Copilot", "copilot"),
-                                        ("Shell", "shell"),
-                                    ] {
-                                        menu = menu.item(PopupMenuItem::new(label).on_click({
-                                            let settings_window = settings_window.clone();
-                                            move |_, window, app| {
-                                                settings_window.update(app, |view, cx| {
-                                                    view.select_agent_type(value, window, cx);
-                                                })
-                                            }
-                                        }));
-                                    }
-                                    menu
-                                }
-                            }),
+                        // Matches the Swift reference's `availableAgents`
+                        // list (`CodingSettingsView.swift`).
+                        Self::dropdown("coding-agent-type-picker",
+                                       agent_type_label,
+                                       ["claude", "codex", "opencode", "gemini", "copilot",
+                                        "shell"].map(|value| {
+                                           (SettingsWindow::agent_type_label(value).into(), value)
+                                       })
+                                       .to_vec(),
+                                       settings_window.clone(),
+                                       |view, value, window, cx| {
+                                           view.select_agent_type(value, window, cx);
+                                       }),
                     ))
                     .child(Self::row(
                         knot_core::l10n::t("settings.coding.options"),

@@ -199,7 +199,9 @@ impl WorkspaceWindow {
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
                         if let Err(error) = session.prompt(&prompt).await {
-                            recorder.error(format!("The agent could not be registered: {error}"));
+                            recorder.error(knot_core::l10n::t_with("panel.error_registration",
+                                                                   &[("error",
+                                                                      &error.to_string())]));
                             eprintln!("failed to send the registration prompt: {error}");
                         }
                     });

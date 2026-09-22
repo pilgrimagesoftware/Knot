@@ -81,30 +81,19 @@ impl SettingsWindow {
         cx.notify();
     }
 
-    pub(crate) fn render_personas(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// One persona's row: its name and a preview of its instructions, with
+    /// the edit and delete actions.
+    ///
+    /// `in_use` is how many agents reference it, which is what disables
+    /// delete - the button stays visible and says why in its tooltip
+    /// rather than disappearing.
+    fn persona_row(&self, persona: knot_core::Persona, index: usize, in_use: usize,
+                   cx: &mut Context<Self>)
+                   -> impl IntoElement + use<> {
         let settings_window = cx.entity();
-        let personas: Vec<knot_core::Persona> = self.settings
-                                                    .active_personas()
-                                                    .into_iter()
-                                                    .cloned()
-                                                    .collect();
-
-        let in_use = self.live_personas_in_use();
-
-        let list = if personas.is_empty() {
-            div().text_sm()
-                 .text_color(cx.theme().muted_foreground)
-                 .child(knot_core::l10n::t("settings.personas.none_defined"))
-                 .into_any_element()
-        }
-        else {
-            v_flex()
-                    .gap_3()
-                    .children(personas.into_iter().enumerate().map(|(index, persona)| {
-                        let id = persona.id;
-                        let preview = Self::persona_preview(&persona.instructions, 80);
-                        let in_use = in_use.get(&id).copied().unwrap_or(0);
-                        h_flex()
+        let id = persona.id;
+        let preview = Self::persona_preview(&persona.instructions, 80);
+        h_flex()
                             .justify_between()
                             .items_center()
                             .gap_2()
@@ -128,7 +117,7 @@ impl SettingsWindow {
                                         Self::icon_button(
                                             ("persona-edit", index),
                                             "icons/pencil.svg",
-                                            "Edit persona",
+                                            knot_core::l10n::t("settings.personas.edit"),
                                             false,
                                         )
                                         .on_click({
@@ -167,9 +156,9 @@ impl SettingsWindow {
                                                             settings_window.clone();
                                                         alert
                                                         .title(knot_core::l10n::t("settings.personas.delete_persona"))
-                                                        .description(format!(
-                                                            "This permanently deletes \"{name}\". \
-                                                             This can't be undone."
+                                                        .description(knot_core::l10n::t_with(
+                                                            "settings.personas.delete_body",
+                                                            &[("name", &name)],
                                                         ))
                                                         .confirm()
                                                         .on_ok(move |_, _, app| {
@@ -184,7 +173,34 @@ impl SettingsWindow {
                                         }),
                                     ),
                             )
-                    }))
+    }
+
+    pub(crate) fn render_personas(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let settings_window = cx.entity();
+        let personas: Vec<knot_core::Persona> = self.settings
+                                                    .active_personas()
+                                                    .into_iter()
+                                                    .cloned()
+                                                    .collect();
+
+        let in_use = self.live_personas_in_use();
+
+        let list = if personas.is_empty() {
+            div().text_sm()
+                 .text_color(cx.theme().muted_foreground)
+                 .child(knot_core::l10n::t("settings.personas.none_defined"))
+                 .into_any_element()
+        }
+        else {
+            v_flex().gap_3()
+                    .children(personas.into_iter().enumerate().map(|(index, persona)| {
+                                                                  let count =
+                                                                      in_use.get(&persona.id)
+                                                                            .copied()
+                                                                            .unwrap_or(0);
+                                                                  self.persona_row(persona, index,
+                                                                                   count, cx)
+                                                              }))
                     .into_any_element()
         };
         // Bounded so the list scrolls in place instead of pushing the group's
@@ -204,7 +220,7 @@ impl SettingsWindow {
                             Self::icon_button(
                                 "personas-add",
                                 "icons/plus.svg",
-                                "Add Persona…",
+                                knot_core::l10n::t("settings.personas.add"),
                                 false,
                             )
                             .on_click({
@@ -218,7 +234,7 @@ impl SettingsWindow {
                             Self::icon_button(
                                 "personas-restore-defaults",
                                 "icons/rotate-ccw.svg",
-                                "Restore Defaults",
+                                knot_core::l10n::t("settings.personas.restore_defaults"),
                                 false,
                             )
                             .on_click({

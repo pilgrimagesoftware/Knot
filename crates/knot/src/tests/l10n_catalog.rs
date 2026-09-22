@@ -144,6 +144,9 @@ fn settings_window_labels_resolve() {
                 "settings.personas.delete_persona",
                 "settings.personas.none_defined",
                 "settings.personas.personas",
+                "settings.personas.edit",
+                "settings.personas.add",
+                "settings.personas.delete_body",
                 "settings.personas.restore_defaults",
                 "settings.personas.restore_defaults_body",
                 "settings.voice.auto_insert",
@@ -173,6 +176,8 @@ fn dialog_labels_resolve() {
                 "agent_editor.coding_agent",
                 "agent_editor.command",
                 "agent_editor.error_choose_folder",
+                "agent_editor.no_folder",
+                "agent_editor.persona_none",
                 "agent_editor.error_enter_name",
                 "agent_editor.folder",
                 "agent_editor.name",
@@ -234,6 +239,28 @@ fn every_sidebar_menu_entry_label_resolves() {
     }
 }
 
+/// The slash lookup's own copy: the popup's key hint, and the description
+/// beside every built-in command. A missing key ships the key itself as the
+/// line explaining what a command does.
+#[test]
+fn slash_lookup_labels_resolve() {
+    for key in ["panel.lookup_hint",
+                "panel.command.broadcast",
+                "panel.command.check",
+                "panel.command.create_agent",
+                "panel.command.list_agents",
+                "panel.command.list_repos",
+                "panel.command.list_worktrees",
+                "panel.command.send",
+                "panel.command.show_markdown",
+                "panel.command.worktree"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
 /// Every settings tab's title, so an added pane cannot show `settings.tabs.*`
 /// where its name belongs.
 #[test]
@@ -242,6 +269,24 @@ fn every_settings_tab_label_resolves() {
         let label = tab.label();
         assert!(!label.starts_with("settings.tabs."),
                 "{tab:?} is missing from the catalog: {label}");
+    }
+}
+
+/// The three failures a panel writes into the conversation itself. Each
+/// embeds the underlying error, so a body that lost its placeholder would
+/// report a failure without saying what failed.
+#[test]
+fn panel_transcript_errors_resolve_and_keep_their_cause() {
+    for key in ["panel.error_first_turn",
+                "panel.error_registration",
+                "panel.error_answer"]
+    {
+        let message = knot_core::l10n::t_with(key, &[("error", "connection refused")]);
+        assert_ne!(message, key, "{key} is missing from the catalog");
+        assert!(message.contains("connection refused"),
+                "{key} must carry the cause: {message}");
+        assert!(!message.contains("%{error}"),
+                "{key} left its placeholder unfilled");
     }
 }
 
