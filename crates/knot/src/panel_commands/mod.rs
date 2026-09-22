@@ -91,10 +91,6 @@ impl LookupRegistry {
         Self::from_sources(&[&builtin, &skills])
     }
 
-    pub(crate) fn entries(&self) -> &[LookupEntry] {
-        &self.entries
-    }
-
     /// The entries `filter` selects, in registry order.
     pub(crate) fn matching(&self, filter: &str) -> Vec<&LookupEntry> {
         self.entries

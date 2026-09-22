@@ -20,18 +20,18 @@
       caret (leading `/` on the caret's line, filter text up to end of token).
       Unit tests: `/` alone, `/p`, token in the middle of prose (no popup),
       and `/p mid-edit` (token ends at whitespace).
-- [ ] 2.2 Prototype surgical token replacement against gpui-kit's
+- [x] 2.2 Prototype surgical token replacement against gpui-kit's
       `TextareaState` API (replace span, caret after token). If the API cannot
       express it, implement the whole-buffer/append fallback from the design
       and record the deviation in this change.
 
 ## 3. The popup
 
-- [ ] 3.1 Render the lookup popup above the panel prompt row, listing filtered
+- [x] 3.1 Render the lookup popup above the panel prompt row, listing filtered
       registry entries (token + description), with the empty-match state
       dismissed. Verify in the app that typing `/` opens it and a matchless
       filter closes it.
-- [ ] 3.2 Wire Up/Down selection, Enter/Tab insert, and Esc dismissal through
+- [x] 3.2 Wire Up/Down selection, Enter/Tab insert, and Esc dismissal through
       the input's key-capture path, plus dismissal on blur and on the token
       being edited away. Verify each in the app.
 - [ ] 3.3 Confirm inserted text flows through the normal send path unchanged;
@@ -40,15 +40,15 @@
 
 ## 4. Polishing
 
-- [ ] 4.1 Memoize the skill scan per focused agent, refreshed on agent
+- [x] 4.1 Memoize the skill scan per focused agent, refreshed on agent
       switch, and verify the lookup opens without a stall on the second and
       later opens in one session.
-- [ ] 4.2 Route lookup-facing strings (empty state, tooltips) through
+- [x] 4.2 Route lookup-facing strings (empty state, tooltips) through
       `knot_core::l10n::t` and verify via a string/locale check.
 
 ## 5. Verification
 
-- [ ] 5.1 `make` passes clean (fmt, clippy, tests, build).
+- [x] 5.1 `make` passes clean (fmt, clippy, tests, build).
 - [ ] 5.2 Exercise the full flow in the app: open the lookup, filter to one
       entry, insert, send, and confirm the agent receives the completed token
       as a prompt.

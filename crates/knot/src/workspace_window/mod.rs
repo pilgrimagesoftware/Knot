@@ -27,7 +27,7 @@ mod creation;
 mod menus;
 mod notifications;
 mod open;
-mod panel;
+pub(crate) mod panel;
 mod render;
 mod repaint;
 mod sessions;
@@ -234,6 +234,11 @@ pub(crate) struct WorkspaceWindow {
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     panel_input_expanded:             BTreeSet<Uuid>,
+    /// The slash lookup's state per Panel-mode agent: the memoized
+    /// command/skill registry, which entry is selected, and the token Esc
+    /// closed it on. Created on the agent's first lookup, since building it
+    /// reads skill roots off disk - see `panel::lookup`.
+    panel_lookups:                    BTreeMap<Uuid, panel::lookup::PanelLookup>,
     /// This window's handle, so the poll can tell whether it is the active
     /// window before replacing the app-wide menu bar - two open workspace
     /// windows must not fight over whose selection the Agents menu shows.

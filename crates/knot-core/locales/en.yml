@@ -47,7 +47,6 @@ panel:
   replace_composer_body: "What you typed will be replaced by the queued message you are editing."
   retry_connect: "Try again"
   context_usage: "Context usage"
-  lookup_empty: "No matching commands or skills"
   lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
   command:
     broadcast: "Send a message to every other agent in the workspace"

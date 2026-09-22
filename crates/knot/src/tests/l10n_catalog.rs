@@ -234,6 +234,28 @@ fn every_sidebar_menu_entry_label_resolves() {
     }
 }
 
+/// The slash lookup's own copy: the popup's key hint, and the description
+/// beside every built-in command. A missing key ships the key itself as the
+/// line explaining what a command does.
+#[test]
+fn slash_lookup_labels_resolve() {
+    for key in ["panel.lookup_hint",
+                "panel.command.broadcast",
+                "panel.command.check",
+                "panel.command.create_agent",
+                "panel.command.list_agents",
+                "panel.command.list_repos",
+                "panel.command.list_worktrees",
+                "panel.command.send",
+                "panel.command.show_markdown",
+                "panel.command.worktree"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
 /// Every settings tab's title, so an added pane cannot show `settings.tabs.*`
 /// where its name belongs.
 #[test]

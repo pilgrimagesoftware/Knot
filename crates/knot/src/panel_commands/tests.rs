@@ -122,8 +122,8 @@ fn an_earlier_source_keeps_a_token_a_later_one_repeats() {
     let skills = skills::SkillRoots::from_roots(vec![root.path().to_path_buf()]);
 
     let registry = LookupRegistry::from_sources(&[&builtin, &skills]);
-    let sends: Vec<&LookupEntry> = registry.entries()
-                                           .iter()
+    let sends: Vec<&LookupEntry> = registry.matching("")
+                                           .into_iter()
                                            .filter(|entry| entry.token == "send")
                                            .collect();
 
@@ -135,7 +135,8 @@ fn an_earlier_source_keeps_a_token_a_later_one_repeats() {
 fn an_empty_filter_matches_every_entry() {
     let registry = LookupRegistry::from_sources(&[&builtin::BuiltinCommands]);
 
-    assert_eq!(registry.matching("").len(), registry.entries().len());
+    assert_eq!(registry.matching("").len(),
+               builtin::BuiltinCommands.entries().len());
 }
 
 #[test]

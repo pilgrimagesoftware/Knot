@@ -112,7 +112,7 @@ fn frontmatter(text: &str) -> Option<&str> {
 /// Handles the two shapes skills actually use: a value on the key's own
 /// line, and a block scalar (`>-`, `|`) continued on the indented lines
 /// below it. Anything else yields whatever sat on the key's line.
-fn field<'a>(frontmatter: &'a str, key: &str) -> Option<String> {
+fn field(frontmatter: &str, key: &str) -> Option<String> {
     let mut lines = frontmatter.lines();
     let prefix = format!("{key}:");
     let first = lines.by_ref()

@@ -302,5 +302,6 @@ impl WorkspaceWindow {
         self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
         self.panel_input_expanded.remove(&id);
+        self.panel_lookups.remove(&id);
     }
 }
