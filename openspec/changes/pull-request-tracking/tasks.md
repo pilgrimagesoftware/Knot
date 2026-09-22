@@ -16,18 +16,18 @@
 
 ## 2. Persistence
 
-- [ ] 2.1 Add a `SavedPullRequest` record (url, agent id, workspace id,
+- [x] 2.1 Add a `SavedPullRequest` record (url, agent id, workspace id,
       first-seen) to `crates/knot-core/src/settings/records.rs`; verify a
       serde round-trip test
-- [ ] 2.2 Add the sixth collection document to the store's document table and
+- [x] 2.2 Add the sixth collection document to the store's document table and
       its read/write path in `crates/knot-core/src/settings/store/`; verify a
       test that writing a pull request leaves `agents.json` untouched
-- [ ] 2.3 Verify a store written before this document loads with no recorded
+- [x] 2.3 Verify a store written before this document loads with no recorded
       pull requests and writes no document until one is recorded; add that test
-- [ ] 2.4 Add the collection and its mutators to `crates/knot-agents/src/store/`
+- [x] 2.4 Add the collection and its mutators to `crates/knot-agents/src/store/`
       - record (idempotent per agent), remove, list by workspace, list by agent;
       verify tests for idempotence and for the per-agent duplicate case
-- [ ] 2.5 Cascade removal from the existing agent-removal and
+- [x] 2.5 Cascade removal from the existing agent-removal and
       workspace-removal paths; verify tests that removing each drops its
       records
 

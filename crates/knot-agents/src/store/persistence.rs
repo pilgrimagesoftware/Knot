@@ -26,7 +26,11 @@ impl AgentStore {
         let current_workspace_id = workspaces.first().map(|workspace| workspace.id);
         Self { agents,
                workspaces,
-               current_workspace_id }
+               current_workspace_id,
+               // Filled from its own document by the caller, which is what
+               // loads it: rebuilding the roster says nothing about what
+               // Knot has seen.
+               pull_requests: Vec::new() }
     }
 
     /// Take in agents and workspaces that already exist elsewhere, keeping

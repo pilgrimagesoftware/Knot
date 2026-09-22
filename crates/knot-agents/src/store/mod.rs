@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use knot_core::{ActivationMode, Capabilities, CostTier, Workspace};
+use knot_core::{ActivationMode, Capabilities, CostTier, SavedPullRequest, Workspace};
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -12,6 +12,7 @@ mod lifecycle;
 mod ordering;
 mod panels;
 mod persistence;
+mod pull_requests;
 
 pub use persistence::AdoptedCounts;
 mod workspace;
@@ -90,6 +91,11 @@ pub struct AgentStore {
     agents:               Vec<Agent>,
     workspaces:           Vec<Workspace>,
     current_workspace_id: Option<Uuid>,
+    /// The pull requests Knot has seen in these agents' output. Held here
+    /// rather than only in the settings document so that removing an agent
+    /// or a workspace can take its records with it, in the one place that
+    /// knows either is going away. See [`pull_requests`].
+    pull_requests:        Vec<SavedPullRequest>,
 }
 
 impl AgentStore {

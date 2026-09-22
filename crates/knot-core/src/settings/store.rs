@@ -1,11 +1,11 @@
 //! Durable configuration store: scalar settings plus the serialized
 //! collections (saved agents, workspaces, personas, bench templates, recent
-//! repos), with decode-tolerant migration, first-launch source-folder
-//! detection, and a bounded recent-repos MRU.
+//! repos, recorded pull requests), with decode-tolerant migration,
+//! first-launch source-folder detection, and a bounded recent-repos MRU.
 //!
 //! Contract: `openspec/specs/settings-persistence/spec.md`.
 //!
-//! One [`Settings`] value is one settings surface over six documents, whose
+//! One [`Settings`] value is one settings surface over seven documents, whose
 //! locations [`StorePaths`] derives:
 //!
 //! | Document | Holds | Directory |
@@ -16,6 +16,7 @@
 //! | `personas.json` | personas | application data |
 //! | `bench.json` | bench templates | application data |
 //! | `recent-repos.json` | recent repositories | application data |
+//! | `pull-requests.json` | recorded pull requests | application data |
 //!
 //! Every mutating helper writes immediately, and writes only the document it
 //! changed: [`Settings::persist`] is the whole surface, while
@@ -45,7 +46,9 @@ mod paths;
 
 pub use paths::StorePaths;
 
-pub use super::records::{BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, Workspace};
+pub use super::records::{
+    BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, SavedPullRequest, Workspace,
+};
 use super::vocabulary::{AiProvider, AppearanceMode, AutopilotAction, UnknownVariant};
 use crate::consts::{
     DEFAULT_PERSONAS, MARKDOWN_FONT_SIZE_DEFAULT, MCP_PORT_DEFAULT, MERMAID_THEME_DEFAULT,
@@ -130,6 +133,8 @@ pub struct Settings {
     pub bench_agents:     Vec<BenchAgent>,
     #[serde(skip)]
     pub recent_repos:     Vec<String>,
+    #[serde(skip)]
+    pub pull_requests:    Vec<SavedPullRequest>,
 
     #[serde(skip)]
     paths: Option<StorePaths>,
@@ -175,6 +180,7 @@ impl Default for Settings {
                personas:                       Vec::new(),
                bench_agents:                   Vec::new(),
                recent_repos:                   Vec::new(),
+               pull_requests:                  Vec::new(),
                paths:                          None, }
     }
 }
@@ -222,6 +228,7 @@ impl Settings {
         settings.personas = documents::read_collection(&paths.personas());
         settings.bench_agents = documents::read_collection(&paths.bench());
         settings.recent_repos = documents::read_collection(&paths.recent_repos());
+        settings.pull_requests = documents::read_collection(&paths.pull_requests());
         settings.paths = Some(paths);
         settings
     }
@@ -279,7 +286,8 @@ impl Settings {
         self.persist_roster()?;
         self.persist_personas()?;
         self.persist_bench()?;
-        self.persist_recent_repos()
+        self.persist_recent_repos()?;
+        self.persist_pull_requests()
     }
 
     /// Write the preferences document: every scalar setting, and nothing
@@ -317,6 +325,21 @@ impl Settings {
 
     fn persist_recent_repos(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.recent_repos(), &self.recent_repos)
+    }
+
+    /// Write the recorded-pull-requests document.
+    ///
+    /// Skipped while there is nothing to record and no document already
+    /// exists, so an installation that has never seen a pull request grows no
+    /// file for the feature. Once the document exists it is always written,
+    /// including when the last record is removed - otherwise a removal would
+    /// not survive a restart, which is the one thing the spec says it must.
+    pub fn persist_pull_requests(&self) -> Result<()> {
+        let path = self.resolved_paths()?.pull_requests();
+        if self.pull_requests.is_empty() && !path.exists() {
+            return Ok(());
+        }
+        documents::write_collection(&path, &self.pull_requests)
     }
 
     /// On first launch with no source folder set, adopt the first existing

@@ -22,6 +22,14 @@ pub const BENCH_FILE: &str = "bench.json";
 /// The recent-repositories collection.
 pub const RECENT_REPOS_FILE: &str = "recent-repos.json";
 
+/// The recorded-pull-requests collection.
+///
+/// Durable data rather than a preference even though the user did not type
+/// it: a collection of objects with identity that grows without bound, which
+/// is what separates the two kinds. Its own document rather than a field on
+/// `SavedAgent`, so a URL scrolling past does not rewrite `agents.json`.
+pub const PULL_REQUESTS_FILE: &str = "pull-requests.json";
+
 /// The single document every setting used to live in, read once on load and
 /// renamed to [`LEGACY_MIGRATED_EXTENSION`] after its values have been
 /// distributed across the documents above.
