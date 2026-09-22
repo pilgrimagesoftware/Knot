@@ -54,7 +54,8 @@ impl WorkspaceWindow {
         let mut settings = knot_core::Settings::load().unwrap_or_else(|_| self.settings.clone());
         settings.sidebar_width = width.clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
         if let Err(error) = settings.persist() {
-            self.error = Some(format!("Could not save the sidebar width: {error}"));
+            self.error = Some(knot_core::l10n::t_with("sidebar.width_error",
+                                                      &[("error", &error.to_string())]));
             return;
         }
         self.settings = settings;

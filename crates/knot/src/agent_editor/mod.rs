@@ -231,6 +231,16 @@ pub(crate) struct AgentEditor {
 
 pub(crate) type AgentCreatedCallback = dyn Fn(Uuid, &mut Window, &mut App);
 
+/// What both submit paths take from the form once it is known to be
+/// valid. Deliberately not the whole form: the fields each path reads
+/// alone - a shell command when creating, a persona when editing - stay
+/// where they are used.
+struct AgentFields {
+    folder: String,
+    name:   String,
+    avatar: String,
+}
+
 impl AgentEditor {
     /// Whether the form has everything required to submit - the primary
     /// button ("Add Agent" or "Save") is disabled until this is true.
@@ -240,20 +250,38 @@ impl AgentEditor {
         && PathBuf::from(self.folder_path.trim()).is_dir()
     }
 
-    fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// The three fields both submit paths read, validated and trimmed, or
+    /// `None` with `self.error` set and a repaint asked for.
+    ///
+    /// Create and edit validated these identically, in the same order,
+    /// with the same two messages - so a rule changed in one was a rule
+    /// changed in one. A caller's whole response to invalid input is now
+    /// the `else` arm of a `let`.
+    fn validated_fields(&mut self, cx: &mut Context<Self>) -> Option<AgentFields> {
         let folder = self.folder_path.trim().to_string();
         if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
             self.error = Some(knot_core::l10n::t("agent_editor.error_choose_folder"));
             cx.notify();
-            return;
+            return None;
         }
         let name = self.name_input.read(cx).value().trim().to_string();
         if name.is_empty() {
             self.error = Some(knot_core::l10n::t("agent_editor.error_enter_name"));
             cx.notify();
-            return;
+            return None;
         }
-        let avatar = self.avatar_input.read(cx).value().trim().to_string();
+        Some(AgentFields { folder,
+                           name,
+                           avatar: self.avatar_input.read(cx).value().trim().to_string() })
+    }
+
+    fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(AgentFields { folder,
+                               name,
+                               avatar, }) = self.validated_fields(cx)
+        else {
+            return;
+        };
         // Defence in depth for the same invariant the form states above.
         let agent_type = created_agent_type(self.creating_a_companion(), &self.agent_type);
         let shell_command = self.shell_command_input.read(cx).value().trim().to_string();
@@ -304,19 +332,12 @@ impl AgentEditor {
         else {
             return;
         };
-        let folder = self.folder_path.trim().to_string();
-        if folder.is_empty() || !PathBuf::from(&folder).is_dir() {
-            self.error = Some(knot_core::l10n::t("agent_editor.error_choose_folder"));
-            cx.notify();
+        let Some(AgentFields { folder,
+                               name,
+                               avatar, }) = self.validated_fields(cx)
+        else {
             return;
-        }
-        let name = self.name_input.read(cx).value().trim().to_string();
-        if name.is_empty() {
-            self.error = Some(knot_core::l10n::t("agent_editor.error_enter_name"));
-            cx.notify();
-            return;
-        }
-        let avatar = self.avatar_input.read(cx).value().trim().to_string();
+        };
         let agent_type = self.agent_type.clone();
         let persona_changed = self.persona_id != self.original_persona_id;
         {
@@ -362,7 +383,7 @@ impl AgentEditor {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Choose Agent Folder".into()),
+            prompt: Some(knot_core::l10n::t("agent_editor.choose_folder_prompt").into()),
         });
         let editor = cx.entity();
         cx.spawn(async move |_this, cx| {

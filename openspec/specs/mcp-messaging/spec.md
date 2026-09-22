@@ -94,6 +94,14 @@ Divergence from the Swift reference: the Swift app idle-gates the nudge for
 direct sends but nudges every broadcast recipient unconditionally. The Rust
 port SHALL idle-gate both paths identically.
 
+A recipient with no live session gets one this way only when a direct send
+activated it (see "Direct send activates a deactivated recipient"); the nudge
+itself SHALL NOT start a session. Activation and the nudge are separate
+effects of the same send - activation makes the recipient's session exist,
+the nudge (subject to its own idle/turn-in-flight guard, evaluated against
+the recipient's state after activation) is what tells it a message is
+waiting.
+
 #### Scenario: Recipient idle at send time
 
 - **WHEN** a message arrives for an Idle recipient with the guard inactive
@@ -128,6 +136,44 @@ port SHALL idle-gate both paths identically.
 - **WHEN** a message arrives for an agent whose session is not running
 - **THEN** nothing is delivered, the message stays unread, and it is
   delivered when that agent next has a live session and is idle
+
+#### Scenario: Broadcast recipient with no live session stays queued
+
+- **WHEN** a broadcast reaches an eligible recipient whose session is not
+  running
+- **THEN** nothing is delivered, the message stays unread, no activation is
+  triggered, and it is delivered when that agent next has a live session and
+  is idle
+
+### Requirement: Direct send activates a deactivated recipient
+
+A direct `send` whose recipient resolves to a deactivated agent SHALL
+activate that agent - starting its session the same way selecting it in the
+UI does - as part of delivering the message. Activation SHALL happen only
+after the existing workspace, shell-agent, and companion routing checks
+pass; a send rejected by any of those SHALL NOT activate anyone.
+
+`broadcast` SHALL NOT activate any recipient: it addresses every eligible
+member of the workspace rather than one agent the sender specifically chose,
+so a deactivated agent stays stopped until a direct send targets it or a
+person selects it.
+
+#### Scenario: Direct send to a deactivated recipient starts it
+
+- **WHEN** a registered agent sends directly to a deactivated agent in its
+  workspace
+- **THEN** the message is stored and the recipient's session starts
+
+#### Scenario: A rejected send does not activate anyone
+
+- **WHEN** a direct send to a deactivated agent is rejected by a routing rule
+  (cross-workspace, shell agent, or companion violation)
+- **THEN** the recipient stays deactivated
+
+#### Scenario: Broadcast never activates a deactivated recipient
+
+- **WHEN** a broadcast reaches a deactivated agent in the sender's workspace
+- **THEN** the message is stored unread and the recipient stays deactivated
 
 ### Requirement: Check and mark-read
 

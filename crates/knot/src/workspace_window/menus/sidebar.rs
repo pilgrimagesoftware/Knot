@@ -113,28 +113,34 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
         AgentListBackgroundEntry::RestartAll => {
             let targets = targets.clone();
             let count = workspace_agent_count(&targets);
-            let description = format!("Restart {count} {}? Every session is cleared and cannot be \
-                                       recovered.",
-                                      agent_noun(count));
-            confirm_then(window, app, "Restart All", description, move |app| {
-                targets.window_entity.update(app, |view, cx| {
-                                         view.restart_all_agents();
-                                         cx.notify();
-                                     });
-            });
+            let description = knot_core::l10n::t_with("menu.sidebar.confirm.restart_all_body",
+                                                      &[("agents", &agent_count(count))]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.sidebar.confirm.restart_all_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      view.restart_all_agents();
+                                                      cx.notify();
+                                                  });
+                         });
         }
         AgentListBackgroundEntry::CloseAll => {
             let targets = targets.clone();
             let count = workspace_agent_count(&targets);
-            let description = format!("Close {count} {}? This closes every session and cannot be \
-                                       undone.",
-                                      agent_noun(count));
-            confirm_then(window, app, "Close All", description, move |app| {
-                targets.window_entity.update(app, |view, cx| {
-                                         view.close_all_agents();
-                                         cx.notify();
-                                     });
-            });
+            let description = knot_core::l10n::t_with("menu.sidebar.confirm.close_all_body",
+                                                      &[("agents", &agent_count(count))]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.sidebar.confirm.close_all_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      view.close_all_agents();
+                                                      cx.notify();
+                                                  });
+                         });
         }
         AgentListBackgroundEntry::DeactivateAll => {
             // No confirmation, matching the row menu's Deactivate: every
@@ -169,6 +175,6 @@ fn workspace_agent_count(targets: &SidebarMenuTargets) -> usize {
 }
 
 /// "agent" or "agents", so a confirmation naming one agent reads as English.
-fn agent_noun(count: usize) -> String {
-    knot_core::l10n::plural_noun(count as u64, "count.agent", "count.agents")
+fn agent_count(count: usize) -> String {
+    knot_core::l10n::pluralize(count as u64, "count.agent", "count.agents")
 }

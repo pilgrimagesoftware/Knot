@@ -221,7 +221,9 @@ pub(super) fn tool_call_icon(kind: &str) -> IconName {
 }
 
 pub(super) fn in_progress_placeholder() -> impl IntoElement {
-    div().text_xs().text_color(rgb(MUTED)).child("Running…")
+    div().text_xs()
+         .text_color(rgb(MUTED))
+         .child(knot_core::l10n::t("panel.running"))
 }
 
 /// A file-edit diff as an added/removed line view rather than raw text,
