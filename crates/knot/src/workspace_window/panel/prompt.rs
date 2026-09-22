@@ -186,11 +186,24 @@ impl WorkspaceWindow {
                       });
         let subscription = cx.subscribe_in(&input,
                                            window,
-                                           move |view: &mut Self, _, event, window, cx| {
-                                               if let InputEvent::PressEnter { shift, .. } = event
-                                                  && *shift == shift_to_send
-                                               {
-                                                   view.send_panel_prompt(id, window, cx);
+                                           move |view: &mut Self, input, event, window, cx| {
+                                               match event {
+                                                   InputEvent::PressEnter { shift, .. }
+                                                       if *shift == shift_to_send =>
+                                                   {
+                                                       view.send_panel_prompt(id, window, cx);
+                                                   }
+                                                   // Focus leaving the input closes the
+                                                   // slash lookup, per its dismissal rules
+                                                   // - a popup left open behind another
+                                                   // pane is exactly what the shared
+                                                   // dismissal path exists to prevent.
+                                                   InputEvent::Blur => {
+                                                       let input = input.clone();
+                                                       view.dismiss_panel_lookup(id, &input, cx);
+                                                       cx.notify();
+                                                   }
+                                                   _ => {}
                                                }
                                            });
         self.panel_prompt_inputs.insert(id, input.clone());

@@ -67,6 +67,17 @@ panel:
   replace_composer_body: "What you typed will be replaced by the queued message you are editing."
   retry_connect: "Try again"
   context_usage: "Context usage"
+  lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  command:
+    broadcast: "Send a message to every other agent in the workspace"
+    check: "Check messages sent to this agent"
+    create_agent: "Create a new agent in the workspace"
+    list_agents: "List the agents in the workspace"
+    list_repos: "List the repositories in the source folder"
+    list_worktrees: "List a repository's worktrees"
+    send: "Send a message to one other agent"
+    show_markdown: "Display a markdown file in Knot's preview pane"
+    worktree: "Isolate this work in a new worktree"
   summary:
     calls_one: "%{count} tool call"
     calls_other: "%{count} tool calls"
