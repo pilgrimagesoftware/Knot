@@ -165,7 +165,7 @@ impl WorkspaceWindow {
                             .icon(IconName::Close)
                             .ghost()
                             .small()
-                            .tooltip("Close")
+                            .tooltip(knot_core::l10n::t("panel.close"))
                             .on_click(cx.listener(move |view, _, _window, cx| {
                                 {
                                     let mut store = view.store.lock();
@@ -220,7 +220,7 @@ impl WorkspaceWindow {
                             .child(format!("{name} is not running")))
                 .child(div().text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Select this agent in the sidebar to start it."))
+                            .child(knot_core::l10n::t("panel.select_agent_to_start")))
                 .into_any_element()
     }
 
@@ -246,7 +246,7 @@ impl WorkspaceWindow {
                         .justify_center()
                         .gap_1()
                         .child(div().text_color(rgb(0x9CA3AF))
-                                    .child("Connecting to agent…"))
+                                    .child(knot_core::l10n::t("panel.connecting")))
                         .child(div().text_xs().text_color(rgb(0x6B7280)).child(step))
                         .into_any_element()
             }
@@ -419,7 +419,7 @@ impl WorkspaceWindow {
                                 div().absolute().bottom_3().right_4().child(
                                     Button::new("panel-scroll-to-bottom")
                                         .icon(IconName::ChevronDown)
-                                        .tooltip("Scroll to latest")
+                                        .tooltip(knot_core::l10n::t("panel.scroll_to_latest"))
                                         .small()
                                         .on_click(move |_: &ClickEvent, _, _| {
                                             list_to_bottom.scroll_to_end();

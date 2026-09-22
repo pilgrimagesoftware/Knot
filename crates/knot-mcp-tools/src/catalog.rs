@@ -199,6 +199,7 @@ impl ToolCatalog for McpToolCatalog {
             consts::SEND_MESSAGE => messaging::send_message(&self.agents.lock(),
                                                             &mut self.messages.lock(),
                                                             self.notifier.as_ref(),
+                                                            self.activation.lock().as_ref(),
                                                             &arguments),
             consts::CHECK_MESSAGES => messaging::check_messages(&self.agents.lock(),
                                                                 &mut self.messages.lock(),

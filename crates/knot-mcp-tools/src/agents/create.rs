@@ -113,7 +113,11 @@ pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
         return ToolCallResult::error("Missing required parameter: branchName");
     }
     let companion = optional_bool(arguments, "companion").unwrap_or(false);
-    if companion && fields.agent_type.as_deref() != Some("shell") {
+    if companion
+       && !fields.agent_type
+                 .as_deref()
+                 .is_some_and(knot_core::agent_type::is_shell)
+    {
         return ToolCallResult::error("Companion agents must use agentType=shell");
     }
 

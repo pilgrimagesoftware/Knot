@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use gpui_kit::App;
@@ -26,6 +26,7 @@ use crate::app_support::app_titlebar_icon;
 use crate::app_support::observe_system_appearance;
 use crate::consts;
 use crate::dashboard;
+use crate::diff_stats::DiffStatsCache;
 use crate::window_options::command_center_window_options;
 use crate::workspace_window::WorkspaceWindow;
 
@@ -34,6 +35,10 @@ pub(crate) struct CommandCenterWindow {
     messages:       Arc<Mutex<knot_messaging::MessageStore>>,
     settings:       knot_core::Settings,
     dashboard_sort: dashboard::DashboardSort,
+    /// Diff stats per agent card. This window shows every workspace's
+    /// agents, so it is the worst place to run `git` where the card is
+    /// drawn - which is what it did.
+    diff_stats:     DiffStatsCache,
 }
 
 impl CommandCenterWindow {
@@ -52,12 +57,190 @@ impl CommandCenterWindow {
                                                        messages,
                                                        settings,
                                                        dashboard_sort:
-                                                           dashboard::DashboardSort::default() });
+                                                           dashboard::DashboardSort::default(),
+                                                       diff_stats: DiffStatsCache::default() });
                   cx.new(|cx| Root::new(view, window, cx))
               })
         {
             eprintln!("failed to open command center window: {error}");
         }
+    }
+
+    /// Asks for a fresh diff stat for every agent with a card, for the ones
+    /// whose cached stat has aged out.
+    ///
+    /// Called from the render path, which it is allowed to be because it
+    /// starts no `git` there: the claim is a map lookup and an `Instant`
+    /// compare, and the subprocess runs on a background thread. The answer
+    /// reaches the next frame through `cx.notify`, so a card that has no
+    /// stat yet simply draws without one and gains it a moment later.
+    fn refresh_diff_stats(&mut self, cx: &mut Context<Self>) {
+        let folders = {
+            let store = self.store.lock();
+            store.agents()
+                 .iter()
+                 .filter(|agent| !agent.is_companion)
+                 .map(|agent| (agent.id, agent.folder.clone()))
+                 .collect::<Vec<_>>()
+        };
+        for (id, folder) in folders {
+            let Some(writer) = self.diff_stats.claim_refresh(id)
+            else {
+                continue;
+            };
+            let view = cx.entity();
+            cx.spawn(async move |_this, cx| {
+                  let stats = cx.background_executor()
+                                .spawn(async move { Repository::open(&folder).diff_stats().ok() })
+                                .await;
+                  writer.record(stats);
+                  cx.update(|app| {
+                        view.update(app, |_view, cx| {
+                                cx.notify();
+                            });
+                    });
+              })
+              .detach();
+        }
+    }
+
+    /// Opens an agent's workspace window with that agent selected.
+    fn on_agent_tap(&self, cx: &mut Context<Self>)
+                    -> impl Fn(Uuid, &mut Window, &mut gpui_kit::App) + Clone + 'static + use<>
+    {
+        let weak = cx.entity().downgrade();
+        let weak = weak.clone();
+        move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+            let Some(entity) = weak.upgrade()
+            else {
+                return;
+            };
+            entity.update(app, |view, cx| {
+                      let Some(workspace_id) =
+                          view.store
+                              .lock()
+                              .workspaces()
+                              .iter()
+                              .find(|workspace| workspace.agent_ids.contains(&id))
+                              .map(|workspace| workspace.id)
+                      else {
+                          return;
+                      };
+                      WorkspaceWindow::open_with_selection(Arc::clone(&view.store),
+                                                           Arc::clone(&view.messages),
+                                                           view.settings.clone(),
+                                                           workspace_id,
+                                                           Some(id),
+                                                           cx);
+                  });
+        }
+    }
+
+    /// Opens a workspace's own window.
+    fn on_workspace_nav(
+        &self, cx: &mut Context<Self>)
+        -> impl Fn(Uuid, &mut Window, &mut gpui_kit::App) + Clone + 'static + use<> {
+        let weak = cx.entity().downgrade();
+        let weak = weak.clone();
+        move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+            let Some(entity) = weak.upgrade()
+            else {
+                return;
+            };
+            entity.update(app, |view, cx| {
+                      WorkspaceWindow::open(Arc::clone(&view.store),
+                                            Arc::clone(&view.messages),
+                                            view.settings.clone(),
+                                            workspace_id,
+                                            cx);
+                  });
+        }
+    }
+
+    /// Opens the agent editor prefilled for a workspace, and shows the new
+    /// agent once it exists.
+    fn on_add_agent(&self, cx: &mut Context<Self>)
+                    -> impl Fn(Uuid, &mut Window, &mut gpui_kit::App) + Clone + 'static + use<>
+    {
+        let weak = cx.entity().downgrade();
+        let weak = weak.clone();
+        move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
+            let Some(entity) = weak.upgrade()
+            else {
+                return;
+            };
+            entity.update(app, |view, cx| {
+                let (folder, insert_after) = view.add_agent_prefill(workspace_id);
+                let store = Arc::clone(&view.store);
+                let messages = Arc::clone(&view.messages);
+                let settings = view.settings.clone();
+                let on_created = move |id: Uuid, _window: &mut Window, cx: &mut App| {
+                    WorkspaceWindow::open_with_selection(Arc::clone(&store),
+                                                         Arc::clone(&messages),
+                                                         settings.clone(),
+                                                         workspace_id,
+                                                         Some(id),
+                                                         cx);
+                };
+                open_agent_editor(Arc::clone(&view.store),
+                                  view.settings.clone(),
+                                  AgentEditorRequest { workspace_id,
+                                                       prefill:
+                                                           AgentPrefill { folder,
+                                                                          ..Default::default() },
+                                                       insert_after,
+                                                       edit_target: None },
+                                  on_created,
+                                  cx);
+            });
+        }
+    }
+
+    /// Every workspace's card set, read from the store in one lock.
+    ///
+    /// Diff stats come from the cache rather than from `git`: this window
+    /// shows every workspace's agents, so computing them here would be a
+    /// subprocess per card per frame.
+    fn dashboard_workspaces(&self, diff_stats: &BTreeMap<Uuid, Option<knot_git::DiffStats>>)
+                            -> Vec<dashboard::DashboardWorkspace> {
+        let store = self.store.lock();
+        store.workspaces()
+                 .iter()
+                 .map(|workspace| {
+                     let dash_agents = workspace.agent_ids
+                                                .iter()
+                                                .filter_map(|id| store.agent(*id))
+                                                .filter(|agent| !agent.is_companion)
+                                                .map(|agent| {
+                                                    let folder_name = agent.folder_name();
+                                                    let git_stats =
+                                                        diff_stats.get(&agent.id)
+                                                                  .copied()
+                                                                  .flatten();
+                                                    dashboard::DashboardAgent { id: agent.id,
+                                                                  avatar: agent.avatar
+                                                                               .graphemes(true)
+                                                                               .next()
+                                                                               .unwrap_or(consts::DEFAULT_AGENT_AVATAR)
+                                                                               .to_string(),
+                                                                  name: agent.name.clone(),
+                                                                  folder_name,
+                                                                  state: agent.state,
+                                                                  is_shell: agent.is_shell(),
+                                                                  header_title:
+                                                                      agent.header_title()
+                                                                           .to_string(),
+                                                                  git_stats,
+                                                                  is_running: agent.activated }
+                                                })
+                                                .collect::<Vec<_>>();
+                     dashboard::DashboardWorkspace { id:        workspace.id,
+                                                     name:      workspace.name.clone(),
+                                                     color_hex: workspace.color_hex.clone(),
+                                                     agents:    self.dashboard_sort
+                                                                    .sorted(dash_agents), }
+                 })
+                 .collect()
     }
 
     /// Folder + insert-after prefill for a workspace's "Add Agent" tile,
@@ -83,151 +266,29 @@ impl CommandCenterWindow {
 impl Render for CommandCenterWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let dashboard_workspaces = {
-            let store = self.store.lock();
-            store.workspaces()
-                 .iter()
-                 .map(|workspace| {
-                     let dash_agents = workspace.agent_ids
-                                                .iter()
-                                                .filter_map(|id| store.agent(*id))
-                                                .filter(|agent| !agent.is_companion)
-                                                .map(|agent| {
-                                                    let folder_name =
-                                          PathBuf::from(&agent.folder).file_name()
-                                                                      .map(|name| {
-                                                                          name.to_string_lossy()
-                                                                              .into_owned()
-                                                                      })
-                                                                      .unwrap_or_else(|| {
-                                                                          agent.folder.clone()
-                                                                      });
-                                                    let git_stats =
-                                          Repository::open(&agent.folder).diff_stats().ok();
-                                                    dashboard::DashboardAgent { id: agent.id,
-                                                                  avatar: agent.avatar
-                                                                               .graphemes(true)
-                                                                               .next()
-                                                                               .unwrap_or(consts::DEFAULT_AGENT_AVATAR)
-                                                                               .to_string(),
-                                                                  name: agent.name.clone(),
-                                                                  folder_name,
-                                                                  state: agent.state,
-                                                                  is_shell: agent.is_shell(),
-                                                                  header_title:
-                                                                      agent.header_title()
-                                                                           .to_string(),
-                                                                  git_stats,
-                                                                  is_running: agent.activated }
-                                                })
-                                                .collect::<Vec<_>>();
-                     dashboard::DashboardWorkspace { id:        workspace.id,
-                                                     name:      workspace.name.clone(),
-                                                     color_hex: workspace.color_hex.clone(),
-                                                     agents:    self.dashboard_sort
-                                                                    .sorted(dash_agents), }
-                 })
-                 .collect::<Vec<_>>()
-        };
-
+        self.refresh_diff_stats(cx);
+        let diff_stats = self.diff_stats.snapshot();
+        let dashboard_workspaces = self.dashboard_workspaces(&diff_stats);
         let weak = cx.entity().downgrade();
+        // Built once and cloned per section: every card answers the same
+        // three questions, and each takes the id it acts on as an argument.
+        let on_agent_tap = self.on_agent_tap(cx);
+        let on_workspace_nav = self.on_workspace_nav(cx);
+        let on_add_agent = self.on_add_agent(cx);
 
-        let sections = dashboard_workspaces.into_iter().map(|workspace| {
-            let on_agent_tap = {
-                let weak = weak.clone();
-                move |id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
-                    let Some(entity) = weak.upgrade() else {
-                        return;
-                    };
-                    entity.update(app, |view, cx| {
-                        let Some(workspace_id) = view.store
-                                                       .lock()
-                                                       .workspaces()
-                                                       .iter()
-                                                       .find(|workspace| {
-                                                           workspace.agent_ids.contains(&id)
-                                                       })
-                                                       .map(|workspace| workspace.id)
-                        else {
-                            return;
-                        };
-                        WorkspaceWindow::open_with_selection(
-                            Arc::clone(&view.store),
-                            Arc::clone(&view.messages),
-                            view.settings.clone(),
-                            workspace_id,
-                            Some(id),
-                            cx,
-                        );
-                    });
-                }
-            };
-            let on_workspace_nav = {
-                let weak = weak.clone();
-                move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
-                    let Some(entity) = weak.upgrade() else {
-                        return;
-                    };
-                    entity.update(app, |view, cx| {
-                        WorkspaceWindow::open(
-                            Arc::clone(&view.store),
-                            Arc::clone(&view.messages),
-                            view.settings.clone(),
-                            workspace_id,
-                            cx,
-                        );
-                    });
-                }
-            };
-            let on_add_agent = {
-                let weak = weak.clone();
-                move |workspace_id: Uuid, _window: &mut Window, app: &mut gpui_kit::App| {
-                    let Some(entity) = weak.upgrade() else {
-                        return;
-                    };
-                    entity.update(app, |view, cx| {
-                        let (folder, insert_after) = view.add_agent_prefill(workspace_id);
-                        let store = Arc::clone(&view.store);
-                        let messages = Arc::clone(&view.messages);
-                        let settings = view.settings.clone();
-                        let on_created = move |id: Uuid, _window: &mut Window, cx: &mut App| {
-                            WorkspaceWindow::open_with_selection(
-                                Arc::clone(&store),
-                                Arc::clone(&messages),
-                                settings.clone(),
-                                workspace_id,
-                                Some(id),
-                                cx,
-                            );
-                        };
-                        open_agent_editor(
-                            Arc::clone(&view.store),
-                            view.settings.clone(),
-                            AgentEditorRequest {
-                                workspace_id,
-                                prefill: AgentPrefill {
-                                    folder,
-                                    ..Default::default()
-                                },
-                                insert_after,
-                                edit_target: None,
-                            },
-                            on_created,
-                            cx,
-                        );
-                    });
-                }
-            };
-
-            dashboard::workspace_section(
-                workspace,
-                true,
-                muted,
-                on_agent_tap,
-                on_workspace_nav,
-                on_add_agent,
-            )
-        });
+        let sections = dashboard_workspaces.into_iter()
+                                           .map(|workspace| {
+                                               dashboard::workspace_section(
+                    workspace,
+                    true,
+                    muted,
+                    dashboard::WorkspaceSectionCallbacks { on_agent_tap:     on_agent_tap.clone(),
+                                                           on_workspace_nav:
+                                                               on_workspace_nav.clone(),
+                                                           on_add_agent:     on_add_agent.clone(), },
+                )
+                                           })
+                                           .collect::<Vec<_>>();
 
         v_flex()
             .size_full()

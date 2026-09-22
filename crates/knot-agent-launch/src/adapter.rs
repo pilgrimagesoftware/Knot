@@ -157,6 +157,22 @@ mod tests {
         }
     }
 
+    /// The roster is the list of types Knot knows; this table is which of
+    /// them speak ACP. A type added there without a decision here would
+    /// silently launch through the terminal path, which is a real answer
+    /// for `shell` and a bug for a coding agent - so every row has to be
+    /// named in one of these two tests.
+    #[test]
+    fn every_known_agent_type_is_decided_about() {
+        let decided =
+            ["claude", "codex", "opencode", "gemini", "copilot", "shell", "custom1", "custom2"];
+        for kind in knot_core::agent_type::ALL {
+            assert!(decided.contains(&kind.id),
+                    "{} is in the roster but no adapter test names it",
+                    kind.id);
+        }
+    }
+
     #[test]
     fn unsupported_or_unknown_agent_types_have_no_adapter() {
         for agent_type in ["shell",

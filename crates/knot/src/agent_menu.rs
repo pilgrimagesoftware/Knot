@@ -214,9 +214,9 @@ fn agent_menu_submenu(entry: AgentMenuEntry, snapshot: &AgentMenuSnapshot) -> Op
                                       .map(|item| match item {
                                           open_in::OpenInEntry::Separator => MenuItem::separator(),
                                           open_in::OpenInEntry::App(app) => {
-                                              MenuItem::action(app.label,
+                                              MenuItem::action(app.label(),
                                                                AgentMenuOpenInApp { app_id:
-                                                                                        app.id
+                                                                                        app.id()
                                                                                            .into(), })
                                           }
                                       })

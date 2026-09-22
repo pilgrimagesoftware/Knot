@@ -89,11 +89,5 @@ pub(crate) fn workspace_default_color() -> Rgba {
 // Agent vocabulary
 // ---------------------------------------------------------------------------
 
-/// The agent type that runs a terminal process of its own.
-///
-/// Compared as a bare literal in six places across two crates before this
-/// existed; see issue #224 for turning the whole vocabulary into enums.
-pub(crate) const SHELL_AGENT_TYPE: &str = "shell";
-
 /// The avatar drawn for an agent that has none.
 pub(crate) const DEFAULT_AGENT_AVATAR: &str = "🤖";

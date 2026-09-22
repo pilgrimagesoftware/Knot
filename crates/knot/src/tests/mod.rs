@@ -17,6 +17,7 @@ mod l10n_catalog;
 mod layout_model;
 mod markdown_view;
 mod notifications;
+mod panel_lookup;
 mod plan_diagram;
 mod quit_warning;
 mod settings_font_preview;

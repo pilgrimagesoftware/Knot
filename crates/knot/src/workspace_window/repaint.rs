@@ -1,4 +1,5 @@
-//! The repaint poll's two predicates.
+//! The repaint poll: the loop that runs it, and the two predicates that
+//! decide whether a tick has anything to draw.
 //!
 //! GPUI redraws on notification, not on a clock, so anything that changes
 //! off the main thread - a spinner frame, a streaming panel response, a
@@ -7,13 +8,89 @@
 //! deliberately conservative: notifying every poll would repaint thirty
 //! times a second while an agent works.
 
+use std::sync::Arc;
+
+use gpui_kit::App;
+use gpui_kit::ClipboardItem;
+use gpui_kit::Entity;
+use parking_lot::Mutex;
+use uuid::Uuid;
+
 use crate::consts;
 use crate::panel_session;
 use crate::working_indicator;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::prompt_queue;
 
+/// Starts the window's repaint poll, which runs for the window's lifetime.
+///
+/// Two jobs the PTY reader thread cannot do itself, because it is not the
+/// main thread: drain OSC 52 clipboard writes onto the pasteboard (see
+/// `clipboard_writes`), and ask for a repaint when the terminal grid has
+/// changed. Without the second the grid only updates on an unrelated UI
+/// event - a keystroke, a mouse move - so output looks stalled after
+/// pressing Enter.
+pub(super) fn spawn_repaint_poll(view: Entity<WorkspaceWindow>,
+                                 clipboard_writes: Arc<Mutex<Vec<String>>>,
+                                 exited_sessions: Arc<Mutex<Vec<Uuid>>>, cx: &mut App) {
+    cx.spawn(async move |cx| {
+          loop {
+              cx.background_executor()
+                .timer(consts::REPAINT_POLL_INTERVAL)
+                .await;
+              let texts = std::mem::take(&mut *clipboard_writes.lock());
+              let exited = std::mem::take(&mut *exited_sessions.lock());
+              for text in texts {
+                  cx.update(|app| {
+                        app.write_to_clipboard(ClipboardItem::new_string(text));
+                    });
+              }
+              cx.update(|app| {
+                    view.update(app, |view, cx| view.repaint_poll_tick(&exited, cx));
+                });
+          }
+      })
+      .detach();
+}
+
 impl WorkspaceWindow {
+    /// One tick of the poll, with the ids of any sessions whose process
+    /// exited since the last one.
+    fn repaint_poll_tick(&mut self, exited: &[Uuid], cx: &mut gpui_kit::Context<Self>) {
+        // A shell companion whose process exited has nothing left to show,
+        // so close it rather than leaving a dead pane that looks hung.
+        for id in exited {
+            self.remove_agent(*id);
+            cx.notify();
+        }
+        // Messages arrive from the MCP server on another thread; this poll
+        // is where an agent going idle is noticed.
+        self.deliver_inbox_nudges();
+        self.raise_awaiting_notifications(cx);
+        // Before the repaint checks below, so an agent started here has its
+        // slot in place when they run.
+        let activated = self.activate_messaged_agents(cx);
+        let grid_dirty = self.selected_agent
+                             .and_then(|id| self.sessions.get(&id))
+                             .and_then(|session| session.lock().grid())
+                             .is_some_and(|grid| grid.lock().take_dirty());
+        let prompts_completed = self.drain_prompt_results();
+        self.sync_panel_agent_states();
+        let prompts_sent = self.deliver_waiting_prompts();
+        let panel_dirty = self.panel_needs_repaint();
+        let spinner_dirty = self.spinner_repaint_due();
+        if grid_dirty
+           || panel_dirty
+           || spinner_dirty
+           || activated
+           || prompts_completed
+           || prompts_sent
+        {
+            cx.notify();
+        }
+        self.refresh_agents_menu(cx);
+    }
+
     /// Whether the dashboard's working indicators need a repaint now: an
     /// agent in this workspace is Working, and the spinner has moved on
     /// since they were last drawn.
@@ -48,20 +125,15 @@ impl WorkspaceWindow {
         std::mem::replace(&mut self.last_spinner_frame, frame) != frame
     }
 
-    /// Whether the selected agent's panel needs a repaint: either its live
-    /// session has new events, or its slot changed lifecycle phase since
-    /// the last poll.
+    /// Applies the results of prompts that finished since the last poll to
+    /// their queues, and says whether any did.
     ///
-    /// The phase half matters because `ensure_panel_session` fills the slot
-    /// from a background tokio task. `Ready` carries its own dirty flag,
-    /// but `Failed` carries nothing - so before this check, a connection
-    /// that failed (a missing API key, a refused handshake) left the pane
-    /// showing "Connecting to agent…" indefinitely, making the connect
-    /// timeout look like it had never fired when in fact the error was
-    /// sitting in the slot, undrawn.
-    pub(super) fn panel_needs_repaint(&mut self) -> bool {
+    /// Separate from [`Self::panel_needs_repaint`] because it changes state:
+    /// that one is asked whether to draw, this one is what makes the answer
+    /// yes.
+    fn drain_prompt_results(&mut self) -> bool {
         let prompt_results = std::mem::take(&mut *self.panel_prompt_results.lock());
-        let prompt_results_changed = !prompt_results.is_empty();
+        let drained = !prompt_results.is_empty();
         for (id, prompt_id, result) in prompt_results {
             if let Some(queue) = self.panel_prompt_queues.get_mut(&id) {
                 // A prompt the user deleted while it was in flight is
@@ -69,8 +141,12 @@ impl WorkspaceWindow {
                 prompt_queue::complete(queue, prompt_id, result.is_ok());
             }
         }
-        let stats_changed = self.diff_stats_dirty
-                                .swap(false, std::sync::atomic::Ordering::SeqCst);
+        drained
+    }
+
+    /// Writes each ready panel session's lifecycle back to the store, so the
+    /// sidebar and dashboard show what the ACP session is actually doing.
+    fn sync_panel_agent_states(&mut self) {
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
@@ -99,6 +175,11 @@ impl WorkspaceWindow {
                 store.set_state(id, state);
             }
         }
+    }
+
+    /// Sends the next queued prompt to every agent that has one, and says
+    /// whether any went out.
+    fn deliver_waiting_prompts(&mut self) -> bool {
         // Every agent with something waiting, not just the selected one.
         // This ran only for `selected_agent`, so a prompt queued behind a
         // background agent's turn sat there until the user happened to
@@ -114,6 +195,22 @@ impl WorkspaceWindow {
         for id in waiting {
             prompt_picked_up |= self.drain_panel_prompt(id);
         }
+        prompt_picked_up
+    }
+
+    /// Whether the selected agent's panel needs a repaint: either its live
+    /// session has new events, or its slot changed lifecycle phase since
+    /// the last poll.
+    ///
+    /// The phase half matters because `ensure_panel_session` fills the slot
+    /// from a background tokio task. `Ready` carries its own dirty flag,
+    /// but `Failed` carries nothing - so before this check, a connection
+    /// that failed (a missing API key, a refused handshake) left the pane
+    /// showing "Connecting to agent…" indefinitely, making the connect
+    /// timeout look like it had never fired when in fact the error was
+    /// sitting in the slot, undrawn.
+    pub(super) fn panel_needs_repaint(&mut self) -> bool {
+        let stats_changed = self.diff_stats.take_changed();
         let Some(id) = self.selected_agent
         else {
             return stats_changed;
@@ -140,11 +237,6 @@ impl WorkspaceWindow {
         if indicator_due {
             self.working_indicator_last_repaint = std::time::Instant::now();
         }
-        phase_changed
-        || events_arrived
-        || indicator_due
-        || stats_changed
-        || prompt_results_changed
-        || prompt_picked_up
+        phase_changed || events_arrived || indicator_due || stats_changed
     }
 }

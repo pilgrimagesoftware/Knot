@@ -22,14 +22,34 @@ git:
 
 workspace:
   manager: "Workspaces"
+  name_placeholder: "Workspace name"
+  missing: "Workspace no longer exists."
+  choose_agent: "Choose an agent from the sidebar"
 
 sidebar:
   new_agent: "New agent"
+  width_error: "Could not save the sidebar width: %{error}"
 
 agent:
   companion: "Shell companion"
 
 panel:
+  # Failures the panel records into the conversation itself, where the
+  # user reads them beside the turn they belong to.
+  error_first_turn: "The agent could not start its first turn: %{error}"
+  error_registration: "The agent could not be registered: %{error}"
+  error_answer: "The agent could not answer: %{error}"
+  allow: "Allow"
+  deny: "Deny"
+  close: "Close"
+  stop: "Stop"
+  running: "Running…"
+  connecting: "Connecting to agent…"
+  select_agent_to_start: "Select this agent in the sidebar to start it."
+  attach_context: "Attach files or images"
+  scroll_to_latest: "Scroll to latest"
+  scroll_to_your_message: "Scroll to your message"
+  scroll_to_top: "Scroll to top"
   copy_prompt: "Copy prompt"
   copy_response: "Copy response"
   copied_prompt: "Copied prompt to clipboard"
@@ -47,6 +67,17 @@ panel:
   replace_composer_body: "What you typed will be replaced by the queued message you are editing."
   retry_connect: "Try again"
   context_usage: "Context usage"
+  lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  command:
+    broadcast: "Send a message to every other agent in the workspace"
+    check: "Check messages sent to this agent"
+    create_agent: "Create a new agent in the workspace"
+    list_agents: "List the agents in the workspace"
+    list_repos: "List the repositories in the source folder"
+    list_worktrees: "List a repository's worktrees"
+    send: "Send a message to one other agent"
+    show_markdown: "Display a markdown file in Knot's preview pane"
+    worktree: "Isolate this work in a new worktree"
   summary:
     calls_one: "%{count} tool call"
     calls_other: "%{count} tool calls"
@@ -97,6 +128,9 @@ settings:
     personas: "Personas"
     none_defined: "No personas defined."
     delete_persona: "Delete Persona"
+    delete_body: "This permanently deletes \"%{name}\". This can't be undone."
+    edit: "Edit persona"
+    add: "Add Persona…"
     restore_defaults: "Restore Defaults"
   autopilot:
     blurb: "Automatically detect when agents need input and take action — no need to babysit your agents. Only available with Claude Code."
@@ -166,6 +200,12 @@ menu:
     deactivate: "Deactivate"
     restart_agent: "Restart Agent"
     remove_agent: "Remove Agent"
+    # What the two confirming row actions ask before they run.
+    confirm:
+      restart_title: "Restart Agent"
+      restart_body: "Restart \"%{name}\"? Its session will be cleared."
+      remove_title: "Remove Agent"
+      remove_body: "Remove \"%{name}\"? This closes its session and cannot be undone."
   # The agent list's background menu, over the workspace rather than
   # any one agent.
   sidebar:
@@ -174,6 +214,14 @@ menu:
     close_all: "Close All"
     deactivate_all: "Deactivate All"
     broadcast: "Broadcast to All Agents…"
+    # The bulk actions' confirmations. %{agents} is a localized count and
+    # noun together ("1 agent", "3 agents"), so the sentence can put them
+    # where its own grammar needs them.
+    confirm:
+      restart_all_title: "Restart All"
+      restart_all_body: "Restart %{agents}? Every session is cleared and cannot be recovered."
+      close_all_title: "Close All"
+      close_all_body: "Close %{agents}? This closes every session and cannot be undone."
 
 quit:
   working_title: "Agents are still working"
@@ -229,6 +277,8 @@ agent_editor:
   save: "Save"
   add: "Add Agent"
   cancel: "Cancel"
+  no_folder: "No folder selected"
+  persona_none: "None"
   error_choose_folder: "Choose a folder."
   error_enter_name: "Enter a name."
 
@@ -240,12 +290,18 @@ workspace_manager:
   rename: "Rename workspace"
   delete: "Delete workspace"
   delete_title: "Delete Workspace?"
+  new_title: "New Workspace"
+  rename_title: "Rename Workspace"
+  save: "Save"
+  create: "Create"
+  error_save: "Could not save workspace: %{error}"
   cancel: "Cancel"
   error_name_empty: "Workspace name cannot be empty."
   error_missing: "Workspace no longer exists."
   error_last_workspace: "At least one workspace must remain."
 
 broadcast:
+  window_title: "Broadcast to All Agents"
   placeholder: "Message every agent in this workspace…"
   send: "Send"
   cancel: "Cancel"

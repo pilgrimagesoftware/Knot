@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::path::PathBuf;
 
 use knot_core::{ActivationMode, Capabilities, CostTier, ViewMode};
@@ -28,7 +29,7 @@ pub enum AgentState {
 /// The single place that decides this, consulted by `create`, `edit`, and
 /// `from_saved` so a non-shell agent can never end up in `Terminal`.
 pub fn view_mode_for(agent_type: &str) -> ViewMode {
-    if agent_type == "shell" {
+    if knot_core::agent_type::is_shell(agent_type) {
         ViewMode::Terminal
     }
     else {
@@ -108,7 +109,17 @@ pub struct Agent {
 impl Agent {
     /// Whether this is a plain shell agent (no AI).
     pub fn is_shell(&self) -> bool {
-        self.agent_type == "shell"
+        knot_core::agent_type::is_shell(&self.agent_type)
+    }
+
+    /// The last component of the agent's folder, for the places that label
+    /// an agent by where it works rather than by its full path - a sidebar
+    /// row, a dashboard card. Falls back to the whole folder when there is
+    /// no last component (a root path, or an empty string).
+    pub fn folder_name(&self) -> String {
+        Path::new(&self.folder).file_name()
+                               .map(|name| name.to_string_lossy().into_owned())
+                               .unwrap_or_else(|| self.folder.clone())
     }
 
     /// Title for the terminal header: prefers agent-set status text over the

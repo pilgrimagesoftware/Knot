@@ -66,22 +66,10 @@ impl AgentEditor {
     }
 }
 
-/// The localized name of a cost tier.
-fn cost_tier_label(tier: knot_core::CostTier) -> gpui_kit::SharedString {
-    match tier {
-        knot_core::CostTier::Low => knot_core::l10n::t("agent_editor.cost_tier_low"),
-        knot_core::CostTier::Medium => knot_core::l10n::t("agent_editor.cost_tier_medium"),
-        knot_core::CostTier::High => knot_core::l10n::t("agent_editor.cost_tier_high"),
-    }.into()
-}
-
-impl Render for AgentEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let editor = cx.entity();
-        let personas = persona_choices(&self.settings);
-        let is_shell = self.agent_type == "shell";
-
-        let identity_rows = vec![
+impl AgentEditor {
+    /// The name and avatar rows, which every agent has whatever its type.
+    fn identity_rows(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        vec![
             Self::dialog_row(knot_core::l10n::t("agent_editor.name"), Input::new(&self.name_input).w(px(200.))).into_any_element(),
             Self::dialog_row(
                 knot_core::l10n::t("agent_editor.avatar"),
@@ -92,7 +80,7 @@ impl Render for AgentEditor {
                         SettingsWindow::icon_button(
                             "agent-avatar-picker",
                             "icons/face-grinning.svg",
-                            "Choose character…",
+                            knot_core::l10n::t("agent_editor.choose_character"),
                             false,
                         )
                         .on_click(
@@ -101,27 +89,46 @@ impl Render for AgentEditor {
                     ),
             )
             .into_any_element(),
-        ];
+        ]
+    }
 
+    /// The rows that depend on what kind of agent this is: its type, a
+    /// shell command when it is one, a persona when any exist, and how it
+    /// activates.
+    /// The rows that depend on what kind of agent this is.
+    fn agent_rows(&self, personas: Vec<knot_core::Persona>, cx: &mut Context<Self>)
+                  -> Vec<gpui_kit::AnyElement> {
+        let mut rows = vec![self.agent_type_row(cx)];
+        if knot_core::agent_type::is_shell(&self.agent_type) && self.edit_target.is_none() {
+            rows.push(self.shell_command_row(cx));
+        }
+        if !personas.is_empty() {
+            rows.push(self.persona_row(personas, cx));
+        }
+        rows.extend(self.activation_rows(cx));
+        rows
+    }
+
+    /// Which coding agent this is - stated rather than asked when the
+    /// editor is creating a companion.
+    fn agent_type_row(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let editor = cx.entity();
         // A companion is a shell agent by definition: `create_shell_companion`
         // hardcodes the type, and the MCP `create-agent` tool refuses
         // `companion` for anything else. Offering the picker here would let
         // this one path create a companion the rest of the stack rejects, so
         // it states the type instead of asking for it.
-        let mut agent_rows = if self.creating_a_companion() {
-            vec![
-                Self::dialog_row(
+        if self.creating_a_companion() {
+            Self::dialog_row(
                     knot_core::l10n::t("agent_editor.coding_agent"),
                     div()
                         .text_color(cx.theme().muted_foreground)
-                        .child(SettingsWindow::agent_type_label("shell")),
+                        .child(SettingsWindow::agent_type_label(knot_core::agent_type::SHELL)),
                 )
-                .into_any_element(),
-            ]
+                .into_any_element()
         }
         else {
-            vec![
-                Self::dialog_row(
+            Self::dialog_row(
                     knot_core::l10n::t("agent_editor.coding_agent"),
                     Button::new("agent-type-picker")
                         .label(SettingsWindow::agent_type_label(&self.agent_type))
@@ -131,16 +138,14 @@ impl Render for AgentEditor {
                             move |mut menu, _, _| {
                                 // Matches the Swift reference's `availableAgents`
                                 // list (`CodingSettingsView.swift`).
-                                for (agent_type, label) in [
-                                    ("claude", "Claude"),
-                                    ("codex", "Codex"),
-                                    ("opencode", "OpenCode"),
-                                    ("gemini", "Gemini"),
-                                    ("copilot", "Copilot"),
-                                    ("custom1", "Custom 1"),
-                                    ("custom2", "Custom 2"),
-                                    ("shell", "Shell"),
-                                ] {
+                                // Every known type, including the user's own
+                                // custom commands - this is where an agent's
+                                // type is chosen, so the roster is offered
+                                // whole.
+                                for (agent_type, label) in
+                                    knot_core::agent_type::ALL.iter()
+                                                              .map(|kind| (kind.id, kind.label))
+                                {
                                     let editor = editor.clone();
                                     menu = menu.item(PopupMenuItem::new(label).on_click(
                                         move |_, _, app| {
@@ -154,23 +159,25 @@ impl Render for AgentEditor {
                             }
                         }),
                 )
-                .into_any_element(),
-            ]
-        };
-        if is_shell && self.edit_target.is_none() {
-            agent_rows.push(
-                Self::dialog_row(
-                    knot_core::l10n::t("agent_editor.command"),
-                    Input::new(&self.shell_command_input)
-                        .w(px(200.))
-                        .font_family(cx.theme().mono_font_family.clone()),
-                )
-                .into_any_element(),
-            );
+                .into_any_element()
         }
-        if !personas.is_empty() {
-            agent_rows.push(
-                Self::dialog_row(
+    }
+
+    /// The command a shell agent runs, offered only while creating one -
+    /// `EditRequest` has no field for it.
+    fn shell_command_row(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        Self::dialog_row(knot_core::l10n::t("agent_editor.command"),
+                         Input::new(&self.shell_command_input).w(px(200.))
+                                                              .font_family(cx.theme()
+                                                                             .mono_font_family
+                                                                             .clone())).into_any_element()
+    }
+
+    /// The persona picker, shown only when the user has personas.
+    fn persona_row(&self, personas: Vec<knot_core::Persona>, cx: &mut Context<Self>)
+                   -> gpui_kit::AnyElement {
+        let editor = cx.entity();
+        Self::dialog_row(
                     knot_core::l10n::t("agent_editor.persona"),
                     Button::new("agent-persona-picker")
                         .label(
@@ -178,7 +185,7 @@ impl Render for AgentEditor {
                                 .and_then(|id| {
                                     personas.iter().find(|p| p.id == id).map(|p| p.name.clone())
                                 })
-                                .unwrap_or_else(|| "None".to_string()),
+                                .unwrap_or_else(|| knot_core::l10n::t("agent_editor.persona_none")),
                         )
                         .dropdown_caret(true)
                         .dropdown_menu({
@@ -192,7 +199,8 @@ impl Render for AgentEditor {
                                 // `PopupMenu` only caps its height and scrolls
                                 // when told to.
                                 let mut menu = menu.scrollable(true);
-                                menu = menu.item(PopupMenuItem::new("None").on_click({
+                                let none = knot_core::l10n::t("agent_editor.persona_none");
+                                menu = menu.item(PopupMenuItem::new(none).on_click({
                                     let editor = editor.clone();
                                     move |_, _, app| editor.update(app, |e, _| e.persona_id = None)
                                 }));
@@ -211,10 +219,12 @@ impl Render for AgentEditor {
                             }
                         }),
                 )
-                .into_any_element(),
-            );
-        }
+                .into_any_element()
+    }
 
+    /// The activation switch and the sentence explaining what it means.
+    fn activation_rows(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        let editor = cx.entity();
         // A switch with the mode named beside it. The segmented control
         // this replaced made the two options equally prominent and left
         // which one was chosen to a fill colour, which did not read at a
@@ -223,7 +233,7 @@ impl Render for AgentEditor {
         // never has to work it out from the switch alone.
         let activation_mode = self.activation_mode;
         let is_active = activation_mode == knot_core::ActivationMode::Active;
-        agent_rows.push(
+        vec![
             Self::dialog_row(
                 knot_core::l10n::t("agent_editor.activation"),
                 h_flex()
@@ -247,19 +257,25 @@ impl Render for AgentEditor {
                                 }
                             }),
                     )
-                    .child(div().child(if is_active { "Active" } else { "Passive" })),
+                    .child(div().child(knot_core::l10n::t(if is_active {
+                        "agent_editor.active"
+                    } else {
+                        "agent_editor.passive"
+                    }))),
             )
             .into_any_element(),
-        );
-        agent_rows.push(Self::dialog_hint(
-            cx,
-            knot_core::l10n::t("agent_editor.activation_hint"),
-        ).into_any_element());
+            Self::dialog_hint(cx, knot_core::l10n::t("agent_editor.activation_hint"))
+                .into_any_element(),
+        ]
+    }
 
-        // Registry metadata: what this agent is for, what it can be asked
-        // to do, and what asking costs. None of it affects how the agent
-        // launches, so editing it never restarts a running agent.
-        let mut registry_rows = vec![
+    /// Registry metadata: what this agent is for, what it can be asked to
+    /// do, and what asking costs. None of it affects how the agent
+    /// launches, so editing it never restarts a running agent.
+    fn registry_rows(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        let editor = cx.entity();
+        let cost_tier = self.cost_tier;
+        vec![
             Self::dialog_row(
                 knot_core::l10n::t("agent_editor.description"),
                 Input::new(&self.description_input).w(px(260.)),
@@ -272,9 +288,6 @@ impl Render for AgentEditor {
             .into_any_element(),
             Self::dialog_hint(cx, knot_core::l10n::t("agent_editor.capabilities_hint"))
                 .into_any_element(),
-        ];
-        let cost_tier = self.cost_tier;
-        registry_rows.push(
             Self::dialog_row(
                 knot_core::l10n::t("agent_editor.cost_tier"),
                 Button::new("agent-cost-tier-picker")
@@ -302,13 +315,14 @@ impl Render for AgentEditor {
                     }),
             )
             .into_any_element(),
-        );
-        registry_rows.push(
             Self::dialog_hint(cx, knot_core::l10n::t("agent_editor.cost_tier_hint"))
                 .into_any_element(),
-        );
+        ]
+    }
 
-        let folder_rows = vec![
+    /// The folder row: the chosen path, or a prompt to choose one.
+    fn folder_rows(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        vec![
             Self::dialog_row(
                 knot_core::l10n::t("agent_editor.folder"),
                 h_flex()
@@ -321,7 +335,7 @@ impl Render for AgentEditor {
                             .whitespace_normal()
                             .text_color(cx.theme().muted_foreground)
                             .child(if self.folder_path.is_empty() {
-                                "No folder selected".to_string()
+                                knot_core::l10n::t("agent_editor.no_folder")
                             } else {
                                 self.folder_path.clone()
                             }),
@@ -330,14 +344,33 @@ impl Render for AgentEditor {
                         SettingsWindow::icon_button(
                             "choose-agent-folder",
                             "icons/folder-open.svg",
-                            "Choose folder…",
+                            knot_core::l10n::t("agent_editor.choose_folder"),
                             false,
                         )
                         .on_click(cx.listener(|editor, _, _, cx| editor.choose_folder(cx))),
                     ),
             )
             .into_any_element(),
-        ];
+        ]
+    }
+}
+
+/// The localized name of a cost tier.
+fn cost_tier_label(tier: knot_core::CostTier) -> gpui_kit::SharedString {
+    match tier {
+        knot_core::CostTier::Low => knot_core::l10n::t("agent_editor.cost_tier_low"),
+        knot_core::CostTier::Medium => knot_core::l10n::t("agent_editor.cost_tier_medium"),
+        knot_core::CostTier::High => knot_core::l10n::t("agent_editor.cost_tier_high"),
+    }.into()
+}
+
+impl Render for AgentEditor {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let personas = persona_choices(&self.settings);
+        let identity_rows = self.identity_rows(cx);
+        let agent_rows = self.agent_rows(personas, cx);
+        let registry_rows = self.registry_rows(cx);
+        let folder_rows = self.folder_rows(cx);
 
         v_flex()
             .size_full()
@@ -381,11 +414,11 @@ impl Render for AgentEditor {
                     )
                     .child(
                         Button::new("create-agent-editor")
-                            .label(if self.edit_target.is_some() {
-                                "Save"
+                            .label(knot_core::l10n::t(if self.edit_target.is_some() {
+                                "agent_editor.save"
                             } else {
-                                "Add Agent"
-                            })
+                                "agent_editor.add"
+                            }))
                             .primary()
                             .disabled(!self.can_submit(cx))
                             .on_click(cx.listener(|editor, _, window, cx| {
