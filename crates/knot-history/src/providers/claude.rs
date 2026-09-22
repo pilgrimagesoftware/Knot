@@ -5,16 +5,46 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use serde_json::Value;
+use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::consts::{CLAUDE_PROJECTS_DIR, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::providers::jsonl_entries;
+use crate::providers::{Maybe, jsonl_entries, maybe_text};
 use crate::title::{extract_title, format_command_message, is_valid_title};
 
 pub struct ClaudeProvider;
+
+/// One line of a Claude transcript.
+///
+/// `isMeta` marks an entry the CLI wrote for itself rather than something
+/// the user typed, and is absent on the ones that are not.
+#[derive(Deserialize)]
+struct Entry {
+    #[serde(rename = "type")]
+    entry_type: String,
+    #[serde(default, rename = "isMeta")]
+    is_meta:    bool,
+    #[serde(default)]
+    message:    Maybe<Message>,
+}
+
+/// `content` is the prompt text on a user turn and an array of content
+/// blocks on an assistant one, which is why it is a [`Maybe`]: only the
+/// string form can title a session, but the assistant's turns still have to
+/// be counted.
+#[derive(Deserialize)]
+struct Message {
+    #[serde(default)]
+    content: Maybe<String>,
+}
+
+impl Entry {
+    fn text(&self) -> Option<&str> {
+        maybe_text(&self.message.known()?.content)
+    }
+}
 
 /// `~/.claude/projects/<folder with '/' -> '-'>`, e.g.
 /// `/Users/x/src/app` -> `~/.claude/projects/-Users-x-src-app`.
@@ -43,23 +73,18 @@ fn parse_session_file(path: &Path) -> Option<ParsedSession> {
     // Not the shared `first_title` scan: this one counts every message as
     // it goes, and its title needs a slash command expanded before it can
     // be judged - so it walks the shared entry iterator itself.
-    for json in jsonl_entries(&content) {
-        let Some(entry_type) = json.get("type").and_then(Value::as_str)
-        else {
-            continue;
-        };
+    for entry in jsonl_entries::<Entry>(&content) {
+        let entry_type = entry.entry_type.as_str();
 
         if entry_type == "user" || entry_type == "assistant" {
             message_count += 1;
         }
 
         if title.is_none() && entry_type == "user" {
-            if json.get("isMeta").and_then(Value::as_bool) == Some(true) {
+            if entry.is_meta {
                 continue;
             }
-            let Some(message_content) = json.get("message")
-                                            .and_then(|m| m.get("content"))
-                                            .and_then(Value::as_str)
+            let Some(message_content) = entry.text()
             else {
                 continue;
             };

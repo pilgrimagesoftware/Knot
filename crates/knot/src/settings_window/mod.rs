@@ -245,7 +245,7 @@ pub(crate) struct SettingsWindow {
 
 impl SettingsWindow {
     fn persist(&self) {
-        if let Err(error) = self.settings.persist() {
+        if let Err(error) = self.settings.persist_preferences() {
             eprintln!("failed to persist settings: {error}");
         }
     }

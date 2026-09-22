@@ -27,7 +27,7 @@ fn write(dir: &TempDir, file: &str, contents: &str) {
 
 /// A Knot that is already in use: the state an import must not disturb.
 fn populated_store(dir: &TempDir) -> Settings {
-    let mut settings = Settings::with_store_path(dir.path().join("settings.json"));
+    let mut settings = Settings::with_store_root(dir.path());
     settings.personas
             .push(Persona { id:           Uuid::new_v4(),
                             name:         "my-persona".into(),

@@ -33,6 +33,16 @@ impl AgentStore {
         Ok(())
     }
 
+    /// Closes the diagram panel. The source is dropped rather than kept:
+    /// unlike a markdown file, there is no path to reopen it from, and a
+    /// plan that is shown again is re-emitted by the tools.
+    pub fn clear_mermaid_panel(&mut self, id: Uuid) -> Result<()> {
+        let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
+        agent.mermaid_source = None;
+        agent.mermaid_title = None;
+        Ok(())
+    }
+
     /// Records one Panel session-setup selection (model, permission mode,
     /// reasoning effort, ...) so reopening the agent can replay it.
     ///

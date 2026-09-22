@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::consts::{DEFAULT_AGENT_TYPE, DEFAULT_AVATAR};
+use crate::settings::capabilities::Capabilities;
+use crate::settings::vocabulary::CostTier;
 
 // ---------------------------------------------------------------------------
 // Persona
@@ -110,6 +112,17 @@ pub struct SavedAgent {
     /// `Passive` from `CreateOptions` instead.
     #[serde(default = "default_activation_mode")]
     pub activation_mode: ActivationMode,
+    /// Registry metadata: what this agent is for, what it can be asked to
+    /// do, and how expensive it is to ask. Absent from records written
+    /// before the registry existed, which load undescribed, untagged and
+    /// mid-priced rather than being hidden. See
+    /// `openspec/specs/agent-registry/spec.md`.
+    #[serde(default)]
+    pub description:     String,
+    #[serde(default)]
+    pub capabilities:    Capabilities,
+    #[serde(default)]
+    pub cost_tier:       CostTier,
     /// The session setup last chosen in the Panel - model, permission mode
     /// and reasoning effort - keyed by the ACP config-option id the adapter
     /// declared, holding that option's selected value.
@@ -147,6 +160,9 @@ impl SavedAgent {
                view_mode: ViewMode::default(),
                acp_session_id: None,
                activation_mode: default_activation_mode(),
+               description: String::new(),
+               capabilities: Capabilities::new(),
+               cost_tier: CostTier::default(),
                session_config: BTreeMap::new() }
     }
 }
@@ -170,6 +186,14 @@ pub struct BenchAgent {
     pub shell_command: Option<String>,
     #[serde(default)]
     pub persona_id:    Option<Uuid>,
+    /// Registry metadata carried onto the agent this template deploys, so a
+    /// saved template records a role and not just a folder.
+    #[serde(default)]
+    pub description:   String,
+    #[serde(default)]
+    pub capabilities:  Capabilities,
+    #[serde(default)]
+    pub cost_tier:     CostTier,
 }
 
 impl BenchAgent {
@@ -185,7 +209,10 @@ impl BenchAgent {
                folder: folder.into(),
                agent_type: default_agent_type(),
                shell_command: None,
-               persona_id: None }
+               persona_id: None,
+               description: String::new(),
+               capabilities: Capabilities::new(),
+               cost_tier: CostTier::default() }
     }
 }
 

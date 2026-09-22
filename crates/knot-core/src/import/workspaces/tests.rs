@@ -18,7 +18,7 @@ use crate::settings::{
 const FOLDER: &str = "/Users/someone/WIP/thing";
 
 fn store(dir: &TempDir) -> Settings {
-    Settings::with_store_path(dir.path().join("settings.json"))
+    Settings::with_store_root(dir.path())
 }
 
 fn workspace(name: &str, agent_ids: Vec<Uuid>) -> Workspace {
@@ -253,13 +253,12 @@ fn what_knot_already_held_is_still_there_afterwards() {
 #[test]
 fn an_imported_workspace_is_persisted() {
     let dir = TempDir::new().expect("temp dir");
-    let path = dir.path().join("settings.json");
-    let mut settings = Settings::with_store_path(&path);
+    let mut settings = Settings::with_store_root(dir.path());
     let (source, id) = source_with_three_agents();
 
     import_workspaces(&mut settings, &source, &[id]).expect("import succeeds");
 
-    let reloaded = Settings::load_from(&path).expect("reload");
+    let reloaded = Settings::load_from_root(dir.path()).expect("reload");
     assert_eq!(reloaded.saved_workspaces.len(), 1);
     assert_eq!(reloaded.saved_agents.len(), 3);
 }

@@ -4,30 +4,45 @@ use std::fs;
 use std::path::PathBuf;
 
 use rusqlite::{Connection, OpenFlags, params};
-use serde_json::Value;
+use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::consts::{CODEX_DB_PATH, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::providers::{first_title, jsonl_entries, resolve_title};
+use crate::providers::{Maybe, first_title, jsonl_entries, maybe_text, resolve_title};
 
 pub struct CodexProvider;
+
+/// One line of a Codex rollout file. Codex nests both the kind and the text
+/// under `payload`; a line without one is not a rollout entry at all.
+#[derive(Deserialize)]
+struct Entry {
+    payload: Payload,
+}
+
+#[derive(Deserialize)]
+struct Payload {
+    #[serde(rename = "type")]
+    payload_type: String,
+    /// A string on a `user_message`; other payload kinds put other shapes
+    /// here, and none of those is a title.
+    #[serde(default)]
+    message:      Maybe<String>,
+}
 
 fn db_path() -> Option<PathBuf> {
     Some(home_dir()?.join(CODEX_DB_PATH))
 }
 
 /// Parse a Codex rollout JSONL file for the first real `user_message`.
-/// Codex nests both the kind and the text under `payload`.
 fn title_from_rollout(path: &str) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
-    first_title(jsonl_entries(&content), |entry| {
-        let payload = entry.get("payload")?;
-        if payload.get("type").and_then(Value::as_str) != Some("user_message") {
+    first_title(jsonl_entries::<Entry>(&content), |entry| {
+        if entry.payload.payload_type != "user_message" {
             return None;
         }
-        payload.get("message").and_then(Value::as_str)
+        maybe_text(&entry.payload.message)
     })
 }
 

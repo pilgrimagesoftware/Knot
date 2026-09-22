@@ -1,5 +1,6 @@
 pub const REGISTER_AGENT: &str = "register-agent";
 pub const LIST_AGENTS: &str = "list-agents";
+pub const DESCRIBE_AGENTS: &str = "describe-agents";
 pub const SEND_MESSAGE: &str = "send-message";
 pub const CHECK_MESSAGES: &str = "check-messages";
 pub const BROADCAST_MESSAGE: &str = "broadcast-message";
@@ -11,3 +12,7 @@ pub const CREATE_WORKTREE: &str = "create-worktree";
 pub const SET_STATUS: &str = "set-status";
 pub const DISPLAY_MARKDOWN: &str = "display-markdown";
 pub const VIEW_MERMAID: &str = "view-mermaid";
+pub const PLAN_TASKS: &str = "plan-tasks";
+pub const DISPATCH_TASK: &str = "dispatch-task";
+pub const COMPLETE_TASK: &str = "complete-task";
+pub const TASK_STATUS: &str = "task-status";

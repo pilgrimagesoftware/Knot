@@ -1,19 +1,37 @@
 //! Guards the `#[serde(rename_all = "camelCase")]` alignment: a document in the
 //! Swift `CodingKeys` shape must load field-for-field, and re-serializing it
 //! must reproduce the same keys.
+//!
+//! The Swift shape is one document holding everything, which is also the
+//! legacy shape the store migrates off, so these fixtures are written as
+//! `settings.json` and read back through the migration.
 
-use knot_core::{AiProvider, AppearanceMode, AutopilotAction, PersonaState, PersonaType, Settings};
+use knot_core::consts::{
+    AGENTS_FILE, LEGACY_SETTINGS_FILE, PERSONAS_FILE, PREFERENCES_FILE, WORKSPACES_FILE,
+};
+use knot_core::{
+    AiProvider, AppearanceMode, AutopilotAction, CostTier, PersonaState, PersonaType, Settings,
+};
 use uuid::Uuid;
 
 const FIXTURE: &str = include_str!("fixtures/settings_swift_shape.json");
 
+/// Write `document` as the legacy single document in a fresh store.
+fn legacy_store(document: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join(LEGACY_SETTINGS_FILE), document).unwrap();
+    dir
+}
+
+fn read_json(path: std::path::PathBuf) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap()
+}
+
 #[test]
 fn loads_swift_shaped_document() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    std::fs::write(&path, FIXTURE).unwrap();
+    let dir = legacy_store(FIXTURE);
 
-    let s = Settings::load_from(&path).unwrap();
+    let s = Settings::load_from_root(dir.path()).unwrap();
 
     assert_eq!(s.appearance_mode, AppearanceMode::Dark);
     assert!(!s.restore_layout_on_launch);
@@ -78,14 +96,12 @@ fn loads_swift_shaped_document() {
 
 #[test]
 fn reserializes_with_swift_keys() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    std::fs::write(&path, FIXTURE).unwrap();
-    let s = Settings::load_from(&path).unwrap();
+    let dir = legacy_store(FIXTURE);
+    // Migrating writes each document, which is what the keys are read off.
+    Settings::load_from_root(dir.path()).unwrap();
 
-    let json = serde_json::to_value(&s).unwrap();
-    let obj = json.as_object().unwrap();
-
+    let preferences = read_json(dir.path().join(PREFERENCES_FILE));
+    let obj = preferences.as_object().unwrap();
     for key in ["appearanceMode",
                 "restoreLayoutOnLaunch",
                 "mcpServerPort",
@@ -99,18 +115,26 @@ fn reserializes_with_swift_keys() {
                 "voiceEnabled",
                 "voiceEngine",
                 "voicePushToTalkKey",
-                "voiceAutoInsert",
-                "savedAgents",
-                "savedWorkspaces",
-                "benchAgents",
-                "recentRepos"]
+                "voiceAutoInsert"]
     {
         assert!(obj.contains_key(key), "missing key {key}");
     }
-    assert!(!obj.contains_key("storePath"),
-            "store_path must not serialize");
+    assert!(!obj.contains_key("paths"),
+            "the store's paths must not serialize");
+    // The collections have their own documents; a key here would be a second,
+    // stale copy of each.
+    for key in ["savedAgents",
+                "savedWorkspaces",
+                "personas",
+                "benchAgents",
+                "recentRepos"]
+    {
+        assert!(!obj.contains_key(key),
+                "preferences document must not carry {key}");
+    }
 
-    let agent = obj["savedAgents"][0].as_object().unwrap();
+    let agents = read_json(dir.path().join(AGENTS_FILE));
+    let agent = agents[0].as_object().unwrap();
     for key in ["agentType",
                 "createdBy",
                 "isCompanion",
@@ -120,7 +144,13 @@ fn reserializes_with_swift_keys() {
         assert!(agent.contains_key(key), "saved agent missing key {key}");
     }
 
-    let persona = obj["personas"][0].as_object().unwrap();
+    let workspaces = read_json(dir.path().join(WORKSPACES_FILE));
+    assert!(workspaces[0].as_object()
+                         .unwrap()
+                         .contains_key("layoutMode"));
+
+    let personas = read_json(dir.path().join(PERSONAS_FILE));
+    let persona = personas[0].as_object().unwrap();
     assert!(persona.contains_key("type"));
     assert!(persona.contains_key("state"));
 }
@@ -130,22 +160,17 @@ fn reserializes_with_swift_keys() {
 /// on every launch.
 #[test]
 fn a_migrated_document_is_recorded_as_migrated() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    std::fs::write(&path,
-                   r#"{"uiFontName":"Helvetica Neue","uiFontSize":13,
-                       "titleFontName":"Palatino","titleFontSize":18}"#).unwrap();
+    let dir = legacy_store(r#"{"uiFontName":"Helvetica Neue","uiFontSize":13,
+                               "titleFontName":"Palatino","titleFontSize":18}"#);
 
-    let migrated = Settings::load_from(&path).unwrap();
+    let migrated = Settings::load_from_root(dir.path()).unwrap();
     assert_eq!(migrated.ui_font_name, "Palatino");
     assert_eq!(migrated.title_font_name, "Helvetica Neue");
-    migrated.persist().unwrap();
 
-    let written: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let written = read_json(dir.path().join(PREFERENCES_FILE));
     assert_eq!(written["settingsVersion"], serde_json::json!(1));
 
-    let reloaded = Settings::load_from(&path).unwrap();
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
     assert_eq!(reloaded.ui_font_name, migrated.ui_font_name);
     assert_eq!(reloaded.ui_font_size, migrated.ui_font_size);
     assert_eq!(reloaded.title_font_name, migrated.title_font_name);
@@ -158,13 +183,12 @@ fn a_migrated_document_is_recorded_as_migrated() {
 #[test]
 fn a_written_sidebar_width_survives_a_reload() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("settings.json");
 
-    let mut settings = Settings::with_store_path(&path);
+    let mut settings = Settings::with_store_root(dir.path());
     settings.sidebar_width = 180.0;
-    settings.persist().unwrap();
+    settings.persist_preferences().unwrap();
 
-    let reloaded = Settings::load_from(&path).unwrap();
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
     assert_eq!(reloaded.sidebar_width, 180.0);
 }
 
@@ -174,38 +198,79 @@ fn a_written_sidebar_width_survives_a_reload() {
 /// silently resets.
 #[test]
 fn the_vocabulary_wire_format_is_unchanged() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("settings.json");
-    std::fs::write(&path,
-                   r#"{"appearanceMode":"dark","aiProvider":"google","autopilotAction":"continue"}"#).unwrap();
+    let dir = legacy_store(r#"{"appearanceMode":"dark","aiProvider":"google","autopilotAction":"continue"}"#);
 
-    let loaded = Settings::load_from(&path).unwrap();
+    let loaded = Settings::load_from_root(dir.path()).unwrap();
     assert_eq!(loaded.appearance_mode, AppearanceMode::Dark);
     assert_eq!(loaded.ai_provider, AiProvider::Google);
     assert_eq!(loaded.autopilot_action, AutopilotAction::Continue);
 
-    loaded.persist().unwrap();
-    let written: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let written = read_json(dir.path().join(PREFERENCES_FILE));
     assert_eq!(written["appearanceMode"], "dark");
     assert_eq!(written["aiProvider"], "google");
     assert_eq!(written["autopilotAction"], "continue");
 }
 
-/// A corrupt value degrades to the default rather than failing the document -
-/// which holds every agent, workspace and persona.
+/// A corrupt value degrades to the default rather than failing the document.
 #[test]
 fn a_corrupt_vocabulary_value_does_not_take_the_document_down() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("settings.json");
     // `mcpServerPort` rather than a font field: an unmarked document also goes
     // through the font-role migration, which moves font values around and
     // would make this test about the wrong thing.
-    std::fs::write(&path, r#"{"appearanceMode":"aut0","mcpServerPort":9111}"#).unwrap();
+    let dir = legacy_store(r#"{"appearanceMode":"aut0","mcpServerPort":9111}"#);
 
-    let loaded = Settings::load_from(&path).unwrap();
+    let loaded = Settings::load_from_root(dir.path()).unwrap();
 
     assert_eq!(loaded.appearance_mode, AppearanceMode::default());
     assert_eq!(loaded.mcp_server_port, 9111,
                "the rest of the document survived");
+}
+
+/// `agent-lifecycle` - "Legacy record without registry fields". The
+/// fixture is a real Swift-era document: it predates the registry entirely,
+/// so every agent and bench entry in it must load undescribed, untagged and
+/// mid-priced rather than failing or being hidden.
+#[test]
+fn a_document_written_before_the_registry_loads_with_registry_defaults() {
+    // Through the store, not `serde_json::from_str`: the collections live in
+    // their own documents now, and a bare decode of the legacy blob would
+    // leave them empty and assert nothing.
+    let dir = legacy_store(FIXTURE);
+    let settings = Settings::load_from_root(dir.path()).expect("fixture still loads");
+
+    assert!(!settings.saved_agents.is_empty(),
+            "fixture must exercise this");
+    for agent in &settings.saved_agents {
+        assert_eq!(agent.description, "");
+        assert!(agent.capabilities.is_empty());
+        assert_eq!(agent.cost_tier, CostTier::Medium);
+    }
+    for bench in &settings.bench_agents {
+        assert_eq!(bench.description, "");
+        assert!(bench.capabilities.is_empty());
+        assert_eq!(bench.cost_tier, CostTier::Medium);
+    }
+}
+
+/// Nothing about how an agent launches changes when it gains a tag, so the
+/// three fields must survive a write/read cycle untouched.
+#[test]
+fn registry_metadata_survives_a_settings_round_trip() {
+    let dir = legacy_store(FIXTURE);
+    let mut settings = Settings::load_from_root(dir.path()).expect("fixture loads");
+    settings.saved_agents[0].description = "Runs the test suite".to_string();
+    settings.saved_agents[0].capabilities = [" Testing ", "rust"].iter().collect();
+    settings.saved_agents[0].cost_tier = CostTier::Low;
+
+    // The round trip is now write-then-read through the store: the agents
+    // document is where these three fields have to survive.
+    settings.persist().unwrap();
+    let back = Settings::load_from_root(dir.path()).unwrap();
+
+    let agent = &back.saved_agents[0];
+    assert_eq!(agent.description, "Runs the test suite");
+    assert!(agent.capabilities.contains("testing"),
+            "normalized on the way in");
+    assert!(agent.capabilities.contains("rust"));
+    assert_eq!(agent.cost_tier, CostTier::Low);
 }

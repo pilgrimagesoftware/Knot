@@ -139,5 +139,90 @@ settings_vocabulary! {
     }
 }
 
+/// How expensive an agent is to run, as declared by whoever configured it.
+///
+/// Deliberately hand-written rather than a [`settings_vocabulary!`] enum:
+/// that macro pins the default to the first variant, and cost tier needs
+/// both a *middle* default and a declaration order that carries the
+/// ordering. Deriving `Ord` here is what lets the registry rank candidates
+/// cheapest-first without a lookup table of magic numbers.
+///
+/// This is a declared class, not a measurement. Nothing in the app meters
+/// tokens or spend; see `openspec/specs/agent-registry/spec.md`.
+#[derive(Debug,
+           Clone,
+           Copy,
+           PartialEq,
+           Eq,
+           PartialOrd,
+           Ord,
+           Hash,
+           Default,
+           Serialize,
+           Deserialize)]
+#[serde(from = "String", into = "String")]
+pub enum CostTier {
+    Low,
+    #[default]
+    Medium,
+    High,
+}
+
+impl CostTier {
+    /// Every variant, cheapest first - the order the registry ranks in and
+    /// the order a picker offers them.
+    pub const ALL: &'static [Self] = &[Self::Low, Self::Medium, Self::High];
+
+    /// The string this variant is stored and transmitted as.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+
+    /// Parses a stored value, falling back to the default and reporting what
+    /// it could not read. Same contract as the macro-generated vocabularies:
+    /// see the module docs on why one bad field must not fail the document.
+    pub fn from_stored(value: &str) -> (Self, Option<UnknownVariant>) {
+        match value.parse() {
+            Ok(parsed) => (parsed, None),
+            Err(unknown) => (Self::default(), Some(unknown)),
+        }
+    }
+}
+
+impl fmt::Display for CostTier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for CostTier {
+    type Err = UnknownVariant;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            other => Err(UnknownVariant(other.to_string())),
+        }
+    }
+}
+
+impl From<String> for CostTier {
+    fn from(value: String) -> Self {
+        Self::from_stored(&value).0
+    }
+}
+
+impl From<CostTier> for String {
+    fn from(value: CostTier) -> Self {
+        value.as_str().to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests;

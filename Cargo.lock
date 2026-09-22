@@ -3772,6 +3772,7 @@ dependencies = [
  "knot-mcp",
  "knot-mcp-tools",
  "knot-messaging",
+ "knot-tasks",
  "knot-terminal",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
@@ -3902,12 +3903,14 @@ version = "1.12.0"
 dependencies = [
  "async-trait",
  "knot-activity",
+ "knot-agent-launch",
  "knot-agents",
  "knot-core",
  "knot-discovery",
  "knot-git",
  "knot-mcp",
  "knot-messaging",
+ "knot-tasks",
  "parking_lot",
  "serde",
  "serde_json",
@@ -3925,6 +3928,17 @@ dependencies = [
  "knot-agents",
  "parking_lot",
  "serde",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "knot-tasks"
+version = "1.12.0"
+dependencies = [
+ "knot-core",
+ "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "uuid",
 ]

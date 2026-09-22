@@ -19,6 +19,7 @@ knot-discovery = { path = "../knot-discovery" }
 knot-messaging = { path = "../knot-messaging" }
 knot-mcp = { path = "../knot-mcp" }
 knot-mcp-tools = { path = "../knot-mcp-tools" }
+knot-tasks = { path = "../knot-tasks" }
 knot-terminal = { path = "../knot-terminal" }
 alacritty_terminal = "0.26.0"
 knot-history = { path = "../knot-history" }

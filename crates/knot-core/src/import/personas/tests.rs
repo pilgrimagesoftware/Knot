@@ -11,7 +11,7 @@ use crate::import::subagents::SubagentDefinition;
 use crate::settings::{Persona, PersonaState, PersonaType, Settings};
 
 fn store(dir: &TempDir) -> Settings {
-    Settings::with_store_path(dir.path().join("settings.json"))
+    Settings::with_store_root(dir.path())
 }
 
 fn definition(name: &str, instructions: &str) -> SubagentDefinition {
@@ -158,12 +158,11 @@ fn an_import_that_adds_nothing_is_still_a_success() {
 #[test]
 fn imported_personas_are_persisted() {
     let dir = TempDir::new().expect("temp dir");
-    let path = dir.path().join("settings.json");
-    let mut settings = Settings::with_store_path(&path);
+    let mut settings = Settings::with_store_root(dir.path());
 
     import_definitions(&mut settings, &[definition("one", "text")]).expect("import succeeds");
 
-    let reloaded = Settings::load_from(&path).expect("reload");
+    let reloaded = Settings::load_from_root(dir.path()).expect("reload");
     assert_eq!(reloaded.personas.len(), 1);
     assert_eq!(reloaded.personas[0].name, "one");
 }

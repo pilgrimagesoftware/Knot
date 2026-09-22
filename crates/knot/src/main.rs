@@ -25,6 +25,7 @@ mod panel_commands;
 mod panel_session;
 mod panel_state;
 mod panel_view;
+mod plan_view;
 mod quit_guard;
 mod settings_window;
 mod terminal_view;

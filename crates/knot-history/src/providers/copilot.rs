@@ -4,16 +4,32 @@
 use std::fs;
 use std::path::PathBuf;
 
-use serde_json::Value;
+use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 use crate::consts::{COPILOT_SESSION_STATE_DIR, MAX_SESSIONS};
 use crate::paths::home_dir;
 use crate::provider::{HistoryProvider, SessionSummary};
-use crate::providers::{first_title, jsonl_entries, resolve_title};
+use crate::providers::{Maybe, first_title, jsonl_entries, maybe_text, resolve_title};
 
 pub struct CopilotProvider;
+
+/// One line of `events.jsonl`. Copilot keeps each event's payload under
+/// `data`, whose shape follows the event kind.
+#[derive(Deserialize)]
+struct Event {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(default)]
+    data:       Maybe<EventData>,
+}
+
+#[derive(Deserialize)]
+struct EventData {
+    #[serde(default)]
+    content: Maybe<String>,
+}
 
 struct WorkspaceInfo {
     cwd:        String,
@@ -59,13 +75,11 @@ fn parse_workspace_yaml(content: &str) -> Option<WorkspaceInfo> {
 /// Parse `events.jsonl` for the first `user.message` event's content.
 fn title_from_events(path: &std::path::Path) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
-    first_title(jsonl_entries(&content), |entry| {
-        if entry.get("type").and_then(Value::as_str) != Some("user.message") {
+    first_title(jsonl_entries::<Event>(&content), |event| {
+        if event.event_type != "user.message" {
             return None;
         }
-        entry.get("data")
-             .and_then(|data| data.get("content"))
-             .and_then(Value::as_str)
+        maybe_text(&event.data.known()?.content)
     })
 }
 
