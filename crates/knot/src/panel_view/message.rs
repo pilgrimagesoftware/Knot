@@ -24,12 +24,12 @@ use gpui_kit::px;
 use gpui_kit::relative;
 use gpui_kit::rgb;
 
-use crate::panel_view::ERROR_COLOR;
-use crate::panel_view::PanelCallbacks;
-use crate::panel_view::PanelMessage;
-use crate::panel_view::PanelState;
-use crate::panel_view::PanelStyle;
-use crate::panel_view::render_tool_call_card;
+use crate::panel_state::PanelMessage;
+use crate::panel_state::PanelState;
+use crate::panel_view::callbacks::PanelCallbacks;
+use crate::panel_view::style::ERROR_COLOR;
+use crate::panel_view::style::PanelStyle;
+use crate::panel_view::tool_call::render_tool_call_card;
 
 /// One message's render inputs, grouped so `render_message` keeps a short
 /// parameter list as the panel gains styling.

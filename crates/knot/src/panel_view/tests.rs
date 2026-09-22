@@ -5,7 +5,12 @@ use gpui_kit::assets::IconName;
 use gpui_kit::px;
 use knot_acp::PermissionRequest;
 
+use super::style::*;
+use super::summary_row::*;
+use super::tool_call::*;
 use super::*;
+use crate::panel_state::PanelMessage;
+use crate::panel_state::PanelState;
 
 #[test]
 fn every_known_kind_maps_to_a_distinct_icon_and_unknown_kinds_fall_back() {
