@@ -6,6 +6,7 @@
 
 rust_i18n::i18n!("locales", fallback = "en");
 
+pub mod agent_type;
 pub mod consts;
 pub mod error;
 pub mod l10n;
