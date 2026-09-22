@@ -22,8 +22,8 @@ options strings, terminal font name and size, autopilot-enabled, AI provider,
 AI API key, autopilot action, autopilot custom prompt, voice-enabled, voice
 engine, push-to-talk key code, voice auto-insert, and similar) and serialized
 collections (saved agents, saved workspaces, personas, bench agents, recent
-repos), including the compact tool-call display preference. Writing a value
-SHALL persist it immediately.
+repos, recorded pull requests), including the compact tool-call display
+preference. Writing a value SHALL persist it immediately.
 
 One surface does not mean one document: the surface SHALL be backed by the
 set of documents defined in "Preferences and durable data are stored
@@ -348,13 +348,17 @@ edits them:
   stored as a single preferences document in the platform's user-preferences
   directory (on macOS, `~/Library/Preferences` under the application's
   directory).
-- **Durable data** - the collections of objects the user created: saved
-  agents, saved workspaces, personas, bench templates and recent
-  repositories. These SHALL be stored in the platform's application-data
-  directory (on macOS, `~/Library/Application Support` under the
-  application's directory), as one document per collection: saved agents,
-  workspaces, personas, bench templates and recent repositories each in their
-  own document.
+- **Durable data** - the collections of objects the user created or that
+  Knot recorded on their behalf: saved agents, saved workspaces, personas,
+  bench templates, recent repositories and recorded pull requests. These SHALL
+  be stored in the platform's application-data directory (on macOS,
+  `~/Library/Application Support` under the application's directory), as one
+  document per collection: saved agents, workspaces, personas, bench templates,
+  recent repositories and recorded pull requests each in their own document.
+
+  Recorded pull requests are durable data rather than a preference even though
+  the user did not type them: they are a collection of objects with identity
+  that grows without bound, which is what separates the two kinds here.
 
 The two directories SHALL be derived from the same organization and
 application identity the store already uses, so the preferences document and
@@ -371,15 +375,22 @@ documents SHALL still hold; only their location coincides.
 
 #### Scenario: Each collection is its own document
 
-- **WHEN** a store holding agents, workspaces, personas, bench templates and
-  recent repositories is persisted
-- **THEN** the application-data directory holds one document per collection
+- **WHEN** a store holding agents, workspaces, personas, bench templates,
+  recent repositories and recorded pull requests is persisted
+- **THEN** the application-data directory holds one document per collection,
+  six in all
 
 #### Scenario: A fresh install writes only what it has
 
 - **WHEN** a store with no persisted documents has a single scalar set
 - **THEN** the preferences document is written and no collection document is
   required to exist for the store to load again
+
+#### Scenario: A store with no recorded pull requests
+
+- **WHEN** a store that predates the recorded-pull-request document is loaded
+- **THEN** it loads successfully with no recorded pull requests, and no
+  document for them is written until one is recorded
 
 ### Requirement: A write touches only the document it belongs to
 
