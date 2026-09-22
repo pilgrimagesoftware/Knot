@@ -3929,6 +3929,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "knot-tasks"
+version = "1.12.0"
+dependencies = [
+ "knot-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "knot-terminal"
 version = "1.12.0"
 dependencies = [

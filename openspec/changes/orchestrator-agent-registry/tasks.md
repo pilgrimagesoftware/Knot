@@ -45,28 +45,32 @@
 
 ## 3. The `knot-tasks` crate
 
-- [ ] 3.1 Create the `knot-tasks` crate in the workspace (no async runtime,
+- [x] 3.1 Create the `knot-tasks` crate in the workspace (no async runtime,
   no UI or MCP dependency) with `Task`, `TaskState`, `Assignee` and
   `TaskGraph`; verify `cargo build -p knot-tasks` succeeds and the crate's
-  only dependencies are `thiserror`, `uuid` and `serde`
-- [ ] 3.2 Implement commit-time validation - dangling dependency, self
+  only dependencies are `thiserror`, `uuid`, `serde` and `knot-core`.
+  `knot-core` was not in the original plan: it is taken for `Capabilities`
+  alone, because a second tag representation here would reintroduce the
+  normalization mismatch that type exists to prevent. It brings no runtime,
+  no UI and no MCP types, so the crate is still testable on its own
+- [x] 3.2 Implement commit-time validation - dangling dependency, self
   dependency, cycle, task limit - returning a typed error naming the
   offending task or edge; verify tests for each of the three rejection
   scenarios in `task-graph` plus one asserting a rejected commit leaves a
   previously committed graph untouched
-- [ ] 3.3 Implement the state machine: initial `ready`/`pending` assignment,
+- [x] 3.3 Implement the state machine: initial `ready`/`pending` assignment,
   the readiness rule, the `dispatched` transitions, and transitive
   `blocked` propagation on failure; verify tests for the last-dependency,
   failure-blocks-downstream and blocked-does-not-recover scenarios
-- [ ] 3.4 Implement the dependency gate as a query that returns either the
+- [x] 3.4 Implement the dependency gate as a query that returns either the
   assignee to dispatch to or the unmet dependency ids, without performing
   any delivery; verify a test that gating a task with one outstanding
   dependency returns that id
-- [ ] 3.5 Implement re-plan carry-over: tasks present in both graphs keep
+- [x] 3.5 Implement re-plan carry-over: tasks present in both graphs keep
   their state, tasks only in the old graph are dropped, and no dispatched
   task is cancelled or re-sent; verify tests for the dispatched-survives and
   done-not-re-run scenarios
-- [ ] 3.6 Add the task limit and any ranking constants to the crate's
+- [x] 3.6 Add the task limit and any ranking constants to the crate's
   `consts.rs`; verify `make size-check` passes and no new `.rs` file exceeds
   700 lines
 
