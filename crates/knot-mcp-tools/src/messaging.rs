@@ -2,14 +2,20 @@ use knot_agents::AgentStore;
 use knot_mcp::ToolCallResult;
 use knot_messaging::{DeliveryNotifier, MessageStore, broadcast, check, send};
 
+use crate::ActivationQueue;
 use crate::args::{optional_bool, require_str};
 use crate::lookup::{agent_not_found, find_in_workspace, workspace_members};
 use crate::responses::{
     BroadcastResponse, CheckMessagesResponse, MessageInfo, SendMessageResponse, success,
 };
 
+/// `activation` is where a recipient that was not activated is recorded for
+/// the app to start, per `mcp-messaging`'s "Direct send activates a
+/// deactivated recipient". `None` outside the app (tests, benches): the
+/// message still sends, nothing starts it.
 pub fn send_message(agents: &AgentStore, messages: &mut MessageStore,
-                    notifier: &dyn DeliveryNotifier, arguments: &serde_json::Value)
+                    notifier: &dyn DeliveryNotifier, activation: Option<&ActivationQueue>,
+                    arguments: &serde_json::Value)
                     -> ToolCallResult {
     let from = match require_str(arguments, "from") {
         Ok(v) => v,
@@ -36,11 +42,22 @@ pub fn send_message(agents: &AgentStore, messages: &mut MessageStore,
         return ToolCallResult::error("Failed to send message: Recipient not found");
     };
 
-    match send(messages, notifier, &sender, &members, recipient.id, content) {
-        Ok(_) => success(&SendMessageResponse {
+    let recipient_id = recipient.id;
+    let recipient_activated = recipient.activated;
+
+    match send(messages, notifier, &sender, &members, recipient_id, content) {
+        Ok(_) => {
+            // Only once the routing rules above have passed - a rejected
+            // send activates nobody. The store flag, not session presence,
+            // is what `agent-lifecycle` states the rule in terms of.
+            if !recipient_activated && let Some(queue) = activation {
+                queue.lock().push(recipient_id);
+            }
+            success(&SendMessageResponse {
             success: true,
             message: "Message sent successfully. Don't check for a response right away - you will be notified when the other agent responds.".to_string(),
-        }),
+        })
+        }
         Err(err) => ToolCallResult::error(err.to_string()),
     }
 }
@@ -118,6 +135,10 @@ mod tests {
         id
     }
 
+    fn activation_queue() -> ActivationQueue {
+        std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()))
+    }
+
     #[test]
     fn send_message_succeeds_between_registered_workspace_members() {
         let mut agents = AgentStore::new();
@@ -128,6 +149,7 @@ mod tests {
         let result = send_message(&agents,
                                   &mut messages,
                                   &NoopNotifier,
+                                  None,
                                   &json!({"from": from.to_string(), "to": to.to_string(), "content": "hi"}));
 
         assert_eq!(result.is_error, None);
@@ -148,6 +170,7 @@ mod tests {
         let result = send_message(&agents,
                                   &mut messages,
                                   &NoopNotifier,
+                                  None,
                                   &json!({"from": from.to_string(), "to": to.to_string(), "content": "hi"}));
 
         assert_eq!(result.is_error, Some(true));
@@ -164,6 +187,7 @@ mod tests {
         send_message(&agents,
                      &mut messages,
                      &NoopNotifier,
+                     None,
                      &json!({"from": from.to_string(), "to": to.to_string(), "content": "hi"}));
 
         let result = check_messages(&agents, &mut messages, &json!({"agentId": to.to_string()}));
@@ -181,6 +205,7 @@ mod tests {
         send_message(&agents,
                      &mut messages,
                      &NoopNotifier,
+                     None,
                      &json!({"from": from.to_string(), "to": to.to_string(), "content": "hi"}));
 
         check_messages(&agents,
@@ -188,6 +213,109 @@ mod tests {
                        &json!({"agentId": to.to_string(), "markAsRead": false}));
 
         assert!(messages.has_unread(to));
+    }
+
+    #[test]
+    fn direct_send_queues_a_deactivated_recipient_for_activation() {
+        let mut agents = AgentStore::new();
+        let from = registered(&mut agents, "/tmp/a");
+        let to = registered(&mut agents, "/tmp/b");
+        // `create` leaves an agent deactivated until something starts it,
+        // which is the state this queues on.
+        assert!(!agents.agent(to).unwrap().activated);
+        let mut messages = MessageStore::new();
+        let activation = activation_queue();
+
+        let result = send_message(&agents,
+                                  &mut messages,
+                                  &NoopNotifier,
+                                  Some(&activation),
+                                  &json!({"from": from.to_string(), "to": to.to_string(), "content": "hi"}));
+
+        assert_eq!(result.is_error, None);
+        assert_eq!(&*activation.lock(), &[to]);
+    }
+
+    #[test]
+    fn direct_send_to_an_activated_recipient_queues_nothing() {
+        let mut agents = AgentStore::new();
+        let from = registered(&mut agents, "/tmp/a");
+        let to = registered(&mut agents, "/tmp/b");
+        agents.set_activated(to, true);
+        let mut messages = MessageStore::new();
+        let activation = activation_queue();
+
+        let result = send_message(&agents,
+                                  &mut messages,
+                                  &NoopNotifier,
+                                  Some(&activation),
+                                  &json!({"from": from.to_string(), "to": to.to_string(), "content": "hi"}));
+
+        assert_eq!(result.is_error, None);
+        assert!(activation.lock().is_empty());
+    }
+
+    #[test]
+    fn a_send_rejected_by_a_routing_rule_queues_nothing() {
+        let mut agents = AgentStore::new();
+        let from = registered(&mut agents, "/tmp/a");
+        // Shell recipient: rejected by `send`'s shell-agent rule, after the
+        // recipient resolves - the case where a queue push would be easiest
+        // to misplace.
+        let shell = agents.create("/tmp/shell",
+                                  CreateOptions { agent_type: Some("shell".to_string()),
+                                                  insert_after: Some(from),
+                                                  ..Default::default() });
+        agents.set_registered(shell, true);
+        let mut messages = MessageStore::new();
+        let activation = activation_queue();
+
+        let result = send_message(&agents,
+                                  &mut messages,
+                                  &NoopNotifier,
+                                  Some(&activation),
+                                  &json!({"from": from.to_string(), "to": shell.to_string(), "content": "hi"}));
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(activation.lock().is_empty());
+    }
+
+    #[test]
+    fn a_send_to_an_unresolvable_recipient_queues_nothing() {
+        let mut agents = AgentStore::new();
+        let from = registered(&mut agents, "/tmp/a");
+        let mut messages = MessageStore::new();
+        let activation = activation_queue();
+
+        let result = send_message(&agents,
+                                  &mut messages,
+                                  &NoopNotifier,
+                                  Some(&activation),
+                                  &json!({"from": from.to_string(), "to": uuid::Uuid::new_v4().to_string(), "content": "hi"}));
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(activation.lock().is_empty());
+    }
+
+    #[test]
+    fn broadcast_never_queues_a_deactivated_recipient() {
+        let mut agents = AgentStore::new();
+        let sender = registered(&mut agents, "/tmp/a");
+        let deactivated = registered(&mut agents, "/tmp/b");
+        assert!(!agents.agent(deactivated).unwrap().activated);
+        let mut messages = MessageStore::new();
+        let activation = activation_queue();
+
+        let result = broadcast_message(&agents,
+                                       &mut messages,
+                                       &NoopNotifier,
+                                       &json!({"from": sender.to_string(), "content": "hi all"}));
+
+        assert_eq!(result.is_error, None);
+        assert!(messages.has_unread(deactivated));
+        // `broadcast_message` takes no queue at all - the strongest form of
+        // "a broadcast activates nobody" this layer can assert.
+        assert!(activation.lock().is_empty());
     }
 
     #[test]
