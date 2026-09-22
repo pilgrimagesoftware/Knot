@@ -1550,7 +1550,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1776,7 +1776,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3757,7 +3757,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "knot"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "alacritty_terminal",
  "gpui-kit",
@@ -3790,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "knot-acp"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "parking_lot",
  "serde",
@@ -3802,7 +3802,7 @@ dependencies = [
 
 [[package]]
 name = "knot-activity"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "knot-agents",
  "knot-core",
@@ -3813,7 +3813,7 @@ dependencies = [
 
 [[package]]
 name = "knot-agent-launch"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "knot-acp",
  "knot-core",
@@ -3823,7 +3823,7 @@ dependencies = [
 
 [[package]]
 name = "knot-agents"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "knot-core",
  "serde",
@@ -3834,9 +3834,10 @@ dependencies = [
 
 [[package]]
 name = "knot-core"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "directories",
+ "plist",
  "rust-i18n",
  "serde",
  "serde_json",
@@ -3847,7 +3848,7 @@ dependencies = [
 
 [[package]]
 name = "knot-discovery"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "notify 8.2.0",
  "parking_lot",
@@ -3858,7 +3859,7 @@ dependencies = [
 
 [[package]]
 name = "knot-git"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "insta",
  "tempfile",
@@ -3867,7 +3868,7 @@ dependencies = [
 
 [[package]]
 name = "knot-history"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "directories",
  "parking_lot",
@@ -3881,7 +3882,7 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -3898,7 +3899,7 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp-tools"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "async-trait",
  "knot-activity",
@@ -3922,7 +3923,7 @@ dependencies = [
 
 [[package]]
 name = "knot-messaging"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "knot-agents",
  "parking_lot",
@@ -3933,7 +3934,7 @@ dependencies = [
 
 [[package]]
 name = "knot-tasks"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "knot-core",
  "serde",
@@ -3944,7 +3945,7 @@ dependencies = [
 
 [[package]]
 name = "knot-terminal"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "alacritty_terminal",
  "knot-acp",
@@ -3962,7 +3963,7 @@ dependencies = [
 
 [[package]]
 name = "knot-watch"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "notify 8.2.0",
  "parking_lot",
@@ -4433,7 +4434,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4632,7 +4633,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5388,6 +5389,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "plist"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2896bade328c13f7042a297ea5ac5b0951f6cf989dea5f32c2fd98da398195cb"
+dependencies = [
+ "base64 0.23.1",
+ "indexmap",
+ "quick-xml 0.42.0",
+ "serde",
+ "time",
+]
+
+[[package]]
 name = "png"
 version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5676,6 +5690,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5728,7 +5751,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6327,7 +6350,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6922,7 +6945,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7290,7 +7313,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7782,7 +7805,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8277,7 +8300,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0"
 dependencies = [
  "proc-macro2",
- "quick-xml",
+ "quick-xml 0.41.0",
  "quote",
 ]
 
@@ -8528,7 +8551,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9243,7 +9266,7 @@ checksum = "a6c2ad15e0e922856ee89afe862b8992334bbe7953adad56cd1199358cb30566"
 dependencies = [
  "bitflags 2.13.1",
  "libc",
- "quick-xml",
+ "quick-xml 0.41.0",
  "x11",
 ]
 

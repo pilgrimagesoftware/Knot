@@ -27,3 +27,9 @@ async-trait = "0.1.92"
 # to forget and no two-policy split between panicking and silently skipping.
 parking_lot = "0.12.5"
 rust-i18n = "4.2.2"
+# Reads Skwad's preferences for `data-import`. macOS-relevant only, but
+# declared unconditionally so the workspace goes on building on Linux for CI,
+# where the import simply finds no preferences. `defaults read` was the
+# alternative: a lossy text format that has to be re-parsed, macOS-only in a
+# way a library is not, and a subprocess whose output shape is a UI convention.
+plist = "1.10.1"
