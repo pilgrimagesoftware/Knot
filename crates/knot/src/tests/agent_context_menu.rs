@@ -13,7 +13,6 @@ use crate::agent_editor::persona_choices;
 use crate::app_state::AgentMenuEntry;
 use crate::app_state::AgentMenuFacts;
 use crate::app_state::agent_context_menu_entries;
-use crate::tests::menu_labels;
 use crate::tests::workspace;
 use crate::workspace_window::agent_menu_facts;
 
@@ -24,24 +23,24 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
                                  has_move_targets:     true,
                                  has_markdown_history: true,
                                  is_running:           true, };
-    assert_eq!(menu_labels(facts),
-               vec!["New Companion…",
-                    "New Shell Companion",
-                    "-",
-                    "Edit Agent…",
-                    "Fork Agent",
-                    "Duplicate Agent",
-                    "-",
-                    "Move to Workspace",
-                    "Save to Bench",
-                    "-",
-                    "Open In…",
-                    "Markdown Files",
-                    "-",
-                    "Register Agent",
-                    "Deactivate",
-                    "Restart Agent",
-                    "Remove Agent"]);
+    assert_eq!(agent_context_menu_entries(facts),
+               vec![AgentMenuEntry::NewCompanion,
+                    AgentMenuEntry::NewShellCompanion,
+                    AgentMenuEntry::Separator,
+                    AgentMenuEntry::EditAgent,
+                    AgentMenuEntry::ForkAgent,
+                    AgentMenuEntry::DuplicateAgent,
+                    AgentMenuEntry::Separator,
+                    AgentMenuEntry::MoveToWorkspace,
+                    AgentMenuEntry::SaveToBench,
+                    AgentMenuEntry::Separator,
+                    AgentMenuEntry::OpenIn,
+                    AgentMenuEntry::MarkdownFiles,
+                    AgentMenuEntry::Separator,
+                    AgentMenuEntry::RegisterAgent,
+                    AgentMenuEntry::Deactivate,
+                    AgentMenuEntry::RestartAgent,
+                    AgentMenuEntry::RemoveAgent]);
 }
 
 #[test]
@@ -51,8 +50,12 @@ fn agent_context_menu_omits_companion_actions_for_companions() {
                                  has_move_targets:     true,
                                  has_markdown_history: false,
                                  is_running:           false, };
-    assert_eq!(menu_labels(facts),
-               vec!["Edit Agent…", "-", "Open In…", "-", "Remove Agent"]);
+    assert_eq!(agent_context_menu_entries(facts),
+               vec![AgentMenuEntry::EditAgent,
+                    AgentMenuEntry::Separator,
+                    AgentMenuEntry::OpenIn,
+                    AgentMenuEntry::Separator,
+                    AgentMenuEntry::RemoveAgent]);
 }
 
 /// The store-reading half of the menu: which workspaces an agent can move
@@ -165,14 +168,16 @@ fn the_persona_picker_offers_active_personas_only_in_sorted_order() {
 /// sits immediately above Restart Agent when it is.
 #[test]
 fn agent_context_menu_offers_deactivate_only_for_a_running_agent() {
-    let stopped = menu_labels(AgentMenuFacts::default());
-    assert!(!stopped.contains(&"Deactivate"),
+    let stopped = agent_context_menu_entries(AgentMenuFacts::default());
+    assert!(!stopped.contains(&AgentMenuEntry::Deactivate),
             "a passive agent that never started has nothing to stop");
 
-    let running = menu_labels(AgentMenuFacts { is_running: true,
-                                               ..Default::default() });
-    let deactivate = running.iter().position(|label| *label == "Deactivate");
-    let restart = running.iter().position(|label| *label == "Restart Agent");
+    let running = agent_context_menu_entries(AgentMenuFacts { is_running: true,
+                                                              ..Default::default() });
+    let deactivate = running.iter()
+                            .position(|entry| *entry == AgentMenuEntry::Deactivate);
+    let restart = running.iter()
+                         .position(|entry| *entry == AgentMenuEntry::RestartAgent);
     assert_eq!(deactivate.zip(restart).map(|(d, r)| r == d + 1),
                Some(true),
                "Deactivate sits immediately above Restart Agent: {running:?}");
@@ -182,12 +187,12 @@ fn agent_context_menu_offers_deactivate_only_for_a_running_agent() {
 /// restarted independently of its owner.
 #[test]
 fn agent_context_menu_offers_deactivate_for_a_running_companion() {
-    let labels = menu_labels(AgentMenuFacts { is_companion: true,
-                                              is_shell: true,
-                                              is_running: true,
-                                              ..Default::default() });
-    assert!(labels.contains(&"Deactivate"));
-    assert!(!labels.contains(&"Restart Agent"));
+    let entries = agent_context_menu_entries(AgentMenuFacts { is_companion: true,
+                                                              is_shell: true,
+                                                              is_running: true,
+                                                              ..Default::default() });
+    assert!(entries.contains(&AgentMenuEntry::Deactivate));
+    assert!(!entries.contains(&AgentMenuEntry::RestartAgent));
 }
 
 /// `agent_menu_facts` reads liveness from the store, so the menu reflects
@@ -211,23 +216,28 @@ fn agent_menu_facts_report_whether_the_agent_is_running() {
 fn agent_context_menu_hides_register_for_a_shell_agent() {
     let facts = AgentMenuFacts { is_shell: true,
                                  ..Default::default() };
-    assert!(!menu_labels(facts).contains(&"Register Agent"));
-    assert!(menu_labels(AgentMenuFacts { is_shell: false,
-                                         ..Default::default() }).contains(&"Register Agent"));
+    assert!(!agent_context_menu_entries(facts).contains(&AgentMenuEntry::RegisterAgent));
+    assert!(agent_context_menu_entries(AgentMenuFacts { is_shell: false,
+                                                        ..Default::default() })
+        .contains(&AgentMenuEntry::RegisterAgent));
 }
 
 #[test]
 fn agent_context_menu_hides_move_to_workspace_without_a_target() {
-    assert!(!menu_labels(AgentMenuFacts::default()).contains(&"Move to Workspace"));
-    assert!(menu_labels(AgentMenuFacts { has_move_targets: true,
-                                         ..Default::default() }).contains(&"Move to Workspace"));
+    assert!(!agent_context_menu_entries(AgentMenuFacts::default())
+        .contains(&AgentMenuEntry::MoveToWorkspace));
+    assert!(agent_context_menu_entries(AgentMenuFacts { has_move_targets: true,
+                                                        ..Default::default() })
+        .contains(&AgentMenuEntry::MoveToWorkspace));
 }
 
 #[test]
 fn agent_context_menu_hides_markdown_files_without_history() {
-    assert!(!menu_labels(AgentMenuFacts::default()).contains(&"Markdown Files"));
-    assert!(menu_labels(AgentMenuFacts { has_markdown_history: true,
-                                         ..Default::default() }).contains(&"Markdown Files"));
+    assert!(!agent_context_menu_entries(AgentMenuFacts::default())
+        .contains(&AgentMenuEntry::MarkdownFiles));
+    assert!(agent_context_menu_entries(AgentMenuFacts { has_markdown_history: true,
+                                                        ..Default::default() })
+        .contains(&AgentMenuEntry::MarkdownFiles));
 }
 
 /// Every hidden group must take its divider with it - the menu can never

@@ -7,7 +7,6 @@ use gpui_kit::AnyWindowHandle;
 use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
-use gpui_kit::component::input::InputState;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::resizable::ResizableState;
 use knot_terminal::PtyTransport;
@@ -241,9 +240,8 @@ pub(crate) struct WorkspaceWindow {
     window_handle:                    AnyWindowHandle,
     view_mode:                        WorkspaceViewMode,
     dashboard_sort:                   dashboard::DashboardSort,
-    new_agent_name_input:             Entity<InputState>,
-    new_agent_folder_input:           Entity<InputState>,
-    show_new_agent:                   bool,
+    /// The sidebar's one error line, for a failure the user caused and can
+    /// act on - currently only a sidebar width that could not be saved.
     error:                            Option<String>,
 }
 
@@ -256,10 +254,14 @@ impl Drop for WorkspaceWindow {
     /// orphaned adapter per panel agent - the same gap `remove_session`
     /// documents for a single agent, applied to the whole window.
     fn drop(&mut self) {
-        for session in self.sessions.values() {
+        for (id, session) in &self.sessions {
             {
                 let mut session = session.lock();
-                let _ = session.shutdown();
+                // As in `remove_session`: the drop below is the teardown,
+                // this is only the polite half of it.
+                if let Err(error) = session.shutdown() {
+                    eprintln!("failed to shut down agent {id}'s terminal: {error}");
+                }
             }
         }
         // Dropping the slot is what guarantees the teardown: it releases

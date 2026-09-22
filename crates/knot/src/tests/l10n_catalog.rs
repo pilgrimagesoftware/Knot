@@ -2,6 +2,11 @@
 //! keys - a missing entry renders the key, which is visible but easy to
 //! miss in review.
 
+use crate::app_state::AgentListBackgroundEntry;
+use crate::app_state::AgentMenuEntry;
+use crate::app_state::SidebarMenuFacts;
+use crate::app_state::sidebar_background_menu_entries;
+use crate::settings_window::SettingsTab;
 use crate::workspace_window;
 
 /// Every word the About window shows comes from the catalog, so a missing
@@ -193,5 +198,49 @@ fn dialog_labels_resolve() {
         let value = knot_core::l10n::t(key);
         assert_ne!(value, key, "{key} is missing from the catalog");
         assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+}
+
+/// Driven by `ALL` rather than a written-out key list, so a variant added
+/// without a catalog entry fails here instead of drawing its own key in the
+/// menu. Separators have no label and are skipped.
+#[test]
+fn every_menu_entry_label_resolves() {
+    for entry in AgentMenuEntry::ALL {
+        let Some(label) = entry.label()
+        else {
+            assert_eq!(entry, AgentMenuEntry::Separator);
+            continue;
+        };
+        assert!(!label.starts_with("menu.agent."),
+                "{entry:?} is missing from the catalog: {label}");
+    }
+}
+
+/// The sidebar's background menu, the same way. It has no `ALL`, so the
+/// entries come from a full menu - which this one always is, since it
+/// disables rather than omits.
+#[test]
+fn every_sidebar_menu_entry_label_resolves() {
+    for item in sidebar_background_menu_entries(SidebarMenuFacts::default()) {
+        let Some(label) = item.entry.label()
+        else {
+            assert_eq!(item.entry, AgentListBackgroundEntry::Separator);
+            continue;
+        };
+        assert!(!label.starts_with("menu.sidebar."),
+                "{:?} is missing from the catalog: {label}",
+                item.entry);
+    }
+}
+
+/// Every settings tab's title, so an added pane cannot show `settings.tabs.*`
+/// where its name belongs.
+#[test]
+fn every_settings_tab_label_resolves() {
+    for tab in SettingsTab::ALL {
+        let label = tab.label();
+        assert!(!label.starts_with("settings.tabs."),
+                "{tab:?} is missing from the catalog: {label}");
     }
 }
