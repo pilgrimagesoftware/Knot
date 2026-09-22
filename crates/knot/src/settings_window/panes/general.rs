@@ -47,9 +47,9 @@ impl SettingsWindow {
         v_flex()
             .gap_3()
             .child(
-                Self::group("Appearance")
+                Self::group(knot_core::l10n::t("settings.general.appearance"))
                     .child(Self::row(
-                        "Appearance",
+                        knot_core::l10n::t("settings.general.appearance"),
                         Button::new("appearance-picker")
                             .label(appearance_label)
                             .dropdown_caret(true)
@@ -78,13 +78,13 @@ impl SettingsWindow {
                     ))
                     .child(Self::hint(
                         cx,
-                        "Derives color scheme from terminal background color.",
+                        knot_core::l10n::t("settings.general.appearance_hint"),
                     )),
             )
             .child(
-                Self::group("Startup")
+                Self::group(knot_core::l10n::t("settings.general.startup"))
                     .child(Self::row(
-                        "Restore agents on launch",
+                        knot_core::l10n::t("settings.general.restore_agents"),
                         Switch::new("restore-layout-on-launch")
                             .checked(restore_layout_on_launch)
                             .on_click({
@@ -99,7 +99,7 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "Restore last conversation",
+                        knot_core::l10n::t("settings.general.restore_conversation"),
                         Switch::new("restore-conversation-on-launch")
                             .checked(restore_conversation_on_launch)
                             .disabled(!Self::restore_conversation_toggle_enabled(
@@ -117,7 +117,7 @@ impl SettingsWindow {
                             }),
                     ))
                     .child(Self::row(
-                        "Keep running in menu bar when closed",
+                        knot_core::l10n::t("settings.general.keep_in_menu_bar"),
                         Switch::new("keep-in-menu-bar")
                             .checked(keep_in_menu_bar)
                             .on_click({
@@ -133,8 +133,8 @@ impl SettingsWindow {
                     )),
             )
             .child(
-                Self::group("Notifications").child(Self::row(
-                    "Desktop notifications",
+                Self::group(knot_core::l10n::t("settings.general.notifications")).child(Self::row(
+                    knot_core::l10n::t("settings.general.desktop_notifications"),
                     Switch::new("desktop-notifications-enabled")
                         .checked(desktop_notifications_enabled)
                         .on_click({
@@ -150,9 +150,9 @@ impl SettingsWindow {
                 )),
             )
             .child(
-                Self::group("Agent Panel")
+                Self::group(knot_core::l10n::t("settings.general.agent_panel"))
                     .child(Self::row(
-                        "Shift+Enter to send",
+                        knot_core::l10n::t("settings.general.shift_enter_to_send"),
                         Switch::new("agent-panel-shift-enter-sends")
                             .checked(agent_panel_shift_enter_sends)
                             .on_click({
@@ -168,7 +168,7 @@ impl SettingsWindow {
                     ))
                     .child(Self::hint(
                         cx,
-                        "When off, Enter sends the message and Shift+Enter adds a newline.",
+                        knot_core::l10n::t("settings.general.shift_enter_hint"),
                     ))
                     // New copy goes through the catalogue, per
                     // `.claude/rules/rust-structure.md` - this pane's older

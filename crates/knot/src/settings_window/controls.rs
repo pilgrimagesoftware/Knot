@@ -33,9 +33,9 @@ impl SettingsWindow {
     /// deliberately larger than row content (`text_lg` vs. the default
     /// `text_base` used by row labels/controls) - a section header should
     /// never read smaller than what it's heading.
-    pub(crate) fn group(title: &'static str) -> GroupBox {
+    pub(crate) fn group(title: impl Into<gpui_kit::SharedString>) -> GroupBox {
         GroupBox::new().outline()
-                       .title(div().text_lg().font_semibold().child(title))
+                       .title(div().text_lg().font_semibold().child(title.into()))
     }
 
     /// A label + control row with the label right-aligned in a fixed-width

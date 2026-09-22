@@ -70,22 +70,22 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                               .unwrap_or_default();
                 let agent_options_input = cx.new(|cx| {
                                                 InputState::new(window, cx)
-                .placeholder("Extra CLI options")
+                .placeholder(knot_core::l10n::t("settings.input.extra_cli_options"))
                 .default_value(initial_options)
                                             });
                 let ai_api_key_input = cx.new(|cx| {
                                              InputState::new(window, cx)
-                .placeholder("API key")
+                .placeholder(knot_core::l10n::t("settings.input.api_key"))
                 .default_value(settings.ai_api_key.clone())
                                          });
                 let autopilot_custom_prompt_input = cx.new(|cx| {
                                                           InputState::new(window, cx)
-                .placeholder("Custom prompt")
+                .placeholder(knot_core::l10n::t("settings.input.custom_prompt"))
                 .default_value(settings.autopilot_custom_prompt.clone())
                                                       });
                 let mcp_port_input = cx.new(|cx| {
                                            InputState::new(window, cx)
-                .placeholder("Port")
+                .placeholder(knot_core::l10n::t("settings.input.port"))
                 .default_value(settings.mcp_server_port.to_string())
                                        });
                 let view = cx.new(|cx| {
