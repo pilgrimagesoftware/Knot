@@ -74,9 +74,16 @@
 ## 6. The view
 
 - [ ] 6.1 Add the Pull Requests launcher row to the sidebar in
-      `crates/knot/src/workspace_window/render/sidebar.rs`, with its count and
-      selected background; verify the count updates when a record is added with
-      the window open
+      `crates/knot/src/workspace_window/render/sidebar.rs`, with its state
+      breakdown and selected background; verify the count updates when a record
+      is added with the window open
+- [ ] 6.1a Derive the breakdown from the state cache - open (draft included),
+      merged, closed, and pending for records whose state is not known; verify
+      unit tests for a fully-known set, a fully-unknown set falling back to the
+      total, and a mixed set counting the rest as pending
+- [ ] 6.1b Verify the breakdown follows a state change on the next refresh, and
+      that it needs no `gh` process while the view is closed - the row falls
+      back to the total instead; add both tests
 - [ ] 6.2 Add the content pane listing the workspace's pull requests grouped by
       agent, newest first, following the markdown/mermaid takeover in
       `workspace_window/panel/pane.rs`; verify the pane replaces the content and
