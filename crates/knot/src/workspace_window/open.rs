@@ -22,7 +22,10 @@ use uuid::Uuid;
 use crate::app_state::agent_selection_for_workspace;
 use crate::app_support::observe_system_appearance;
 use crate::dashboard;
+use crate::window_options::reconciled_workspace_bounds;
 use crate::window_options::workspace_window_options;
+use crate::window_registry::WindowKey;
+use crate::window_registry::WindowRegistry;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::repaint::spawn_repaint_poll;
@@ -42,6 +45,21 @@ impl WorkspaceWindow {
                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                       settings: knot_core::Settings, workspace_id: Uuid,
                                       select_agent: Option<Uuid>, cx: &mut App) {
+        // One window per workspace: a second request raises the first rather
+        // than opening another, and shows the agent it named if it named one
+        // (`openspec/specs/window-lifecycle`). Every route that opens a
+        // workspace - the manager, a Command Center card or heading, the agent
+        // editor's post-create jump - arrives here, so the check belongs here
+        // rather than at each of them.
+        let key = WindowKey::Workspace(workspace_id);
+        if WindowRegistry::activate(key, cx) {
+            if let Some(requested) = select_agent
+               && let Some(view) = WindowRegistry::workspace_view(key, cx)
+            {
+                view.update(cx, |view, cx| view.reveal_agent(requested, cx));
+            }
+            return;
+        }
         let workspace_name = {
                                  let store = store.lock();
                                  store.workspaces()
@@ -56,7 +74,8 @@ impl WorkspaceWindow {
                  .find(|workspace| workspace.id == workspace_id)
                  .and_then(|workspace| workspace.window_bounds)
         };
-        let options = workspace_window_options(saved_bounds, cx);
+        let placed = reconciled_workspace_bounds(saved_bounds, cx);
+        let options = workspace_window_options(placed, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
                   // Every window tracks the OS appearance, so a light/dark flip
@@ -155,6 +174,10 @@ impl WorkspaceWindow {
                             }
                             window
                         });
+                  // Registered from inside the open closure because the
+                  // view is only in scope here: `cx.open_window` hands back a
+                  // handle to the `Root` wrapper, not to this.
+                  WindowRegistry::register(key, window.window_handle(), Some(view.downgrade()), cx);
                   spawn_repaint_poll(view.clone(),
                                      clipboard_writes,
                                      Arc::clone(&exited_sessions),
@@ -167,6 +190,16 @@ impl WorkspaceWindow {
                           let subscription =
                               cx.observe_window_bounds(window, move |view, window, _cx| {
                                     let bounds = window.window_bounds().get_bounds();
+                                    // Our own placement is not a move the user
+                                    // made. Writing it back would replace the
+                                    // remembered frame with the one we fell
+                                    // back to, so a window arranged on a
+                                    // display that is merely unplugged would
+                                    // lose its place the first time it was
+                                    // reopened without it.
+                                    if Some(bounds) == placed {
+                                        return;
+                                    }
                                     let saved =
                                         knot_core::SavedWindowBounds { x:      bounds.origin
                                                                                      .x

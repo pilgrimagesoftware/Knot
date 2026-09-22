@@ -91,3 +91,15 @@ pub(crate) fn workspace_default_color() -> Rgba {
 
 /// The avatar drawn for an agent that has none.
 pub(crate) const DEFAULT_AGENT_AVATAR: &str = "🤖";
+
+/// How much of a restored window's top edge has to land on a display for the
+/// user to be able to grab it: the workspace title bar's height, so the whole
+/// bar is reachable rather than a sliver of it.
+///
+/// A window restored onto a display that is no longer attached was placed
+/// unclamped, which is how one ended up where it could not be dragged back.
+pub(crate) const WINDOW_GRAB_STRIP_HEIGHT: f32 = 64.;
+
+/// How much of a restored window's width has to overlap a display, so it
+/// cannot be pushed to a few pixels at the screen edge and counted as visible.
+pub(crate) const WINDOW_MIN_VISIBLE_WIDTH: f32 = 160.;
