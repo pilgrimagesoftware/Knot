@@ -10,6 +10,7 @@
 //! interpret.
 
 use gpui_kit::base::{StyledExt, h_flex};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Icon};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
@@ -35,10 +36,18 @@ impl WorkspaceWindow {
         }
         let is_showing = self.view_mode == WorkspaceViewMode::PullRequests;
 
+        // The second line ellipsizes in a narrow sidebar, and the compact
+        // sidebar drops it altogether - so the whole of it goes in a tooltip,
+        // the one place the full breakdown is always readable.
+        let tooltip = format!("{} — {}",
+                              knot_core::l10n::t("pull_requests.title"),
+                              counts_label(counts));
+
         Some(div().id("workspace-pull-requests-row")
                   .cursor_pointer()
                   .rounded(cx.theme().radius)
                   .p_2()
+                  .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
                   .bg(if is_showing {
                       cx.theme().muted
                   }
@@ -97,25 +106,34 @@ fn title_and_counts(counts: PullRequestCounts, cx: &mut Context<WorkspaceWindow>
 /// that. Showing "0 open · 0 merged · 0 closed" for four records Knot has not
 /// asked about yet would state three things it does not know; "4" states the
 /// one thing it does.
+///
+/// A state nothing is in is left out entirely. "0 closed" is a fact nobody
+/// needs and a third of the row's width, and dropping it makes the counts
+/// that are there easier to read.
+///
+/// Assembled from per-count entries rather than one sentence, which the
+/// localization rule would normally forbid: this is a list of labelled
+/// numbers whose membership varies, not a sentence with a value in it, so
+/// each part stays independently translatable and the separator is
+/// punctuation.
 pub(crate) fn counts_label(counts: PullRequestCounts) -> String {
     if counts.nothing_known() {
         return knot_core::l10n::t_with("pull_requests.counts_total",
                                        &[("count", &counts.total().to_string())]);
     }
-    let open = counts.open.to_string();
-    let merged = counts.merged.to_string();
-    let closed = counts.closed.to_string();
-    if counts.pending == 0 {
-        return knot_core::l10n::t_with("pull_requests.counts",
-                                       &[("open", &open),
-                                         ("merged", &merged),
-                                         ("closed", &closed)]);
-    }
-    knot_core::l10n::t_with("pull_requests.counts_pending",
-                            &[("open", &open),
-                              ("merged", &merged),
-                              ("closed", &closed),
-                              ("pending", &counts.pending.to_string())])
+    [("pull_requests.count_open", counts.open),
+     ("pull_requests.count_merged", counts.merged),
+     ("pull_requests.count_closed", counts.closed),
+     ("pull_requests.count_pending", counts.pending)].into_iter()
+                                                     .filter(|(_, count)| *count > 0)
+                                                     .map(|(key, count)| {
+                                                         let count = count.to_string();
+                                                         knot_core::l10n::t_with(key,
+                                                                                 &[("count",
+                                                                                    &count)])
+                                                     })
+                                                     .collect::<Vec<_>>()
+                                                     .join(" · ")
 }
 
 #[cfg(test)]

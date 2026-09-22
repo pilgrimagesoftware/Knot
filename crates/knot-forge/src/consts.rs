@@ -14,7 +14,16 @@ pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// The fields `gh pr view` is asked for. Everything the view renders and
 /// nothing else: asking for less would mean a second call, asking for more
 /// would mean paying for data no row shows.
-pub const PULL_REQUEST_FIELDS: &str = "number,title,state,isDraft,statusCheckRollup";
+pub const PULL_REQUEST_FIELDS: &str = "number,title,state,isDraft,mergeable,statusCheckRollup";
+
+/// How long to wait before re-asking when GitHub has not yet computed a pull
+/// request's mergeability.
+///
+/// It computes lazily: the first request for an open pull request usually
+/// answers `UNKNOWN` and starts the work, and the next one has the answer.
+/// One short retry turns the common case into a single fetch, rather than
+/// leaving the row uncoloured until the next refresh a minute later.
+pub const MERGEABILITY_RETRY_DELAY: Duration = Duration::from_millis(1200);
 
 /// `gh auth status` says this when it found no credentials. `gh` reports the
 /// condition on stderr with a non-zero exit, so the text is what separates

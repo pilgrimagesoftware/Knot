@@ -1,6 +1,8 @@
 //! Unit tests for [`super`].
 
-use super::{CheckRollup, PullRequestStatus, parse_pull_request_state, pull_request_state_with};
+use super::{
+    CheckRollup, Mergeability, PullRequestStatus, parse_pull_request_state, pull_request_state_with,
+};
 use crate::error::ForgeError;
 use crate::runner::stub::StubRunner;
 
@@ -164,7 +166,8 @@ fn the_url_is_passed_to_gh_with_the_fields_the_view_needs() {
 
     assert_eq!(runner.calls(),
                vec!["pr view https://github.com/acme/widget/pull/42 --json \
-                     number,title,state,isDraft,statusCheckRollup"]);
+                     number,title,state,isDraft,mergeable,statusCheckRollup"],
+               "asked once: the captured payload already knows its mergeability");
 }
 
 #[test]
@@ -186,4 +189,95 @@ fn a_failed_lookup_surfaces_as_a_command_failure() {
 
     assert!(matches!(err, ForgeError::Command { .. }));
     assert!(!err.is_persistent(), "a failed lookup is worth retrying");
+}
+
+// --- Mergeability -----------------------------------------------------------
+
+/// The captured open pull request is mergeable, so its row earns a colour
+/// from one fetch.
+#[test]
+fn a_captured_mergeable_pull_request_reads_as_mergeable() {
+    let state = parse_pull_request_state(CAPTURED_OPEN).unwrap();
+
+    assert_eq!(state.mergeable, Mergeability::Mergeable);
+}
+
+/// The question does not arise once it is merged or closed, and GitHub
+/// answers `UNKNOWN` there anyway.
+#[test]
+fn a_pull_request_that_is_not_open_has_no_mergeability() {
+    assert_eq!(parse_pull_request_state(CAPTURED_MERGED).unwrap().mergeable,
+               Mergeability::Unknown);
+
+    let closed = r#"{"state":"CLOSED","mergeable":"MERGEABLE"}"#;
+    assert_eq!(parse_pull_request_state(closed).unwrap().mergeable,
+               Mergeability::Unknown,
+               "a closed pull request cannot be merged whatever the field says");
+}
+
+#[test]
+fn a_conflicting_pull_request_is_blocked() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"CONFLICTING"}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::Blocked);
+}
+
+/// GitHub refuses to merge a draft, which is the whole point of marking one.
+#[test]
+fn a_draft_is_blocked_even_when_github_calls_it_mergeable() {
+    let json = r#"{"state":"OPEN","isDraft":true,"mergeable":"MERGEABLE"}"#;
+    let state = parse_pull_request_state(json).unwrap();
+
+    assert_eq!(state.status, PullRequestStatus::Draft);
+    assert_eq!(state.mergeable, Mergeability::Blocked);
+}
+
+/// A pull request with red CI is not one anybody is about to merge, whatever
+/// the API says about conflicts.
+#[test]
+fn failing_checks_block_an_otherwise_mergeable_pull_request() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+                   "statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"}]}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::Blocked);
+}
+
+/// A row must not claim a colour it has not earned.
+#[test]
+fn an_uncomputed_mergeability_stays_unknown() {
+    for value in [r#""UNKNOWN""#, "null"] {
+        let json = format!(r#"{{"state":"OPEN","isDraft":false,"mergeable":{value}}}"#);
+
+        assert_eq!(parse_pull_request_state(&json).unwrap().mergeable,
+                   Mergeability::Unknown,
+                   "for {value}");
+    }
+}
+
+/// GitHub computes mergeability lazily, so the first ask for an open pull
+/// request often answers "unknown" and starts the work. One retry turns that
+/// into a single visible fetch.
+#[test]
+fn an_open_pull_request_with_unknown_mergeability_is_asked_twice() {
+    let runner = StubRunner::ok(r#"{"state":"OPEN","isDraft":false,"mergeable":"UNKNOWN"}"#);
+
+    let state = pull_request_state_with(&runner, "https://github.com/a/b/pull/1").unwrap();
+
+    assert_eq!(runner.calls().len(), 2);
+    assert_eq!(state.mergeable,
+               Mergeability::Unknown,
+               "still unknown, and still listed");
+}
+
+/// Nothing is left to compute once it is merged, so a second ask would be
+/// one `gh` run per row for no answer.
+#[test]
+fn a_merged_pull_request_is_never_asked_twice() {
+    let runner = StubRunner::ok(CAPTURED_MERGED);
+
+    pull_request_state_with(&runner, "https://github.com/a/b/pull/1").unwrap();
+
+    assert_eq!(runner.calls().len(), 1);
 }

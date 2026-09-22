@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use crate::consts::PULL_REQUEST_FIELDS;
+use crate::consts::{MERGEABILITY_RETRY_DELAY, PULL_REQUEST_FIELDS};
 use crate::error::{ForgeError, Result};
 use crate::runner::{ForgeRunner, GhRunner};
 
@@ -30,6 +30,26 @@ impl PullRequestStatus {
     }
 }
 
+/// Whether an open pull request can actually be merged.
+///
+/// Separate from [`PullRequestStatus`] because it is a different question:
+/// "is it still open" versus "could it land right now". Only meaningful
+/// while a pull request is open - a merged one has nothing left to block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mergeability {
+    /// Nothing in the way.
+    Mergeable,
+    /// Something is: a conflict, a failing check, a branch behind its base,
+    /// a review still required, or the pull request being a draft. The
+    /// distinctions matter on GitHub's own page; here they collapse, because
+    /// a row has one colour and they all mean "not yet".
+    Blocked,
+    /// GitHub has not computed it. It does so lazily, so this is the honest
+    /// answer for a moment after the first ask - and a row must not claim a
+    /// colour it has not earned.
+    Unknown,
+}
+
 /// The summary result of a pull request's checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckRollup {
@@ -46,10 +66,13 @@ pub enum CheckRollup {
 /// same as one whose checks have not finished.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestState {
-    pub number: Option<u64>,
-    pub title:  Option<String>,
-    pub status: PullRequestStatus,
-    pub checks: Option<CheckRollup>,
+    pub number:    Option<u64>,
+    pub title:     Option<String>,
+    pub status:    PullRequestStatus,
+    pub checks:    Option<CheckRollup>,
+    /// Whether it could land right now. [`Mergeability::Unknown`] for a
+    /// pull request that is not open, where the question does not arise.
+    pub mergeable: Mergeability,
 }
 
 /// Read the state of the pull request at `url` through the real `gh`.
@@ -58,7 +81,25 @@ pub fn pull_request_state(url: &str) -> Result<PullRequestState> {
 }
 
 /// [`pull_request_state`], against a supplied runner.
+///
+/// Asks twice at most. GitHub computes mergeability lazily, so the first ask
+/// for an open pull request usually answers "unknown" and starts the work;
+/// one short retry turns that into a single visible fetch rather than a row
+/// that stays uncoloured until the next refresh. A pull request that is not
+/// open is never re-asked: there is nothing left to compute.
 pub fn pull_request_state_with(runner: &impl ForgeRunner, url: &str) -> Result<PullRequestState> {
+    let state = fetch(runner, url)?;
+    if !state.status.is_open() || state.mergeable != Mergeability::Unknown {
+        return Ok(state);
+    }
+    std::thread::sleep(MERGEABILITY_RETRY_DELAY);
+    // A failed retry is not a failed fetch: the answer already in hand is
+    // good except for one field, and losing the row over it would be worse
+    // than an uncoloured border.
+    Ok(fetch(runner, url).unwrap_or(state))
+}
+
+fn fetch(runner: &impl ForgeRunner, url: &str) -> Result<PullRequestState> {
     let stdout = runner.run(&["pr", "view", url, "--json", PULL_REQUEST_FIELDS])?;
     parse_pull_request_state(&stdout)
 }
@@ -78,6 +119,8 @@ struct RawPullRequest {
     state:               Option<String>,
     #[serde(default)]
     is_draft:            Option<bool>,
+    #[serde(default)]
+    mergeable:           Option<String>,
     #[serde(default)]
     status_check_rollup: Option<Vec<RawCheck>>,
 }
@@ -104,10 +147,37 @@ pub fn parse_pull_request_state(json: &str) -> Result<PullRequestState> {
 
     let status = status_from(raw.state.as_deref(), raw.is_draft)?;
 
+    let checks = raw.status_check_rollup.as_deref().and_then(rollup_from);
+
     Ok(PullRequestState { number: raw.number,
                           title: raw.title,
                           status,
-                          checks: raw.status_check_rollup.as_deref().and_then(rollup_from) })
+                          checks,
+                          mergeable: mergeability_from(status, raw.mergeable.as_deref(), checks) })
+}
+
+/// Fold GitHub's answer, the check rollup and draft-ness into the one
+/// question a row asks: could this land right now.
+///
+/// Draft counts as blocked - GitHub refuses to merge a draft, which is the
+/// whole point of marking one. Failing checks count too: a pull request whose
+/// CI is red is not one anybody is about to merge, whatever the API says
+/// about conflicts.
+fn mergeability_from(status: PullRequestStatus, mergeable: Option<&str>,
+                     checks: Option<CheckRollup>)
+                     -> Mergeability {
+    if !status.is_open() {
+        return Mergeability::Unknown;
+    }
+    if status == PullRequestStatus::Draft || checks == Some(CheckRollup::Failing) {
+        return Mergeability::Blocked;
+    }
+    match mergeable.map(str::to_ascii_uppercase).as_deref() {
+        Some("MERGEABLE") => Mergeability::Mergeable,
+        Some("CONFLICTING") => Mergeability::Blocked,
+        // `UNKNOWN`, an absent field, or a value a newer `gh` invented.
+        _ => Mergeability::Unknown,
+    }
 }
 
 /// The one field that cannot be absent. A row that does not know whether its

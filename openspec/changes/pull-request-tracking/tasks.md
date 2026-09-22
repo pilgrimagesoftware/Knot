@@ -106,6 +106,6 @@
 
 - [x] 7.1 Run `make` and verify the full gate passes - fmt, size-check, lint,
       test, build
-- [ ] 7.2 Walk the scenarios in `specs/pull-request-tracking/spec.md` against
+- [x] 7.2 Walk the scenarios in `specs/pull-request-tracking/spec.md` against
       the running app, including the `gh`-absent and `gh`-unauthenticated paths,
       and verify each holds

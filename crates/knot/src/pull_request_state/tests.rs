@@ -4,7 +4,9 @@
 
 use std::time::Duration;
 
-use knot_forge::{CheckRollup, ForgeAvailability, PullRequestState, PullRequestStatus};
+use knot_forge::{
+    CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
+};
 
 use super::{ForgeStatus, MAX_AGE, PullRequestStateCache, counts_for};
 
@@ -15,7 +17,8 @@ fn state(status: PullRequestStatus) -> Option<PullRequestState> {
     Some(PullRequestState { number: Some(42),
                             title: Some("Do the thing".to_string()),
                             status,
-                            checks: Some(CheckRollup::Passing) })
+                            checks: Some(CheckRollup::Passing),
+                            mergeable: Mergeability::Mergeable })
 }
 
 fn urls(count: usize) -> Vec<String> {

@@ -1,15 +1,18 @@
 //! Unit tests for [`super`]: the text and the icon a row shows, which are
 //! the parts that can be wrong without anyone noticing on screen.
 
-use knot_forge::{CheckRollup, ForgeAvailability, PullRequestState, PullRequestStatus};
+use knot_forge::{
+    CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
+};
 
-use super::{detail_line, forge_notice_text, status_icon};
+use super::{REMOVE_ICON, detail_line, forge_notice_text, state_color, status_icon};
 
 fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestState {
     PullRequestState { number: Some(42),
                        title: Some("Do the thing".to_string()),
                        status,
-                       checks }
+                       checks,
+                       mergeable: Mergeability::Mergeable }
 }
 
 #[test]
@@ -99,6 +102,85 @@ fn each_state_has_its_own_icon() {
     assert_eq!(unique.len(),
                icons.len(),
                "two states share an icon: {icons:?}");
+}
+
+// --- The row's colour -------------------------------------------------------
+
+/// Green open and ready, amber open and blocked, purple merged, red closed -
+/// four states that must never collide, since the colour is the first thing
+/// a row is read by.
+#[test]
+fn each_state_wears_its_own_colour() {
+    let all = [state_color(Some(PullRequestStatus::Open), Mergeability::Mergeable),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Blocked),
+               state_color(Some(PullRequestStatus::Merged), Mergeability::Unknown),
+               state_color(Some(PullRequestStatus::Closed), Mergeability::Unknown)];
+
+    for colour in all {
+        assert!(colour.is_some(), "a fetched state earns a colour");
+    }
+    for (index, left) in all.iter().enumerate() {
+        for right in &all[index + 1..] {
+            assert_ne!(left, right, "two states share a colour");
+        }
+    }
+}
+
+/// A row must not claim a colour it has not earned: no state fetched, or an
+/// open pull request whose mergeability GitHub has not computed yet.
+#[test]
+fn an_unearned_colour_is_not_claimed() {
+    assert_eq!(state_color(None, Mergeability::Unknown), None);
+    assert_eq!(state_color(None, Mergeability::Mergeable), None);
+    assert_eq!(state_color(Some(PullRequestStatus::Open), Mergeability::Unknown),
+               None);
+}
+
+/// A draft cannot land, so it wears the blocked colour rather than a green
+/// that would read as ready.
+#[test]
+fn a_draft_wears_the_blocked_colour() {
+    assert_eq!(state_color(Some(PullRequestStatus::Draft), Mergeability::Blocked),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Blocked));
+}
+
+/// The tint is a state marker behind the row's text, not a fill competing
+/// with it.
+#[test]
+fn the_background_tint_is_lighter_than_the_border() {
+    const {
+        assert!(crate::consts::PULL_REQUEST_ROW_TINT > 0.0);
+        assert!(crate::consts::PULL_REQUEST_ROW_TINT < crate::consts::PULL_REQUEST_ROW_BORDER_TINT);
+        assert!(crate::consts::PULL_REQUEST_ROW_BORDER_TINT <= 1.0);
+    }
+}
+
+/// The far-right control has to read as a control rather than as another
+/// status: every other icon in the row is one, and an X among them reads as
+/// "failed". Beside a pull request it reads worse still - as "close this
+/// pull request", the one thing Knot will never do.
+#[test]
+fn the_remove_control_does_not_wear_a_status_icon() {
+    let statuses = [status_icon(Some(PullRequestStatus::Draft)),
+                    status_icon(Some(PullRequestStatus::Open)),
+                    status_icon(Some(PullRequestStatus::Merged)),
+                    status_icon(Some(PullRequestStatus::Closed)),
+                    status_icon(None)];
+
+    assert!(!statuses.contains(&REMOVE_ICON),
+            "the remove control wears a status icon");
+    assert!(REMOVE_ICON.contains("trash"),
+            "{REMOVE_ICON} does not read as delete");
+}
+
+/// The icon says "delete"; the tooltip says delete from *what*, which is the
+/// part that matters when the forge is one click away.
+#[test]
+fn the_remove_control_has_a_tooltip() {
+    let text = knot_core::l10n::t("pull_requests.remove");
+
+    assert_ne!(text, "pull_requests.remove");
+    assert!(!text.is_empty());
 }
 
 // --- The availability message ----------------------------------------------

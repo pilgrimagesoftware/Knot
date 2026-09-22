@@ -32,6 +32,7 @@ pub mod runner;
 pub use availability::{ForgeAvailability, probe, probe_with};
 pub use error::{ForgeError, Result};
 pub use pull_request::{
-    CheckRollup, PullRequestState, PullRequestStatus, pull_request_state, pull_request_state_with,
+    CheckRollup, Mergeability, PullRequestState, PullRequestStatus, pull_request_state,
+    pull_request_state_with,
 };
 pub use runner::{ForgeRunner, GhRunner};
