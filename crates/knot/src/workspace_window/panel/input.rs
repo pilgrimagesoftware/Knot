@@ -33,13 +33,18 @@ use uuid::Uuid;
 use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
-use crate::workspace_window::PERMISSION_SELECTOR_ID;
-use crate::workspace_window::QueuedPanelPrompt;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::context_usage_indicator;
 use crate::workspace_window::element_key;
 use crate::workspace_window::prompt_queue;
-use crate::workspace_window::queued_status_label;
+use crate::workspace_window::prompt_queue::QueuedPanelPrompt;
+use crate::workspace_window::prompt_queue::queued_status_label;
+
+/// The permission-mode selector's element id - the one selector with
+/// risk-tinted labels and a keyboard action of its own, so it needs naming
+/// rather than matching on a literal in three places.
+pub(in crate::workspace_window) const PERMISSION_SELECTOR_ID: &str =
+    "panel-permission-mode-selector";
 
 impl WorkspaceWindow {
     /// The input area: attached-context chips, the expandable text entry,

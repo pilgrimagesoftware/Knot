@@ -10,8 +10,8 @@ use gpui_kit::Context;
 use uuid::Uuid;
 
 use crate::app_support::Activation;
-use crate::workspace_window::PromptOrigin;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::prompt_queue::PromptOrigin;
 use crate::workspace_window::workspace_agent_ids;
 
 impl WorkspaceWindow {

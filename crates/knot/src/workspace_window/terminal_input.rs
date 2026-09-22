@@ -10,10 +10,17 @@ use gpui_kit::Window;
 use gpui_kit::px;
 use uuid::Uuid;
 
-use crate::workspace_window::TERMINAL_HEADER_HEIGHT;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::terminal_cell_size;
 use crate::workspace_window::terminal_font_family;
+
+/// Terminal pane geometry - shared by resize and mouse-position translation
+/// so they agree on the same grid.
+///
+/// The pane's left edge is the sidebar's right edge, which the user drags, so
+/// that half of the geometry is [`WorkspaceWindow::sidebar_width`] rather than
+/// a constant.
+const TERMINAL_HEADER_HEIGHT: f32 = 64.;
 
 impl WorkspaceWindow {
     /// Resizes `id`'s session grid/PTY to match the content pane's current

@@ -33,10 +33,10 @@ use crate::app_support::single_line;
 use crate::consts;
 use crate::settings_window::SettingsWindow;
 use crate::workspace_window::AgentMenuTargets;
-use crate::workspace_window::AgentRow;
 use crate::workspace_window::DetailLineSize;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::agent_row::AgentRow;
 use crate::workspace_window::agent_row_context_menu;
 use crate::workspace_window::detail_line;
 
