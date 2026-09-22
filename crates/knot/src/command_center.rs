@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui_kit::App;
@@ -93,15 +92,7 @@ impl Render for CommandCenterWindow {
                                                 .filter_map(|id| store.agent(*id))
                                                 .filter(|agent| !agent.is_companion)
                                                 .map(|agent| {
-                                                    let folder_name =
-                                          PathBuf::from(&agent.folder).file_name()
-                                                                      .map(|name| {
-                                                                          name.to_string_lossy()
-                                                                              .into_owned()
-                                                                      })
-                                                                      .unwrap_or_else(|| {
-                                                                          agent.folder.clone()
-                                                                      });
+                                                    let folder_name = agent.folder_name();
                                                     let git_stats =
                                           Repository::open(&agent.folder).diff_stats().ok();
                                                     dashboard::DashboardAgent { id: agent.id,
@@ -223,9 +214,11 @@ impl Render for CommandCenterWindow {
                 workspace,
                 true,
                 muted,
-                on_agent_tap,
-                on_workspace_nav,
-                on_add_agent,
+                dashboard::WorkspaceSectionCallbacks {
+                    on_agent_tap,
+                    on_workspace_nav,
+                    on_add_agent,
+                },
             )
         });
 
