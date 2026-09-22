@@ -164,8 +164,9 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 - **`mod.rs` declares; it does not implement.** Module declarations,
   re-exports and the module doc comment only - implementation goes in sibling
   files named for what they do. Being under the line limit is not evidence the
-  code is in the right place. The six `mod.rs` files that predate the rule are
-  a backlog (issue #300), not exceptions.
+  code is in the right place. The six that predated the rule were split under
+  issue #300; the ones still holding code elsewhere in the workspace are a
+  backlog, not exceptions.
 - **No crate-wide `allow`.** Allow on the item, with a comment saying why.
   `UNWIRED` marks ported-but-unconnected code, `SUPERSEDED` marks code a newer
   path replaced - both greppable.
