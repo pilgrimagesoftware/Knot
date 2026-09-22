@@ -33,7 +33,6 @@ use gpui_kit::px;
 
 use crate::app_support::app_titlebar_icon;
 use crate::command_center::CommandCenterWindow;
-use crate::settings_window::SettingsWindow;
 use crate::workspace_manager::WorkspaceDrag;
 use crate::workspace_manager::WorkspaceDragPreview;
 use crate::workspace_manager::WorkspaceManager;
@@ -290,7 +289,7 @@ impl Render for WorkspaceManager {
                             .justify_end()
                             .gap_1()
                             .child(
-                                SettingsWindow::icon_button(
+                                crate::controls::icon_button(
                                     "open-command-center",
                                     "icons/layout-dashboard.svg",
                                     knot_core::l10n::t("dashboard.command_center"),

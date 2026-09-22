@@ -79,16 +79,38 @@ strength of being opened.
 ### Requirement: Subagent definition provider registry
 
 The system SHALL resolve a subagent-definition provider by coding-agent tool.
-Providers exist for `claude`, `codex`, `opencode` and `gemini`. For any other
-tool, subagent import SHALL be reported as unsupported and SHALL be a no-op.
+The registry SHALL know the tools `claude`, `codex`, `opencode` and `gemini`.
+A reader exists for `claude`. For a tool the registry does not know, and for
+one it knows but has no reader for, subagent import SHALL be reported as
+unsupported and SHALL be a no-op.
 
 A provider SHALL read only; it SHALL NOT create, modify or delete anything in
 the tool it reads from.
+
+The import surface SHALL offer only the tools that have a reader. A tool
+whose format is not yet confirmed SHALL be absent from it rather than listed
+and empty: "nothing to import" is indistinguishable from "not built yet", and
+a user cannot tell which one they are looking at.
+
+Codex, OpenCode and Gemini have no reader because their subagent format has
+not been read from a real installation. None of the three holds subagent
+definitions on the machine this change was written on: Codex keeps
+`config.toml` and a `skills/` directory with no agents, OpenCode's
+`opencode.jsonc` holds only a `$schema` key, and `~/.gemini` holds config,
+history and plugins but no agents. A reader written from an inferred format
+fails silently, which is worse than no reader at all, so each remains
+unimplemented until its format can be confirmed against a populated install.
 
 #### Scenario: Unsupported tool
 
 - **WHEN** subagent definitions are requested for a tool with no provider
 - **THEN** support is reported false and no read is attempted
+
+#### Scenario: A tool with no confirmed format is not offered
+
+- **WHEN** the user opens the import surface
+- **THEN** only tools with a reader are listed, and Codex, OpenCode and
+  Gemini are absent rather than shown holding nothing
 
 ### Requirement: Claude subagent source and format
 

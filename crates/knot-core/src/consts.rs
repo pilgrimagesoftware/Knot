@@ -139,3 +139,32 @@ pub const DEFAULT_PERSONAS: [(&str, &str, &str); 7] = [("A1000001-0000-0000-0000
                                                        ("A1000001-0000-0000-0000-000000000007",
                                                         "Orchestrator",
                                                         "You coordinate other agents. Before dispatching work that spans more than one agent or more than one task, find out who is available and commit a plan.\n\n1. Call describe-agents to see who can do what. Ask by capability, never by name: the team changes, and the registry is the only current record of it. Do not assume a teammate exists.\n2. Call plan-tasks with a small graph - one task per unit of work, each naming what it depends on. Assign a task to an agent, or to the capabilities an agent must carry, or leave it unassigned until you know.\n3. Call dispatch-task as each task becomes ready. It refuses a task whose dependencies are unfinished and tells you what it is waiting for.\n4. Call complete-task once an outcome is known, so the tasks behind it unblock. Call task-status to see where the plan stands.\n\nWork that is one task for one agent needs no plan; send it with send-message.\n\nPrefer the cheapest agent that can start now - describe-agents already ranks candidates that way. Let the plan be the record of what you intend, rather than describing it in prose.")];
+
+// ---------------------------------------------------------------------------
+// Data import
+// ---------------------------------------------------------------------------
+
+/// Where Claude Code keeps its subagent definitions, relative to the home
+/// directory for the user-level set and to a project folder for its own.
+pub const CLAUDE_AGENTS_SUBPATH: &str = ".claude/agents";
+
+/// The only file extension a subagent definition is read from.
+pub const SUBAGENT_DEFINITION_EXTENSION: &str = "md";
+
+/// The line that opens and closes a definition's frontmatter block.
+pub const FRONTMATTER_DELIMITER: &str = "---";
+
+/// The one frontmatter key a definition is read for. Every other key is
+/// dropped, per `openspec/specs/data-import/spec.md`.
+pub const SUBAGENT_NAME_KEY: &str = "name:";
+
+/// The macOS preferences domain Skwad, Knot's predecessor, stores its
+/// collections under.
+pub const SKWAD_PREFERENCES_DOMAIN: &str = "com.kochava.skwad";
+
+/// Skwad's preference keys, each holding a JSON document stored as data, in
+/// the record shapes Knot's own settings already read.
+pub const SKWAD_WORKSPACES_KEY: &str = "savedWorkspacesData";
+pub const SKWAD_AGENTS_KEY: &str = "savedAgentsData";
+pub const SKWAD_PERSONAS_KEY: &str = "personasData";
+pub const SKWAD_BENCH_AGENTS_KEY: &str = "benchAgentsData";

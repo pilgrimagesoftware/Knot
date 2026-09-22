@@ -31,7 +31,7 @@ impl SettingsWindow {
     fn appearance_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
         let appearance_label = Self::appearance_label(self.settings.appearance_mode);
-        Self::group(knot_core::l10n::t("settings.general.appearance"))
+        crate::controls::group(knot_core::l10n::t("settings.general.appearance"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.appearance"),
                         // Driven off `AppearanceMode::ALL`, so a new variant
@@ -64,7 +64,7 @@ impl SettingsWindow {
         let restore_layout_on_launch = self.settings.restore_layout_on_launch;
         let restore_conversation_on_launch = self.settings.restore_conversation_on_launch;
         let keep_in_menu_bar = self.settings.keep_in_menu_bar;
-        Self::group(knot_core::l10n::t("settings.general.startup"))
+        crate::controls::group(knot_core::l10n::t("settings.general.startup"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.restore_agents"),
                         Switch::new("restore-layout-on-launch")
@@ -119,7 +119,7 @@ impl SettingsWindow {
     fn notifications_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
         let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
-        Self::group(knot_core::l10n::t("settings.general.notifications")).child(Self::row(
+        crate::controls::group(knot_core::l10n::t("settings.general.notifications")).child(Self::row(
                     knot_core::l10n::t("settings.general.desktop_notifications"),
                     Switch::new("desktop-notifications-enabled")
                         .checked(desktop_notifications_enabled)
@@ -145,7 +145,7 @@ impl SettingsWindow {
         // so a `t(..)` temporary in the call would not outlive it.
         let compact_tool_calls_label = knot_core::l10n::t("settings.compact_tool_calls");
         let compact_tool_calls_hint = knot_core::l10n::t("settings.compact_tool_calls_hint");
-        Self::group(knot_core::l10n::t("settings.general.agent_panel"))
+        crate::controls::group(knot_core::l10n::t("settings.general.agent_panel"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.shift_enter_to_send"),
                         Switch::new("agent-panel-shift-enter-sends")

@@ -306,6 +306,32 @@ broadcast:
   send: "Send"
   cancel: "Cancel"
 
+import:
+  title: "Import"
+  personas_title: "Personas from subagent definitions"
+  personas_none: "No subagent definitions found."
+  workspaces_title: "Workspaces from Skwad"
+  workspaces_none: "No Skwad installation found, so there is nothing to import."
+  import_selected: "Import"
+  import_count: "Import %{count}"
+  result_title: "Last import"
+  failed_title: "Import failed"
+  failed: "The import could not be completed: %{error}"
+  nothing_to_do: "Nothing to import."
+  refresh: "Look again"
+  result:
+    added: "Added %{count}: %{names}"
+    skipped: "Already present, left alone (%{count}): %{names}"
+    unreadable: "Could not read %{count}: %{names}"
+    unreadable_entry: "%{name} (%{reason})"
+  reason:
+    no_frontmatter: "no frontmatter block"
+    no_name: "no name in its frontmatter"
+    empty_body: "no instructions after its frontmatter"
+    unreadable: "could not be read from disk"
+    malformed: "could not be decoded"
+    missing_persona: "its persona was not in the source, so it arrived without one"
+
 plan:
   title: "Plan"
   empty: "No plan committed yet."
