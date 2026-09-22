@@ -34,6 +34,7 @@ use gpui_kit::rgb;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
@@ -81,7 +82,7 @@ impl WorkspaceWindow {
                             .whitespace_nowrap()
                             .text_ellipsis()
                             .font_semibold()
-                            .child(title),
+                            .child(single_line(&title)),
                     )
                     .child(
                         Button::new("markdown-pane-close")
@@ -92,7 +93,10 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _, _window, cx| {
                                 {
                                     let mut store = view.store.lock();
-                                    let _ = store.clear_markdown_panel(id);
+                                    if let Err(error) = store.clear_markdown_panel(id) {
+                                        eprintln!("failed to close the markdown panel: \
+                                                   {error}");
+                                    }
                                 }
                                 cx.notify();
                             })),

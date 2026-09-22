@@ -16,6 +16,7 @@ use gpui_kit::px;
 
 use crate::app_state::state_color;
 use crate::app_state::state_label;
+use crate::app_support::single_line;
 use crate::dashboard;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::creation::SelectedAgentHeader;
@@ -64,7 +65,7 @@ impl WorkspaceWindow {
                                         .font_family(title_font_name.clone())
                                         .text_size(title_font_size)
                                         .text_color(cx.theme().muted_foreground)
-                                        .child(header.folder.clone()))
+                                        .child(single_line(&header.folder)))
                             .when(!header.header_title.is_empty(), |row| {
                                 row.child(div().flex_shrink_0()
                                                .font_family(title_font_name.clone())
@@ -79,7 +80,7 @@ impl WorkspaceWindow {
                                                .font_family(title_font_name.clone())
                                                .text_size(title_font_size)
                                                .text_color(cx.theme().muted_foreground)
-                                               .child(header.header_title.clone()))
+                                               .child(single_line(&header.header_title)))
                             })
                             .into_any_element()
                 }

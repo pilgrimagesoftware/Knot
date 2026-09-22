@@ -29,6 +29,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::sidebar_compact::{CompactAgentRow, compact_agent_row_body};
 use crate::app_state::state_color;
+use crate::app_support::single_line;
 use crate::consts;
 use crate::settings_window::SettingsWindow;
 use crate::workspace_window::AgentMenuTargets;
@@ -160,7 +161,14 @@ impl WorkspaceWindow {
                                             .whitespace_nowrap()
                                             .text_ellipsis()
                                             .font_semibold()
-                                            .child(name),
+                                            // A name is stored text, and
+                                            // imported rosters carry
+                                            // whatever the other tool held;
+                                            // the flags above stop soft
+                                            // wrapping only, so a name with
+                                            // a line break in it would grow
+                                            // the row.
+                                            .child(single_line(&name)),
                                     )
                                     // A companion says so where a primary
                                     // agent names its type - it has no

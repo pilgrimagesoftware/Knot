@@ -214,7 +214,9 @@ pub(super) fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: 
 pub(super) fn show_agent_markdown_file(targets: &AgentMenuTargets, file: &Path, app: &mut App) {
     {
         let mut store = targets.store.lock();
-        let _ = store.set_markdown_panel(targets.id, file.to_path_buf(), false);
+        if let Err(error) = store.set_markdown_panel(targets.id, file.to_path_buf(), false) {
+            eprintln!("failed to show {}: {error}", file.display());
+        }
     }
     targets.window_entity.update(app, |_, cx| cx.notify());
 }
@@ -345,7 +347,11 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                      .on_ok(move |_, _, app| {
                                          {
                                              let mut store = targets.store.lock();
-                                             let _ = store.restart(targets.id);
+                                             if let Err(error) = store.restart(targets.id) {
+                                                 eprintln!("failed to restart agent {}: \
+                                                            {error}",
+                                                           targets.id);
+                                             }
                                          }
                                          targets.window_entity.update(app, |view, cx| {
                                                                   view.remove_session(targets.id);
