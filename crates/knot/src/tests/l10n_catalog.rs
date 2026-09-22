@@ -267,6 +267,28 @@ fn every_settings_tab_label_resolves() {
     }
 }
 
+/// The Import tab draws every word it shows from the catalog, empty states
+/// included - and an empty state is exactly the copy a missing key would
+/// replace with a key string, since it only appears when there is nothing
+/// else on screen to notice.
+#[test]
+fn import_pane_labels_resolve() {
+    for key in ["settings.import.personas_title",
+                "settings.import.personas_none",
+                "settings.import.workspaces_title",
+                "settings.import.workspaces_none",
+                "settings.import.import_selected",
+                "settings.import.import_count",
+                "settings.import.result_title",
+                "settings.import.nothing_to_do",
+                "settings.import.refresh"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
 /// The three failures a panel writes into the conversation itself. Each
 /// embeds the underlying error, so a body that lost its placeholder would
 /// report a failure without saying what failed.
