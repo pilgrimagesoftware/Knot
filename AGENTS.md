@@ -171,8 +171,13 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
   resolves, never the English copy.
 - Keep functions to <= 5-6 args; group related args in a struct.
 - Closed vocabularies are enums with `Display`/`FromStr`, not `String` matched
-  with a `_ => default` arm.
-- No I/O on the render path - GPUI re-renders per keystroke.
+  with a `_ => default` arm. An open one (`agent_type`) keeps its `String` and
+  gets one roster - `knot_core::agent_type` - that every crate reads.
+- Locks are `parking_lot::Mutex`: no poisoning, so no `.unwrap()` or
+  `if let Ok(..)` around a guard. `tokio::sync::Mutex` only where a guard is
+  held across an `.await` (`knot-acp`'s transport).
+- No I/O on the render path - GPUI re-renders per keystroke. Diff stats go
+  through `knot/src/diff_stats.rs`, which has caught this three times.
 - No statement-hugging brace style; format with nightly `rustfmt`.
 
 `.claude/rules/rust-structure.md` has the reasoning behind each of these, with
