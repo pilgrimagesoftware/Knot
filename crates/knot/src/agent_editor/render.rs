@@ -35,11 +35,12 @@ impl AgentEditor {
     /// A `LabeledContent`-style row: label at the leading edge, control(s)
     /// trailing - matching the Swift reference's `Form` rows, as opposed to
     /// the Settings window's fixed right-aligned label column.
-    fn dialog_row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
+    fn dialog_row(label: impl Into<gpui_kit::SharedString>, control: impl IntoElement)
+                  -> impl IntoElement {
         h_flex().justify_between()
                 .items_center()
                 .gap_3()
-                .child(div().child(label))
+                .child(div().child(label.into()))
                 .child(control)
     }
 
@@ -48,11 +49,12 @@ impl AgentEditor {
     /// leading-label/trailing-control rather than the settings window's
     /// fixed label column, so the hint spans the card instead of being
     /// indented past a column that isn't there.
-    fn dialog_hint(cx: &Context<Self>, text: &'static str) -> impl IntoElement {
+    fn dialog_hint(cx: &Context<Self>, text: impl Into<gpui_kit::SharedString>)
+                   -> impl IntoElement {
         div().text_sm()
              .whitespace_normal()
              .text_color(cx.theme().muted_foreground)
-             .child(text)
+             .child(text.into())
     }
 
     /// A card grouping related rows - the Swift reference's `Form` sections
@@ -71,9 +73,9 @@ impl Render for AgentEditor {
         let is_shell = self.agent_type == "shell";
 
         let identity_rows = vec![
-            Self::dialog_row("Name", Input::new(&self.name_input).w(px(200.))).into_any_element(),
+            Self::dialog_row(knot_core::l10n::t("agent_editor.name"), Input::new(&self.name_input).w(px(200.))).into_any_element(),
             Self::dialog_row(
-                "Avatar",
+                knot_core::l10n::t("agent_editor.avatar"),
                 h_flex()
                     .gap_2()
                     .child(Input::new(&self.avatar_input).w(px(48.)))
@@ -100,7 +102,7 @@ impl Render for AgentEditor {
         let mut agent_rows = if self.creating_a_companion() {
             vec![
                 Self::dialog_row(
-                    "Coding agent",
+                    knot_core::l10n::t("agent_editor.coding_agent"),
                     div()
                         .text_color(cx.theme().muted_foreground)
                         .child(SettingsWindow::agent_type_label("shell")),
@@ -111,7 +113,7 @@ impl Render for AgentEditor {
         else {
             vec![
                 Self::dialog_row(
-                    "Coding agent",
+                    knot_core::l10n::t("agent_editor.coding_agent"),
                     Button::new("agent-type-picker")
                         .label(SettingsWindow::agent_type_label(&self.agent_type))
                         .dropdown_caret(true)
@@ -149,7 +151,7 @@ impl Render for AgentEditor {
         if is_shell && self.edit_target.is_none() {
             agent_rows.push(
                 Self::dialog_row(
-                    "Command",
+                    knot_core::l10n::t("agent_editor.command"),
                     Input::new(&self.shell_command_input)
                         .w(px(200.))
                         .font_family(cx.theme().mono_font_family.clone()),
@@ -160,7 +162,7 @@ impl Render for AgentEditor {
         if !personas.is_empty() {
             agent_rows.push(
                 Self::dialog_row(
-                    "Persona",
+                    knot_core::l10n::t("agent_editor.persona"),
                     Button::new("agent-persona-picker")
                         .label(
                             self.persona_id
@@ -214,7 +216,7 @@ impl Render for AgentEditor {
         let is_active = activation_mode == knot_core::ActivationMode::Active;
         agent_rows.push(
             Self::dialog_row(
-                "Activation",
+                knot_core::l10n::t("agent_editor.activation"),
                 h_flex()
                     .gap_2()
                     .items_center()
@@ -242,13 +244,12 @@ impl Render for AgentEditor {
         );
         agent_rows.push(Self::dialog_hint(
             cx,
-            "Active starts this agent whenever its workspace opens. \
-                 Passive leaves it stopped until you select it.",
+            knot_core::l10n::t("agent_editor.activation_hint"),
         ).into_any_element());
 
         let folder_rows = vec![
             Self::dialog_row(
-                "Folder",
+                knot_core::l10n::t("agent_editor.folder"),
                 h_flex()
                     .gap_2()
                     .items_center()
@@ -313,7 +314,7 @@ impl Render for AgentEditor {
                     .gap_2()
                     .child(
                         Button::new("cancel-agent-editor")
-                            .label("Cancel")
+                            .label(knot_core::l10n::t("agent_editor.cancel"))
                             .on_click(|_, window, _| window.remove_window()),
                     )
                     .child(

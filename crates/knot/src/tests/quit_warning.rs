@@ -218,9 +218,16 @@ fn agents_going_idle_while_the_warning_is_open_changes_neither_action(cx: &mut T
 
 #[test]
 fn the_warning_copy_comes_from_the_catalog_and_names_the_count() {
-    assert_eq!(quit_guard::warning_title(), "Agents are still working");
-    assert_eq!(quit_guard::confirm_label(), "Quit Anyway");
-    assert_eq!(quit_guard::cancel_label(), "Keep Working");
+    // The keys resolve, rather than the copy being what it is today: these
+    // strings come from the catalog, so asserting the English here fails on a
+    // copy edit that broke nothing.
+    for (label, key) in [(quit_guard::warning_title(), "quit.working_title"),
+                         (quit_guard::confirm_label(), "quit.working_confirm"),
+                         (quit_guard::cancel_label(), "quit.working_cancel")]
+    {
+        assert_ne!(label, key, "{key} is missing from the catalog");
+        assert!(!label.is_empty(), "{key} resolves to an empty string");
+    }
 
     // One agent is named, not counted: "1 agent" reads as a tally where
     // there is nothing to tally.
