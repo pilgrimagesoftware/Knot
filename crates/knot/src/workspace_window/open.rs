@@ -195,6 +195,11 @@ impl WorkspaceWindow {
                                                  // is noticed.
                                                  view.deliver_inbox_nudges();
                                                  view.raise_awaiting_notifications(cx);
+                                                 // Before the repaint
+                                                 // checks below, so an agent
+                                                 // started here has its slot
+                                                 // in place when they run.
+                                                 let activated = view.activate_messaged_agents(cx);
                                                  let grid_dirty =
                                                      view.selected_agent
                                                          .and_then(|id| view.sessions.get(&id))
@@ -204,7 +209,11 @@ impl WorkspaceWindow {
                                                          });
                                                  let panel_dirty = view.panel_needs_repaint();
                                                  let spinner_dirty = view.spinner_repaint_due();
-                                                 if grid_dirty || panel_dirty || spinner_dirty {
+                                                 if grid_dirty
+                                                    || panel_dirty
+                                                    || spinner_dirty
+                                                    || activated
+                                                 {
                                                      cx.notify();
                                                  }
                                                  view.refresh_agents_menu(cx);
