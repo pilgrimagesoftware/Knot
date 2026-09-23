@@ -2,12 +2,12 @@
 
 ## 1. One definition of a folder's name
 
-- [ ] 1.1 Move `last_path_component` from `crates/knot-agents/src/store/helpers.rs`
+- [x] 1.1 Move `last_path_component` from `crates/knot-agents/src/store/helpers.rs`
       to `knot-core`, beside the other rules both crates read, and have
       `AgentStore::create` call it there; verify with
       `cargo test -p knot-agents create_from_folder_with_defaults`, which
       already pins that a folderful create is named after its folder
-- [ ] 1.2 Move the helper's tests with it rather than leaving them behind, and
+- [x] 1.2 Move the helper's tests with it rather than leaving them behind, and
       add one for the `None` case - a path with no last component - since that
       is the case the editor now depends on; verify with
       `cargo test -p knot-core`
