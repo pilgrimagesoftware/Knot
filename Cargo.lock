@@ -3773,6 +3773,7 @@ dependencies = [
  "knot-mcp",
  "knot-mcp-tools",
  "knot-messaging",
+ "knot-processes",
  "knot-tasks",
  "knot-terminal",
  "objc2 0.6.4",
@@ -3901,7 +3902,9 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.20",
+ "time",
  "tokio",
  "tokio-stream",
  "uuid",
@@ -3940,6 +3943,13 @@ dependencies = [
  "serde",
  "thiserror 2.0.20",
  "uuid",
+]
+
+[[package]]
+name = "knot-processes"
+version = "1.13.0"
+dependencies = [
+ "thiserror 2.0.20",
 ]
 
 [[package]]

@@ -65,6 +65,21 @@ Because the button is inside the group, hovering the button is hovering the
 group, so it stays visible under the pointer with no second rule. The spec
 requires that; the structure provides it rather than a guard enforcing it.
 
+### The 85% width cap moves to the cluster
+
+The bubble's `max_w(relative(0.85))` has to move up to the cluster, and this
+was found by shipping it the other way: a percentage resolves against its
+containing block, and the cluster is shrink-wrapped, so a cap left on the
+bubble resolved against an indefinite width and constrained nothing. Long
+prompts grew past the row and read as left-aligned — the alignment regression
+the first build produced.
+
+On the cluster the percentage resolves against the row, which is `w_full` and
+therefore definite. The cap now measures the button and the bubble together
+rather than the bubble alone, so a maximum-width prompt is one button
+narrower than it used to be. That is the accepted cost of keeping one cap;
+widening the fraction to compensate would make the number mean less, not more.
+
 ### One constant group name
 
 `group_hover` binds to the nearest ancestor carrying the name, and each message

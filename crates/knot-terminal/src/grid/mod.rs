@@ -146,6 +146,18 @@ impl Grid {
         mode.contains(TermMode::SGR_MOUSE) && mode.intersects(TermMode::MOUSE_MODE)
     }
 
+    /// Whether the running program has enabled bracketed paste, and so
+    /// wants pasted text wrapped in markers it can recognize.
+    ///
+    /// A shell that has it on uses it to refuse to *run* a pasted multi-line
+    /// command until the user presses Enter, which is the difference between
+    /// pasting a script and executing one by accident.
+    pub fn bracketed_paste_mode(&self) -> bool {
+        use alacritty_terminal::term::TermMode;
+
+        self.term.mode().contains(TermMode::BRACKETED_PASTE)
+    }
+
     /// Starts (replacing any existing) a simple text selection anchored at
     /// this cell.
     pub fn start_selection(&mut self, column: usize, row: usize) {

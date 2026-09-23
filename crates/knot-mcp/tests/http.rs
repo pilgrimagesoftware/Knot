@@ -298,3 +298,42 @@ async fn stop_closes_the_listener() {
     let result = reqwest::get(format!("{base}/health")).await;
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn vitals_track_uptime_sessions_and_requests_per_interval() {
+    let (mut server, base) = start_server(Arc::new(EmptyCatalog)).await;
+    let client = reqwest::Client::new();
+
+    assert!(server.uptime().is_some(), "a serving server has an uptime");
+    assert_eq!(server.live_sessions(), 0);
+    assert_eq!(server.take_served(), 0);
+
+    for id in 0..5 {
+        client.post(format!("{base}/mcp"))
+              .json(&json!({ "jsonrpc": "2.0", "id": id, "method": "initialize" }))
+              .send()
+              .await
+              .unwrap();
+    }
+
+    assert_eq!(server.live_sessions(), 5, "each handshake opened a session");
+    assert_eq!(server.take_served(), 5);
+
+    for id in 0..2 {
+        client.post(format!("{base}/mcp"))
+              .json(&json!({ "jsonrpc": "2.0", "id": id, "method": "tools/list" }))
+              .send()
+              .await
+              .unwrap();
+    }
+
+    // Two, not seven: each heartbeat describes its own interval, so the
+    // count taken above must not still be in this one.
+    assert_eq!(server.take_served(), 2);
+    assert_eq!(server.take_served(),
+               0,
+               "and an idle interval reports nothing");
+
+    server.stop();
+    assert!(server.uptime().is_none(), "a stopped server has no uptime");
+}

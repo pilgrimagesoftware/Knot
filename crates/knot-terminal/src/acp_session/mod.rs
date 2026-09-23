@@ -175,6 +175,12 @@ impl AcpSession {
         &self.session_id
     }
 
+    /// The adapter subprocess's process id - a panel agent's session root,
+    /// for the processes section. `None` once the adapter has been reaped.
+    pub fn process_id(&self) -> Option<u32> {
+        self.client.process_id()
+    }
+
     /// The connected adapter's declared capabilities (e.g. its supported
     /// permission modes), for panel controls that need to know what the
     /// adapter actually supports before offering a selection.

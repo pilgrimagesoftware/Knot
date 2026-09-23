@@ -67,6 +67,18 @@ impl McpSessionManager {
         self.table.lock().sessions.get(id).cloned()
     }
 
+    /// How many sessions are live right now - what the heartbeat reports, so
+    /// an idle server can be told from one nothing is connected to.
+    pub fn len(&self) -> usize {
+        self.table.lock().sessions.len()
+    }
+
+    /// Whether no session is live. Paired with [`Self::len`] because clippy
+    /// asks for it; the heartbeat uses the count.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn session_for_agent(&self, agent_id: Uuid) -> Option<McpSession> {
         let table = self.table.lock();
         let id = table.agent_to_session.get(&agent_id)?;
@@ -140,6 +152,32 @@ mod tests {
 
         assert!(manager.session(&first.id).is_some());
         assert!(manager.session(&second.id).is_some());
+    }
+
+    #[test]
+    fn the_live_count_tracks_creation_replacement_and_cleanup() {
+        let manager = McpSessionManager::new();
+        assert_eq!(manager.len(), 0);
+        assert!(manager.is_empty());
+
+        let agent = Uuid::new_v4();
+        manager.create_session(agent);
+        manager.create_session(Uuid::new_v4());
+        assert_eq!(manager.len(), 2);
+        assert!(!manager.is_empty());
+
+        // Replacing an agent's session leaves the count alone: the old one
+        // is removed as the new one lands, so a reconnecting agent must not
+        // read as a second connection.
+        manager.create_session(agent);
+        assert_eq!(manager.len(), 2);
+
+        manager.remove_for_agent(agent);
+        assert_eq!(manager.len(), 1);
+
+        std::thread::sleep(Duration::from_millis(20));
+        manager.cleanup_stale(Duration::from_millis(10));
+        assert_eq!(manager.len(), 0, "a reclaimed session stops being counted");
     }
 
     #[test]

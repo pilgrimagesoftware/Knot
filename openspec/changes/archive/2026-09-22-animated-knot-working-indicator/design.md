@@ -46,6 +46,22 @@ animated-image handling then supplies frame timing, the reduced-motion
 behavior the spec requires, the inactive-window pause, and the repaint
 scheduling.
 
+Two conditions on that, both found in implementation and neither obvious from
+the outside, because failing either yields a still frame rather than an error:
+
+- **The bytes must arrive as an embedded resource path, not as an
+  `Arc<Image>`.** Those are two different decoders. `Image::to_image_data`,
+  which an `Arc<Image>` source goes through, special-cases GIF and sends every
+  other format — WebP included — to `decode_static_image`. Only the resource
+  loader behind `img("some/path")` asks `WebPDecoder::has_animation` and
+  decodes the rest of the frames. So the asset is served by an `AssetSource`
+  of Knot's own, layered over gpui-kit's icon catalog and registered in
+  `app_bootstrap.rs`, rather than built beside `app_titlebar_icon` the way
+  that still icon is.
+- **The element must carry an `id`.** `img` keeps the frame index in element
+  state, and both the advance and the `request_animation_frame` call are gated
+  on `global_id.is_some()`.
+
 The alternative — a still image plus a frame index the app advances, in the
 shape of today's `spinner_frame()` — was rejected. It would need its own
 repaint driver in the panel, its own reduced-motion check, and its own
@@ -53,9 +69,12 @@ repaint driver in the panel, its own reduced-motion check, and its own
 would put a clock read back on the render path.
 
 WebP over GIF because the icon has a soft alpha edge and GIF transparency is one
-bit, which fringes against both themes. Measured on the real icon at 96×96 over
-30 frames, the GIF is 142KB with a hard alpha cutoff; WebP carries full alpha
-and is smaller. GIF stays the fallback if `img2webp` proves unavailable — it
+bit, which fringes against both themes. WebP costs bytes for that rather than
+saving them, which the pre-implementation estimate had backwards: measured on
+the real icon at the settings actually shipped (24 frames at 72×72), the GIF is
+68KB with a hard alpha cutoff and the WebP is 95KB with full alpha. Edge quality
+is the whole reason for the choice, so the choice stands — but it is a trade,
+not a free win. GIF stays the fallback if `img2webp` proves unavailable; it
 works and it is playable, it just looks worse at the edge.
 
 **This needs a tool the machine does not have.** `ffmpeg` is installed but its
@@ -74,9 +93,11 @@ alpha, then assembled into a looping WebP. The whole pipeline goes in
 nobody can reproduce. It is not wired into `make` — it needs tools CI does not
 have, and the asset changes roughly never.
 
-Verified: 30 frames at 96×96 come out intact, alpha preserved, with the knot
-clearing the canvas corners at every angle (it is a round form in a square
-frame, so rotation cannot clip it).
+Verified: 24 frames at 72×72 come out intact, alpha preserved with no fringe
+against a dark surface, with the knot clearing the canvas corners at every angle
+(it is a round form in a square frame, so rotation cannot clip it). One
+revolution is 24 × 62ms = 1488ms, and frame 24 would be frame 0 again, so the
+loop closes with no seam.
 
 Alternatives considered:
 
@@ -88,16 +109,23 @@ Alternatives considered:
 - *A pulse or breathe.* Avoids the lighting problem, but at the size of this row
   a scale-and-fade reads as throbbing rather than as work in progress.
 
-### Size: a 24px slot, authored at 96×96
+### Size: a 24px slot, authored at 72×72
 
 The row today is a 12×16 box holding one character, which is the size the
 proposal calls a stray glyph. 24px is legible as a deliberate mark and still
 subordinate to the conversation.
 
-The asset is authored at 96×96 — 4× the slot — matching what
-`assets/app-icon-32.png` already does (64×64 for a 16px slot). The box is fixed
-in both dimensions so the row reserves the same space whether the animation
-plays or is held still, which is what the spec's no-reflow scenario asks for.
+The asset is authored at 72×72 — 3× the slot, which still clears the 48 device
+pixels a 2× display asks for. Not the 4× `assets/app-icon-32.png` uses for its
+16px slot: a rotation gives every frame different alpha, so nothing compresses
+across frames and the file scales with area × frame count, which a still icon's
+ratio says nothing about. 4× at 30 frames measured 182KB against the ~100KB
+ceiling under Risks; 3× at 24 frames is 95KB. Encoder quality is not the lever —
+q80 to q60 saved 12% — so area and frame count are what came down.
+
+The box is fixed in both dimensions so the row reserves the same space whether
+the animation plays or is held still, which is what the spec's no-reflow
+scenario asks for.
 
 ### The panel stops calling `working_indicator`
 
@@ -122,7 +150,9 @@ both icon assets are built the same way in the same place.
 - **A binary asset in git that only one script can regenerate** → The script is
   committed with it, and it derives from an icon already in the tree, so the
   input is versioned too. Keep the asset small; if it exceeds roughly 100KB,
-  drop the frame count or the dimensions rather than accepting the weight.
+  drop the frame count or the dimensions rather than accepting the weight. Not
+  hypothetical: the first generated asset was 182KB, and the frame count and
+  dimensions came down to meet this, as recorded under Size above.
 - **`img2webp` is an extra tool for whoever regenerates the asset** → It is
   needed only to regenerate, never to build or run Knot, and the script should
   say so and fail with that message rather than a missing-binary error.

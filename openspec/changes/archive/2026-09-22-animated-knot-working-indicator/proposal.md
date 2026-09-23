@@ -66,7 +66,12 @@ None. Both surfaces involved already have capabilities.
 - `crates/knot/src/panel_view/render.rs` — the `PanelRow::Working` arm stops
   calling `working_indicator::render`.
 - `crates/knot/src/app_support.rs` — a sibling to `app_titlebar_icon` that
-  builds the animated image, so the asset has one loading site.
+  builds the animated image, so the asset has one loading site, plus the
+  asset source that serves its bytes.
+- `crates/knot/src/app_bootstrap.rs` — registers that asset source in place of
+  the bare `AllAssets`, delegating every other path to it. Not foreseen when
+  this was written: `img` only decodes an animated WebP as more than one frame
+  when the bytes arrive as an embedded resource path, not as an `Arc<Image>`.
 - `crates/knot/src/working_indicator.rs` — unchanged in behavior; its module doc
   gains the note that the panel no longer calls it.
 - No new crate dependency: `gpui`'s `img` element already decodes animated WebP,

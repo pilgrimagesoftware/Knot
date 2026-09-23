@@ -445,3 +445,45 @@ fn the_default_tuning_is_the_crate_constants() {
     assert_eq!(tuning.probe_failure_threshold,
                consts::PROBE_FAILURE_THRESHOLD);
 }
+
+/// One writer spans every attempt.
+///
+/// `build_server` makes a fresh server per attempt. If each started its own
+/// writer, a restarted supervisor would leave several appending to one file
+/// with their own byte counters, rotating underneath each other - so this
+/// asserts what that would break: servers built from one supervisor write
+/// through one log, in order, into one file.
+#[tokio::test]
+async fn every_server_a_supervisor_builds_shares_its_one_log() {
+    let root = tempfile::TempDir::new().expect("temp dir");
+    let path = root.path().join(consts::LOG_FILE_NAME);
+
+    let supervisor = Supervisor::new(0, Arc::new(EmptyCatalog), no_agents()).with_log(path.clone());
+
+    let first = supervisor.build_server();
+    let second = supervisor.build_server();
+    let (Some(first_log), Some(second_log)) = (first.log(), second.log())
+    else {
+        panic!("a supervisor with a log gives every server it builds one");
+    };
+    first_log.info(crate::log::Subject::Lifecycle, "from the first server");
+    second_log.info(crate::log::Subject::Lifecycle, "from the second server");
+    second_log.flush().await;
+
+    let contents = std::fs::read_to_string(&path).expect("log file");
+    let first_at = contents.find("from the first server")
+                           .expect("the first server's entry");
+    let second_at = contents.find("from the second server")
+                            .expect("the second server's entry");
+    assert!(first_at < second_at,
+            "two writers on one file would not preserve this order: {contents}");
+}
+
+/// A supervisor with no log must not hand one out either - a server that
+/// started its own writer is exactly the case `with_log` exists to avoid.
+#[tokio::test]
+async fn a_supervisor_without_a_log_builds_servers_without_one() {
+    let supervisor = Supervisor::new(0, Arc::new(EmptyCatalog), no_agents());
+
+    assert!(supervisor.build_server().log().is_none());
+}

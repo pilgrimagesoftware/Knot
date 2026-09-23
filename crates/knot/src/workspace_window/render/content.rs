@@ -80,7 +80,12 @@ impl WorkspaceWindow {
                     .flex_1()
                     .min_h_0()
                     .w_full()
-                    .child(
+                    // The pane goes in a `flex_1().min_h_0()` box of its own
+                    // because the processes section is its sibling below:
+                    // every pane inside styles itself `size_full`, which
+                    // would otherwise overflow this column by exactly the
+                    // section's height.
+                    .child(v_flex().flex_1().min_h_0().w_full().child(
                         self.selected_agent
                                     .and_then(|id| {
                                         let (is_panel_mode, markdown_file, diagram, stopped) = {
@@ -268,7 +273,11 @@ impl WorkspaceWindow {
                                             )
                                             .into_any_element()
                                     }),
-                            )
+                            ))
+                            // Below whichever session pane is showing, so the
+                            // terminal and panel views get the section from
+                            // one place rather than two that can drift.
+                            .children(self.processes_section(cx))
                             .into_any_element()
                                         }))
                 .into_any_element()

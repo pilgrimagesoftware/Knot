@@ -183,6 +183,27 @@ pub(crate) struct WorkspaceWindow {
     /// separates it from the settings snapshot in issue #238, where the copy
     /// *is* what gets read and written back.
     pub(super) titled_as:                        String,
+    /// The processes section's state per agent that has one: whether it is
+    /// open, the last sample, the last failure, and any termination in
+    /// flight. One struct per agent rather than a map per field, so teardown
+    /// has one entry to prune.
+    pub(super) process_sections: BTreeMap<Uuid, crate::agent_processes::ProcessSection>,
+    /// Where the sampling task publishes, and the main thread drains.
+    pub(super) process_publish:                  crate::agent_processes::PublishSlot,
+    /// The generation this window has already drained, so a poll tick that
+    /// finds the same pass again is not mistaken for news.
+    pub(super) process_generation:               u64,
+    /// When the last sample was asked for, so the poll - which ticks thirty
+    /// times a second - runs `ps` on the sampler's cadence instead.
+    pub(super) process_sampled_at:               Option<std::time::Instant>,
+    /// Set while a sample is in flight, so a slow `ps` is not asked for
+    /// twice. The same discipline `RefreshCache::claim_refresh` applies to
+    /// `git diff`.
+    pub(super) process_sampling:                 Arc<std::sync::atomic::AtomicBool>,
+    /// Terminations that were refused, queued by the blocking task and
+    /// drained by the poll - the same off-main-thread hand-off
+    /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
+    pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
