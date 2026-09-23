@@ -13,6 +13,9 @@
 use std::sync::Arc;
 
 use gpui_kit::component::WindowExt;
+use gpui_kit::component::button::ButtonVariant;
+use gpui_kit::component::dialog::DialogButtonProps;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::{ClipboardItem, Context, Window};
 use knot_processes::{DescendantProcess, TerminationTarget};
 use uuid::Uuid;
@@ -74,7 +77,13 @@ impl WorkspaceWindow {
                   let target = target.clone();
                   alert.title(knot_core::l10n::t("processes.terminate_title"))
                        .description(body.clone())
-                       .confirm()
+                       // Named and tinted rather than a bare "OK": the
+                       // action is destructive and cannot be undone, so the
+                       // button says what it does.
+                       .button_props(DialogButtonProps::default()
+                           .ok_text(knot_core::l10n::t("processes.terminate"))
+                           .ok_variant(ButtonVariant::Danger)
+                           .show_cancel(true))
                        .on_ok(move |_, _, app| {
                            entity.update(app, |view, cx| {
                                      view.terminate_process(agent_id, target.clone());
@@ -135,8 +144,13 @@ impl WorkspaceWindow {
     }
 
     /// Copies the row's process identifier.
-    pub(super) fn copy_process_pid(&self, pid: u32, cx: &mut Context<Self>) {
+    ///
+    /// Confirmed with a notification, as the code-block copy button is: a
+    /// copy that says nothing is indistinguishable from a click that missed.
+    pub(super) fn copy_process_pid(&self, pid: u32, window: &mut Window, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(pid.to_string()));
+        window.push_notification(Notification::info(knot_core::l10n::t("processes.copied_pid")),
+                                 cx);
     }
 
     /// Copies the row's command line in full.
@@ -144,7 +158,12 @@ impl WorkspaceWindow {
     /// The command as the operating system reports it, not the text the row
     /// drew: that one is truncated to the pane's width and flattened onto one
     /// line, neither of which belongs on the clipboard.
-    pub(super) fn copy_process_command(&self, command: String, cx: &mut Context<Self>) {
+    pub(super) fn copy_process_command(&self, command: String, window: &mut Window,
+                                       cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(command));
+        window.push_notification(
+            Notification::info(knot_core::l10n::t("processes.copied_command")),
+            cx,
+        );
     }
 }

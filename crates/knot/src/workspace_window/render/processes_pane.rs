@@ -370,16 +370,16 @@ impl WorkspaceWindow {
                                   "processes.copy_pid",
                                   muted,
                                   false,
-                                  cx.listener(move |view, _: &ClickEvent, _window, cx| {
-                                        view.copy_process_pid(pid, cx);
+                                  cx.listener(move |view, _: &ClickEvent, window, cx| {
+                                        view.copy_process_pid(pid, window, cx);
                                     })))
                 .child(row_action(("copy-process-command", u64::from(pid)),
                                   IconName::Copy,
                                   "processes.copy_command",
                                   muted,
                                   false,
-                                  cx.listener(move |view, _: &ClickEvent, _window, cx| {
-                                        view.copy_process_command(copy_command.clone(), cx);
+                                  cx.listener(move |view, _: &ClickEvent, window, cx| {
+                                        view.copy_process_command(copy_command.clone(), window, cx);
                                     })))
                 // Left out entirely where the platform has no process viewer,
                 // rather than drawn as a control that does nothing.

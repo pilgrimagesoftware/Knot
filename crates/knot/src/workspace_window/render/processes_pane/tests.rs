@@ -36,7 +36,9 @@ fn every_key_the_section_shows_resolves() {
                 "processes.terminating",
                 "processes.terminate_title",
                 "processes.copy_pid",
+                "processes.copied_pid",
                 "processes.copy_command",
+                "processes.copied_command",
                 "processes.open_viewer",
                 "processes.empty_not_running",
                 "processes.empty_none"]
