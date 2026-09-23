@@ -72,7 +72,7 @@
 
 ## 7. Verification and close-out
 
-- [ ] 7.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
+- [x] 7.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
       `build` all pass on the workspace.
 - [ ] 7.2 Manually verify with a packaged build — `make package` and `Knot.app` — that
       `~/Library/Logs/Knot/` holds the log, that connecting an agent produces request and response
