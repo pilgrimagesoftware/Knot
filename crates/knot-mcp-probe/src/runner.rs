@@ -154,13 +154,26 @@ impl McpRunner for CommandRunner {
         let stderr = stderr_reader.join().unwrap_or_default();
 
         if status.success() {
-            return Ok(stdout);
+            // Not every CLI writes its listing to stdout. `gemini mcp list`
+            // puts the whole thing on stderr and leaves stdout empty, which
+            // this crate discovered the hard way: the shape was captured
+            // through `2>&1`, so nothing noticed until it was run for real
+            // against the installed binary and came back unreadable.
+            //
+            // Preferring stdout keeps the ordinary case exact - a CLI that
+            // lists on stdout and warns on stderr is read from stdout, not
+            // from both blended together.
+            return Ok(prefer_nonempty(stdout, stderr));
         }
 
         // A CLI that health-checks as it lists can exit non-zero *and* have
         // listed: `claude mcp list` does exactly that when a server fails to
-        // connect. Stdout that still holds rows is the answer; the exit code
+        // connect. Output that still holds rows is the answer; the exit code
         // alone would throw away the very state the section exists to show.
+        //
+        // Only stdout counts here. On a genuine failure stderr holds the
+        // error message, and treating that as a listing would send it to a
+        // parser that can only report it as unreadable - losing the reason.
         if !stdout.trim().is_empty() {
             return Ok(stdout);
         }
@@ -200,6 +213,15 @@ fn locate(program: &str, env: &[(String, String)]) -> OsString {
                                                             .unwrap_or_else(|| {
                                                                 OsString::from(program)
                                                             })
+}
+
+/// `stdout` when it holds anything at all, otherwise `stderr`.
+fn prefer_nonempty(stdout: String, stderr: String) -> String {
+    if stdout.trim().is_empty() {
+        return stderr;
+    }
+
+    stdout
 }
 
 fn read_to_string(pipe: &mut impl Read) -> String {

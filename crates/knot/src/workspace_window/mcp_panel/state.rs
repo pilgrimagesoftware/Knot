@@ -69,8 +69,6 @@ impl Drop for ProbeClaim {
 pub(crate) struct McpSection {
     /// Whether the section is open. Does not gate probing: the collapsed
     /// header names what needs attention, so it needs an answer too.
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(crate) expanded: bool,
     /// A probe is wanted and has not been started.
     requested:           bool,
@@ -86,8 +84,6 @@ pub(crate) struct McpSection {
 
 impl McpSection {
     /// Opens or shuts the section, answering its new state.
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(crate) fn toggle(&mut self) -> bool {
         self.expanded = !self.expanded;
         self.expanded
@@ -105,7 +101,21 @@ impl McpSection {
         !self.ever_requested && !self.requested
     }
 
+    /// Whether a probe has been asked for and not yet started.
+    ///
+    /// Separate from [`Self::take_request`] so a caller can check before it
+    /// has secured everything the probe needs. Taking the request first and
+    /// then returning early loses it permanently - `ever_requested` is
+    /// already set, so nothing asks again and the section sits on "not
+    /// checked yet" while nothing will ever check.
+    pub(crate) fn wants_probe(&self) -> bool {
+        self.requested
+    }
+
     /// Takes a pending request, if there is one.
+    ///
+    /// Call this only once the probe is certain to start, or once the
+    /// request is deliberately being dropped.
     pub(crate) fn take_request(&mut self) -> bool {
         let requested = std::mem::take(&mut self.requested);
         self.ever_requested |= requested;
@@ -129,14 +139,10 @@ impl McpSection {
         }
     }
 
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(crate) fn inventory(&self) -> Option<&Inventory> {
         self.inventory.as_ref()
     }
 
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(crate) fn failure(&self) -> Option<&str> {
         self.failure.as_deref()
     }

@@ -79,6 +79,24 @@ fn a_claim_dropped_without_reporting_still_answers() {
     assert!(results.lock()[0].1.is_err());
 }
 
+/// Peeking must not consume. A caller that took the request and then
+/// returned early - because the agent vanished from the store for a frame,
+/// say - would lose it permanently: the section has asked once, so nothing
+/// asks again, and it sits on "not checked yet" while nothing will ever
+/// check. The symptom is an absence, which no ordinary test would catch.
+#[test]
+fn peeking_at_a_request_does_not_take_it() {
+    let mut section = McpSection::default();
+
+    section.request();
+
+    assert!(section.wants_probe());
+    assert!(section.wants_probe(), "peeking twice must still see it");
+    assert!(section.take_request(),
+            "the request survived being looked at");
+    assert!(!section.wants_probe());
+}
+
 #[test]
 fn a_new_section_wants_its_first_probe() {
     let mut section = McpSection::default();

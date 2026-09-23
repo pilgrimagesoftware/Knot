@@ -58,6 +58,6 @@
 
 ## 9. Gate
 
-- [ ] 9.1 Run `make` end to end — `fmt-check`, `size-check`, `lint`, `test`, `build`; verify no file crossed 700 lines and no crate-wide `allow` was added
+- [x] 9.1 Run `make` end to end — `fmt-check`, `size-check`, `lint`, `test`, `build`; verify no file crossed 700 lines and no crate-wide `allow` was added
 - [ ] 9.2 Verify by hand in a debug build against a real Claude Code agent: a server disabled for the project reads as disabled rather than failed, the delegated action lands in `/mcp`, and the section catches up when that terminal exits
-- [ ] 9.3 Verify the cost claim by hand: opening a window and never expanding the section runs zero probes, and a shown section runs one probe rather than one per tick
+- [ ] 9.3 Verify the cost claim by hand: a window showing the dashboard, a Terminal-mode agent or a stopped agent runs zero probes, and a shown Panel agent runs one probe rather than one per tick. (Corrected from "never expanding the section runs zero probes": the sampler's gate is *shown*, not *expanded*, because the collapsed header names what needs attention and so needs an answer too — `openspec/specs/agent-mcp-status/spec.md`, "Probing is bounded and runs off the render path".)

@@ -134,6 +134,37 @@ fn a_nonzero_exit_with_nothing_on_stdout_is_a_failure() {
     }
 }
 
+/// `gemini mcp list` writes its whole listing to stderr and leaves stdout
+/// empty. The shape was captured through `2>&1`, so nothing noticed until the
+/// probe ran against the real binary and came back unreadable.
+#[test]
+fn a_listing_written_to_stderr_is_still_read() {
+    let dir = TempDir::new().unwrap();
+    let out =
+        runner_with(Duration::from_secs(10)).run(&sh("echo 'github: https://x - Connected' >&2",
+                                                     dir.path()))
+                                            .expect("a successful command");
+
+    assert!(out.contains("github"),
+            "the listing on stderr was discarded");
+}
+
+/// A CLI that lists on stdout and warns on stderr must be read from stdout,
+/// not from both blended together - a warning line in the middle of a listing
+/// is not a server.
+#[test]
+fn stdout_wins_when_both_streams_have_something() {
+    let dir = TempDir::new().unwrap();
+    let out = runner_with(Duration::from_secs(10))
+        .run(&sh("echo 'warning: untrusted folder' >&2; echo 'github: https://x - Connected'",
+                 dir.path()))
+        .expect("a successful command");
+
+    assert!(out.contains("github"));
+    assert!(!out.contains("untrusted"),
+            "stderr leaked into a successful listing");
+}
+
 #[test]
 fn a_label_names_the_whole_command() {
     let dir = TempDir::new().unwrap();

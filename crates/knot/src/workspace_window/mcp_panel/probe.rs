@@ -53,8 +53,6 @@ impl WorkspaceWindow {
     }
 
     /// This agent's section, or `None` if it has never been shown.
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(in crate::workspace_window) fn mcp_section(&self, agent_id: Uuid) -> Option<&McpSection> {
         self.mcp_sections.get(&agent_id)
     }
@@ -64,23 +62,17 @@ impl WorkspaceWindow {
     /// Read from the in-flight set rather than stored on the section: a
     /// claim frees on drop, so an unwind cannot leave the header saying
     /// "checking" forever.
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(in crate::workspace_window) fn mcp_probing(&self, agent_id: Uuid) -> bool {
         self.mcp_in_flight.lock().contains(&agent_id)
     }
 
     /// Opens or shuts the section, answering its new state.
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(in crate::workspace_window) fn toggle_mcp_section(&mut self, agent_id: Uuid) -> bool {
         self.mcp_sections.entry(agent_id).or_default().toggle()
     }
 
     /// Asks for a probe of this agent: the refresh action, and the
     /// delegated terminal's exit.
-    // UNWIRED(#383): read by the section's render and actions, task groups 5-7.
-    #[allow(dead_code)]
     pub(in crate::workspace_window) fn request_mcp_probe(&mut self, agent_id: Uuid) {
         self.mcp_sections.entry(agent_id).or_default().request();
     }
@@ -138,12 +130,16 @@ impl WorkspaceWindow {
             return;
         };
 
-        let Some(section) = self.mcp_sections.get_mut(&agent_id)
-        else {
-            return;
-        };
-
-        if !section.take_request() {
+        // Peeked, not taken. Taking it here and then returning early below
+        // would lose the request permanently: the section has asked once, so
+        // nothing asks again, and it sits on "not checked yet" while nothing
+        // will ever check. That is `claim_refresh`'s "claim that never
+        // records" in a different shape, and it does not fail a test -
+        // the symptom is an absence.
+        if !self.mcp_sections
+                .get(&agent_id)
+                .is_some_and(McpSection::wants_probe)
+        {
             return;
         }
 
@@ -154,12 +150,18 @@ impl WorkspaceWindow {
 
         // Claimed before the spawn, the way `claim_process_sample` does:
         // work this slow must not be asked for twice while the first is
-        // still running. A request that cannot claim is dropped rather than
-        // queued - the running probe answers it too.
+        // still running.
         let Some(claim) = ProbeClaim::claim(&self.mcp_in_flight, &self.mcp_results, agent_id)
         else {
+            // In flight. The request is dropped rather than queued, per the
+            // spec - the running probe's result answers this one too - and
+            // dropping it here is deliberate, not an early return.
+            self.take_mcp_request(agent_id);
             return;
         };
+
+        // Nothing between here and the spawn may fail.
+        self.take_mcp_request(agent_id);
 
         // `spawn_blocking`, not `spawn`: the probe runs a subprocess and
         // blocks until it has drained its output.
@@ -167,6 +169,13 @@ impl WorkspaceWindow {
                         let runner = CommandRunner::new();
                         claim.report(knot_mcp_probe::probe(&runner, &plan));
                     });
+    }
+
+    /// Consumes this agent's pending probe request.
+    fn take_mcp_request(&mut self, agent_id: Uuid) {
+        if let Some(section) = self.mcp_sections.get_mut(&agent_id) {
+            section.take_request();
+        }
     }
 
     /// What to run for this agent, in its own directory and environment.

@@ -43,8 +43,6 @@ impl SectionRow {
     /// restarted here, configured in the settings window's MCP tab - so
     /// there is no agent flow to hand the user over to, in any state
     /// including failed.
-    // UNWIRED(#383): the row's delegated action button, task group 7.
-    #[allow(dead_code)]
     pub(crate) fn offers_action(&self) -> bool {
         match self {
             Self::Knot(_) => false,
