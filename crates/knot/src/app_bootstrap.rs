@@ -13,7 +13,6 @@ use gpui_kit::SystemMenuType;
 use gpui_kit::actions;
 use gpui_kit::base::input;
 use gpui_kit::component::Root;
-use gpui_kit::component::Theme;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::input::InputState;
 use knot_mcp::ToolCatalog;
@@ -534,7 +533,13 @@ pub(crate) fn run() {
                                // application menu from the process name.
                                app_support::set_process_name(&knot_core::l10n::t("app.name"));
                                gpui_kit::init(cx);
-                               Theme::change(cx.window_appearance(), None, cx);
+                               // Before the first window: a stored Light or
+                               // Dark has to be in the first frame, not
+                               // arrive as a repaint after one.
+                               cx.set_global(crate::appearance::AppearancePreference(
+                                   settings.appearance_mode,
+                               ));
+                               crate::appearance::apply(None, cx);
                                apply_visual_identity(&settings, cx);
 
                                // Before `on_action(quit)`: the guard reads

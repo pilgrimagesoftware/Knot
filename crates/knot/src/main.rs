@@ -12,6 +12,7 @@ mod agent_processes;
 mod app_bootstrap;
 mod app_state;
 mod app_support;
+mod appearance;
 mod broadcast_sheet;
 mod command_center;
 mod consts;
