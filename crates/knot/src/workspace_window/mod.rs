@@ -8,6 +8,7 @@
 mod agent_row;
 mod agents;
 mod chrome;
+pub(crate) mod composer_focus;
 mod creation;
 mod menus;
 mod notifications;

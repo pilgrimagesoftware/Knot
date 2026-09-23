@@ -125,6 +125,16 @@ pub(crate) struct WorkspaceWindow {
     /// Which spinner frame the working indicators were last repainted on -
     /// see `spinner_repaint_due`.
     pub(super) last_spinner_frame:               u128,
+    /// The agent whose composer this window last *focused*, or `None` when
+    /// the last frame showed no composer at all - see `prepare_frame`.
+    ///
+    /// It records what focus was taken for, not where focus is now. Those
+    /// differ the moment the user clicks anything else, and that is the
+    /// point: the frame compares this against the composer it is about to
+    /// show, so focus is taken once on the transition into an agent and
+    /// never pulled back while the user is working elsewhere in the window.
+    /// Reading where focus actually is would undo that.
+    pub(super) focused_composer:                 Option<Uuid>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
