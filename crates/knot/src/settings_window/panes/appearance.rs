@@ -16,8 +16,8 @@ impl SettingsWindow {
                     Self::font_picker_button(
                         "ui-font-picker",
                         FontPanelTarget::Ui,
-                        self.settings.ui_font_name.clone(),
-                        self.settings.ui_font_size,
+                        crate::settings_global::read(cx).ui_font_name.clone(),
+                        crate::settings_global::read(cx).ui_font_size,
                         cx,
                     ),
                 ))
@@ -26,8 +26,8 @@ impl SettingsWindow {
                     Self::font_picker_button(
                         "title-font-picker",
                         FontPanelTarget::Title,
-                        self.settings.title_font_name.clone(),
-                        self.settings.title_font_size,
+                        crate::settings_global::read(cx).title_font_name.clone(),
+                        crate::settings_global::read(cx).title_font_size,
                         cx,
                     ),
                 ))
@@ -36,8 +36,8 @@ impl SettingsWindow {
                     Self::font_picker_button(
                         "terminal-font-picker",
                         FontPanelTarget::Terminal,
-                        self.settings.terminal_font_name.clone(),
-                        self.settings.terminal_font_size,
+                        crate::settings_global::read(cx).terminal_font_name.clone(),
+                        crate::settings_global::read(cx).terminal_font_size,
                         cx,
                     ),
                 )),

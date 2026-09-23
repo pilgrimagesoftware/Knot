@@ -28,6 +28,14 @@ pub enum ProcessError {
     /// The signal was rejected -- typically a process owned by another user.
     #[error("signalling process {pid} was refused: {output}")]
     SignalRefused { pid: u32, output: String },
+
+    /// The shell behind a `!` command could not be launched, so the command
+    /// never ran. Distinct from [`ProcessError::Command`]: that reports a
+    /// command that ran and failed, which is the user's business rather than a
+    /// fault, whereas this one means the folder, the shell or the environment
+    /// is wrong.
+    #[error("{shell} could not be started: {output}")]
+    ShellLaunch { shell: String, output: String },
 }
 
 #[cfg(test)]
@@ -59,6 +67,17 @@ mod tests {
         let err = ProcessError::IdentityMismatch { pid: 4242 };
 
         assert!(err.to_string().contains("4242"));
+    }
+
+    #[test]
+    fn shell_launch_names_the_shell_and_the_reason() {
+        let err = ProcessError::ShellLaunch { shell:  "/bin/zsh -lc".to_owned(),
+                                              output: "No such file or directory".to_owned(), };
+
+        let text = err.to_string();
+
+        assert!(text.contains("/bin/zsh -lc"));
+        assert!(text.contains("No such file or directory"));
     }
 
     #[test]

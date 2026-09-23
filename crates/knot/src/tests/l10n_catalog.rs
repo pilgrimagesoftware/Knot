@@ -49,7 +49,10 @@ fn queued_message_control_labels_resolve() {
                 "panel.edit_queued",
                 "panel.replace_composer_title",
                 "panel.replace_composer_body",
-                "panel.retry_connect"]
+                "panel.retry_connect",
+                "panel.lookup_hint",
+                "panel.mentions_gathering",
+                "panel.mentions_capped"]
     {
         assert_ne!(knot_core::l10n::t(key),
                    key,
@@ -269,6 +272,47 @@ fn slash_lookup_labels_resolve() {
                    key,
                    "{key} is missing from the catalog");
     }
+}
+
+/// The `!` shell passthrough's chrome. Every one of these appears on an entry
+/// the user made happen deliberately, so a key string in place of copy is
+/// exactly where it would be noticed and exactly where it should not be.
+#[test]
+fn shell_passthrough_labels_resolve() {
+    for key in ["panel.shell.marker",
+                "panel.shell.running",
+                "panel.shell.cancel",
+                "panel.shell.cancelled",
+                "panel.shell.truncated",
+                "panel.shell.exit_ok",
+                "panel.shell.signalled",
+                "panel.shell.pending",
+                "panel.shell.discard",
+                "panel.shell.shared"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
+/// The three that embed a value. A body that lost its placeholder still
+/// resolves, so resolving is not enough: assert the value survives
+/// substitution.
+#[test]
+fn shell_passthrough_substitutions_survive() {
+    let folder = knot_core::l10n::t_with("panel.shell.ran_in", &[("folder", "/tmp/worktree")]);
+    assert!(folder.contains("/tmp/worktree"), "{folder}");
+
+    let code = knot_core::l10n::t_with("panel.shell.exit_failed", &[("code", "3")]);
+    assert!(code.contains('3'), "{code}");
+
+    let error =
+        knot_core::l10n::t_with("panel.shell.failed_to_start", &[("error", "no such file")]);
+    assert!(error.contains("no such file"), "{error}");
+
+    let limit = knot_core::l10n::t_with("panel.shell.timed_out", &[("limit", "2 minutes")]);
+    assert!(limit.contains("2 minutes"), "{limit}");
 }
 
 /// Every settings tab's title, so an added pane cannot show `settings.tabs.*`

@@ -60,12 +60,16 @@ impl WorkspaceWindow {
         // A shell companion whose process exited has nothing left to show,
         // so close it rather than leaving a dead pane that looks hung.
         for id in exited {
-            self.remove_agent(*id);
+            // Before the removal: a terminal opened to hand the user an
+            // agent's own MCP flow is how that section finds out anything
+            // changed, and after `remove_agent` there is nothing left to ask.
+            self.finish_mcp_handover(*id);
+            self.remove_agent(*id, cx);
             cx.notify();
         }
         // Messages arrive from the MCP server on another thread; this poll
         // is where an agent going idle is noticed.
-        self.deliver_inbox_nudges();
+        self.deliver_inbox_nudges(cx);
         self.raise_awaiting_notifications(cx);
         self.raise_mcp_failure_notification(cx);
         // Before the repaint checks below, so an agent started here has its
@@ -77,11 +81,17 @@ impl WorkspaceWindow {
                              .is_some_and(|grid| grid.lock().take_dirty());
         // Every agent's taps, not just the selected one's: an agent working
         // in an unselected pane is the case this feature exists for.
-        let pull_requests_recorded = self.drain_pull_requests();
+        let pull_requests_recorded = self.drain_pull_requests(cx);
         let prompts_completed = self.drain_prompt_results();
         let panel_states_moved = self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
+        // A `!` command's output lands on its own drain threads with no
+        // context to notify from. Taken into a local rather than into the
+        // `||` chain below: `take_dirty` clears as it reads, so a
+        // short-circuit past it would strand a command's output until its
+        // next append - and a finished command has no next append.
+        let shell_runs_moved = self.poll_panel_shell_runs();
         // Both land from `spawn_blocking` with no context to notify from, so
         // without this a fetched pull request state drew only when something
         // unrelated happened to repaint the window - and on a workspace with
@@ -97,17 +107,28 @@ impl WorkspaceWindow {
         let git_commits_landed = self.drain_git_commits();
         let git_watches_fired = self.drain_git_watches();
         let git_reads_landed = self.git_panel_needs_repaint();
+        // A file listing walked off the main thread, and the folder watch
+        // that asks for a fresh one. Neither has a GPUI context, so
+        // without this an `@` lookup would show whatever it had when
+        // something unrelated last repainted the window.
+        let mentions_listed = self.drain_mention_listings();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
         // `workspace_window::processes`.
         let processes_sampled = self.process_sampling_tick();
+        // Runs an agent's own MCP list command, off any cadence at all: on
+        // first becoming visible, on refresh, and when a delegated terminal
+        // exits. Lands here because `spawn_blocking` has no context to
+        // notify from - see `workspace_window::mcp_panel::probe`.
+        let mcp_probed = self.mcp_probe_tick(cx);
         if grid_dirty
            || panel_states_moved
            || panel_dirty
            || spinner_dirty
            || activated
            || processes_sampled
+           || mcp_probed
            || prompts_completed
            || prompts_sent
            || pull_requests_recorded
@@ -117,6 +138,8 @@ impl WorkspaceWindow {
            || git_commits_landed
            || git_watches_fired
            || git_reads_landed
+           || mentions_listed
+           || shell_runs_moved
         {
             cx.notify();
         }

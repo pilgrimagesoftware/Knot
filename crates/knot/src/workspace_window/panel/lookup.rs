@@ -29,18 +29,22 @@ use gpui_kit::component::input::Escape;
 use gpui_kit::component::input::IndentInline;
 use gpui_kit::component::input::MoveDown;
 use gpui_kit::component::input::MoveUp;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::px;
 use uuid::Uuid;
 
 use crate::app_support::single_line;
+use crate::composer_scan::escape_token;
 use crate::panel_commands::ActiveToken;
-use crate::panel_commands::LookupEntry;
+use crate::panel_commands::LookupMatch;
 use crate::panel_commands::LookupRegistry;
+use crate::panel_commands::Trigger;
 use crate::panel_commands::active_token;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::element_key;
+use crate::workspace_window::panel::mentions::MentionState;
+use crate::workspace_window::panel::prompt::PanelInputState;
 
 /// How many entries the popup shows at once before scrolling.
 const LOOKUP_MAX_VISIBLE: usize = 8;
@@ -90,7 +94,7 @@ impl WorkspaceWindow {
     }
 
     /// The token under the caret in `input`, or `None` when there is none.
-    fn panel_lookup_token(input: &Entity<TextareaState>, cx: &gpui_kit::App)
+    fn panel_lookup_token(input: &Entity<PanelInputState>, cx: &gpui_kit::App)
                           -> Option<ActiveToken> {
         let state = input.read(cx);
         active_token(&state.value(), state.cursor())
@@ -101,10 +105,15 @@ impl WorkspaceWindow {
     ///
     /// This is the single "is the popup open?" answer; the renderer and
     /// every key handler ask it rather than keeping a flag in step.
-    fn panel_lookup_matches(&mut self, id: Uuid, input: &Entity<TextareaState>,
+    fn panel_lookup_matches(&mut self, id: Uuid, input: &Entity<PanelInputState>,
                             cx: &gpui_kit::App)
-                            -> Option<(ActiveToken, Vec<LookupEntry>)> {
+                            -> Option<(ActiveToken, Vec<LookupMatch>)> {
         let token = Self::panel_lookup_token(input, cx)?;
+        // The trigger under the caret decides which list this is, so the
+        // two lookups cannot both be open: there is one caret.
+        if token.trigger == Trigger::Mention {
+            return self.panel_mention_matches(id, token);
+        }
         let lookup = self.panel_lookup(id);
         // Typing past what Esc closed reopens the popup; retyping the same
         // token leaves it closed, so Esc is not undone by a redraw.
@@ -112,11 +121,7 @@ impl WorkspaceWindow {
             return None;
         }
         lookup.dismissed = None;
-        let matches: Vec<LookupEntry> = lookup.registry
-                                              .matching(&token.filter)
-                                              .into_iter()
-                                              .cloned()
-                                              .collect();
+        let matches: Vec<LookupMatch> = lookup.registry.matching(&token.filter);
         if matches.is_empty() {
             return None;
         }
@@ -124,18 +129,59 @@ impl WorkspaceWindow {
         Some((token, matches))
     }
 
+    /// The `@` lookup's matches for `id`, or `None` when it is closed.
+    ///
+    /// Starting the listing is a side effect of asking: the first `@` an
+    /// agent sees is what pays for the walk of its folder. While that
+    /// runs the popup says so rather than showing an empty list, which
+    /// would read as "no such file".
+    fn panel_mention_matches(&mut self, id: Uuid, token: ActiveToken)
+                             -> Option<(ActiveToken, Vec<LookupMatch>)> {
+        let state = self.ensure_panel_mentions(id)?;
+        if self.panel_lookup(id).dismissed.as_deref() == Some(token.filter.as_str()) {
+            return None;
+        }
+        self.panel_lookup(id).dismissed = None;
+
+        let matches = match state {
+            MentionState::Gathering => {
+                vec![LookupMatch::status(knot_core::l10n::t("panel.mentions_gathering"))]
+            }
+            MentionState::Ready { overflowed } => {
+                let mentions = self.panel_mentions_for(id)?;
+                let mut matches = mentions.registry().matching(&token.filter);
+                matches.truncate(LOOKUP_MAX_VISIBLE);
+                if matches.is_empty() {
+                    return None;
+                }
+                if overflowed {
+                    // Appended rather than replacing the list: matching
+                    // still ran over what was gathered, and the row says
+                    // the answer is incomplete rather than absent.
+                    matches.push(LookupMatch::status(knot_core::l10n::t("panel.mentions_capped")));
+                }
+                matches
+            }
+        };
+        let lookup = self.panel_lookup(id);
+        lookup.selected = lookup.selected.min(matches.len() - 1);
+        Some((token, matches))
+    }
+
     /// The popup, when the lookup is open - a list above the prompt row.
     pub(in crate::workspace_window) fn render_panel_lookup(&mut self, id: Uuid,
-                                                           input: &Entity<TextareaState>,
+                                                           input: &Entity<PanelInputState>,
                                                            cx: &mut Context<Self>)
                                                            -> Option<impl IntoElement + use<>> {
-        let (_, matches) = self.panel_lookup_matches(id, input, cx)?;
+        let (token, matches) = self.panel_lookup_matches(id, input, cx)?;
+        let trigger = token.trigger;
         let selected = self.panel_lookup(id).selected;
         let input = input.clone();
 
         let rows = matches.into_iter().enumerate().map(|(index, entry)| {
             let input = input.clone();
             let is_selected = index == selected;
+            let is_status = entry.is_status;
             h_flex().id(("panel-lookup-entry", element_key(id).wrapping_add(index as u64)))
                     .w_full()
                     .min_w_0()
@@ -146,15 +192,21 @@ impl WorkspaceWindow {
                     .when_selected(is_selected, cx)
                     .child(div().flex_shrink_0()
                                 .font_family(cx.theme().mono_font_family.clone())
-                                .child(format!("/{}", entry.token)))
+                                .child(if entry.is_status {
+                                    entry.entry.token.clone()
+                                }
+                                else {
+                                    format!("{}{}", trigger.char(), entry.entry.token)
+                                }))
                     .child(div().flex_1()
                                 .min_w_0()
                                 .text_color(cx.theme().muted_foreground)
-                                .child(single_line(&entry.description)))
+                                .child(single_line(&entry.entry.description)))
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.panel_lookup_select(id, index);
                         view.insert_panel_lookup_entry(id, &input, window, cx);
                     }))
+                    .when(is_status, |row| row.cursor_default())
         });
 
         Some(v_flex().id(("panel-lookup", element_key(id)))
@@ -195,7 +247,7 @@ impl WorkspaceWindow {
 
     /// Closes the popup without touching the buffer, per Esc's scenario.
     pub(in crate::workspace_window) fn dismiss_panel_lookup(&mut self, id: Uuid,
-                                                            input: &Entity<TextareaState>,
+                                                            input: &Entity<PanelInputState>,
                                                             cx: &gpui_kit::App) {
         let filter = Self::panel_lookup_token(input, cx).map(|token| token.filter);
         self.panel_lookup(id).dismissed = filter.or(Some(String::new()));
@@ -203,22 +255,29 @@ impl WorkspaceWindow {
 
     /// Replaces the slash token under the caret with the selected entry's
     /// token, leaving the rest of the buffer alone.
-    fn insert_panel_lookup_entry(&mut self, id: Uuid, input: &Entity<TextareaState>,
+    fn insert_panel_lookup_entry(&mut self, id: Uuid, input: &Entity<PanelInputState>,
                                  window: &mut Window, cx: &mut Context<Self>) {
         let Some((token, matches)) = self.panel_lookup_matches(id, input, cx)
         else {
             return;
         };
         let selected = self.panel_lookup(id).selected.min(matches.len() - 1);
+        // A status row says what the lookup is doing; it is not a thing
+        // that can be inserted, and Enter on one must leave the buffer
+        // alone rather than write the message into the prompt.
+        if matches[selected].is_status {
+            return;
+        }
         replace_lookup_token(input,
                              token.range.clone(),
-                             &matches[selected].token,
+                             token.trigger,
+                             &matches[selected].entry.token,
                              window,
                              cx);
         // The token now reads as the inserted entry; marking that dismissed
         // keeps the popup shut over the completed token instead of
         // reopening on the exact match the user just chose.
-        self.panel_lookup(id).dismissed = Some(matches[selected].token.clone());
+        self.panel_lookup(id).dismissed = Some(matches[selected].entry.token.clone());
         self.panel_lookup(id).selected = 0;
         cx.notify();
     }
@@ -231,7 +290,7 @@ impl WorkspaceWindow {
     /// so the lookup has to see them first and stop them going further -
     /// but only while it is open, or ordinary typing would lose those keys.
     pub(in crate::workspace_window) fn wire_panel_lookup_keys<E>(&self, element: E, id: Uuid,
-                                                                 input: &Entity<TextareaState>,
+                                                                 input: &Entity<PanelInputState>,
                                                                  cx: &mut Context<Self>)
                                                                  -> E
         where E: InteractiveElement {
@@ -309,9 +368,19 @@ impl WorkspaceWindow {
 /// selection does exactly that, and `replace` documents the caret landing
 /// at the end of what it wrote - so the two calls together are the spec's
 /// "token is replaced in place" with no whole-buffer fallback needed.
-pub(crate) fn replace_lookup_token(input: &Entity<TextareaState>, range: std::ops::Range<usize>,
-                                   token: &str, window: &mut Window, cx: &mut gpui_kit::App) {
-    let text = format!("/{token}");
+pub(crate) fn replace_lookup_token(input: &Entity<PanelInputState>,
+                                   range: std::ops::Range<usize>, trigger: Trigger, token: &str,
+                                   window: &mut Window, cx: &mut gpui_kit::App) {
+    // The trigger comes from the token being replaced, not from the entry:
+    // an `@` completion writes an `@` back, and a `/` completion a `/`.
+    //
+    // A mention is escaped so a path containing a space stays one token.
+    // A command token has no whitespace to protect, and escaping it would
+    // only make the buffer harder to read.
+    let text = match trigger {
+        Trigger::Slash => format!("/{token}"),
+        Trigger::Mention => format!("@{}", escape_token(token)),
+    };
     input.update(cx, |state, cx| {
              state.set_selected_range(range, cx);
              state.replace(&text, window, cx);

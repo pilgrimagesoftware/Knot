@@ -25,7 +25,6 @@ pub(crate) fn workspace_name_is_blank(name: &str) -> bool {
 pub(crate) struct WorkspaceManager {
     pub(crate) store:               Arc<Mutex<knot_agents::AgentStore>>,
     pub(crate) messages:            Arc<Mutex<knot_messaging::MessageStore>>,
-    pub(crate) settings:            knot_core::Settings,
     pub(crate) name_input:          Entity<InputState>,
     /// The workspace the open name dialog is renaming, or `None` when it is
     /// naming a new one. Whether a dialog is open at all is the `Root`'s

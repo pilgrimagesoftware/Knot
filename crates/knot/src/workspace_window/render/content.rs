@@ -23,7 +23,6 @@ use crate::consts;
 use crate::terminal_view;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::terminal_cell_size;
-use crate::workspace_window::terminal_font_family;
 
 impl WorkspaceWindow {
     /// The column that fills the window beside the sidebar.
@@ -225,12 +224,8 @@ impl WorkspaceWindow {
                                                         let (_, cell_height) =
                                                             terminal_cell_size(
                                                                 cx,
-                                                                terminal_font_family(
-                                                                    &view.settings,
-                                                                    cx,
-                                                                ),
-                                                                px(view
-                                                                    .settings
+                                                                view.terminal_font_family(),
+                                                                px(crate::settings_global::read(cx)
                                                                     .terminal_font_size
                                                                     as f32),
                                                             );
@@ -260,11 +255,9 @@ impl WorkspaceWindow {
                                                 ))
                                                 .child(terminal_view::render_grid(
                                                     &grid.lock(),
-                                                    terminal_font_family(
-                                                        &self.settings,
-                                                        cx,
-                                                    ),
-                                                    px(self.settings.terminal_font_size
+                                                    self.terminal_font_family(),
+                                                    px(crate::settings_global::read(cx)
+                                                        .terminal_font_size
                                                         as f32),
                                                 ))
                                                 .into_any_element(),
@@ -299,9 +292,10 @@ impl WorkspaceWindow {
                                                     })
                                                     // Below whichever session pane is showing, so
                                                     // the
-                                                    // terminal and panel views get the section from
+                                                    // terminal and panel views get the sections
+                                                    // from
                                                     // one place rather than two that can drift.
-                                                    .children(self.processes_section(cx))
+                                                    .children(self.agent_sections_row(cx))
                                                     .into_any_element()
                                         }))
                 .into_any_element()

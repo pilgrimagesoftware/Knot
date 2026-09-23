@@ -1,0 +1,13 @@
+Checking MCP server health…
+
+claude.ai Claude Docs: https://docs.example.com/sse - ✔ Connected
+claude.ai Asana: https://asana.example.com/sse - ✔ Connected
+claude.ai Asana (2): https://asana.example.com/sse - ⊘ Disabled for this project (re-enable via /mcp)
+plugin:claude-mem:mcp-search: node -e const f=require('fs'),p=require('path');const d=process.cwd();const K=[E,p.join(d,"plugin"),d].filter(Boolean);/* a - b - c */const ch=c.spawn(process.execPath,[p.join(R,'scripts',"mcp-server.cjs")],{stdio:'inherit'}); - ✔ Connected
+plugin:kochava:github: https://api.githubcopilot.com/mcp/ (HTTP) - ✔ Connected
+plugin:grafana-mcp:grafana: docker run --rm -i -e GRAFANA_URL grafana/mcp-grafana -t stdio - ✔ Connected
+tolaria: https://tolaria.example.com/mcp (HTTP) - ⊘ Disabled for this project (re-enable via /mcp)
+aws-mcp: https://aws.example.com/mcp (HTTP) - ✘ Failed to connect — -32602: Invalid request parameters
+sentry: https://sentry.example.com/mcp (HTTP) - ⏸ Pending approval
+linear: https://linear.example.com/mcp (HTTP) - ✘ Needs authentication
+knot: http://127.0.0.1:8767/mcp (HTTP) - ✔ Connected

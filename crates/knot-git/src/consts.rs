@@ -10,6 +10,19 @@ pub const VERSION: &[&str] = &["--version"];
 
 pub const STATUS: &[&str] = &["status", "--porcelain=v2", "--branch"];
 
+/// Every file the repository tracks, plus the untracked ones git would
+/// not ignore. `--exclude-standard` is what honours `.gitignore`, the
+/// global excludes file and `.git/info/exclude`, so a caller listing files
+/// for a picker does not have to reimplement ignore rules.
+///
+/// `-z` because a path may contain anything but NUL, and without it git
+/// C-quotes the awkward ones - which would have to be unquoted to be used.
+pub const LS_FILES: &[&str] = &["ls-files",
+                                "--cached",
+                                "--others",
+                                "--exclude-standard",
+                                "-z"];
+
 pub const DIFF: &[&str] = &["diff", "--no-color"];
 pub const DIFF_STAGED_FLAG: &str = "--staged";
 /// Separates revisions from paths. Not optional on a path-scoped diff: a path

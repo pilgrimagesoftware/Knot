@@ -540,17 +540,20 @@ arrangement behind forever.
 
 A preference written through the settings surface SHALL take effect in every
 already-open window that draws from it, without that window being closed and
-reopened.
+reopened, and without a delivery step that each window must opt into.
 
-A window MAY hold its own copy of the settings surface. If it does, the copy
-SHALL be refreshed when preferences are written, and the refresh SHALL NOT be
-performed on the render path.
+The running system SHALL hold one settings surface. A window SHALL NOT hold a
+copy that can diverge from it: a window reading a preference after it was
+written SHALL observe the written value regardless of which window wrote it,
+which window is reading, or when either was opened.
 
-Refreshing preferences SHALL replace only the scalar preferences. The durable
-collections - saved agents, saved workspaces, workspace UI state, personas,
-bench agents, recent repos and recorded pull requests - SHALL be left as the
-refreshing window holds them, so a refresh cannot discard roster state the
-window has not yet written.
+Reading the settings surface SHALL be safe on the render path, which is
+re-entered on every frame. A read SHALL NOT block on a write and SHALL NOT
+block on another read.
+
+A reader that has taken the surface SHALL continue to see a consistent set of
+values for as long as it holds it, even if a write lands meanwhile. A write
+SHALL NOT be observable as a partially-applied set of values.
 
 #### Scenario: Compact tool calls applies to an open panel
 
@@ -558,17 +561,60 @@ window has not yet written.
   mode in the settings window
 - **THEN** that window's panel draws the summary line without being reopened
 
+#### Scenario: A non-workspace window sees the change too
+
+- **WHEN** the import window is open and a preference it draws is changed in
+  the settings window
+- **THEN** the import window draws the new value without being reopened
+
 #### Scenario: Refresh keeps the roster
 
-- **WHEN** a window whose in-memory roster differs from the preferences
-  document refreshes its preferences
-- **THEN** its scalar preferences match the document and its roster is
-  unchanged
+- **WHEN** a preference is written while the in-memory roster differs from
+  what the roster documents on disk hold
+- **THEN** the scalar preferences reflect the write and the roster is
+  unchanged, in memory and on disk
 
 #### Scenario: A window opened later is unaffected
 
 - **WHEN** a preference is changed and a workspace window is opened afterwards
 - **THEN** that window reads the changed value, as it did before
+
+#### Scenario: A reader mid-frame sees one consistent set
+
+- **WHEN** a write lands while a window is part-way through reading several
+  preferences for one frame
+- **THEN** that frame draws every value as it stood at the read, and the next
+  frame draws every value as it stands after the write
+
+### Requirement: A write preserves values written elsewhere
+
+Writing through the settings surface SHALL persist the values the writer
+changed and SHALL preserve every value the writer did not change, including
+values written by another part of the system since the writer began.
+
+No holder of the settings surface SHALL be able to revert a value it never
+set. This applies to the scalars and to the durable collections alike, and it
+applies however long the holder has been open.
+
+#### Scenario: An import does not revert a preference
+
+- **WHEN** the user opens the import window, changes a preference in the
+  settings window, and then completes an import
+- **THEN** the imported records are stored and the changed preference still
+  reads as the user set it
+
+#### Scenario: A roster write does not revert a preference
+
+- **WHEN** a preference is changed and a window that has been open since
+  before the change then adds, renames or removes an agent
+- **THEN** the roster change is stored and the changed preference still reads
+  as the user set it
+
+#### Scenario: Two windows writing different values
+
+- **WHEN** one window writes a preference and another window, open since
+  before that write, then writes a different preference
+- **THEN** both written values are stored and neither reverts the other
 
 ### Requirement: A combined workspace document is split once
 

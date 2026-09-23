@@ -15,16 +15,18 @@ use gpui_kit::AnyWindowHandle;
 use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::resizable::ResizableState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use super::pane_focus::FocusTarget;
 use super::panel;
 use super::prompt_queue::QueuedPanelPrompt;
+use super::terminal_font::TerminalFont;
 use super::view_mode::WorkspaceViewMode;
+use crate::composer_style::ComposerStyling;
 use crate::dashboard;
 use crate::panel_session;
 use crate::panel_state;
@@ -78,7 +80,6 @@ pub(crate) struct WorkspaceWindow {
     /// answered keeps arriving. This is what makes the second one a repeat
     /// rather than news, per `desktop-notifications`' suppression rule.
     pub(super) notified_awaiting:                BTreeMap<Uuid, String>,
-    pub(super) settings:                         knot_core::Settings,
     pub(super) workspace_id:                     Uuid,
     pub(super) selected_agent:                   Option<Uuid>,
     pub(super) sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
@@ -108,6 +109,10 @@ pub(crate) struct WorkspaceWindow {
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
     pub(super) terminal_focus:                   gpui_kit::FocusHandle,
+    /// The family the terminal draws and measures in, resolved from the
+    /// installed families once per configured name rather than once per
+    /// frame - see `terminal_font`.
+    pub(super) terminal_font:                    TerminalFont,
     /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
     /// `on_grid_event` (which runs on the PTY reader thread) and drained
     /// by a polling loop onto the OS pasteboard via GPUI's main-thread
@@ -126,22 +131,27 @@ pub(crate) struct WorkspaceWindow {
     /// Which spinner frame the working indicators were last repainted on -
     /// see `spinner_repaint_due`.
     pub(super) last_spinner_frame:               u128,
-    /// The agent whose composer this window last *focused*, or `None` when
-    /// the last frame showed no composer at all - see `prepare_frame`.
+    /// What this window last *focused* - an agent's composer or its terminal
+    /// surface - or `None` when the last frame showed neither; see
+    /// `prepare_frame`.
     ///
     /// It records what focus was taken for, not where focus is now. Those
     /// differ the moment the user clicks anything else, and that is the
-    /// point: the frame compares this against the composer it is about to
+    /// point: the frame compares this against the target it is about to
     /// show, so focus is taken once on the transition into an agent and
     /// never pulled back while the user is working elsewhere in the window.
     /// Reading where focus actually is would undo that.
-    pub(super) focused_composer:                 Option<Uuid>,
+    ///
+    /// One latch over both targets rather than one each, so switching
+    /// between agents of different modes is a transition for the one being
+    /// switched to - see `pane_focus`.
+    pub(super) focused_pane:                     Option<FocusTarget>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
-    pub(super) panel_prompt_inputs:              BTreeMap<Uuid, Entity<TextareaState>>,
+    pub(super) panel_prompt_inputs: BTreeMap<Uuid, Entity<panel::prompt::PanelInputState>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
@@ -162,6 +172,32 @@ pub(crate) struct WorkspaceWindow {
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    /// References waiting to be written into a composer. Attaching
+    /// context can complete without a window - the add-context control
+    /// finishes after its picker closes - and editing a buffer needs one,
+    /// so the insertion is deferred to the next frame that has it.
+    pub(super) panel_pending_attachments:        BTreeMap<Uuid, Vec<PathBuf>>,
+    /// Each Panel-mode agent's file listing for the `@` lookup: how far
+    /// along it is, what it found, and the watch following its folder.
+    /// Built on the agent's first `@`, since an agent nobody mentions a
+    /// file to should not cost a walk - see `panel::mentions`.
+    pub(super) panel_mentions:                   BTreeMap<Uuid, panel::mentions::PanelMentions>,
+    /// Each Panel-mode composer's styled runs: its three decoration
+    /// collections, the buffer they describe and the palette they were
+    /// painted from. Created with the composer entity, so a restored draft
+    /// arrives styled; see `panel::styling`.
+    pub(super) panel_composer_styling:           BTreeMap<Uuid, ComposerStyling>,
+    /// Live `!` commands, keyed by the id of the card drawing each one.
+    ///
+    /// Not keyed by agent: a panel may have several commands running at
+    /// once, each finishing on its own. An entry is removed the poll after
+    /// its run settles, by which point the card holds everything the
+    /// conversation needs - see `panel::shell`.
+    ///
+    /// Shared rather than owned outright because the cancel control is a
+    /// render closure with no `Context` to reach the window through - the
+    /// same reason a panel's session slot is an `Arc`.
+    pub(super) panel_shell_runs: Arc<Mutex<BTreeMap<Uuid, panel::shell::PanelShellRun>>>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     pub(super) panel_input_expanded:             BTreeSet<Uuid>,
@@ -204,6 +240,23 @@ pub(crate) struct WorkspaceWindow {
     /// drained by the poll - the same off-main-thread hand-off
     /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
     pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
+    /// The MCP section's state per agent that has one: whether it is open,
+    /// whether a probe is wanted, the last inventory and the last failure.
+    /// One struct per agent rather than a map per field, so teardown has one
+    /// entry to prune.
+    pub(super) mcp_sections: BTreeMap<Uuid, crate::workspace_window::mcp_panel::state::McpSection>,
+    /// Agents with a probe in flight. The authority for "a probe is
+    /// running": a claim frees this on drop, so an unwind cannot leave a
+    /// header saying "checking" for the life of the window.
+    pub(super) mcp_in_flight: crate::workspace_window::mcp_panel::state::InFlight,
+    /// Where a finished probe reports and the poll drains - the same
+    /// off-main-thread hand-off `process_failures` uses.
+    pub(super) mcp_results: crate::workspace_window::mcp_panel::state::ProbeResults,
+    /// Shell companions opened to hand the user an agent's own MCP flow,
+    /// mapped to the agent whose section opened them. An entry's exit is what
+    /// makes that section re-probe, so it catches up with whatever the user
+    /// did in there.
+    pub(super) mcp_handover_terminals:           BTreeMap<Uuid, Uuid>,
     /// Agents whose git panel is open. Per-agent rather than a
     /// `WorkspaceViewMode`: the panel is scoped to one agent's folder and
     /// leaves that agent's content visible, so it is not a window mode.

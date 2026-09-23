@@ -35,7 +35,6 @@ use crate::window_options::settings_window_options;
 
 /// Opens the settings window, or brings it forward if already open.
 pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
-                                   settings: knot_core::Settings,
                                    store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
        && existing.update(cx, |_, window, _| window.activate_window())
@@ -43,6 +42,9 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
     {
         return;
     }
+    // Seeds the inputs. Read once here rather than held: the window keeps no
+    // settings of its own, and each pane reads the surface as it draws.
+    let settings = crate::settings_global::read(cx);
     let options = settings_window_options(cx);
     match cx.open_window(options, move |window, cx| {
                 // Every window tracks the OS appearance, so a light/dark flip
@@ -105,8 +107,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                           this.save_mcp_port(cx);
                                                       }
                                                   });
-                                 SettingsWindow { settings,
-                                                  store,
+                                 SettingsWindow { store,
                                                   selected_tab: SettingsTab::General,
                                                   selected_agent_type,
                                                   mcp_selected_agent_type:
@@ -139,8 +140,10 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                         settings_window.update(app, |view, cx| {
                                                            match target {
                                     native_font_panel::Target::Ui => {
-                                        view.settings.ui_font_name = family.clone();
-                                        view.settings.ui_font_size = size;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.ui_font_name = family.clone();
+                                            settings.ui_font_size = size;
+                                        });
                                         // The UI font is the app-wide
                                         // default, so the live theme carries
                                         // it: every open window redraws in
@@ -153,12 +156,16 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                         // Read per frame at the sites that
                                         // draw titles and headers, so nothing
                                         // global needs updating here.
-                                        view.settings.title_font_name = family;
-                                        view.settings.title_font_size = size;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.title_font_name = family.clone();
+                                            settings.title_font_size = size;
+                                        });
                                     }
                                     native_font_panel::Target::Terminal => {
-                                        view.settings.terminal_font_name = family;
-                                        view.settings.terminal_font_size = size;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.terminal_font_name = family.clone();
+                                            settings.terminal_font_size = size;
+                                        });
                                     }
                                 }
                                                            view.persist(cx);
@@ -217,7 +224,6 @@ fn spawn_mcp_state_poll(view: Entity<SettingsWindow>, cx: &mut App) {
 }
 
 pub(crate) struct SettingsWindow {
-    pub(super) settings: knot_core::Settings,
     /// The live agent store, for questions this window's own `Settings`
     /// snapshot can't answer truthfully - whether a persona is still
     /// assigned to an agent, which changes while this window is open.
@@ -239,18 +245,21 @@ pub(crate) struct SettingsWindow {
 }
 
 impl SettingsWindow {
-    /// Write the preferences, then hand them to the windows already drawing
-    /// the old values.
+    /// Write the preferences the panes have just changed on the shared
+    /// surface.
     ///
-    /// The delivery is here rather than at each of the twenty call sites
-    /// because every one of them has the same obligation: a setting that is
-    /// stored and not delivered is the shape of issue #238, and it is not
-    /// visible at the call site that it was missed.
+    /// The panes edit the surface directly, so by the time this runs the
+    /// change is already what every window reads. All that is left is the
+    /// document - and a repaint, since reading live state does not cause one.
+    ///
+    /// There is no delivery step any more. `settings_broadcast` existed to
+    /// hand each open window the new values because each held its own copy;
+    /// with one surface there is nothing to deliver.
     pub(super) fn persist(&self, cx: &mut App) {
-        if let Err(error) = self.settings.persist_preferences() {
+        if let Err(error) = crate::settings_global::read(cx).persist_preferences() {
             eprintln!("failed to persist settings: {error}");
             return;
         }
-        crate::settings_broadcast::preferences_changed(cx);
+        cx.refresh_windows();
     }
 }

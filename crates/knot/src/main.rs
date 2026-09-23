@@ -16,6 +16,8 @@ mod appearance;
 mod broadcast_sheet;
 mod command_center;
 mod commit_window;
+mod composer_scan;
+mod composer_style;
 mod consts;
 mod controls;
 mod dashboard;
@@ -35,7 +37,7 @@ mod plan_view;
 mod pull_request_state;
 mod quit_guard;
 mod refresh_cache;
-mod settings_broadcast;
+mod settings_global;
 mod settings_window;
 mod terminal_view;
 #[cfg(test)]
