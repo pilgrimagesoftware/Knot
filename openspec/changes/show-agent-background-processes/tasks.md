@@ -90,11 +90,11 @@
 
 - [x] 6.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
       `build` all pass on the workspace.
-- [ ] 6.2 Manually verify against a live agent: start a shell agent, launch a background server
+- [x] 6.2 Manually verify against a live agent: start a shell agent, launch a background server
       from it, confirm it appears as background with a plausible runtime, confirm a foreground
       command is classified foreground, terminate the server from the row and confirm it
       disappears from the next sample.
-- [ ] 6.3 Manually verify against a live panel agent: confirm the adapter's descendants appear,
+- [x] 6.3 Manually verify against a live panel agent: confirm the adapter's descendants appear,
       all classified background, and that collapsing the section stops sampling.
 - [x] 6.4 Verify the documented limitation holds and is not mistaken for a defect: a
       double-forked daemon started by an agent does not appear in the section, because it has
