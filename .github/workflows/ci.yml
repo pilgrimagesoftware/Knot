@@ -55,6 +55,12 @@ jobs:
       - name: File size
         run: make size-check
 
+      # An undeclared module is not compiled, so a test file that loses its
+      # `mod` line stops running while the suite stays green. The moment it
+      # happens is a merge conflict in a sorted run of `mod` lines.
+      - name: Declared modules
+        run: make declared-check
+
       - name: Git version (needs >= 2.30 for porcelain v2 tests)
         run: |
           git --version
