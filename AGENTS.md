@@ -184,6 +184,11 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
   held across an `.await` (`knot-acp`'s transport).
 - No I/O on the render path - GPUI re-renders per keystroke. Diff stats go
   through `knot/src/diff_stats.rs`, which has caught this three times.
+- Off-thread results have to reach a frame. A new cache, dirty flag or
+  `spawn_blocking` result belongs in `repaint_poll_tick`'s `if` chain, and a
+  clearing read (`take_changed`, `take_dirty`) must not be reachable on a path
+  that discards it. Four separate breaks of that chain are named in
+  `.claude/rules/rust-structure.md`; none of them failed a test.
 - No statement-hugging brace style; format with nightly `rustfmt`.
 
 `.claude/rules/rust-structure.md` has the reasoning behind each of these, with
