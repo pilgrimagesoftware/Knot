@@ -93,25 +93,15 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
                                            insert_after,
                                            edit_target },
                       move |_id, _window, app| {
-                          window_entity.update(app, |view, cx| {
-                                           // Freshly loaded, not this window's
-                                           // snapshot: the
+                          window_entity.update(app, |_view, cx| {
+                                           // No reload here any more. The
                                            // sidebar row resolves the agent's
-                                           // persona name
-                                           // from `view.settings.personas`,
-                                           // which was taken
-                                           // when the window opened. Assigning
-                                           // a persona
-                                           // added since then (or via this same
-                                           // edit, on an
-                                           // agent that had none) would resolve
-                                           // to nothing
-                                           // and the row would keep showing no
-                                           // persona line.
-                                           view.settings =
-                                               knot_core::Settings::load().unwrap_or_else(|_| {
-                                                                              view.settings.clone()
-                                                                          });
+                                           // persona name from the shared
+                                           // surface, so a persona added since
+                                           // the window opened is already
+                                           // there; this used to re-read from
+                                           // disk because the row read a
+                                           // snapshot taken at open.
                                            cx.notify();
                                        });
                       },
@@ -228,7 +218,7 @@ pub(super) fn move_agent_to_workspace(targets: &AgentMenuTargets, workspace_id: 
                              if view.selected_agent == Some(targets.id) {
                                  view.selected_agent = None;
                              }
-                             view.persist_agents();
+                             view.persist_agents(cx);
                              cx.notify();
                          });
 }
@@ -283,7 +273,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                  .is_ok();
             if created {
                 targets.window_entity.update(app, |view, cx| {
-                                         view.persist_agents();
+                                         view.persist_agents(cx);
                                          cx.notify();
                                      });
             }
@@ -334,7 +324,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                                           ..Default::default() })
             };
             targets.window_entity.update(app, |view, cx| {
-                                     view.persist_agents();
+                                     view.persist_agents(cx);
                                      view.select_agent(created);
                                      cx.notify();
                                  });
@@ -391,7 +381,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                          // them out so a relaunch doesn't
                                          // resume the session
                                          // just dropped.
-                                         view.persist_agents();
+                                         view.persist_agents(cx);
                                          cx.notify();
                                      });
             });
@@ -406,7 +396,7 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                          description,
                          move |app| {
                              targets.window_entity.update(app, |view, cx| {
-                                                      view.remove_agent(targets.id);
+                                                      view.remove_agent(targets.id, cx);
                                                       cx.notify();
                                                   });
                          });

@@ -32,8 +32,8 @@ impl WorkspaceWindow {
         };
         let (cell_width, cell_height) =
             terminal_cell_size(cx,
-                               terminal_font_family(&self.settings, cx),
-                               px(self.settings.terminal_font_size as f32));
+                               terminal_font_family(&crate::settings_global::read(cx), cx),
+                               px(crate::settings_global::read(cx).terminal_font_size as f32));
         let viewport = window.viewport_size();
         let pane_width =
             (f32::from(viewport.width) - self.sidebar_width(cx) as f32).max(cell_width);
@@ -97,8 +97,8 @@ impl WorkspaceWindow {
                                 -> (usize, usize) {
         let (cell_width, cell_height) =
             terminal_cell_size(cx,
-                               terminal_font_family(&self.settings, cx),
-                               px(self.settings.terminal_font_size as f32));
+                               terminal_font_family(&crate::settings_global::read(cx), cx),
+                               px(crate::settings_global::read(cx).terminal_font_size as f32));
         let x = (f32::from(position.x) - self.sidebar_width(cx) as f32).max(0.);
         let y = (f32::from(position.y) - TERMINAL_HEADER_HEIGHT).max(0.);
         ((x / cell_width) as usize, (y / cell_height) as usize)

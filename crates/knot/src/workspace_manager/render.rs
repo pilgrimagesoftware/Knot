@@ -196,7 +196,6 @@ impl Render for WorkspaceManager {
                                         CommandCenterWindow::open(
                                             Arc::clone(&manager.store),
                                             Arc::clone(&manager.messages),
-                                            manager.settings.clone(),
                                             cx,
                                         );
                                     },

@@ -13,6 +13,7 @@
 
 use std::sync::Arc;
 
+use gpui_kit::App;
 use gpui_kit::ClickEvent;
 use gpui_kit::Context;
 use gpui_kit::Entity;
@@ -87,7 +88,7 @@ impl WorkspaceWindow {
     /// The title rides along rather than being resolved separately so the
     /// two are read from the same lock scope, and so the title bar cannot
     /// disagree with the rows about which workspace this window is.
-    fn frame_snapshot(&self) -> Option<(String, Vec<AgentRow>)> {
+    fn frame_snapshot(&self, cx: &App) -> Option<(String, Vec<AgentRow>)> {
         let store = self.store.lock();
         let title = workspace_title(&store, self.workspace_id)?;
         let workspace = store.workspaces()
@@ -98,14 +99,13 @@ impl WorkspaceWindow {
                        .iter()
                        .filter_map(|id| store.agent(*id))
                        .map(|agent| {
-                           let persona_name =
-                               agent.persona_id.and_then(|id| {
-                                                   self.settings
+                           let persona_name = agent.persona_id.and_then(|id| {
+                                                                  crate::settings_global::read(cx)
                                                        .personas
                                                        .iter()
                                                        .find(|persona| persona.id == id)
                                                        .map(|persona| persona.name.clone())
-                                               });
+                                                              });
                            AgentRow { id: agent.id,
                                       avatar: agent.avatar.clone(),
                                       name: agent.name.clone(),
@@ -347,9 +347,9 @@ impl Render for WorkspaceWindow {
         // The title font (Manrope) applies explicitly to header and cell text
         // that isn't the agent's name - the name keeps the app-wide UI font
         // (Adamina), so it needs no override here.
-        let title_font_name = self.settings.title_font_name.clone();
-        let title_font_size = px(self.settings.title_font_size as f32);
-        let Some((window_title, agents)) = self.frame_snapshot()
+        let title_font_name = crate::settings_global::read(cx).title_font_name.clone();
+        let title_font_size = px(crate::settings_global::read(cx).title_font_size as f32);
+        let Some((window_title, agents)) = self.frame_snapshot(cx)
         else {
             return v_flex().size_full()
                            .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
@@ -445,7 +445,7 @@ impl Render for WorkspaceWindow {
                         else {
                             return;
                         };
-                        view.persist_sidebar_width(width);
+                        view.persist_sidebar_width(width, cx);
                     }))
                     .child(resizable_panel()
                         .size(px(sidebar_width as f32))

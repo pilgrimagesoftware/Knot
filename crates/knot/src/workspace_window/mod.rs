@@ -23,7 +23,6 @@ mod pull_requests_view;
 mod render;
 mod repaint;
 mod sessions;
-mod settings_refresh;
 mod sidebar_layout;
 mod terminal_input;
 mod title;

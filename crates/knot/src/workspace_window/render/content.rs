@@ -226,11 +226,12 @@ impl WorkspaceWindow {
                                                             terminal_cell_size(
                                                                 cx,
                                                                 terminal_font_family(
-                                                                    &view.settings,
+                                                                    &crate::settings_global::read(
+                                                                        cx,
+                                                                    ),
                                                                     cx,
                                                                 ),
-                                                                px(view
-                                                                    .settings
+                                                                px(crate::settings_global::read(cx)
                                                                     .terminal_font_size
                                                                     as f32),
                                                             );
@@ -261,10 +262,10 @@ impl WorkspaceWindow {
                                                 .child(terminal_view::render_grid(
                                                     &grid.lock(),
                                                     terminal_font_family(
-                                                        &self.settings,
+                                                        &crate::settings_global::read(cx),
                                                         cx,
                                                     ),
-                                                    px(self.settings.terminal_font_size
+                                                    px(crate::settings_global::read(cx).terminal_font_size
                                                         as f32),
                                                 ))
                                                 .into_any_element(),

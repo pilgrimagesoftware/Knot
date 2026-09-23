@@ -24,11 +24,6 @@ use gpui_kit::App;
 use knot_core::{Settings, SharedSettings};
 
 /// The process's settings surface, as a GPUI global.
-// UNWIRED(#401): stage 1 installs the surface; the readers and writers move
-// over in stage 2, one owner struct at a time. Until then nothing outside the
-// tests calls these, so `dead_code` is correct and temporary - deleting the
-// allow is part of the last conversion, not a follow-up.
-#[allow(dead_code)]
 pub(crate) struct SettingsGlobal(SharedSettings);
 
 impl gpui_kit::Global for SettingsGlobal {}
@@ -53,11 +48,6 @@ pub(crate) fn install(settings: Settings, cx: &mut App) {
 /// condition - [`install`] runs before the first window opens - so it fails
 /// loudly instead of quietly substituting a value that writes somewhere the
 /// caller did not expect.
-// UNWIRED(#401): stage 1 installs the surface; the readers and writers move
-// over in stage 2, one owner struct at a time. Until then nothing outside the
-// tests calls these, so `dead_code` is correct and temporary - deleting the
-// allow is part of the last conversion, not a follow-up.
-#[allow(dead_code)]
 pub(crate) fn handle(cx: &App) -> SharedSettings {
     cx.global::<SettingsGlobal>().0.clone()
 }
@@ -67,11 +57,6 @@ pub(crate) fn handle(cx: &App) -> SharedSettings {
 /// # Panics
 ///
 /// See [`handle`].
-// UNWIRED(#401): stage 1 installs the surface; the readers and writers move
-// over in stage 2, one owner struct at a time. Until then nothing outside the
-// tests calls these, so `dead_code` is correct and temporary - deleting the
-// allow is part of the last conversion, not a follow-up.
-#[allow(dead_code)]
 pub(crate) fn read(cx: &App) -> Arc<Settings> {
     cx.global::<SettingsGlobal>().0.read()
 }
@@ -88,11 +73,6 @@ pub(crate) fn read(cx: &App) -> Arc<Settings> {
 /// # Panics
 ///
 /// See [`handle`].
-// UNWIRED(#401): stage 1 installs the surface; the readers and writers move
-// over in stage 2, one owner struct at a time. Until then nothing outside the
-// tests calls these, so `dead_code` is correct and temporary - deleting the
-// allow is part of the last conversion, not a follow-up.
-#[allow(dead_code)]
 pub(crate) fn write<F>(cx: &App, change: F) -> Arc<Settings>
     where F: FnMut(&mut Settings) {
     cx.global::<SettingsGlobal>().0.write(change)

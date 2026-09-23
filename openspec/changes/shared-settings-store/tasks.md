@@ -32,14 +32,14 @@
 - [x] 2.3 Move `settings_window`'s persist path onto the handle and delete its
       owned `settings` field. Verify the existing settings-window tests pass
       unchanged.
-- [ ] 2.4 Move `workspace_window/sidebar_layout.rs` onto the handle and delete
+- [x] 2.4 Move `workspace_window/sidebar_layout.rs` onto the handle and delete
       its hand-written `Settings::load()` guard. Verify the sidebar width still
       persists and that a preference written elsewhere is not reverted by a
       width write.
 
 ## 3. Move the readers
 
-- [ ] 3.1 Convert `workspace_window`'s reads to the handle and delete its
+- [x] 3.1 Convert `workspace_window`'s reads to the handle and delete its
       `settings` field, taking one `Arc<Settings>` per render rather than one
       per read. Verify `crates/knot/src/tests/settings_reach_open_windows.rs`
       still passes against the new path.
@@ -49,7 +49,7 @@
 - [x] 3.3 Convert `import_window` and delete its `settings` field and its
       `Settings::load()` at open. Verify the spec's "A non-workspace window
       sees the change too" scenario.
-- [ ] 3.4 Convert `command_center` and delete its `settings` field. Verify the
+- [x] 3.4 Convert `command_center` and delete its `settings` field. Verify the
       command centre builds and its existing tests pass.
 - [ ] 3.5 Convert `agent_editor` and delete its `settings` field and its
       `Settings::load()` guard. Verify agent creation and editing still
@@ -66,10 +66,10 @@
 
 ## 4. Delete the machinery the copies required
 
-- [ ] 4.1 Delete `crates/knot/src/settings_broadcast.rs` and its call in
+- [x] 4.1 Delete `crates/knot/src/settings_broadcast.rs` and its call in
       `settings_window`'s persist. Verify nothing references it and the build
       is clean.
-- [ ] 4.2 Delete `Settings::reload_preferences`, its `#[serde(skip)]`
+- [x] 4.2 Delete `Settings::reload_preferences`, its `#[serde(skip)]`
       transplant and the test that holds the two in step. Verify no caller
       remains.
 - [ ] 4.3 Confirm no struct field anywhere holds a `Settings` or an

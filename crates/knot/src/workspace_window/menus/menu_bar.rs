@@ -128,7 +128,7 @@ impl WorkspaceWindow {
         let (facts, move_targets, markdown_history) = agent_menu_facts(&store, id);
         drop(store);
         Some(SelectedAgentMenu { targets:  AgentMenuTargets { store: Arc::clone(&self.store),
-                                                              settings: self.settings.clone(),
+                                                              settings: (*crate::settings_global::read(cx)).clone(),
                                                               window_entity: cx.entity(),
                                                               workspace_id: self.workspace_id,
                                                               id,

@@ -33,9 +33,9 @@ use crate::workspace_window::workspace_title;
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
-                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                       settings: knot_core::Settings, workspace_id: Uuid, cx: &mut App) {
-        Self::open_with_selection(store, messages, settings, workspace_id, None, cx);
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>, workspace_id: Uuid,
+                       cx: &mut App) {
+        Self::open_with_selection(store, messages, workspace_id, None, cx);
     }
 
     /// Like `open`, but overrides the agent that would otherwise be picked
@@ -44,8 +44,8 @@ impl WorkspaceWindow {
     /// land on.
     pub(crate) fn open_with_selection(store: Arc<Mutex<knot_agents::AgentStore>>,
                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                                      settings: knot_core::Settings, workspace_id: Uuid,
-                                      select_agent: Option<Uuid>, cx: &mut App) {
+                                      workspace_id: Uuid, select_agent: Option<Uuid>,
+                                      cx: &mut App) {
         // One window per workspace: a second request raises the first rather
         // than opening another, and shows the agent it named if it named one
         // (`openspec/specs/window-lifecycle`). Every route that opens a
@@ -122,7 +122,6 @@ impl WorkspaceWindow {
                     messages,
                     nudged_messages: BTreeMap::new(),
                     notified_awaiting: BTreeMap::new(),
-                    settings,
                     workspace_id,
                     selected_agent,
                     sessions: BTreeMap::new(),
@@ -190,8 +189,8 @@ impl WorkspaceWindow {
                                 }
                             }
                             for id in agent_ids {
-                                window.ensure_session(id);
-                                window.ensure_panel_session(id);
+                                window.ensure_session(id, cx);
+                                window.ensure_panel_session(id, cx);
                             }
                             window
                         });
@@ -209,7 +208,7 @@ impl WorkspaceWindow {
                   // changed and only then is anything written to disk.
                   view.update(cx, |view, cx| {
                           let subscription =
-                              cx.observe_window_bounds(window, move |view, window, _cx| {
+                              cx.observe_window_bounds(window, move |view, window, cx| {
                                     let bounds = window.window_bounds().get_bounds();
                                     // Our own placement is not a move the user
                                     // made. Writing it back would replace the
@@ -241,7 +240,7 @@ impl WorkspaceWindow {
                                     if changed {
                                         // The UI-state document alone: a
                                         // drag must not rewrite the roster.
-                                        view.persist_workspace_ui();
+                                        view.persist_workspace_ui(cx);
                                     }
                                 });
                           view.window_bounds_subscription = Some(subscription);

@@ -401,12 +401,8 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
     {
         let store = Arc::clone(&store);
         let messages = Arc::clone(&messages);
-        let settings = settings.clone();
         cx.on_action(move |_: &OpenCommandCenter, cx| {
-              CommandCenterWindow::open(Arc::clone(&store),
-                                        Arc::clone(&messages),
-                                        settings.clone(),
-                                        cx);
+              CommandCenterWindow::open(Arc::clone(&store), Arc::clone(&messages), cx);
           });
     }
     cx.on_action(move |_: &OpenWorkspaces, cx| {

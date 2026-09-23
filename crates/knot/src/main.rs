@@ -35,7 +35,6 @@ mod plan_view;
 mod pull_request_state;
 mod quit_guard;
 mod refresh_cache;
-mod settings_broadcast;
 mod settings_global;
 mod settings_window;
 mod terminal_view;

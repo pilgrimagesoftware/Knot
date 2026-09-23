@@ -249,15 +249,17 @@ impl SettingsWindow {
     /// surface.
     ///
     /// The panes edit the surface directly, so by the time this runs the
-    /// change is already what every other window reads. This writes it to
-    /// disk - and then hands the windows still holding their own copy a
-    /// refresh, which is what `settings_broadcast` is for until the last of
-    /// them is converted.
+    /// change is already what every window reads. All that is left is the
+    /// document - and a repaint, since reading live state does not cause one.
+    ///
+    /// There is no delivery step any more. `settings_broadcast` existed to
+    /// hand each open window the new values because each held its own copy;
+    /// with one surface there is nothing to deliver.
     pub(super) fn persist(&self, cx: &mut App) {
         if let Err(error) = crate::settings_global::read(cx).persist_preferences() {
             eprintln!("failed to persist settings: {error}");
             return;
         }
-        crate::settings_broadcast::preferences_changed(cx);
+        cx.refresh_windows();
     }
 }

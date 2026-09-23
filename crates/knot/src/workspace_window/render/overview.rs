@@ -102,8 +102,8 @@ impl WorkspaceWindow {
                         entity.update(app, |view, cx| {
                                   view.select_agent(id);
                                   view.view_mode = WorkspaceViewMode::Terminal;
-                                  view.ensure_session(id);
-                                  view.ensure_panel_session(id);
+                                  view.ensure_session(id, cx);
+                                  view.ensure_panel_session(id, cx);
                                   cx.notify();
                               });
                     }
@@ -135,7 +135,7 @@ impl WorkspaceWindow {
                                       WorkspaceWindow::select_and_focus_created_agent(cx);
                                   open_agent_editor(
                                 Arc::clone(&view.store),
-                                view.settings.clone(),
+                                (*crate::settings_global::read(cx)).clone(),
                                 AgentEditorRequest {
                                     workspace_id,
                                     prefill: AgentPrefill {
