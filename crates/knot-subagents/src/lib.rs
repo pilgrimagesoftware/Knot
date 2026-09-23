@@ -23,6 +23,7 @@
 pub mod error;
 pub mod event;
 pub mod kind;
+pub mod recognize;
 pub mod state;
 pub mod subagent;
 
