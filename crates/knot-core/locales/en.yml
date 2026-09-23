@@ -32,6 +32,12 @@ sidebar:
 
 agent:
   companion: "Shell companion"
+  # How a duplicated agent is named. The shape is the translator's:
+  # where the number goes relative to the name, and what separates
+  # them, are read back off this entry rather than assumed at the
+  # call site. Numbering, not a "(copy)" suffix, so duplicating a
+  # duplicate extends the series instead of nesting.
+  duplicate_name: "%{name} %{number}"
 
 panel:
   # Failures the panel records into the conversation itself, where the
