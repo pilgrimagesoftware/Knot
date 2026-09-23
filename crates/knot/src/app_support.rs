@@ -12,6 +12,9 @@ use gpui_kit::px;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod tests;
+
 /// The automatic nudge Knot sends an agent with unread mail.
 ///
 /// The closing sentence is load-bearing: the nudge can land behind work the
