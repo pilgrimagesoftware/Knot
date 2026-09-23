@@ -15,10 +15,12 @@
 //! second thread writes into a file that is being rolled.
 
 mod entry;
+mod heartbeat;
 mod logger;
 mod redact;
 mod writer;
 
 pub use entry::{Entry, Level, Subject};
+pub(crate) use heartbeat::{Vitals, spawn as spawn_heartbeat};
 pub use logger::Logger;
 pub use redact::describe_call;

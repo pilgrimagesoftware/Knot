@@ -19,3 +19,8 @@ pub const LOG_ROTATION_SIZE: u64 = 5 * 1024 * 1024;
 /// How many rolled files to keep beside the active one. Older ones are
 /// deleted, so the log occupies at most `(1 + this) * LOG_ROTATION_SIZE`.
 pub const LOG_RETAINED_FILES: usize = 3;
+
+/// How often the server writes its vitals while it is serving. A minute is
+/// short enough that a gap in the log localizes a death, and long enough that
+/// an idle server does not fill the file on its own.
+pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);

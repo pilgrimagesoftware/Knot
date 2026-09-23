@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::consts;
 use crate::hooks::{AgentHookHandler, HookRequest};
-use crate::log::{Logger, Subject};
+use crate::log::{Logger, Subject, Vitals, spawn_heartbeat};
 use crate::rpc::{self, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::session::McpSessionManager;
 use crate::status::{self, AgentStatusEntry};
@@ -51,9 +51,11 @@ pub struct McpServer {
     /// `start`, cleared by `stop`, so uptime is the current run's rather
     /// than the process's.
     started_at: Option<Instant>,
-    /// The log's writer task, owned here and aborted on stop so a spawned
-    /// task cannot outlive the server that started it.
+    /// The log's writer task, released on stop so it can drain and exit.
     log_task:   Option<JoinHandle<()>>,
+    /// The heartbeat, owned here and aborted on stop: unlike the writer it
+    /// has no natural end, so nothing but an abort stops it.
+    heartbeat:  Option<JoinHandle<()>>,
 }
 
 impl Drop for McpServer {
@@ -74,7 +76,8 @@ impl McpServer {
                handle: None,
                bound_addr: None,
                started_at: None,
-               log_task: None }
+               log_task: None,
+               heartbeat: None }
     }
 
     pub fn with_hook_handler(mut self, handler: Arc<dyn AgentHookHandler>) -> Self {
@@ -136,6 +139,12 @@ impl McpServer {
            && let Some(bound) = self.bound_addr
         {
             log.info(Subject::Lifecycle, format!("bound {bound}"));
+            self.heartbeat = Some(spawn_heartbeat(Vitals { log:      log.clone(),
+                                                           addr:     bound,
+                                                           started:  Instant::now(),
+                                                           sessions: self.state.sessions.clone(),
+                                                           served:   Arc::clone(&self.state.served),
+                                                           interval: consts::HEARTBEAT_INTERVAL, }));
         }
         self.handle = Some(tokio::spawn(async move {
                                let _ = axum::serve(listener, router).await;
@@ -164,6 +173,11 @@ impl McpServer {
     pub fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();
+        }
+        // Before the stop entry, so no heartbeat can land after it and
+        // claim the server is still up.
+        if let Some(heartbeat) = self.heartbeat.take() {
+            heartbeat.abort();
         }
         if let Some(log) = self.log() {
             log.info(Subject::Lifecycle, "stopped");

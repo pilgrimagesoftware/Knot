@@ -56,10 +56,10 @@
 
 ## 5. Heartbeat
 
-- [ ] 5.1 Implement the heartbeat task: on each interval log uptime, bound address, live session
+- [x] 5.1 Implement the heartbeat task: on each interval log uptime, bound address, live session
       count, and `swap(0)` of the request counter; verify tests cover an idle interval reporting
       zero, and five-then-two requests reporting five then two rather than five then seven.
-- [ ] 5.2 Start the task when the server begins serving and abort it in `stop()` alongside the
+- [x] 5.2 Start the task when the server begins serving and abort it in `stop()` alongside the
       serve handle; verify a test asserts no heartbeat entry is written after the server stops.
 
 ## 6. Resolving the path in the app
