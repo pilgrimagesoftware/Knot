@@ -58,6 +58,12 @@ impl WorkspaceWindow {
             self.copy_selection(id, cx);
             return;
         }
+        if keystroke.modifiers.platform && keystroke.key == "v" {
+            self.paste_into_terminal(id, cx);
+            return;
+        }
+        // Every other platform-modifier chord belongs to the application, not
+        // to the program in the pane.
         if keystroke.modifiers.platform {
             return;
         }
@@ -180,6 +186,40 @@ impl WorkspaceWindow {
                                .collect::<Vec<_>>()
                                .join("\n");
         cx.write_to_clipboard(ClipboardItem::new_string(text));
+    }
+
+    /// Writes the OS pasteboard's text into the focused terminal pane's PTY.
+    ///
+    /// The counterpart to [`Self::copy_selection`], which had no opposite:
+    /// `dispatch_key` returned early on every platform-modifier chord but
+    /// Cmd-C, so Cmd-V reached here and was dropped. The menu's own Paste
+    /// action does not cover it either - that targets a focused text input,
+    /// and the pane is a focus handle with a raw key handler.
+    ///
+    /// The payload is built by `knot_terminal::paste_payload`, which
+    /// translates line breaks for a tty and keeps a pasted blob from closing
+    /// the bracketed-paste marker early.
+    pub(super) fn paste_into_terminal(&mut self, id: Uuid, cx: &mut App) {
+        let Some(session) = self.sessions.get(&id)
+        else {
+            return;
+        };
+        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text())
+        else {
+            return;
+        };
+
+        let bracketed = session.lock()
+                               .grid()
+                               .is_some_and(|grid| grid.lock().bracketed_paste_mode());
+        let Some(payload) = knot_terminal::paste_payload(&text, bracketed)
+        else {
+            return;
+        };
+
+        if let Err(error) = session.lock().send_text(&payload) {
+            eprintln!("failed to paste into the terminal: {error}");
+        }
     }
 
     /// Sends a scroll-wheel event to the focused terminal pane's session

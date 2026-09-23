@@ -12,6 +12,7 @@ mod acp_session;
 mod grid;
 mod keys;
 mod mouse;
+mod paste;
 mod pty;
 mod session;
 
@@ -25,6 +26,7 @@ use knot_agents::Agent;
 #[cfg(test)]
 use knot_core::Settings;
 pub use mouse::{MouseButton, MouseInput, mouse_to_bytes};
+pub use paste::paste_payload;
 pub use pty::PtyTransport;
 pub use session::{SessionConfig, SessionPlan, TerminalTransport};
 use thiserror::Error;
