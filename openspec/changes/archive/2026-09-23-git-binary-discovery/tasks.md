@@ -22,7 +22,7 @@
 ## 3. Gate
 
 - [x] 3.1 `make`
-- [ ] 3.2 On a machine with no Xcode command line tools and a Homebrew git,
+- [x] 3.2 On a machine with no Xcode command line tools and a Homebrew git,
       confirm the git panel reads status. Not reproducible here - this
       machine has both - so it stands as the one claim these tests do not
       make
