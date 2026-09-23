@@ -71,17 +71,24 @@ impl WorkspaceWindow {
     /// recorded pull requests must not be polling `gh` fifty times while the
     /// user is doing something else. Nothing here runs a subprocess - each
     /// claim hands its writer to `spawn_blocking` and a later frame draws the
-    /// answer.
+    /// answer. That includes the availability probe, which is `gh auth
+    /// status` and was the one thing here that did run on the frame.
     pub(super) fn refresh_pull_request_states(&mut self) {
         if self.view_mode != WorkspaceViewMode::PullRequests {
             return;
         }
-        // One probe per view opening, before twenty lookups: if `gh` is
-        // absent or signed out, every one of them would fail the same way,
-        // and the view says so once instead.
-        if self.forge_status.needs_probe() {
-            self.forge_status.set(knot_forge::probe());
+        // One probe before twenty lookups: if `gh` is absent or signed out,
+        // every one of them would fail the same way, and the view says so
+        // once instead.
+        if let Some(writer) = self.forge_status
+                                  .claim_probe(pull_request_state::PROBE_MAX_AGE)
+        {
+            self.runtime
+                .spawn_blocking(move || writer.record(knot_forge::probe()));
         }
+        // Nothing to fetch until the first probe lands, and nothing to fetch
+        // after one that found no usable `gh`. Either way a later frame
+        // arrives here again, because the probe marks the view for repaint.
         if !self.forge_status.is_ready() {
             return;
         }

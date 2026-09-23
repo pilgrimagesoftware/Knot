@@ -82,6 +82,12 @@ impl WorkspaceWindow {
         self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
+        // Both land from `spawn_blocking` with no context to notify from, so
+        // without this a fetched pull request state drew only when something
+        // unrelated happened to repaint the window - and on a workspace with
+        // nothing running, that could be never.
+        let forge_probed = self.forge_status.take_changed();
+        let pull_request_states_changed = self.pull_request_states.take_changed();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -95,6 +101,8 @@ impl WorkspaceWindow {
            || prompts_completed
            || prompts_sent
            || pull_requests_recorded
+           || forge_probed
+           || pull_request_states_changed
         {
             cx.notify();
         }

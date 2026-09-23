@@ -83,7 +83,7 @@ impl WorkspaceWindow {
     /// not installed is twenty copies of one fact, and the fix is the same
     /// for all of them.
     fn forge_notice(&self) -> Option<String> {
-        forge_notice_text(self.forge_status.availability()?)
+        forge_notice_text(&self.forge_status.availability()?)
     }
 }
 
