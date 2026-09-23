@@ -143,6 +143,22 @@ impl WorkspaceWindow {
     }
 }
 
+/// The fixed palette, for the header's `+N` / `-N` figures only.
+///
+/// These stay on `consts` rather than the theme because the agent header
+/// directly above the panel draws the same two figures through
+/// `app_state::diff_stats_row`, which uses this palette app-wide. Two
+/// different greens for the same number, a few pixels apart, is worse than
+/// one imperfect one - and unlike the diff body, this is a two-character
+/// accent rather than something anybody reads a screenful of.
+fn added_color() -> gpui_kit::Hsla {
+    rgb(consts::COLOR_IDLE).into()
+}
+
+fn removed_color() -> gpui_kit::Hsla {
+    rgb(consts::COLOR_ERROR).into()
+}
+
 /// The path, and the counts that are greater than zero.
 fn diff_header(diff: &FileDiff) -> gpui_kit::AnyElement {
     let additions = diff.additions();
@@ -257,28 +273,27 @@ fn prefix(kind: LineKind) -> &'static str {
     }
 }
 
+/// The background wash and text colour for one line.
+///
+/// Both come from theme tokens rather than the fixed palette in `consts`.
+/// That palette is documented as meaning the same thing in light and dark,
+/// and it does - for a status dot or a stat figure, which is what it was
+/// written for. A diff pane is not that: it is a wall of body text, and the
+/// palette's green is 2.28:1 on white, below even the threshold for large
+/// text. The theme's tokens are the ones picked to be legible against the
+/// theme's own background, which is exactly the question here.
+///
+/// The `+`/`-` prefix carries the same distinction as the colour, so a line's
+/// classification survives when the colour does not - a diff read without
+/// colour vision is still a diff.
 fn line_colors(kind: LineKind, cx: &mut gpui_kit::App) -> (gpui_kit::Hsla, gpui_kit::Hsla) {
+    let theme = cx.theme();
     match kind {
-        LineKind::Addition => (tint(added_color()), added_color()),
-        LineKind::Deletion => (tint(removed_color()), removed_color()),
-        LineKind::HunkHeader | LineKind::Header => (tint(hunk_color()), hunk_color()),
-        LineKind::Context => (gpui_kit::transparent_black(), default_text(cx)),
+        LineKind::Addition => (tint(theme.success), theme.success),
+        LineKind::Deletion => (tint(theme.danger), theme.danger),
+        LineKind::HunkHeader | LineKind::Header => (tint(theme.info), theme.info),
+        LineKind::Context => (gpui_kit::transparent_black(), theme.foreground),
     }
-}
-
-/// The palette `consts` already documents for a diff: `COLOR_IDLE` is
-/// "green: an agent that is idle, and a diff's added lines", `COLOR_ERROR`
-/// the matching red. The hunk header borrows the input blue.
-fn added_color() -> gpui_kit::Hsla {
-    rgb(consts::COLOR_IDLE).into()
-}
-
-fn removed_color() -> gpui_kit::Hsla {
-    rgb(consts::COLOR_ERROR).into()
-}
-
-fn hunk_color() -> gpui_kit::Hsla {
-    rgb(consts::COLOR_INPUT).into()
 }
 
 /// A background wash of the line's own colour, faint enough to read through.
@@ -307,8 +322,4 @@ fn mono_family(cx: &gpui_kit::App) -> SharedString {
 
 fn muted(cx: &gpui_kit::App) -> gpui_kit::Hsla {
     cx.theme().muted_foreground
-}
-
-fn default_text(cx: &gpui_kit::App) -> gpui_kit::Hsla {
-    cx.theme().foreground
 }
