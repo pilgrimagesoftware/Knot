@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use knot_core::Workspace;
 use uuid::Uuid;
 
@@ -17,8 +15,14 @@ pub(super) fn default_workspace(agent_ids: Vec<Uuid>) -> Workspace {
                 agent_ids }
 }
 
-pub(super) fn last_path_component(folder: &str) -> String {
-    Path::new(folder).file_name()
-                     .map(|name| name.to_string_lossy().into_owned())
-                     .unwrap_or_else(|| folder.to_string())
+/// The name an agent created in `folder` takes when its caller supplied
+/// none.
+///
+/// The rule itself is `knot_core::folder_name`, shared with the agent editor
+/// so the dialog and the store cannot name the same folder differently. What
+/// stays here is only this caller's answer to a folder with no last
+/// component - the path itself, which is what the store has always used and
+/// what a caller with no name field to leave blank needs.
+pub(super) fn name_for_folder(folder: &str) -> String {
+    knot_core::folder_name(folder).unwrap_or_else(|| folder.to_string())
 }

@@ -59,6 +59,26 @@ pub(crate) fn persona_choices(settings: &knot_core::Settings) -> Vec<knot_core::
     settings.active_personas().into_iter().cloned().collect()
 }
 
+/// The name to put in the name field when `folder` is chosen, or `None` to
+/// leave it as it is.
+///
+/// Contract: `openspec/specs/agent-editor-ui/spec.md` - "Choosing a folder
+/// names an unnamed agent after it".
+///
+/// Two ways to be left alone. A name the user already supplied is never
+/// replaced, so choosing a second folder to correct a mistake does not
+/// discard it. And a folder with no last component has no name to give, so
+/// the field keeps the blank it had rather than being filled with nothing.
+///
+/// Blank is `trim().is_empty()`, the same test `validated_fields` rejects a
+/// name by, so the dialog cannot both refuse a name and decline to fill it.
+pub(crate) fn name_from_folder(current_name: &str, folder: &str) -> Option<String> {
+    if !current_name.trim().is_empty() {
+        return None;
+    }
+    knot_core::folder_name(folder)
+}
+
 /// Splits the capabilities field into tags. `Capabilities` trims,
 /// lowercases and drops empties, so this only has to decide where one tag
 /// ends and the next begins.
@@ -75,3 +95,6 @@ pub(super) struct AgentFields {
     pub(super) name:   String,
     pub(super) avatar: String,
 }
+
+#[cfg(test)]
+mod tests;
