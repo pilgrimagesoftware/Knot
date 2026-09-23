@@ -2,31 +2,31 @@
 
 ## 1. The `knot-processes` crate
 
-- [ ] 1.1 Create `crates/knot-processes` with `lib.rs` (module doc linking
+- [x] 1.1 Create `crates/knot-processes` with `lib.rs` (module doc linking
       `openspec/specs/agent-processes/spec.md`), `consts.rs`, and a `thiserror` `ProcessError`
       plus a crate `Result` alias; add it to the workspace members and verify `cargo build
       --workspace` succeeds.
-- [ ] 1.2 Implement the process-record parser for `ps -Ao pid=,ppid=,pgid=,tpgid=,etime=,command=`
+- [x] 1.2 Implement the process-record parser for `ps -Ao pid=,ppid=,pgid=,tpgid=,etime=,command=`
       output — five leading fields then the command verbatim — and verify unit tests over
       captured fixture text cover a command containing spaces, leading whitespace padding, a
       malformed line being skipped without failing the sample, and both `etime` shapes
       (`MM:SS`, `HH:MM:SS`, `DD-HH:MM:SS`).
-- [ ] 1.3 Implement the descendant tree walk: given a root PID and a parsed table, return every
+- [x] 1.3 Implement the descendant tree walk: given a root PID and a parsed table, return every
       transitive descendant excluding the root; verify unit tests cover a grandchild being
       reported, the root being excluded, an unrelated process with a recycled-looking PID being
       excluded, and a cycle in the parent chain terminating rather than looping.
-- [ ] 1.4 Implement background/foreground classification (`pgid == tpgid` is foreground,
+- [x] 1.4 Implement background/foreground classification (`pgid == tpgid` is foreground,
       everything else including `tpgid` of `0`/`-1` is background) and verify unit tests cover a
       foreground command, a detached process, and a subtree with no controlling terminal.
-- [ ] 1.5 Implement the blocking sample entry point that runs `ps`, parses, and returns the
+- [x] 1.5 Implement the blocking sample entry point that runs `ps`, parses, and returns the
       table; verify an integration test samples the current process and finds this test binary's
       own PID in the table.
-- [ ] 1.6 Implement termination: re-verify the target's parent chain and start time, send `TERM`,
+- [x] 1.6 Implement termination: re-verify the target's parent chain and start time, send `TERM`,
       poll for exit to a bounded grace period, then send `KILL`; verify tests cover a spawned
       sleep exiting on `TERM`, a `TERM`-ignoring child being killed after the grace period, an
       already-exited PID reported as success, and a mismatched identity refused without
       signalling.
-- [ ] 1.7 Verify `make lint` and `make size-check` pass for the new crate and that `mod.rs`
+- [x] 1.7 Verify `make lint` and `make size-check` pass for the new crate and that `mod.rs`
       files declare and re-export only.
 
 ## 2. Root PID accessors

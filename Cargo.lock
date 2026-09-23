@@ -3943,6 +3943,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "knot-processes"
+version = "1.13.0"
+dependencies = [
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "knot-tasks"
 version = "1.13.0"
 dependencies = [
