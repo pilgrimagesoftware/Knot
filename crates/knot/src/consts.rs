@@ -67,6 +67,19 @@ pub(crate) const GIT_DIFF_MAX_LINES: usize = 20_000;
 /// panel's own overdraw, for the same reason.
 pub(crate) const GIT_DIFF_LIST_OVERDRAW: f32 = 400.;
 
+/// The height hint every diff row starts with, before it has been measured.
+///
+/// A virtualized list summarises an unmeasured row as zero height and flags
+/// the whole summary unknown, so anything derived from total content height -
+/// a scrollbar thumb above all - is wrong until every row has been drawn.
+/// Seeding a hint fixes that from the first frame, and real heights replace
+/// it as rows render.
+///
+/// It works here and would not for a conversation: diff rows are uniform -
+/// one line each, one text size, no wrapping. An approximation is enough,
+/// since it only has to hold until the row is measured.
+pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 16.;
+
 /// How stale a pull request's fetched state may get before the Pull Requests
 /// view asks for it again.
 ///

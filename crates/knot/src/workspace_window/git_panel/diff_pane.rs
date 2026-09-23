@@ -104,22 +104,31 @@ impl WorkspaceWindow {
     /// The list state for the diff, reconciled to `row_count`.
     ///
     /// One per agent rather than per selection: only one diff is on screen at
-    /// a time, so a second entry would be a leak, not a cache. The row count
-    /// is tracked alongside so a selection change splices rather than
-    /// rebuilding measured heights that no longer apply.
+    /// a time, so a second entry would be a leak, not a cache.
+    ///
+    /// `reset_with_uniform_height` rather than `splice`, for two reasons. A
+    /// count change here means different content - another file, or the same
+    /// file after a stage - so no measured height from the previous one is
+    /// worth keeping, which is what `reset` means and `splice` does not. And
+    /// the uniform hint keeps the summary measurable: an unmeasured row
+    /// summarises as zero height with an unknown-height flag that ORs up the
+    /// tree, so one unmeasured row anywhere makes anything derived from total
+    /// content height wrong - silently, for a scrollbar, since those
+    /// accessors return a plausible number rather than `None`. Diff rows are
+    /// uniform, so the hint fits them.
+    ///
+    /// Deliberately not `measure_all`: it re-measures every row on every
+    /// splice, which is the cost virtualizing exists to avoid.
     fn git_diff_list(&mut self, agent: uuid::Uuid, row_count: usize) -> ListState {
-        let known = self.git_diff_row_counts.get(&agent).copied().unwrap_or(0);
+        let known = self.git_diff_row_counts.get(&agent).copied();
         let list = self.git_diff_lists.entry(agent).or_insert_with(|| {
                                                        ListState::new(0,
                                                          ListAlignment::Top,
                                                          px(consts::GIT_DIFF_LIST_OVERDRAW))
                                                    });
 
-        if known != row_count {
-            // Every row is new whenever the count moves - a different file,
-            // or the same file changed - so the whole range is replaced
-            // rather than keeping measured heights against different content.
-            list.splice(0..known, row_count);
+        if known != Some(row_count) {
+            list.reset_with_uniform_height(row_count, px(consts::GIT_DIFF_LINE_HEIGHT));
             self.git_diff_row_counts.insert(agent, row_count);
         }
 
