@@ -180,6 +180,22 @@ mod tests {
         count.load(Ordering::SeqCst)
     }
 
+    /// Waits out the watch's own start, then zeroes `count`.
+    ///
+    /// `work_tree` creates `.git/refs/heads`, which the predicate accepts,
+    /// moments before a test starts its watch. macOS asks FSEvents for events
+    /// "since now", but the id that means now is sampled as the stream is
+    /// scheduled, so a change made just before it can still be delivered -
+    /// and the test then counts a callback it did not cause. Every test here
+    /// counts callbacks, so every one of them settles first.
+    ///
+    /// This weakens nothing: each test makes the changes it asserts on after
+    /// the reset.
+    async fn settle(count: &AtomicUsize) {
+        tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE * 2).await;
+        count.store(0, Ordering::SeqCst);
+    }
+
     /// A working tree with a `.git` directory, so the predicate has both
     /// kinds of path to judge.
     fn work_tree() -> tempfile::TempDir {
@@ -209,6 +225,7 @@ mod tests {
                                                counted.fetch_add(1, Ordering::SeqCst);
                                            });
         watch.start().unwrap();
+        settle(&count).await;
 
         for i in 0..50 {
             fs::write(dir.path().join(format!("file{i}.rs")), "changed").unwrap();
@@ -237,6 +254,7 @@ mod tests {
                                                counted.fetch_add(1, Ordering::SeqCst);
                                            });
         watch.start().unwrap();
+        settle(&count).await;
 
         for i in 0..20 {
             fs::write(dir.path().join(format!(".git/objects/obj{i}")), "x").unwrap();
@@ -247,9 +265,9 @@ mod tests {
         // Absence cannot be waited for the way a value can, so this is a
         // bounded-confidence check: several debounces' worth of room, and if
         // load delays a spurious callback past it the test passes when it
-        // should not. That direction is the safe one - it cannot fail
-        // spuriously, only under-report - and the two positive tests above
-        // prove the predicate is not simply rejecting everything.
+        // should not. That direction under-reports rather than failing
+        // spuriously, and the two positive tests above prove the predicate is
+        // not simply rejecting everything.
         tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE * 4).await;
         watch.stop();
 
@@ -274,6 +292,7 @@ mod tests {
                                                counted.fetch_add(1, Ordering::SeqCst);
                                            });
         watch.start().unwrap();
+        settle(&count).await;
 
         fs::write(dir.path().join(".git/index"), "staged").unwrap();
 
