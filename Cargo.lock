@@ -3773,6 +3773,7 @@ dependencies = [
  "knot-mcp",
  "knot-mcp-tools",
  "knot-messaging",
+ "knot-processes",
  "knot-tasks",
  "knot-terminal",
  "objc2 0.6.4",

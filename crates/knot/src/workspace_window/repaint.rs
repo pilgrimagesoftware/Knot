@@ -83,10 +83,15 @@ impl WorkspaceWindow {
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
         let spinner_dirty = self.spinner_repaint_due();
+        // Runs `ps` on its own much slower cadence, and only while a
+        // processes section is expanded on the shown agent - see
+        // `workspace_window::processes`.
+        let processes_sampled = self.process_sampling_tick();
         if grid_dirty
            || panel_dirty
            || spinner_dirty
            || activated
+           || processes_sampled
            || prompts_completed
            || prompts_sent
            || pull_requests_recorded

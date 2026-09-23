@@ -66,9 +66,6 @@ impl PanelSessionHandle {
     }
 
     /// The adapter subprocess's process id - this agent's session root.
-    // UNWIRED(#337): read through `PanelSessionSlot::process_id` once the
-    // processes section's sampling task lands.
-    #[allow(dead_code)]
     pub fn process_id(&self) -> Option<u32> {
         self.session.process_id()
     }
@@ -266,9 +263,6 @@ impl PanelSessionSlot {
     /// `Connecting` is the mid-restart case and `Failed` never spawned
     /// anything that survived; both answer `None`, which is the spec's "a
     /// stopped agent has no session root".
-    // UNWIRED(#337): read by `WorkspaceWindow::agent_session_root`, itself
-    // unwired until the processes section's sampling task lands.
-    #[allow(dead_code)]
     pub fn process_id(&self) -> Option<u32> {
         match self {
             Self::Ready(handle) => handle.process_id(),

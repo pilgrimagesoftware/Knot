@@ -10,18 +10,21 @@
 //! therefore decided by the agent's view mode, not by which map happens to
 //! have an entry.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Instant;
+
 use knot_core::ViewMode;
 use uuid::Uuid;
 
 use super::window::WorkspaceWindow;
+use crate::agent_processes::{self, ProcessSection, Showing};
 
 /// The agent's session root, given what each launch path reports for it.
 ///
 /// `None` whenever the path that owns this agent has no live process: never
 /// started, deactivated, mid-restart, or exited.
-// UNWIRED(#337): called by `agent_session_root` below, which the processes
-// section's sampling task is what finally calls.
-#[allow(dead_code)]
 pub(crate) fn session_root(view_mode: ViewMode, pty: Option<u32>, adapter: Option<u32>)
                            -> Option<u32> {
     match view_mode {
@@ -30,10 +33,141 @@ pub(crate) fn session_root(view_mode: ViewMode, pty: Option<u32>, adapter: Optio
     }
 }
 
-// UNWIRED(#337): the whole impl is reached only from the processes section's
-// sampling task, which lands with the section itself.
-#[allow(dead_code)]
 impl WorkspaceWindow {
+    /// One tick of the processes sampler, from the repaint poll.
+    ///
+    /// Answers whether a new sample landed, so the poll repaints for it and
+    /// not for the twenty-nine ticks a second that find nothing.
+    pub(super) fn process_sampling_tick(&mut self) -> bool {
+        let landed = self.drain_published_processes();
+        self.claim_process_sample();
+        landed
+    }
+
+    /// This agent's section, or `None` if it has never been opened.
+    // UNWIRED(#337): read and driven by the section's own rendering, which
+    // lands next.
+    #[allow(dead_code)]
+    pub(super) fn process_section(&self, agent_id: Uuid) -> Option<&ProcessSection> {
+        self.process_sections.get(&agent_id)
+    }
+
+    /// Opens or shuts the section, answering its new state.
+    ///
+    /// Expanding is what starts the sampler: the next poll tick sees a
+    /// non-empty observed set. Collapsing is what stops it.
+    // UNWIRED(#337): called by the section header's click handler, which
+    // lands next.
+    #[allow(dead_code)]
+    pub(super) fn toggle_process_section(&mut self, agent_id: Uuid) -> bool {
+        let expanded = self.process_sections.entry(agent_id).or_default().toggle();
+
+        if !expanded {
+            // Nothing is shown while shut, and a stale list would be the
+            // first thing drawn on reopening.
+            if let Some(section) = self.process_sections.get_mut(&agent_id) {
+                section.clear();
+            }
+            // So reopening samples at once rather than waiting out the rest
+            // of an interval that elapsed while it was shut.
+            self.process_sampled_at = None;
+        }
+
+        expanded
+    }
+
+    /// Drops everything this agent's section held. Called from session
+    /// teardown, where every other per-agent map is pruned.
+    pub(super) fn forget_process_section(&mut self, agent_id: Uuid) {
+        self.process_sections.remove(&agent_id);
+    }
+
+    /// Which agents this window is sampling right now.
+    fn observed_process_roots(&self) -> BTreeMap<Uuid, u32> {
+        let showing = Showing { agent: if self.view_mode.is_takeover() {
+                                    None
+                                }
+                                else {
+                                    self.selected_agent
+                                }, };
+
+        agent_processes::observed_roots(&self.process_sections, showing, |agent| {
+            self.agent_session_root(agent)
+        })
+    }
+
+    /// Moves a completed pass into the sections, answering whether one had
+    /// arrived since the last tick.
+    fn drain_published_processes(&mut self) -> bool {
+        let (descendants, failure, generation) = {
+            let published = self.process_publish.lock();
+            if published.generation == self.process_generation {
+                return false;
+            }
+            (published.descendants.clone(), published.failure.clone(), published.generation)
+        };
+        self.process_generation = generation;
+
+        for (agent, section) in &mut self.process_sections {
+            match (failure.as_ref(), descendants.get(agent)) {
+                // A failed sample keeps the last successful list on screen.
+                (Some(message), _) => section.fail(message.clone()),
+                (None, Some(processes)) => section.publish(processes.clone()),
+                // Observed by nobody this pass: shut, or the agent stopped.
+                (None, None) => section.clear(),
+            }
+        }
+
+        true
+    }
+
+    /// Starts a sample if one is due and none is already running.
+    fn claim_process_sample(&mut self) {
+        let roots = self.observed_process_roots();
+
+        if roots.is_empty() {
+            // Nothing observed: no subprocess, and the next expansion
+            // samples immediately rather than mid-interval.
+            self.process_sampled_at = None;
+            return;
+        }
+
+        if self.process_sampling.load(Ordering::Acquire) {
+            return;
+        }
+
+        let due = self.process_sampled_at
+                      .is_none_or(|at| at.elapsed() >= knot_processes::consts::SAMPLE_INTERVAL);
+        if !due {
+            return;
+        }
+
+        // Marked before the spawn, as `claim_refresh` does: work this slow
+        // must not be asked for twice while the first is still running.
+        self.process_sampled_at = Some(Instant::now());
+        self.process_sampling.store(true, Ordering::Release);
+
+        let slot = Arc::clone(&self.process_publish);
+        let running = Arc::clone(&self.process_sampling);
+        // `spawn_blocking`, not `spawn`: `knot_processes::sample` runs `ps`
+        // and blocks until it has drained its output.
+        self.runtime.spawn_blocking(move || {
+                        let outcome = agent_processes::sample_roots(&roots, knot_processes::sample);
+                        {
+                            let mut published = slot.lock();
+                            published.generation += 1;
+                            match outcome {
+                                Ok(descendants) => {
+                                    published.descendants = descendants;
+                                    published.failure = None;
+                                }
+                                Err(error) => published.failure = Some(error.to_string()),
+                            }
+                        }
+                        running.store(false, Ordering::Release);
+                    });
+    }
+
     /// The process whose descendants this agent's processes section lists.
     pub(super) fn agent_session_root(&self, agent_id: Uuid) -> Option<u32> {
         let view_mode = self.store

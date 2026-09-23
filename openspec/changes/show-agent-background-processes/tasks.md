@@ -42,16 +42,16 @@
 
 ## 3. Sampling task and window state
 
-- [ ] 3.1 Add per-agent processes-section state (collapsed by default, expansion, last snapshot,
+- [x] 3.1 Add per-agent processes-section state (collapsed by default, expansion, last snapshot,
       last failure, in-flight terminations) to the workspace window; verify unit tests cover
       default-collapsed and toggle behavior.
-- [ ] 3.2 Implement the per-window sampling task: one `ps` read per interval on a blocking task,
+- [x] 3.2 Implement the per-window sampling task: one `ps` read per interval on a blocking task,
       descendant sets computed per observed root from that one snapshot, published into window
       state; verify a test with two observed roots performs a single sample and populates both.
-- [ ] 3.3 Gate the task's lifetime — starts when a section expands, stops on collapse, on the
+- [x] 3.3 Gate the task's lifetime — starts when a section expands, stops on collapse, on the
       agent stopping, on the pane no longer being shown, and on window close; verify unit tests
       cover each stop trigger.
-- [ ] 3.4 Verify by inspection and test that no render path calls into `knot-processes`: the
+- [x] 3.4 Verify by inspection and test that no render path calls into `knot-processes`: the
       renderer reads only the published snapshot, and a render with no completed sample yields
       the unknown count rather than zero.
 
