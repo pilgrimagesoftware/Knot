@@ -58,6 +58,7 @@ use crate::workspace_window::with_agents_menu_actions;
 use crate::workspace_window::workspace_title;
 
 mod content;
+mod mcp_pane;
 mod overview;
 mod processes_pane;
 mod processes_summary;

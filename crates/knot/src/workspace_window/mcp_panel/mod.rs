@@ -15,4 +15,6 @@
 //! stamped with when they were taken rather than dressed up as live.
 
 pub(crate) mod probe;
+pub(crate) mod rows;
 pub(crate) mod state;
+pub(crate) mod summary;

@@ -301,6 +301,7 @@ impl WorkspaceWindow {
                                                     // the
                                                     // terminal and panel views get the section from
                                                     // one place rather than two that can drift.
+                                                    .children(self.mcp_servers_section(cx))
                                                     .children(self.processes_section(cx))
                                                     .into_any_element()
                                         }))

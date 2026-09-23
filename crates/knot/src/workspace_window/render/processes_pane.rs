@@ -400,7 +400,7 @@ impl WorkspaceWindow {
 
     /// Whether a document the agent opened has taken the content area, in
     /// which case its session pane - and this section with it - is not shown.
-    fn agent_has_document_pane(&self, agent_id: Uuid) -> bool {
+    pub(super) fn agent_has_document_pane(&self, agent_id: Uuid) -> bool {
         let store = self.store.lock();
         let Some(agent) = store.agent(agent_id)
         else {

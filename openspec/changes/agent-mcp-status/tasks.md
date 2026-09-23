@@ -31,18 +31,18 @@
 
 ## 5. The list the section shows
 
-- [ ] 5.1 Compose the row list from Knot's own server (state read from `mcp_status.rs`, not the probe) followed by the agent's rows; verify Knot's row renders with its state before any probe has completed
-- [ ] 5.2 Merge a probed row whose target is Knot's endpoint into Knot's own row, keyed on endpoint rather than name, carrying Knot's state and a marker that the agent configures it independently; verify a differently-named entry on Knot's endpoint merges and a same-named entry on another endpoint does not
-- [ ] 5.3 Render Knot's row with no delegated action in every state including failed; verify the failed case offers none
-- [ ] 5.4 Render each row as name, transport and state using `short_label()`, with a copy action carrying the full target; verify the `node -e` fixture row's height matches a one-line row's
+- [x] 5.1 Compose the row list from Knot's own server (state read from `mcp_status.rs`, not the probe) followed by the agent's rows; verify Knot's row renders with its state before any probe has completed
+- [x] 5.2 Merge a probed row whose target is Knot's endpoint into Knot's own row, keyed on endpoint rather than name, carrying Knot's state and a marker that the agent configures it independently; verify a differently-named entry on Knot's endpoint merges and a same-named entry on another endpoint does not
+- [x] 5.3 Render Knot's row with no delegated action in every state including failed; verify the failed case offers none
+- [x] 5.4 Render each row as name, transport and state using `short_label()`, with a copy action carrying the full target; verify the `node -e` fixture row's height matches a one-line row's
 
 ## 6. Header, states and refresh
 
-- [ ] 6.1 Implement the collapsed header: count and name the servers needing attention (needs-authentication or failed), deduplicated, capped, with a remainder counting those the names do not cover; verify four servers with two needing authentication name exactly those two
-- [ ] 6.2 Implement the remaining header branches — all connected, no servers configured, cannot determine, probe failed, probe in progress, agent not running — and verify each resolves from the catalog with no placeholder left behind
-- [ ] 6.3 Show when the rows were taken alongside them, and never present them as live session state; verify the timestamp is present whenever rows are
-- [ ] 6.4 Keep the previous probe's rows when a later probe fails, shown with their original timestamp beside the failure; verify a failure after a success does not empty the list
-- [ ] 6.5 Add the refresh action and the expanded header's row count; verify refresh while in flight starts no second probe
+- [x] 6.1 Implement the collapsed header: count and name the servers needing attention (needs-authentication or failed), deduplicated, capped, with a remainder counting those the names do not cover; verify four servers with two needing authentication name exactly those two
+- [x] 6.2 Implement the remaining header branches — all connected, no servers configured, cannot determine, probe failed, probe in progress, agent not running — and verify each resolves from the catalog with no placeholder left behind
+- [x] 6.3 Show when the rows were taken alongside them, and never present them as live session state; verify the timestamp is present whenever rows are
+- [x] 6.4 Keep the previous probe's rows when a later probe fails, shown with their original timestamp beside the failure; verify a failure after a success does not empty the list
+- [x] 6.5 Add the refresh action and the expanded header's row count; verify refresh while in flight starts no second probe
 
 ## 7. The delegated action
 
@@ -53,8 +53,8 @@
 
 ## 8. Localization
 
-- [ ] 8.1 Add catalog keys for every `ServerState`, every header branch, the timestamp phrasing, the independent-registration marker and the action labels; verify tests assert the keys resolve and never the English copy
-- [ ] 8.2 Touch `knot-core` after editing `en.yml` so the l10n tests do not run against a stale artifact
+- [x] 8.1 Add catalog keys for every `ServerState`, every header branch, the timestamp phrasing, the independent-registration marker and the action labels; verify tests assert the keys resolve and never the English copy
+- [x] 8.2 Touch `knot-core` after editing `en.yml` so the l10n tests do not run against a stale artifact
 
 ## 9. Gate
 
