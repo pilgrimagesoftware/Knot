@@ -2,56 +2,56 @@
 
 ## 1. Server lifecycle state
 
-- [ ] 1.1 Add `ServerState` to `knot-mcp` — disabled, starting, running with the bound address,
+- [x] 1.1 Add `ServerState` to `knot-mcp` — disabled, starting, running with the bound address,
       retrying with attempt/next-delay/error, stopped — with the payloads carried in the variants;
       verify unit tests assert each variant exposes only its own data.
-- [ ] 1.2 Add the backoff and probe constants (initial delay, multiplier, maximum delay, probe
+- [x] 1.2 Add the backoff and probe constants (initial delay, multiplier, maximum delay, probe
       interval, probe timeout, consecutive-failure threshold) to `knot-mcp/src/consts.rs`; verify
       `cargo build --workspace` succeeds.
-- [ ] 1.3 Implement the pure attempt-number-to-delay policy function; verify unit tests cover
+- [x] 1.3 Implement the pure attempt-number-to-delay policy function; verify unit tests cover
       growth from the initial delay, the cap at the maximum, and that the cap is never exceeded
       for a large attempt count.
 
 ## 2. Observing the serve task
 
-- [ ] 2.1 Add the additive accessor on `McpServer` that lends the serve task's `JoinHandle` for
+- [x] 2.1 Add the additive accessor on `McpServer` that lends the serve task's `JoinHandle` for
       the supervisor to await, leaving `start()`, `stop()` and `Drop` behavior unchanged; verify
       the existing `knot-mcp` tests still pass unmodified.
-- [ ] 2.2 Verify with a test that the lent handle completes when the serve task ends, and
+- [x] 2.2 Verify with a test that the lent handle completes when the serve task ends, and
       completes with an error when the task is aborted.
 
 ## 3. Health probe
 
-- [ ] 3.1 Implement the raw-TCP `/health` probe — connect, write the minimal request, read the
+- [x] 3.1 Implement the raw-TCP `/health` probe — connect, write the minimal request, read the
       status line, succeed on `200` — with a bounded timeout on connect, write and read; verify a
       test probes a live `McpServer` successfully and a test against a closed port fails within
       the timeout rather than hanging.
-- [ ] 3.2 Implement the consecutive-failure counter: a single failure does not trip, the
+- [x] 3.2 Implement the consecutive-failure counter: a single failure does not trip, the
       configured number of consecutive failures does, and one success resets it; verify unit
       tests cover all three.
 
 ## 4. The supervisor loop
 
-- [ ] 4.1 Implement `Supervisor` owning the port, catalog, agents-snapshot function and hook
+- [x] 4.1 Implement `Supervisor` owning the port, catalog, agents-snapshot function and hook
       handler, constructing a fresh `McpServer` per attempt; verify a test restarts the server
       and asserts the same tools are served afterwards.
-- [ ] 4.2 Implement the `tokio::select!` loop over stop signal, serve handle and probe timer, and
+- [x] 4.2 Implement the `tokio::select!` loop over stop signal, serve handle and probe timer, and
       expose `state()` as a `watch::Receiver`; verify a test subscribing after the server reaches
       running immediately observes running.
-- [ ] 4.3 Implement restart on an unexpectedly ended serve task; verify tests cover a serve task
+- [x] 4.3 Implement restart on an unexpectedly ended serve task; verify tests cover a serve task
       that returns and one that panics, each followed by the server serving again on the same
       port.
-- [ ] 4.4 Implement restart on the probe's consecutive-failure threshold; verify a test wedges or
+- [x] 4.4 Implement restart on the probe's consecutive-failure threshold; verify a test wedges or
       kills the listener and asserts a restart follows.
-- [ ] 4.5 Implement bind retry with backoff against the configured port only; verify tests cover
+- [x] 4.5 Implement bind retry with backoff against the configured port only; verify tests cover
       a busy port producing retrying states with growing delays, recovery once the port is
       released, and that no attempt ever binds a different port.
-- [ ] 4.6 Implement the stop path so an intentional stop exits before a task exit can be read as
+- [x] 4.6 Implement the stop path so an intentional stop exits before a task exit can be read as
       a failure; verify tests assert that stopping yields the stopped state, issues no restart, no
       probe, and releases the port.
-- [ ] 4.7 Verify the backoff counter resets only on reaching running *and* passing a probe, so a
+- [x] 4.7 Verify the backoff counter resets only on reaching running *and* passing a probe, so a
       start-then-die loop backs off rather than hot-looping; cover it with a test.
-- [ ] 4.8 Verify `make lint` and `make size-check` pass for `knot-mcp` and that its `mod.rs`/
+- [x] 4.8 Verify `make lint` and `make size-check` pass for `knot-mcp` and that its `mod.rs`/
       `lib.rs` declare and re-export only.
 
 ## 5. Wiring into the app
