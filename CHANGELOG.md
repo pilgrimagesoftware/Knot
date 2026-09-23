@@ -1,4 +1,61 @@
 
+## 1.14.0 - 2026-09-23
+
+### Added
+- Recognize pull request URLs in agent output
+- Read pull request state through the gh CLI
+- Persist recorded pull requests as a seventh document
+- Watch both agent kinds for pull request URLs
+- Add the Pull Requests view and its state cache
+- Colour each pull request row by its state
+- One window per workspace, Command Center and manager
+- Name the workspace in its window's title bar
+- Supervise the server with state, probing and backoff
+- Show and announce the MCP server's supervised state
+- Add the animated working-indicator asset and its recipe
+- Animate the app icon as the conversation's working row
+- Add the log entry model, writer task and rotation
+- Log requests, tool calls and the server's own lifecycle
+- Write a periodic heartbeat carrying the server's vitals
+- Resolve the MCP log directory and hand it to the server
+- Reveal the prompt copy control on hover
+- Read an agent's descendant tree and terminate one process
+- Resolve an agent to the process Knot spawned for its session
+- Sample an agent's process tree off the render path
+- Show an agent's processes in its pane, and act on one
+- Split workspace UI state into its own document
+- Write workspace arrangement without rewriting the roster
+
+
+### Changed
+- Split agent_editor's mod.rs into fields, window, submit and pickers
+- Split panel_state's mod.rs into message, state and fold
+- Split panel_view's mod.rs into style, callbacks and render
+- Split settings_window's mod.rs into tab, window and render
+- Split about_window into build_info, window and pane
+- Split workspace_window's mod.rs into named siblings
+
+
+### Documentation
+- Make "mod.rs declares, it does not implement" a standing rule
+- Treat the six legacy mod.rs files as a backlog, not exceptions
+- Record the mod.rs backlog as done, and what splitting it taught
+
+
+### Fixed
+- Keep a restored window on an attached display
+- One Enter Full Screen, and a reachable Window menu
+- Scroll the Command Center's grid instead of clipping it
+- Scroll the workspace window's dashboard too
+- Focus the prompt input when a Panel-mode agent is selected
+- Compare the log directory's name case-insensitively
+- Cap the prompt cluster, not the bubble inside it
+- Confirm a process copy, and name the terminate button
+- Paste into the terminal pane with cmd-v
+- Keep the historical workspace UI-state defaults
+
+
+
 ## 1.13.0 - 2026-09-22
 
 ### Added
