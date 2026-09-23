@@ -22,7 +22,7 @@
 - [x] 3.2 Map a failed `Repository::status()` to `GitStatusSnapshot::Failed` and a non-repository folder to `NotARepository`; verify the panel shows an error rather than a clean tree for a folder whose `.git` has been made unreadable
 - [x] 3.3 Implement the diff read keyed by `DiffKey`, claimed only for the current selection; verify selecting a file shows its diff and that selecting a second file before the first arrives never shows the first
 - [x] 3.4 Wire both caches' `take_changed()` into `repaint_poll_tick`'s dirty predicates and verify the panel redraws when a refresh lands without any unconditional `cx.notify()`
-- [ ] 3.5 Verify no git command runs from a render: type continuously into the commit message field with a status and diff loaded and confirm no `git` process is spawned
+- [ ] 3.5 Verify no git command runs from a render: type continuously into the commit message field with a status and diff loaded and confirm no `git` process is spawned — **needs a display**; exact steps in `verification.md`
 
 ## 4. Working tree list
 
@@ -79,4 +79,4 @@
 - [x] 10.2 Move any new panel constants into `crates/knot/src/consts.rs` with a comment saying what each decides; verify no layout number was moved there and no decision left inline
 - [x] 10.3 Run `make` and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass
 - [x] 10.4 Verify no crate-wide `allow` was added, `mod.rs` files declare only, and no colocated test module pushes a file over 700 lines
-- [ ] 10.5 Run the app against a repository with staged, unstaged, untracked and conflicted files and walk the full loop — review a diff, stage, discard, commit — confirming each spec scenario in `specs/git-panel-ui/spec.md`
+- [ ] 10.5 Run the app against a repository with staged, unstaged, untracked and conflicted files and walk the full loop — review a diff, stage, discard, commit — confirming each spec scenario in `specs/git-panel-ui/spec.md` — **needs a display**; 24 numbered steps, each naming the scenario it discharges, in `verification.md`
