@@ -2,17 +2,17 @@
 
 ## 1. Author the animation
 
-- [ ] 1.1 Install the WebP tools (`brew install webp`) and confirm `img2webp`
+- [x] 1.1 Install the WebP tools (`brew install webp`) and confirm `img2webp`
       runs; if it cannot be installed, take the GIF fallback in design.md and
       say so in the script's header comment
-- [ ] 1.2 Write `scripts/make-working-animation.sh`: rotate
+- [x] 1.2 Write `scripts/make-working-animation.sh`: rotate
       `crates/knot/assets/icon/icon.png` through one full turn with `ffmpeg`
-      (`rotate=...:c=none` to keep alpha, scaled to 96×96), assemble the frames
+      (`rotate=...:c=none` to keep alpha, scaled to 72×72), assemble the frames
       into a looping animated WebP, and write it to
       `crates/knot/assets/working-knot.webp`. The script checks for its tools
       first and exits with a message naming the missing one; verify by running
       it from a clean checkout of the frames directory
-- [ ] 1.3 Run the script and check the result: full alpha, one full revolution
+- [x] 1.3 Run the script and check the result: full alpha, one full revolution
       with no visible seam at the loop point, ~1.5s per revolution, and under
       100KB; verify with `ffprobe` for frame count and dimensions and by opening
       the file
