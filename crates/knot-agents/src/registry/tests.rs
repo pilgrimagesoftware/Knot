@@ -192,18 +192,10 @@ fn an_agent_in_another_workspace_is_not_a_candidate() {
     let mut store = AgentStore::new();
     let caller = tagged(&mut store, "caller", &[], CostTier::Medium, None);
     let elsewhere = Uuid::new_v4();
-    store.add_workspace(knot_core::Workspace { id:                    elsewhere,
-                                               name:                  "Other".to_string(),
-                                               color_hex:             "#000000".to_string(),
-                                               agent_ids:             Vec::new(),
-                                               active_agent_ids:      Vec::new(),
-                                               layout_mode:           "single".to_string(),
-                                               focused_pane_index:    0,
-                                               split_ratio:           0.5,
-                                               split_ratio_secondary: None,
-                                               show_dashboard:        None,
-                                               is_detached:           None,
-                                               window_bounds:         None, });
+    store.add_workspace(knot_core::Workspace { id:        elsewhere,
+                                               name:      "Other".to_string(),
+                                               color_hex: "#000000".to_string(),
+                                               agent_ids: Vec::new(), });
     store.create("/repo/stranger",
                  CreateOptions { name: Some("stranger".to_string()),
                                  capabilities: ["rust"].iter().collect(),

@@ -428,6 +428,10 @@ pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::
     let mut store = knot_agents::AgentStore::from_saved(&settings.saved_agents,
                                                         settings.saved_workspaces.clone());
     store.set_pull_requests(settings.pull_requests.clone());
+    // From its own document, like the pull requests above: how a window was
+    // arranged is not derivable from the roster, and `from_saved` deliberately
+    // does not invent it.
+    store.set_workspace_ui(settings.workspace_ui.clone());
 
     if settings.restore_conversation_on_launch {
         let persisted: BTreeMap<Uuid, String> =
@@ -452,11 +456,14 @@ pub(crate) fn agent_selection_for_workspace(store: &knot_agents::AgentStore, wor
     let workspace = store.workspaces()
                          .iter()
                          .find(|workspace| workspace.id == workspace_id)?;
-    workspace.active_agent_ids
-             .iter()
-             .chain(workspace.agent_ids.iter())
-             .find(|id| store.agent(**id).is_some())
-             .copied()
+    // Which agents the layout is showing is arrangement, so it comes from the
+    // UI state; which agents belong to the workspace is configuration, and
+    // comes from the record.
+    let active = store.workspace_ui(workspace_id).active_agent_ids;
+    active.iter()
+          .chain(workspace.agent_ids.iter())
+          .find(|id| store.agent(**id).is_some())
+          .copied()
 }
 
 // UNWIRED: ported from the Swift reference, no view reads it yet.

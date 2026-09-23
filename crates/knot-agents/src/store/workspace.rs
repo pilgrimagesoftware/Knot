@@ -1,8 +1,30 @@
+use knot_core::WorkspaceUiState;
 use uuid::Uuid;
 
 use super::AgentStore;
 
 impl AgentStore {
+    /// The UI state for `id`, created at its defaults if the workspace has
+    /// never been arranged.
+    ///
+    /// Not gated on the workspace existing: the setters below are driven by
+    /// window observers, which can fire for a workspace closed a moment ago,
+    /// and an entry with no workspace is pruned on the next load rather than
+    /// guarded against on every write.
+    fn workspace_ui_mut(&mut self, id: Uuid) -> &mut WorkspaceUiState {
+        self.workspace_ui.entry(id).or_default()
+    }
+
+    /// How `id`'s window is arranged, or the defaults if it never has been.
+    pub fn workspace_ui(&self, id: Uuid) -> WorkspaceUiState {
+        self.workspace_ui.get(&id).cloned().unwrap_or_default()
+    }
+
+    /// Replace the whole UI-state map, as the store is loaded from settings.
+    pub fn set_workspace_ui(&mut self, ui: std::collections::BTreeMap<Uuid, WorkspaceUiState>) {
+        self.workspace_ui = ui;
+    }
+
     /// The workspace `id` names, for the operations that edit one in place.
     /// The sibling of `agent_mut`, which the agent half of the store has
     /// had all along - four lookups here were written out by hand instead.
@@ -25,20 +47,70 @@ impl AgentStore {
     }
 
     /// Records where `id`'s window was last seen, so reopening the
-    /// workspace restores its frame. Returns whether the workspace exists
-    /// and the frame actually changed - the caller persists only then,
-    /// since bounds observers fire continuously through a drag.
+    /// workspace restores its frame. Returns whether the frame actually
+    /// changed - the caller persists only then, since bounds observers fire
+    /// continuously through a drag.
     pub fn set_workspace_window_bounds(&mut self, id: Uuid, bounds: knot_core::SavedWindowBounds)
                                        -> bool {
-        let Some(workspace) = self.workspace_mut(id)
-        else {
-            return false;
-        };
-        if workspace.window_bounds == Some(bounds) {
+        let ui = self.workspace_ui_mut(id);
+        if ui.window_bounds == Some(bounds) {
             return false;
         }
-        workspace.window_bounds = Some(bounds);
+        ui.window_bounds = Some(bounds);
         true
+    }
+
+    /// Record `id`'s layout mode and which agents are active in it.
+    ///
+    /// UNWIRED(#321): nothing sets a layout mode yet - workspace windows show
+    /// one agent, and the split, three- and four-pane layouts are still to be
+    /// ported. The field is persisted and migrated all the same, because an
+    /// installation upgrading from the Swift app already has one stored and
+    /// losing it would be silent.
+    pub fn set_workspace_layout(&mut self, id: Uuid, layout_mode: impl Into<String>,
+                                active_agent_ids: Vec<Uuid>) {
+        let ui = self.workspace_ui_mut(id);
+        ui.layout_mode = layout_mode.into();
+        ui.active_agent_ids = active_agent_ids;
+    }
+
+    /// Record which agents `id`'s layout is showing, leaving its layout mode
+    /// alone.
+    pub fn set_workspace_active_agents(&mut self, id: Uuid, active_agent_ids: Vec<Uuid>) {
+        self.workspace_ui_mut(id).active_agent_ids = active_agent_ids;
+    }
+
+    /// Record which pane of `id`'s layout has focus.
+    ///
+    /// UNWIRED(#321): there is only one pane until the layouts are ported.
+    pub fn set_workspace_focused_pane(&mut self, id: Uuid, index: i32) {
+        self.workspace_ui_mut(id).focused_pane_index = index;
+    }
+
+    /// Record `id`'s split ratios - the secondary one only applies to the
+    /// three- and four-pane layouts, hence the `Option`.
+    ///
+    /// UNWIRED(#321): nothing splits a workspace window yet.
+    pub fn set_workspace_split_ratios(&mut self, id: Uuid, primary: f64, secondary: Option<f64>) {
+        let ui = self.workspace_ui_mut(id);
+        ui.split_ratio = primary;
+        ui.split_ratio_secondary = secondary;
+    }
+
+    /// Record whether `id` is showing its dashboard.
+    ///
+    /// UNWIRED(#324): the dashboard is drawn but its visibility is not yet
+    /// something the user toggles and the window remembers.
+    pub fn set_workspace_show_dashboard(&mut self, id: Uuid, showing: bool) {
+        self.workspace_ui_mut(id).show_dashboard = Some(showing);
+    }
+
+    /// Record whether `id` is detached into its own window.
+    ///
+    /// Read by the agent row's move-target menu, which excludes detached
+    /// workspaces; nothing sets it outside tests yet.
+    pub fn set_workspace_detached(&mut self, id: Uuid, detached: bool) {
+        self.workspace_ui_mut(id).is_detached = Some(detached);
     }
 
     pub fn rename_workspace(&mut self, id: Uuid, name: impl Into<String>) -> bool {
@@ -61,6 +133,11 @@ impl AgentStore {
             return false;
         };
         let workspace = self.workspaces.remove(index);
+        // Removed here as well as pruned on load: this is the teardown that
+        // already drops per-workspace state, and leaving it to load alone
+        // would let a window reopened before the next launch read the dead
+        // workspace's arrangement.
+        self.workspace_ui.remove(&id);
         for agent_id in workspace.agent_ids {
             self.remove(agent_id);
         }
@@ -128,13 +205,20 @@ impl AgentStore {
             }
             if let Some(workspace) = self.workspace_mut(source) {
                 workspace.agent_ids.retain(|id| *id != agent_id);
-                workspace.active_agent_ids.retain(|id| *id != agent_id);
             }
+            self.workspace_ui_mut(source)
+                .active_agent_ids
+                .retain(|id| *id != agent_id);
         }
+        let mut became_only_member = false;
         if let Some(workspace) = self.workspace_mut(target_workspace_id) {
             workspace.agent_ids.push(agent_id);
-            if workspace.active_agent_ids.is_empty() {
-                workspace.active_agent_ids = vec![agent_id];
+            became_only_member = true;
+        }
+        if became_only_member {
+            let ui = self.workspace_ui_mut(target_workspace_id);
+            if ui.active_agent_ids.is_empty() {
+                ui.active_agent_ids = vec![agent_id];
             }
         }
     }

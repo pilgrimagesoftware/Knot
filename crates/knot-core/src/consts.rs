@@ -13,6 +13,27 @@ pub const AGENTS_FILE: &str = "agents.json";
 /// The saved-workspaces collection.
 pub const WORKSPACES_FILE: &str = "workspaces.json";
 
+/// The layout a workspace window uses until something changes it: a single
+/// pane. Every record written by the Swift app and by every Rust build so far
+/// carries this value, so an entry that does not name a layout has to read as
+/// this one rather than as the empty string.
+pub const WORKSPACE_LAYOUT_DEFAULT: &str = "single";
+
+/// Where a split layout's divider sits until it is dragged: the middle. Like
+/// [`WORKSPACE_LAYOUT_DEFAULT`], this is what every stored record already
+/// holds, so a missing value must read as this and not as zero.
+pub const WORKSPACE_SPLIT_RATIO_DEFAULT: f64 = 0.5;
+
+/// Per-workspace UI state, keyed by workspace id.
+///
+/// Not a collection: a lookup table the app writes about itself. Every read
+/// is "the state for this workspace" and every write is "this workspace's
+/// state", so it is a map rather than a list of records each carrying an id.
+/// Separate from [`WORKSPACES_FILE`] so that moving a window - the most
+/// frequent write in the store, and the least valuable - does not rewrite the
+/// roster the user built.
+pub const WORKSPACE_UI_STATE_FILE: &str = "workspace-ui-state.json";
+
 /// The personas collection.
 pub const PERSONAS_FILE: &str = "personas.json";
 

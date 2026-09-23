@@ -13,18 +13,10 @@ fn store_with_agent() -> (AgentStore, Uuid) {
 
 /// An empty workspace with a fresh id, added to `store`.
 fn add_workspace(store: &mut AgentStore, name: &str) -> Uuid {
-    let workspace = knot_core::Workspace { id:                    Uuid::new_v4(),
-                                           name:                  name.to_string(),
-                                           color_hex:             "#000000".to_string(),
-                                           agent_ids:             Vec::new(),
-                                           active_agent_ids:      Vec::new(),
-                                           layout_mode:           "single".to_string(),
-                                           focused_pane_index:    0,
-                                           split_ratio:           0.5,
-                                           split_ratio_secondary: None,
-                                           show_dashboard:        None,
-                                           is_detached:           None,
-                                           window_bounds:         None, };
+    let workspace = knot_core::Workspace { id:        Uuid::new_v4(),
+                                           name:      name.to_string(),
+                                           color_hex: "#000000".to_string(),
+                                           agent_ids: Vec::new(), };
     let id = workspace.id;
     store.add_workspace(workspace);
     id

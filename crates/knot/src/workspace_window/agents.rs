@@ -160,6 +160,35 @@ impl WorkspaceWindow {
         }
     }
 
+    /// Writes the store's per-workspace UI state back to settings, and
+    /// nothing else.
+    ///
+    /// The reason the UI state is a document of its own. A bounds observer
+    /// fires continuously through a pointer drag, and routing that through
+    /// `persist_agents` meant every one of those frames rewrote
+    /// `agents.json` and `workspaces.json` from this window's `Settings`
+    /// snapshot - the highest-frequency, lowest-value write in the app
+    /// republishing the roster the user built, stale copy included. This
+    /// writes `workspace-ui-state.json` alone.
+    ///
+    /// The map is read from the store rather than from the snapshot: the
+    /// store is shared between windows, so it is what another window's
+    /// arrangement has already reached.
+    pub(super) fn persist_workspace_ui(&mut self) {
+        // Scoped so the store guard is released before the write: the same
+        // blocking-I/O rule `persist_agents` follows.
+        {
+            let store = self.store.lock();
+            self.settings.workspace_ui = store.saved_workspace_ui();
+        }
+        if let Err(error) = self.settings.persist_workspace_ui() {
+            // Not surfaced, for the same reason `persist_agents` does not:
+            // this runs on every arrangement change, and what is lost is
+            // where a window sits.
+            eprintln!("failed to persist workspace UI state: {error}");
+        }
+    }
+
     /// Every agent id in this window's workspace, snapshotted.
     pub(super) fn workspace_agent_ids(&self) -> Vec<Uuid> {
         workspace_agent_ids(&self.store.lock(), self.workspace_id)

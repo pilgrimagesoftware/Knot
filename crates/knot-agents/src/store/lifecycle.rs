@@ -68,8 +68,12 @@ impl AgentStore {
                 Some(index) => workspace.agent_ids.insert(index + 1, id),
                 None => workspace.agent_ids.push(id),
             }
-            if workspace.active_agent_ids.is_empty() {
-                workspace.active_agent_ids = vec![id];
+            // The first agent in a workspace is the one its window shows, so
+            // an otherwise-empty layout gets it. Which agents are active is
+            // arrangement, so it is set on the UI state rather than the
+            // record.
+            if self.workspace_ui(workspace_id).active_agent_ids.is_empty() {
+                self.set_workspace_active_agents(workspace_id, vec![id]);
             }
         }
         id
@@ -119,8 +123,11 @@ impl AgentStore {
             self.forget_agent_pull_requests(id);
             for workspace in &mut self.workspaces {
                 workspace.agent_ids.retain(|agent_id| *agent_id != id);
-                workspace.active_agent_ids
-                         .retain(|agent_id| *agent_id != id);
+            }
+            // The parallel map has to lose the agent too, or a layout would
+            // go on naming a pane for an agent that no longer exists.
+            for ui in self.workspace_ui.values_mut() {
+                ui.active_agent_ids.retain(|agent_id| *agent_id != id);
             }
             removed.push(RemovedAgent { id, was_registered });
         }

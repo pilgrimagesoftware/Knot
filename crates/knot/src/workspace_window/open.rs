@@ -68,13 +68,7 @@ impl WorkspaceWindow {
         // `workspace.missing` instead.
         let workspace_name =
             workspace_title(&store.lock(), workspace_id).unwrap_or_else(|| "Workspace".to_string());
-        let saved_bounds = {
-            let store = store.lock();
-            store.workspaces()
-                 .iter()
-                 .find(|workspace| workspace.id == workspace_id)
-                 .and_then(|workspace| workspace.window_bounds)
-        };
+        let saved_bounds = store.lock().workspace_ui(workspace_id).window_bounds;
         let placed = reconciled_workspace_bounds(saved_bounds, cx);
         let options = workspace_window_options(placed, cx);
         if let Err(error) =
@@ -233,7 +227,9 @@ impl WorkspaceWindow {
                                             .lock()
                                             .set_workspace_window_bounds(workspace_id, saved);
                                     if changed {
-                                        view.persist_agents();
+                                        // The UI-state document alone: a
+                                        // drag must not rewrite the roster.
+                                        view.persist_workspace_ui();
                                     }
                                 });
                           view.window_bounds_subscription = Some(subscription);

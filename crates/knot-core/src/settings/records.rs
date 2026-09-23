@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::consts::{DEFAULT_AGENT_TYPE, DEFAULT_AVATAR};
+use crate::consts::{
+    DEFAULT_AGENT_TYPE, DEFAULT_AVATAR, WORKSPACE_LAYOUT_DEFAULT, WORKSPACE_SPLIT_RATIO_DEFAULT,
+};
 use crate::settings::capabilities::Capabilities;
 use crate::settings::vocabulary::CostTier;
 
@@ -220,34 +222,52 @@ impl BenchAgent {
 // Workspace
 // ---------------------------------------------------------------------------
 
-/// A saved group of agents with its own layout state. The port stores the
-/// layout fields as opaque data; it does not interpret them here.
+/// A saved group of agents: what the user configured about it, and nothing
+/// more. How its window was last arranged is [`WorkspaceUiState`], in its own
+/// document - see `openspec/specs/settings-persistence/spec.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
-    pub id:                    Uuid,
-    pub name:                  String,
-    pub color_hex:             String,
+    pub id:        Uuid,
+    pub name:      String,
+    pub color_hex: String,
     #[serde(default)]
-    pub agent_ids:             Vec<Uuid>,
-    #[serde(default)]
+    pub agent_ids: Vec<Uuid>,
+}
+
+/// What the application recorded about how one workspace's window was last
+/// arranged. The user never entered any of it and would not miss it if it
+/// were discarded, which is why it is not part of [`Workspace`]: where a
+/// window sits is the most frequently written value in the store and the
+/// least valuable, and it must not be a reason to rewrite the roster.
+///
+/// The port stores the layout fields as opaque data; it does not interpret
+/// them here.
+///
+/// Every field carries its own serde default, so an entry written before a
+/// field existed loads with that field defaulted rather than failing.
+///
+/// [`Default`] is written out rather than derived: `layout_mode` and
+/// `split_ratio` default to `"single"` and `0.5`, which is what every record
+/// written before the split already holds. Deriving would give `""` and
+/// `0.0`, so a workspace with no entry would read as a layout that does not
+/// exist and a divider at the far edge - a change to what the state *means*,
+/// which moving this record is not supposed to make.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WorkspaceUiState {
+    #[serde(default = "default_workspace_layout")]
     pub layout_mode:           String,
-    #[serde(default)]
     pub active_agent_ids:      Vec<Uuid>,
-    #[serde(default)]
     pub focused_pane_index:    i32,
-    #[serde(default)]
+    #[serde(default = "default_split_ratio")]
     pub split_ratio:           f64,
-    #[serde(default)]
     pub split_ratio_secondary: Option<f64>,
-    #[serde(default)]
     pub show_dashboard:        Option<bool>,
-    #[serde(default)]
     pub is_detached:           Option<bool>,
     /// Where this workspace's window was last seen, so reopening it puts
     /// it back rather than re-centring. `None` until the window has been
     /// opened once.
-    #[serde(default)]
     pub window_bounds:         Option<SavedWindowBounds>,
 }
 
@@ -264,6 +284,27 @@ pub struct SavedWindowBounds {
 // ---------------------------------------------------------------------------
 // serde defaults
 // ---------------------------------------------------------------------------
+
+impl Default for WorkspaceUiState {
+    fn default() -> Self {
+        Self { layout_mode:           default_workspace_layout(),
+               active_agent_ids:      Vec::new(),
+               focused_pane_index:    0,
+               split_ratio:           default_split_ratio(),
+               split_ratio_secondary: None,
+               show_dashboard:        None,
+               is_detached:           None,
+               window_bounds:         None, }
+    }
+}
+
+fn default_workspace_layout() -> String {
+    WORKSPACE_LAYOUT_DEFAULT.to_string()
+}
+
+fn default_split_ratio() -> f64 {
+    WORKSPACE_SPLIT_RATIO_DEFAULT
+}
 
 pub(super) fn default_avatar() -> String {
     DEFAULT_AVATAR.to_string()
@@ -459,24 +500,50 @@ mod tests {
 
     #[test]
     fn workspace_round_trips() {
-        let ws = Workspace { id:                    id(),
-                             name:                  "Main".to_string(),
-                             color_hex:             "#1B4FB2".to_string(),
-                             agent_ids:             vec![id()],
-                             layout_mode:           "grid".to_string(),
-                             active_agent_ids:      vec![id()],
-                             focused_pane_index:    1,
-                             split_ratio:           0.5,
-                             split_ratio_secondary: Some(0.3),
-                             show_dashboard:        Some(false),
-                             is_detached:           Some(true),
-                             window_bounds:         Some(SavedWindowBounds { x:      12.,
-                                                                             y:      34.,
-                                                                             width:  960.,
-                                                                             height: 640., }), };
+        let ws = Workspace { id:        id(),
+                             name:      "Main".to_string(),
+                             color_hex: "#1B4FB2".to_string(),
+                             agent_ids: vec![id()], };
         let json = serde_json::to_string(&ws).unwrap();
         let back: Workspace = serde_json::from_str(&json).unwrap();
         assert_eq!(ws, back);
+    }
+
+    #[test]
+    fn workspace_ui_state_round_trips() {
+        let ui = WorkspaceUiState { layout_mode:           "grid".to_string(),
+                                    active_agent_ids:      vec![id()],
+                                    focused_pane_index:    1,
+                                    split_ratio:           0.5,
+                                    split_ratio_secondary: Some(0.3),
+                                    show_dashboard:        Some(false),
+                                    is_detached:           Some(true),
+                                    window_bounds:         Some(SavedWindowBounds { x:      12.,
+                                                                                    y:      34.,
+                                                                                    width:  960.,
+                                                                                    height: 640., }), };
+        let json = serde_json::to_string(&ui).unwrap();
+        let back: WorkspaceUiState = serde_json::from_str(&json).unwrap();
+        assert_eq!(ui, back);
+    }
+
+    /// The wire keys are what an existing `workspaces.json` was written with,
+    /// so the split can only find them under these exact names.
+    #[test]
+    fn workspace_ui_state_keeps_the_camel_case_keys_it_was_stored_under() {
+        let json = serde_json::to_value(WorkspaceUiState::default()).unwrap();
+        let object = json.as_object().unwrap();
+        for key in ["layoutMode",
+                    "activeAgentIds",
+                    "focusedPaneIndex",
+                    "splitRatio",
+                    "splitRatioSecondary",
+                    "showDashboard",
+                    "isDetached",
+                    "windowBounds"]
+        {
+            assert!(object.contains_key(key), "UI state missing key {key}");
+        }
     }
 
     // --- SavedPullRequest --------------------------------------------------
@@ -534,15 +601,44 @@ mod tests {
         assert!(!record.is_same_sighting("https://github.com/a/b/pull/1", other_agent));
     }
 
-    /// A workspace saved before window frames were remembered must still
-    /// load - the field is absent from every existing settings file.
+    /// The defaults are what every record written before the split already
+    /// holds. Deriving `Default` would give `""` and `0.0` instead, which is
+    /// a layout that does not exist and a divider at the far edge - a change
+    /// to what the state means, not just to where it is stored.
     #[test]
-    fn a_workspace_without_saved_window_bounds_still_loads() {
+    fn ui_state_defaults_match_what_existing_records_hold() {
+        let ui = WorkspaceUiState::default();
+
+        assert_eq!(ui.layout_mode, "single");
+        assert_eq!(ui.split_ratio, 0.5);
+
+        // And an entry that names neither reads the same way, rather than
+        // taking serde's zero values.
+        let decoded: WorkspaceUiState = serde_json::from_str("{}").unwrap();
+        assert_eq!(decoded, ui);
+    }
+
+    /// UI state saved before window frames were remembered must still load -
+    /// the field is absent from every entry written before it existed.
+    #[test]
+    fn ui_state_without_saved_window_bounds_still_loads() {
+        let ui: WorkspaceUiState = serde_json::from_str(r#"{"layoutMode":"single"}"#).unwrap();
+
+        assert_eq!(ui.layout_mode, "single");
+        assert_eq!(ui.window_bounds, None);
+    }
+
+    /// A workspace record still carrying the UI keys - every existing
+    /// `workspaces.json` - must load as a workspace, because the split reads
+    /// the document as JSON and decodes each record after lifting them out.
+    #[test]
+    fn a_combined_workspace_record_still_decodes_as_a_workspace() {
         let json = r##"{"id":"00000000-0000-0000-0000-000000000001","name":"Main",
-                        "colorHex":"#1B4FB2"}"##;
+                        "colorHex":"#1B4FB2","layoutMode":"grid","splitRatio":0.25}"##;
 
         let ws: Workspace = serde_json::from_str(json).unwrap();
 
-        assert_eq!(ws.window_bounds, None);
+        assert_eq!(ws.name, "Main");
+        assert!(ws.agent_ids.is_empty());
     }
 }

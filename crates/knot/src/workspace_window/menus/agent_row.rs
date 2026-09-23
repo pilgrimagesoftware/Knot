@@ -64,12 +64,13 @@ pub(crate) fn agent_menu_facts(store: &knot_agents::AgentStore, id: Uuid)
                              .map(|workspace| workspace.id);
     // Detached workspaces live in their own windows and are not move
     // targets, matching the reference's `attachedWorkspaces`.
-    let move_targets = store.workspaces()
-                            .iter()
-                            .filter(|workspace| workspace.is_detached != Some(true))
-                            .filter(|workspace| Some(workspace.id) != own_workspace)
-                            .map(|workspace| (workspace.id, workspace.name.clone()))
-                            .collect::<Vec<_>>();
+    let move_targets =
+        store.workspaces()
+             .iter()
+             .filter(|workspace| store.workspace_ui(workspace.id).is_detached != Some(true))
+             .filter(|workspace| Some(workspace.id) != own_workspace)
+             .map(|workspace| (workspace.id, workspace.name.clone()))
+             .collect::<Vec<_>>();
     let history = agent.markdown_history.clone();
     let facts = AgentMenuFacts { is_companion:         agent.is_companion,
                                  is_shell:             agent.is_shell(),

@@ -2,11 +2,14 @@
 //!
 //! Contract: `openspec/specs/settings-persistence/spec.md`.
 //!
-//! The store is two kinds of document in two directories: the preferences
-//! document in the platform's user-preferences directory, and one document
-//! per durable collection in the application-data directory. [`StorePaths`]
-//! holds those two locations and derives every document's path from them, so
-//! nothing else has to know a filename.
+//! The store is three kinds of document in two directories: the preferences
+//! document in the platform's user-preferences directory, and - in the
+//! application-data directory - one document per durable collection plus the
+//! per-workspace UI-state document. The third kind is distinguished by what
+//! its values are, not by where it lives: UI state is what the application
+//! recorded about its own windows, which the user never entered.
+//! [`StorePaths`] holds the two locations and derives every document's path
+//! from them, so nothing else has to know a filename.
 
 use std::path::PathBuf;
 
@@ -14,7 +17,8 @@ use directories::ProjectDirs;
 
 use crate::consts::{
     AGENTS_FILE, APP_NAME, BENCH_FILE, LEGACY_SETTINGS_FILE, ORG_NAME, ORG_QUALIFIER,
-    PERSONAS_FILE, PREFERENCES_FILE, PULL_REQUESTS_FILE, RECENT_REPOS_FILE, WORKSPACES_FILE,
+    PERSONAS_FILE, PREFERENCES_FILE, PULL_REQUESTS_FILE, RECENT_REPOS_FILE,
+    WORKSPACE_UI_STATE_FILE, WORKSPACES_FILE,
 };
 
 /// The resolved location of every document the store reads and writes.
@@ -63,6 +67,11 @@ impl StorePaths {
     /// The saved-workspaces document.
     pub fn workspaces(&self) -> PathBuf {
         self.data_dir.join(WORKSPACES_FILE)
+    }
+
+    /// The per-workspace UI-state document.
+    pub fn workspace_ui_state(&self) -> PathBuf {
+        self.data_dir.join(WORKSPACE_UI_STATE_FILE)
     }
 
     /// The personas document.
