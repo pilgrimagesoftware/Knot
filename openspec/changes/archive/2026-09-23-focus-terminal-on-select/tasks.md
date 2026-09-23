@@ -26,7 +26,7 @@
 ## 3. Gate
 
 - [x] 3.1 Run `make fmt` then `make` and verify the whole gate passes
-- [ ] 3.2 In the running app, select a shell companion from the sidebar and
+- [x] 3.2 In the running app, select a shell companion from the sidebar and
       type without clicking the pane; verify the text reaches the shell, that
       selecting one whose session is still starting does not strand focus, and
       that clicking a control elsewhere keeps focus there across redraws
