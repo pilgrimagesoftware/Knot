@@ -21,8 +21,23 @@ impl AgentStore {
 
     /// Replace the collection wholesale, as the settings document supplies it
     /// at load.
+    ///
+    /// Records naming an agent this store does not hold are dropped, the same
+    /// rule [`Self::record_pull_request`] applies on the way in and the
+    /// removal cascade applies on the way out. The cascade only fires when an
+    /// agent leaves through the store, so an agent lost any other way - a
+    /// roster document restored on its own, or replaced - leaves records
+    /// behind; and a record with no agent has nothing to show it under. The
+    /// sidebar row counts a workspace's records while the pane draws them
+    /// under their agent, so leaving one in is a count over an empty pane.
+    ///
+    /// The roster has to be installed first, which is what the one caller
+    /// does: `build_agent_store` fills the store from the saved agents, then
+    /// hands the records over.
     pub fn set_pull_requests(&mut self, records: Vec<SavedPullRequest>) {
-        self.pull_requests = records;
+        self.pull_requests = records.into_iter()
+                                    .filter(|record| self.agent(record.agent_id).is_some())
+                                    .collect();
     }
 
     /// Record `url` against `agent_id`, returning whether this was new.

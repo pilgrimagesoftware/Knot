@@ -141,3 +141,25 @@ fn records_do_not_outlive_a_roster_that_is_not_restored() {
 
     assert!(build_agent_store(&reloaded).pull_requests().is_empty());
 }
+
+/// The sidebar row counts a workspace's records; the pane draws them under
+/// the agent that opened each one, and can draw nothing for an agent that is
+/// gone. So a record whose agent left the roster between launches - a
+/// document restored on its own, a roster lost - would be a count over an
+/// empty pane. It does not survive the launch that finds it.
+#[test]
+fn records_do_not_outlive_an_agent_missing_from_the_restored_roster() {
+    let dir = tempdir().unwrap();
+    let (mut settings, agent_id, workspace_id) = settings_with_agent(dir.path());
+    let mut store = build_agent_store(&settings);
+    store.record_pull_request(agent_id, FIRST);
+    settings.pull_requests = store.pull_requests().to_vec();
+
+    let mut reloaded = relaunch(&settings, dir.path());
+    reloaded.saved_agents.clear();
+    let mut restored = build_agent_store(&reloaded);
+    restored.set_pull_requests(reloaded.pull_requests.clone());
+
+    assert!(restored.pull_requests_for_workspace(workspace_id)
+                    .is_empty());
+}

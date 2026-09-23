@@ -231,3 +231,23 @@ fn the_same_url_from_both_taps_is_one_record() {
     assert_eq!(recorded, 1);
     assert_eq!(store.pull_requests().len(), 1);
 }
+
+// --- Installing -------------------------------------------------------------
+
+/// The same rule recording and removal already enforce, applied to the
+/// collection a launch hands over: an agent that went away outside the
+/// store's own removal path - a roster lost, a document restored on its own -
+/// leaves records the view has nothing to show under.
+#[test]
+fn installing_records_drops_the_ones_whose_agent_is_gone() {
+    let (mut store, agent) = store_with_agent();
+    let workspace = store.workspaces()[0].id;
+    store.record_pull_request(agent, FIRST);
+    let mut records = store.pull_requests().to_vec();
+    records.push(knot_core::SavedPullRequest::new(SECOND, Uuid::new_v4(), workspace));
+
+    store.set_pull_requests(records);
+
+    assert_eq!(store.pull_requests().len(), 1);
+    assert_eq!(store.pull_requests()[0].url, FIRST);
+}
