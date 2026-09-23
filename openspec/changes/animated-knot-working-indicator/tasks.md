@@ -51,21 +51,21 @@
       `WORKING_INDICATOR_MIN_REPAINT` and `last_spinner_frame` are untouched;
       verify with `cargo test -p knot working_indicator` and by watching a
       dashboard with a working agent.
-      Automated half done: 3/3 pass, and the diff touches none of
-      `consts.rs`, `workspace_window/window.rs`, `open.rs` or `repaint.rs`.
-      Watching a live dashboard is outstanding with 4.1–4.3
+      3/3 tests pass, the diff touches none of `consts.rs`,
+      `workspace_window/window.rs`, `open.rs` or `repaint.rs`, and the live
+      dashboard was watched in a debug build
 - [x] 3.2 Confirm the panel's row bookkeeping is unchanged — `row_count` still
       counts `turn_active` and `row_at` still yields `Working` last; verify with
       `cargo test -p knot panel_view` (26/26 pass)
 
 ## 4. Walk the spec
 
-- [ ] 4.1 Run a turn and confirm the animated icon appears as the last row,
+- [x] 4.1 Run a turn and confirm the animated icon appears as the last row,
       animates continuously through a quiet stretch with no output, and is gone
       once the turn ends
-- [ ] 4.2 Confirm the indicator sits below a pending permission prompt while one
+- [x] 4.2 Confirm the indicator sits below a pending permission prompt while one
       is awaiting a decision
-- [ ] 4.3 Turn on Reduce Motion in System Settings > Accessibility > Display and
+- [x] 4.3 Turn on Reduce Motion in System Settings > Accessibility > Display and
       confirm the row is still present, shows the icon held still, and occupies
       the same space as when animating
 - [x] 4.4 Run `make` and confirm the whole gate passes — `fmt-check`,
