@@ -24,6 +24,7 @@ mod menu_key_equivalents;
 mod notifications;
 mod panel_lookup;
 mod panel_scroll;
+mod permission_keybindings;
 mod plan_diagram;
 mod pull_request_records;
 mod quit_warning;
