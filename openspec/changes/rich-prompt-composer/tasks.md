@@ -38,10 +38,10 @@
 
 ## 6. `@` file mentions
 
-- [ ] 6.1 Make `active_token` in `panel_commands/token.rs` trigger-aware, returning which trigger is under the caret; verify a buffer holding both a `/` and an `@` token reports the one the caret sits in
-- [ ] 6.2 Move matching and ranking from `LookupEntry::matches` onto `LookupSource`, leaving commands on case-insensitive substring; verify the existing `panel-slash-commands` tests pass unchanged
-- [ ] 6.3 Add a file `LookupSource` with subsequence matching, a score preferring name matches over directory matches and consecutive characters over scattered ones, and matched-character indices for the row; verify `kgs` reaches `crates/knot-git/src/lib.rs` and ranking and marking match the spec's scenarios
-- [ ] 6.4 Enumerate the agent's own working folder off the render path — via `knot-git` for a repository (tracked plus untracked-but-not-ignored), a filesystem walk with the Swift reference's exclusion set otherwise; verify an ignored `target/` path never appears and a new untracked file does
+- [x] 6.1 Make `active_token` in `panel_commands/token.rs` trigger-aware, returning which trigger is under the caret; verify a buffer holding both a `/` and an `@` token reports the one the caret sits in
+- [x] 6.2 Move matching and ranking from `LookupEntry::matches` onto `LookupSource`, leaving commands on case-insensitive substring; verify the existing `panel-slash-commands` tests pass unchanged
+- [x] 6.3 Add a file `LookupSource` with subsequence matching, a score preferring name matches over directory matches and consecutive characters over scattered ones, and matched-character indices for the row; verify `kgs` reaches `crates/knot-git/src/lib.rs` and ranking and marking match the spec's scenarios
+- [x] 6.4 Enumerate the agent's own working folder off the render path — via `knot-git` for a repository (tracked plus untracked-but-not-ignored), a filesystem walk with the Swift reference's exclusion set otherwise; verify an ignored `target/` path never appears and a new untracked file does
 - [ ] 6.5 Cache the listing per agent and refresh it from `knot-discovery`'s debounced watch rather than a timer; verify a file created while the agent is open appears in a later lookup without reopening the agent
 - [ ] 6.6 Report enumeration states in the popup — still gathering, and folder over the cap with matching still offered over what was gathered; verify the composer keeps accepting keystrokes during enumeration and add the localization keys
 - [ ] 6.7 Dispatch the popup on the caret's trigger so the two lookups are mutually exclusive, sharing navigation, insertion and Esc; verify moving the caret between a `/` token and an `@` token switches the list and never shows both

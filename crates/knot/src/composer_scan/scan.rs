@@ -82,6 +82,20 @@ impl Edit {
     }
 }
 
+/// The token spans on the line containing `offset`.
+///
+/// The lookup asks this to decide which trigger the caret is in, so that
+/// what opens the popup and what gets the token treatment are one answer
+/// rather than two rules that can drift apart.
+pub(crate) fn tokens_on_line(text: &str, offset: usize) -> Vec<Span> {
+    if offset > text.len() || !text.is_char_boundary(offset) {
+        return Vec::new();
+    }
+    let mut spans = tokens::scan(text, offset..offset);
+    sort(&mut spans);
+    spans
+}
+
 /// Every construct in `text`, given the attachment references currently
 /// held in the pending-context table.
 ///

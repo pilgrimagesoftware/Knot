@@ -35,7 +35,7 @@ use uuid::Uuid;
 
 use crate::app_support::single_line;
 use crate::panel_commands::ActiveToken;
-use crate::panel_commands::LookupEntry;
+use crate::panel_commands::LookupMatch;
 use crate::panel_commands::LookupRegistry;
 use crate::panel_commands::active_token;
 use crate::workspace_window::WorkspaceWindow;
@@ -103,7 +103,7 @@ impl WorkspaceWindow {
     /// every key handler ask it rather than keeping a flag in step.
     fn panel_lookup_matches(&mut self, id: Uuid, input: &Entity<PanelInputState>,
                             cx: &gpui_kit::App)
-                            -> Option<(ActiveToken, Vec<LookupEntry>)> {
+                            -> Option<(ActiveToken, Vec<LookupMatch>)> {
         let token = Self::panel_lookup_token(input, cx)?;
         let lookup = self.panel_lookup(id);
         // Typing past what Esc closed reopens the popup; retyping the same
@@ -112,11 +112,7 @@ impl WorkspaceWindow {
             return None;
         }
         lookup.dismissed = None;
-        let matches: Vec<LookupEntry> = lookup.registry
-                                              .matching(&token.filter)
-                                              .into_iter()
-                                              .cloned()
-                                              .collect();
+        let matches: Vec<LookupMatch> = lookup.registry.matching(&token.filter);
         if matches.is_empty() {
             return None;
         }
@@ -146,11 +142,11 @@ impl WorkspaceWindow {
                     .when_selected(is_selected, cx)
                     .child(div().flex_shrink_0()
                                 .font_family(cx.theme().mono_font_family.clone())
-                                .child(format!("/{}", entry.token)))
+                                .child(format!("/{}", entry.entry.token)))
                     .child(div().flex_1()
                                 .min_w_0()
                                 .text_color(cx.theme().muted_foreground)
-                                .child(single_line(&entry.description)))
+                                .child(single_line(&entry.entry.description)))
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.panel_lookup_select(id, index);
                         view.insert_panel_lookup_entry(id, &input, window, cx);
@@ -212,13 +208,13 @@ impl WorkspaceWindow {
         let selected = self.panel_lookup(id).selected.min(matches.len() - 1);
         replace_lookup_token(input,
                              token.range.clone(),
-                             &matches[selected].token,
+                             &matches[selected].entry.token,
                              window,
                              cx);
         // The token now reads as the inserted entry; marking that dismissed
         // keeps the popup shut over the completed token instead of
         // reopening on the exact match the user just chose.
-        self.panel_lookup(id).dismissed = Some(matches[selected].token.clone());
+        self.panel_lookup(id).dismissed = Some(matches[selected].entry.token.clone());
         self.panel_lookup(id).selected = 0;
         cx.notify();
     }

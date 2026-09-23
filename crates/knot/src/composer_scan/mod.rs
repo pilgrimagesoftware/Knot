@@ -30,3 +30,4 @@ pub(crate) use scan::Edit;
 pub(crate) use scan::Span;
 pub(crate) use scan::rescan;
 pub(crate) use scan::scan;
+pub(crate) use scan::tokens_on_line;

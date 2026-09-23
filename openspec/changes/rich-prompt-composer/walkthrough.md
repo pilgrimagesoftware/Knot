@@ -20,6 +20,8 @@ Debug build of `396-rich-prompt-composer` at `40fc9d7`, launched with
 | --- | --- | --- |
 | 5.1 | Each treatment visually distinct — heading, strong, emphasis, inline code, link, list marker, block quote, slash token, mention | **Pass.** No issue stood out. |
 | 5.4 | Legible in the active appearance | **Pass.** |
+| 3.4 | Context menu | **Pass.** |
+| 3.4 | Selection by keyboard | **Pass.** |
 
 Automated counterparts: `composer_style::tests` (no treatment is hue-only, no
 two are drawn alike except the deliberate code pair, treatments change with
@@ -31,10 +33,10 @@ slash lookup and the send path still work over `EditorState`.
 
 ### Not yet walked
 
-- **3.4** — IME composition, the context menu, selection by mouse and
-  keyboard, undo/redo. These are the `EditorState` behaviours no test
-  reaches, and they are the ones the widget swap could plausibly have
-  changed.
+- **3.4, the rest** — IME composition, selection by mouse, and undo/redo.
+  Undo/redo is the one to weight: `gpui-base`'s `enter()` calls
+  `undo_manager.break_transaction_coalescing()` on the submit path, and the
+  swap changed which branch of that function the composer takes.
 - **5.1/5.4 in the other appearance** — the light/dark switch restyling with
   no edit.
 - **8.2** — the full scenario sweep, once groups 6 and 7 land.
