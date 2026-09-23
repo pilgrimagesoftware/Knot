@@ -1,10 +1,13 @@
 //! Small presentational helpers for the workspace window's chrome: the
-//! agent-row detail lines, the terminal font/metrics lookups, and the
+//! agent-row detail lines, the terminal's cell metrics, and the
 //! context-usage indicator.
 //!
 //! None of these touch [`super::WorkspaceWindow`] state - they take what
 //! they need and return an element or a value, which is what makes them
-//! separable from the window itself and unit-testable as they stand.
+//! separable from the window itself and unit-testable as they stand. That
+//! is why the terminal's font *family* is not here: deciding it costs a
+//! font enumeration, so it is answered from a per-window memo instead - see
+//! [`super::terminal_font`].
 
 use gpui_kit::App;
 use gpui_kit::InteractiveElement;
@@ -90,28 +93,6 @@ pub(crate) fn runs_a_terminal_process(agent_type: &str) -> bool {
 /// which a list index does not.
 pub(crate) fn element_key(id: Uuid) -> u64 {
     id.as_u64_pair().0
-}
-
-/// The font family to actually render the terminal with: the user's
-/// `terminal_font_name` setting if GPUI can actually resolve it (checked
-/// against the platform's font catalog plus whatever we've embedded),
-/// otherwise the embedded JetBrains Mono default. Guards against a stale or
-/// otherwise-unresolvable persisted value (an old default, a font that was
-/// uninstalled, a font-panel value AppKit accepts but GPUI's lookup
-/// doesn't) silently falling back further to the proportional UI font.
-pub(crate) fn terminal_font_family(settings: &knot_core::Settings, cx: &App)
-                                   -> gpui_kit::SharedString {
-    let requested = &settings.terminal_font_name;
-    if cx.text_system()
-         .all_font_names()
-         .iter()
-         .any(|name| name == requested)
-    {
-        requested.clone().into()
-    }
-    else {
-        "JetBrains Mono".into()
-    }
 }
 
 /// Measures the actual rendered cell size for `terminal_view`'s font/size,
