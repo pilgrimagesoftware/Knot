@@ -24,4 +24,4 @@
 ## 4. Gate
 
 - [x] 4.1 Run `make` end to end — `fmt-check`, `size-check`, `lint`, `test`, `build`; verify no file crossed 700 lines
-- [ ] 4.2 Verify by hand in a debug build: a collapsed section on a busy agent names its processes and updates as they come and go; expanding switches to a count; stopping the agent reads as none; a takeover view stops the sampling
+- [x] 4.2 Verify by hand in a debug build: a collapsed section on a busy agent names its processes and updates as they come and go; expanding switches to a count; stopping the agent reads as none; a takeover view stops the sampling

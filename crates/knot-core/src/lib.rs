@@ -11,6 +11,7 @@ pub mod agent_type;
 pub mod consts;
 pub mod error;
 pub mod exec_path;
+pub mod folder_name;
 pub mod import;
 pub mod l10n;
 pub mod log_dir;
@@ -19,6 +20,7 @@ pub mod settings;
 
 pub use error::{Error, Result};
 pub use exec_path::{resolve_program, search_path};
+pub use folder_name::folder_name;
 pub use l10n::t;
 pub use log_dir::log_dir;
 pub use settings::{
