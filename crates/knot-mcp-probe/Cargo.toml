@@ -9,3 +9,6 @@ rust-version.workspace = true
 [dependencies]
 knot-core = { path = "../knot-core" }
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

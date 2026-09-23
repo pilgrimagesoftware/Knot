@@ -9,11 +9,11 @@
 
 ## 2. `knot-mcp-probe`: running and parsing
 
-- [ ] 2.1 Implement the runner: spawn the type's list command with the agent's working directory and launch environment, stdin closed, stdout and stderr captured, killed at `PROBE_TIMEOUT` from `consts.rs`; verify a fixture command that sleeps past the timeout is killed and yields `ProbeError::TimedOut` rather than hanging the test
-- [ ] 2.2 Implement the Claude Code parser: name is the text before the first `": "`, state is anchored on the last ` - ` followed by a recognized state glyph, and the target is what lies between; verify against a captured fixture holding the `node -e` stdio entry, an `(HTTP)` entry, `⊘ Disabled for this project`, `✘ Failed to connect — -32602: Invalid request parameters`, and a name containing both spaces and colons
-- [ ] 2.3 Map every observed state string to `ServerState`, retaining the failure detail; verify `✘ Failed to connect — <error>` keeps `<error>` and that an unrecognized glyph yields `Unknown` rather than `Connected`
-- [ ] 2.4 Degrade per line, not wholesale: an unparsable line becomes an `Unknown` row; output with no parsable line at all is `ProbeError::Unrecognized` carrying its first line; verify a fixture of entirely foreign output produces the error and not an empty inventory
-- [ ] 2.5 Add `is_knot_endpoint(target, knot_url)` normalizing scheme, host, port and path before comparing; verify `http://127.0.0.1:8767/mcp` matches `http://localhost:8767/mcp/` and does not match a different port
+- [x] 2.1 Implement the runner: spawn the type's list command with the agent's working directory and launch environment, stdin closed, stdout and stderr captured, killed at `PROBE_TIMEOUT` from `consts.rs`; verify a fixture command that sleeps past the timeout is killed and yields `ProbeError::TimedOut` rather than hanging the test
+- [x] 2.2 Implement the Claude Code parser: name is the text before the first `": "`, state is anchored on the last ` - ` followed by a recognized state glyph, and the target is what lies between; verify against a captured fixture holding the `node -e` stdio entry, an `(HTTP)` entry, `⊘ Disabled for this project`, `✘ Failed to connect — -32602: Invalid request parameters`, and a name containing both spaces and colons
+- [x] 2.3 Map every observed state string to `ServerState`, retaining the failure detail; verify `✘ Failed to connect — <error>` keeps `<error>` and that an unrecognized glyph yields `Unknown` rather than `Connected`
+- [x] 2.4 Degrade per line, not wholesale: an unparsable line becomes an `Unknown` row; output with no parsable line at all is `ProbeError::Unrecognized` carrying its first line; verify a fixture of entirely foreign output produces the error and not an empty inventory
+- [x] 2.5 Add `is_knot_endpoint(target, knot_url)` normalizing scheme, host, port and path before comparing; verify `http://127.0.0.1:8767/mcp` matches `http://localhost:8767/mcp/` and does not match a different port
 
 ## 3. Per-type knowledge on the roster
 

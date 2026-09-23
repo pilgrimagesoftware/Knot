@@ -3918,6 +3918,7 @@ name = "knot-mcp-probe"
 version = "1.14.0"
 dependencies = [
  "knot-core",
+ "tempfile",
  "thiserror 2.0.20",
 ]
 
