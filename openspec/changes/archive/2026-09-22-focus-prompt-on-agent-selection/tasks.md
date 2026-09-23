@@ -45,29 +45,29 @@
 
 ## 3. Check what focus now affects
 
-- [ ] 3.1 Confirm the Agents menu still enables and dispatches with a focused
+- [x] 3.1 Confirm the Agents menu still enables and dispatches with a focused
       composer — the root-focus guard no longer fires, and the menu's handlers
       depend on the composer being the root element's descendant; verify by
       selecting a Panel-mode agent and opening the Agents menu
-- [ ] 3.2 Confirm the Edit menu's five items are enabled with the composer
+- [x] 3.2 Confirm the Edit menu's five items are enabled with the composer
       focused and that ⌘C copies from it, per `app-menu`'s requirement; verify by
       selecting text in the composer and choosing Edit > Copy
-- [ ] 3.3 Confirm the terminal pane is unaffected: selecting a Terminal-mode
+- [x] 3.3 Confirm the terminal pane is unaffected: selecting a Terminal-mode
       agent leaves focus alone, and clicking the pane still focuses it and still
       answers ⌘C with its own copy-selection
 
 ## 4. Walk the spec
 
-- [ ] 4.1 Select a Panel-mode agent from the sidebar, from the window's overview,
+- [x] 4.1 Select a Panel-mode agent from the sidebar, from the window's overview,
       and by creating one, and confirm typing goes into the composer each time
       with no intervening click
-- [ ] 4.2 Open a workspace window whose restored selection is a Panel-mode agent
+- [x] 4.2 Open a workspace window whose restored selection is a Panel-mode agent
       and confirm its composer has focus
-- [ ] 4.3 Type a partial message to one agent, switch to a second, switch back,
+- [x] 4.3 Type a partial message to one agent, switch to a second, switch back,
       and confirm the first agent's composer has focus and still holds its text
-- [ ] 4.4 Select an agent, click a config selector, and let the window redraw
+- [x] 4.4 Select an agent, click a config selector, and let the window redraw
       (start a turn so it streams); confirm focus stays where it was put
-- [ ] 4.5 Confirm the no-focus cases: dashboard showing, markdown pane open,
+- [x] 4.5 Confirm the no-focus cases: dashboard showing, markdown pane open,
       diagram pane open, deactivated agent, Terminal-mode agent
-- [ ] 4.6 Run `make` and confirm the whole gate passes — `fmt-check`,
+- [x] 4.6 Run `make` and confirm the whole gate passes — `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build
