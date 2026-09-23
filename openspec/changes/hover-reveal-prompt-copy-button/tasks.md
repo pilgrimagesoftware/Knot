@@ -39,5 +39,5 @@
 - [x] 3.2 Confirm the response action bar is unchanged
 - [ ] 3.3 Scroll a long conversation with the pointer held still over the list
       and confirm no control is left stuck shown on a row that scrolled past it
-- [ ] 3.4 Run `make` and confirm the whole gate passes — `fmt-check`,
+- [x] 3.4 Run `make` and confirm the whole gate passes — `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build

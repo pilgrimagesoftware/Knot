@@ -76,7 +76,14 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                 // rules out. The button being inside the group is also what
                 // keeps it shown once the pointer reaches it.
                 .child(
+                    // The 85% cap belongs on the cluster, not on the bubble
+                    // inside it. A percentage resolves against its containing
+                    // block, and the cluster is shrink-wrapped, so a cap on
+                    // the bubble resolved against an indefinite width and
+                    // stopped constraining anything - a long prompt then grew
+                    // past the row and read as left-aligned.
                     h_flex()
+                        .max_w(relative(0.85))
                         .min_w_0()
                         .gap_1()
                         .group(PROMPT_HOVER_GROUP)
@@ -105,7 +112,6 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                         )
                         .child(
                             div()
-                                .max_w(relative(0.85))
                                 .min_w_0()
                                 .text_sm()
                                 .text_color(style.prompt_foreground)
