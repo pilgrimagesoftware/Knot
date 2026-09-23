@@ -177,7 +177,7 @@ impl WorkspaceWindow {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
-        let shift_to_send = self.settings.agent_panel_shift_enter_sends;
+        let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
         let placeholder = Self::panel_prompt_placeholder();
         let max_rows = if self.panel_input_expanded.contains(&id) {
             PANEL_INPUT_ROWS_EXPANDED

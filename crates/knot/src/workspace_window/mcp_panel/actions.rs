@@ -26,13 +26,16 @@ impl WorkspaceWindow {
     /// The configured value may carry flags meant for launching the agent
     /// (`claude --resume`); its first token is the binary, and the rest is
     /// not an argument to an MCP command.
-    pub(in crate::workspace_window) fn mcp_program_for(&self, agent_type: &str) -> Option<String> {
-        self.settings
-            .agent_commands
-            .get(agent_type)
-            .and_then(|text| text.split_whitespace().next())
-            .map(str::to_owned)
-            .or_else(|| knot_core::agent_type::mcp_program(agent_type).map(str::to_owned))
+    pub(in crate::workspace_window) fn mcp_program_for(&self, agent_type: &str,
+                                                       cx: &gpui_kit::App)
+                                                       -> Option<String> {
+        crate::settings_global::read(cx).agent_commands
+                                        .get(agent_type)
+                                        .and_then(|text| text.split_whitespace().next())
+                                        .map(str::to_owned)
+                                        .or_else(|| {
+                                            knot_core::agent_type::mcp_program(agent_type).map(str::to_owned)
+                                        })
     }
 
     /// Opens a terminal running this agent type's MCP flow for `server`.
@@ -40,7 +43,8 @@ impl WorkspaceWindow {
     /// Does nothing for a type with no MCP command - a row on such a type
     /// offers no action in the first place, and this is the second half of
     /// that same check.
-    pub(in crate::workspace_window) fn open_mcp_handover(&mut self, agent_id: Uuid, server: &str)
+    pub(in crate::workspace_window) fn open_mcp_handover(&mut self, agent_id: Uuid,
+                                                         server: &str, cx: &gpui_kit::App)
                                                          -> bool {
         let Some(agent_type) = self.store
                                    .lock()
@@ -50,7 +54,7 @@ impl WorkspaceWindow {
             return false;
         };
 
-        let Some(program) = self.mcp_program_for(&agent_type)
+        let Some(program) = self.mcp_program_for(&agent_type, cx)
         else {
             return false;
         };
@@ -97,7 +101,7 @@ impl WorkspaceWindow {
             companion
         };
 
-        self.persist_agents();
+        self.persist_agents(cx);
         // So the section catches up with whatever the user did in there.
         self.mcp_handover_terminals.insert(companion, agent_id);
 

@@ -53,11 +53,6 @@ pub(crate) struct ImportWindow {
     /// Focused on first render so the window has a key target for `Escape`.
     /// A window with nothing focused never sees the key event at all.
     pub(super) focus:               gpui_kit::FocusHandle,
-    /// The store an import writes into. Loaded when the window opens rather
-    /// than snapshotted at bootstrap, for the reason the settings window
-    /// reloads: importing into a stale copy would overwrite whatever has
-    /// been saved since.
-    pub(super) settings:            knot_core::Settings,
     /// The live store every open window renders from. Imported workspaces and
     /// agents go in here as well as into settings: settings is what survives a
     /// restart, the store is what the running app can see, and an import that
@@ -71,11 +66,8 @@ pub(crate) struct ImportWindow {
 }
 
 impl ImportWindow {
-    fn new(settings: knot_core::Settings, store: Arc<Mutex<knot_agents::AgentStore>>,
-           cx: &mut Context<Self>)
-           -> Self {
+    fn new(store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut Context<Self>) -> Self {
         Self { focus: cx.focus_handle(),
-               settings,
                store,
                sources: Self::scan(),
                subagent_selection: BTreeSet::new(),
@@ -113,7 +105,8 @@ impl ImportWindow {
                                    .cloned()
                                    .collect();
 
-        let result = knot_core::import::import_definitions(&mut self.settings, &selected);
+        let result =
+            knot_core::import::import_definitions(&crate::settings_global::handle(cx), &selected);
         // Personas live only in settings - the store holds agents and
         // workspaces - so there is nothing to adopt here. The other windows
         // still have to be redrawn: an imported persona shows up in the
@@ -127,9 +120,11 @@ impl ImportWindow {
         let source = self.sources.skwad.clone();
         let selected: Vec<Uuid> = self.workspace_selection.iter().copied().collect();
 
-        let result = knot_core::import::import_workspaces(&mut self.settings, &source, &selected);
+        let result = knot_core::import::import_workspaces(&crate::settings_global::handle(cx),
+                                                          &source,
+                                                          &selected);
         if result.is_ok() {
-            self.adopt_imported_records();
+            self.adopt_imported_records(cx);
         }
         self.outcome = Some(summarise(result, &source.unreadable));
         self.workspace_selection.clear();
@@ -145,10 +140,11 @@ impl ImportWindow {
     /// Diffed by id rather than tracked through the import: the store skips
     /// anything it already holds, so handing it everything settings now has is
     /// both correct and idempotent, and needs no record of what was added.
-    fn adopt_imported_records(&mut self) {
+    fn adopt_imported_records(&mut self, cx: &App) {
+        let settings = crate::settings_global::read(cx);
         self.store
             .lock()
-            .adopt_saved(&self.settings.saved_agents, &self.settings.saved_workspaces);
+            .adopt_saved(&settings.saved_agents, &settings.saved_workspaces);
     }
 
     /// Redraw this window and every other one.
@@ -202,11 +198,10 @@ impl Render for ImportWindow {
 pub(crate) fn register_import_action(store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     let handle: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
     cx.on_action(move |_: &crate::app_bootstrap::OpenImport, cx| {
-          // Reload from disk rather than reusing a clone captured at
-          // bootstrap: an import writes to the store, and importing into a
-          // stale snapshot would overwrite anything saved since.
-          let settings = knot_core::Settings::load().unwrap_or_default();
-          open_import_window(&handle, settings, Arc::clone(&store), cx);
+          // No reload here any more: the import reads and writes the shared
+          // surface, so there is no snapshot to be stale. This used to load
+          // from disk precisely because there was.
+          open_import_window(&handle, Arc::clone(&store), cx);
       });
 }
 
@@ -216,7 +211,6 @@ pub(crate) fn register_import_action(store: Arc<Mutex<knot_agents::AgentStore>>,
 /// window fails its update, which is the same test the settings and About
 /// windows use, and is why no close observer is needed to clear the handle.
 pub(crate) fn open_import_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
-                                 settings: knot_core::Settings,
                                  store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     if let Some(existing) = *handle.borrow()
        && existing.update(cx, |_, window, _| window.activate_window())
@@ -228,7 +222,7 @@ pub(crate) fn open_import_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>,
                 // Every window tracks the OS appearance, so a light/dark flip
                 // re-resolves the system palette and repaints.
                 observe_system_appearance(window);
-                let view = cx.new(|cx| ImportWindow::new(settings, store, cx));
+                let view = cx.new(|cx| ImportWindow::new(store, cx));
                 cx.new(|cx| Root::new(view, window, cx).bg(cx.theme().background))
             }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),

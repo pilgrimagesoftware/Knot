@@ -90,7 +90,7 @@ fn an_unknown_agent_is_not_probed() {
 fn the_probe_tick_is_called_from_the_repaint_poll_and_its_answer_is_used() {
     let repaint = read("repaint.rs");
 
-    assert!(repaint.contains("self.mcp_probe_tick()"),
+    assert!(repaint.contains("self.mcp_probe_tick(cx)"),
             "repaint_poll_tick must call the probe tick, or results never reach a frame");
     assert!(repaint.contains("|| mcp_probed"),
             "the tick's answer must be in the notify chain, or a landed probe draws only when \

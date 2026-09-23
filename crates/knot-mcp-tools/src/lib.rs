@@ -20,7 +20,7 @@ use std::sync::Arc;
 use knot_activity::{EventSink, Tracker, TrackerConfig, tracking_for};
 use knot_agents::{AgentState, AgentStore};
 use knot_core::BenchAgent;
-use knot_core::Settings;
+use knot_core::SharedSettings;
 use knot_discovery::RepoInfo;
 use knot_mcp::{
     AgentHookHandler, HookRequest, HookStatus, claude_status, codex_turn_complete, extract_metadata,
@@ -51,7 +51,7 @@ pub struct McpToolCatalog {
     notifier:       Arc<dyn DeliveryNotifier + Send + Sync>,
     repos:          watch::Receiver<Vec<RepoInfo>>,
     bench_agents:   Mutex<Vec<BenchAgent>>,
-    settings:       Mutex<Option<Settings>>,
+    settings:       Mutex<Option<SharedSettings>>,
     trackers:       Mutex<HashMap<Uuid, Tracker>>,
     awaiting_input: Mutex<Option<AwaitingInputQueue>>,
     activation:     Mutex<Option<ActivationQueue>>,
@@ -108,21 +108,32 @@ impl McpToolCatalog {
         self.agents.lock().agents().to_vec()
     }
 
-    pub fn with_settings(self, settings: Settings) -> Self {
+    /// The settings surface this catalog persists the roster through.
+    ///
+    /// Takes the shared handle rather than an owned `Settings`. The catalog
+    /// lives on the MCP server's own thread for the whole session, so a
+    /// snapshot taken when the server started would still be read hours
+    /// later - `restore_conversation_on_launch` below is exactly that read,
+    /// and it decides what a persisted agent carries. Issue #238 in a
+    /// background service.
+    pub fn with_settings(self, settings: SharedSettings) -> Self {
         *self.settings.lock() = Some(settings);
         self
     }
 
     fn persist_agent_state(&self) -> Result<()> {
         let agents = self.agents.lock();
-        let mut settings = self.settings.lock();
-        let Some(settings) = settings.as_mut()
+        let settings = self.settings.lock();
+        let Some(settings) = settings.as_ref()
         else {
             return Ok(());
         };
-        settings.saved_agents = agents.saved_agents(settings.restore_conversation_on_launch);
-        settings.saved_workspaces = agents.saved_workspaces();
-        Ok(settings.persist_roster()?)
+        let installed = settings.write(|settings| {
+                                    settings.saved_agents =
+                                agents.saved_agents(settings.restore_conversation_on_launch);
+                                    settings.saved_workspaces = agents.saved_workspaces();
+                                });
+        Ok(installed.persist_roster()?)
     }
 
     fn tracker_for(&self, id: Uuid, agent_type: &str) -> bool {
@@ -334,7 +345,7 @@ mod tests {
     #[tokio::test]
     async fn successful_agent_mutation_persists_durable_state() {
         let dir = tempdir().unwrap();
-        let cat = catalog().with_settings(knot_core::Settings::with_store_root(dir.path()));
+        let cat = catalog().with_settings(knot_core::SharedSettings::new(knot_core::Settings::with_store_root(dir.path())));
         let id = cat.agents
                     .lock()
                     .create("/tmp/persisted", knot_agents::CreateOptions::default());

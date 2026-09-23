@@ -151,7 +151,7 @@ impl WorkspaceWindow {
     /// supervises its own server), and the type has a flow at all. A row on
     /// an agent Knot cannot interrogate never reaches here, because it has no
     /// rows.
-    fn mcp_row_action(&self, row: &SectionRow) -> Option<(String, String)> {
+    fn mcp_row_action(&self, row: &SectionRow, cx: &Context<Self>) -> Option<(String, String)> {
         let SectionRow::Agent(server) = row
         else {
             return None;
@@ -166,7 +166,7 @@ impl WorkspaceWindow {
                              .lock()
                              .agent(agent_id)
                              .map(|agent| agent.agent_type.clone())?;
-        let program = self.mcp_program_for(&agent_type)?;
+        let program = self.mcp_program_for(&agent_type, cx)?;
         let flow = crate::workspace_window::mcp_panel::handover::handover(&agent_type,
                                                                           &program,
                                                                           &server.name)?;
@@ -191,7 +191,7 @@ impl WorkspaceWindow {
     /// run. A build with no supervisor running (a test window) reads as
     /// disabled rather than panicking on the missing global.
     fn mcp_rows(&self, agent_id: Uuid, cx: &Context<Self>) -> Vec<SectionRow> {
-        let port = self.settings.mcp_server_port;
+        let port = crate::settings_global::read(cx).mcp_server_port;
         let knot_state = if cx.has_global::<crate::mcp_status::McpServerStatus>() {
             cx.global::<crate::mcp_status::McpServerStatus>().state()
         }
@@ -313,7 +313,7 @@ impl WorkspaceWindow {
 
         let copy_tooltip = knot_core::l10n::t("mcp.action_copy_target");
         let address = row.short_label();
-        let action = self.mcp_row_action(row);
+        let action = self.mcp_row_action(row, cx);
 
         v_flex()
             .w_full()
@@ -363,7 +363,7 @@ impl WorkspaceWindow {
                          .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
                          .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
                                        if let Some(agent_id) = view.selected_agent {
-                                           view.open_mcp_handover(agent_id, &server);
+                                           view.open_mcp_handover(agent_id, &server, cx);
                                            cx.notify();
                                        }
                                    }))

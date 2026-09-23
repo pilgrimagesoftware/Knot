@@ -59,21 +59,13 @@ fn opening_the_same_workspace_twice_leaves_one_window(cx: &mut TestAppContext) {
     cx.update(|cx| {
           gpui_kit::init(cx);
           WindowRegistry::install(cx);
-          let settings = sandboxed_settings(&dir);
+          crate::settings_global::install(sandboxed_settings(&dir), cx);
 
-          WorkspaceWindow::open(Arc::clone(&store),
-                                Arc::clone(&messages),
-                                settings.clone(),
-                                id,
-                                cx);
+          WorkspaceWindow::open(Arc::clone(&store), Arc::clone(&messages), id, cx);
           assert_eq!(cx.windows().len(), 1, "the first open should make a window");
 
           for _ in 0..4 {
-              WorkspaceWindow::open(Arc::clone(&store),
-                                    Arc::clone(&messages),
-                                    settings.clone(),
-                                    id,
-                                    cx);
+              WorkspaceWindow::open(Arc::clone(&store), Arc::clone(&messages), id, cx);
           }
           assert_eq!(cx.windows().len(),
                      1,
@@ -95,18 +87,10 @@ fn two_workspaces_get_two_windows(cx: &mut TestAppContext) {
     cx.update(|cx| {
           gpui_kit::init(cx);
           WindowRegistry::install(cx);
-          let settings = sandboxed_settings(&dir);
+          crate::settings_global::install(sandboxed_settings(&dir), cx);
 
-          WorkspaceWindow::open(Arc::clone(&store),
-                                Arc::clone(&messages),
-                                settings.clone(),
-                                first,
-                                cx);
-          WorkspaceWindow::open(Arc::clone(&store),
-                                Arc::clone(&messages),
-                                settings.clone(),
-                                second,
-                                cx);
+          WorkspaceWindow::open(Arc::clone(&store), Arc::clone(&messages), first, cx);
+          WorkspaceWindow::open(Arc::clone(&store), Arc::clone(&messages), second, cx);
           assert_eq!(cx.windows().len(),
                      2,
                      "different workspaces keep their own windows");
@@ -134,6 +118,7 @@ fn opening_from_inside_another_windows_update_still_leaves_one_window(cx: &mut T
     let host = cx.update(|cx| {
                      gpui_kit::init(cx);
                      WindowRegistry::install(cx);
+                     crate::settings_global::install(sandboxed_settings(&dir), cx);
                      cx.open_window(WindowOptions::default(), |window, cx| {
                            let view = cx.new(|_| Blank);
                            cx.new(|cx| Root::new(view, window, cx))
@@ -141,14 +126,12 @@ fn opening_from_inside_another_windows_update_still_leaves_one_window(cx: &mut T
                        .expect("the host window should open")
                  });
     let mut host_cx = VisualTestContext::from_window(host.into(), cx);
-    let settings = sandboxed_settings(&dir);
 
     for _ in 0..3 {
         let store = Arc::clone(&store);
         let messages = Arc::clone(&messages);
-        let settings = settings.clone();
         host_cx.update(|_window, cx| {
-                   WorkspaceWindow::open(store, messages, settings, id, cx);
+                   WorkspaceWindow::open(store, messages, id, cx);
                });
     }
 

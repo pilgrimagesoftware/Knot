@@ -31,3 +31,8 @@
       clicking still works. 3.2 proves the element is painted; it proves
       nothing about legibility against the primary button fill, and it
       exercises neither the key dispatch nor the click path end to end.
+
+      Carried forward, not dropped: the change is archived with 3.3 still
+      open. The risk-colouring half of #194 has to trigger a live
+      permission prompt to verify its own fix, so this check moves into
+      that change rather than waiting on an occasion of its own.

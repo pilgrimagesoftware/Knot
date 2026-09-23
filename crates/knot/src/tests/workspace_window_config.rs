@@ -17,6 +17,18 @@ fn config_option(id: &str, category: &str) -> knot_acp::ConfigOption {
                              options:       Vec::new(), }
 }
 
+/// The case issue #194 turned on: ACP makes `category` optional, so an
+/// agent may declare a perfectly good option and attach nothing to it.
+fn uncategorized_option(id: &str) -> knot_acp::ConfigOption {
+    knot_acp::ConfigOption { category: None,
+                             ..config_option(id, "unused") }
+}
+
+fn named_option(id: &str, name: &str) -> knot_acp::ConfigOption {
+    knot_acp::ConfigOption { name: name.to_string(),
+                             ..uncategorized_option(id) }
+}
+
 #[test]
 fn find_config_option_matches_category_case_insensitively() {
     let options = vec![config_option("mode", "Mode"),
@@ -27,7 +39,7 @@ fn find_config_option_matches_category_case_insensitively() {
 }
 
 #[test]
-fn find_config_option_is_none_when_no_category_matches() {
+fn find_config_option_is_none_when_nothing_matches() {
     let options = vec![config_option("mode", "mode")];
 
     assert!(WorkspaceWindow::find_config_option(&options, &["model"]).is_none());
@@ -40,6 +52,96 @@ fn find_config_option_ignores_non_select_options() {
     let options = vec![boolean_option];
 
     assert!(WorkspaceWindow::find_config_option(&options, &["mode"]).is_none());
+}
+
+/// The defect itself: ACP says a client "MUST handle missing or unknown
+/// categories gracefully", and Knot required the field instead, so an
+/// agent that omitted it lost all three selectors and the prompt's risk
+/// colour at once.
+#[test]
+fn find_config_option_falls_back_to_the_id_when_there_is_no_category() {
+    let options = vec![uncategorized_option("mode")];
+
+    let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+    assert_eq!(found.map(|option| option.id.as_str()), Some("mode"));
+}
+
+#[test]
+fn find_config_option_falls_back_to_the_id_on_an_unknown_category() {
+    let options = vec![config_option("mode", "_vendor_specific")];
+
+    let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+    assert_eq!(found.map(|option| option.id.as_str()), Some("mode"));
+}
+
+#[test]
+fn find_config_option_falls_back_to_the_name_last() {
+    let options = vec![named_option("session_behaviour", "mode")];
+
+    let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+    assert_eq!(found.map(|option| option.id.as_str()),
+               Some("session_behaviour"));
+}
+
+/// `mode` is a substring of `model`. Matching on anything looser than
+/// equality would let the permission slot claim the model option, which is
+/// why all three passes compare whole fields.
+#[test]
+fn find_config_option_never_matches_a_substring() {
+    let options = vec![uncategorized_option("model")];
+
+    assert!(WorkspaceWindow::find_config_option(&options, &["mode"]).is_none());
+}
+
+#[test]
+fn find_config_option_ignores_non_select_options_on_every_pass() {
+    let mut uncategorized = uncategorized_option("mode");
+    uncategorized.kind = "boolean".to_string();
+    let mut by_name = named_option("anything", "mode");
+    by_name.kind = "boolean".to_string();
+
+    assert!(WorkspaceWindow::find_config_option(&[uncategorized], &["mode"]).is_none());
+    assert!(WorkspaceWindow::find_config_option(&[by_name], &["mode"]).is_none());
+}
+
+/// The test that proves this change is additive. An agent whose options
+/// resolve today must keep resolving to the same one, so the category pass
+/// has to finish the whole list before any fallback runs - even when an
+/// earlier option would match on its id.
+#[test]
+fn find_config_option_prefers_a_category_match_over_an_earlier_id_match() {
+    let options = vec![uncategorized_option("mode"),
+                       config_option("session_behaviour", "mode"),];
+
+    let found = WorkspaceWindow::find_config_option(&options, &["mode"]);
+    assert_eq!(found.map(|option| option.id.as_str()),
+               Some("session_behaviour"),
+               "a categorized option must outrank an earlier id match");
+}
+
+/// ACP asks clients to treat the agent's own `configOptions` order as the
+/// priority order, so a tie inside one pass goes to whichever the agent
+/// listed first.
+#[test]
+fn find_config_option_breaks_ties_by_the_agents_ordering() {
+    let categorized = vec![config_option("first", "mode"),
+                           config_option("second", "mode"),];
+    assert_eq!(WorkspaceWindow::find_config_option(&categorized, &["mode"]).map(|option| {
+                                                                               option.id.as_str()
+                                                                           }),
+               Some("first"));
+
+    // Two different candidates, both matching on the id pass: the winner
+    // has to be the one the agent listed first, not the one listed first
+    // among the candidates.
+    let uncategorized = vec![uncategorized_option("permission_mode"),
+                             uncategorized_option("mode"),];
+    assert_eq!(WorkspaceWindow::find_config_option(&uncategorized,
+                                                   &["mode", "permission_mode"]).map(|option| {
+                                                                                    option.id
+                                                                                          .as_str()
+                                                                                }),
+               Some("permission_mode"));
 }
 
 /// Regression guard for "Remove Agent does nothing": `AgentStore::remove`

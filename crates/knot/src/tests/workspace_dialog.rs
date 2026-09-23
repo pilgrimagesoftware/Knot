@@ -51,6 +51,7 @@ fn manager(
         let created = &mut created;
         cx.update(|cx| {
               gpui_kit::init(cx);
+              crate::settings_global::install(settings.clone(), cx);
               cx.open_window(WindowOptions::default(), |window, cx| {
                     let name_input =
                         cx.new(|cx| InputState::new(window, cx).placeholder("Workspace name"));
@@ -64,7 +65,6 @@ fn manager(
                                                       });
                                      WorkspaceManager { store,
                                                         messages,
-                                                        settings,
                                                         name_input,
                                                         workspace_dialog_id: None,
                                                         error: None,

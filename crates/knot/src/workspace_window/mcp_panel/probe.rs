@@ -44,10 +44,10 @@ impl WorkspaceWindow {
     ///
     /// Answers whether anything landed, so the poll repaints for a result
     /// and not for the ticks that find nothing.
-    pub(in crate::workspace_window) fn mcp_probe_tick(&mut self) -> bool {
+    pub(in crate::workspace_window) fn mcp_probe_tick(&mut self, cx: &gpui_kit::App) -> bool {
         let landed = self.drain_mcp_probes();
         self.request_first_mcp_probe();
-        self.claim_mcp_probe();
+        self.claim_mcp_probe(cx);
 
         landed
     }
@@ -142,7 +142,7 @@ impl WorkspaceWindow {
     }
 
     /// Starts a probe if one was asked for and none is already running.
-    fn claim_mcp_probe(&mut self) {
+    fn claim_mcp_probe(&mut self, cx: &gpui_kit::App) {
         let Some(agent_id) = self.mcp_probe_target()
         else {
             return;
@@ -161,7 +161,7 @@ impl WorkspaceWindow {
             return;
         }
 
-        let Some(plan) = self.mcp_probe_plan(agent_id)
+        let Some(plan) = self.mcp_probe_plan(agent_id, cx)
         else {
             return;
         };
@@ -197,7 +197,7 @@ impl WorkspaceWindow {
     }
 
     /// What to run for this agent, in its own directory and environment.
-    fn mcp_probe_plan(&self, agent_id: Uuid) -> Option<ProbePlan> {
+    fn mcp_probe_plan(&self, agent_id: Uuid, cx: &gpui_kit::App) -> Option<ProbePlan> {
         let (agent_type, folder) = {
             let store = self.store.lock();
             let agent = store.agent(agent_id)?;
@@ -207,7 +207,7 @@ impl WorkspaceWindow {
         // The same resolver the handover uses, so the probe reads the
         // configuration of the installation the flow would open. Two
         // resolvers would drift invisibly.
-        let program = self.mcp_program_for(&agent_type);
+        let program = self.mcp_program_for(&agent_type, cx);
 
         // The same `PATH` the ACP adapter is launched with. Knot started
         // from Finder inherits launchd's, which names no directory any agent

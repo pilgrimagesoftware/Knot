@@ -39,25 +39,24 @@ impl WorkspaceWindow {
                            .map(|width| f64::from(f32::from(*width)));
         match measured {
             Some(width) if width >= SIDEBAR_WIDTH_MIN => width,
-            _ => self.settings.sidebar_width,
+            _ => crate::settings_global::read(cx).sidebar_width,
         }
     }
 
     /// Record a width the user just finished dragging to.
     ///
-    /// Re-reads the store from disk first, as `agent_editor` and the bench
-    /// menu do: this window's snapshot went stale the moment another window
-    /// persisted, and writing it back would silently revert that window's
-    /// edits. The window's own snapshot is updated too, so the next render
-    /// agrees with what is on disk.
-    pub(crate) fn persist_sidebar_width(&mut self, width: f64) {
-        let mut settings = knot_core::Settings::load().unwrap_or_else(|_| self.settings.clone());
-        settings.sidebar_width = width.clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
-        if let Err(error) = settings.persist_preferences() {
+    /// This used to re-read the store from disk first, as `agent_editor` and
+    /// the bench menu did, because the window's snapshot went stale the
+    /// moment another window persisted and writing it back would revert that
+    /// window's edits. The write goes through the shared surface now, which
+    /// is never stale, so the guard is gone with the snapshot it guarded.
+    pub(crate) fn persist_sidebar_width(&mut self, width: f64, cx: &App) {
+        let installed = crate::settings_global::write(cx, |settings| {
+            settings.sidebar_width = width.clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
+        });
+        if let Err(error) = installed.persist_preferences() {
             self.error = Some(knot_core::l10n::t_with("sidebar.width_error",
                                                       &[("error", &error.to_string())]));
-            return;
         }
-        self.settings = settings;
     }
 }

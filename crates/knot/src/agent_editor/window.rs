@@ -39,21 +39,19 @@ pub(crate) struct AgentEditorRequest {
 /// `request.edit_target`. `on_created` is called with the new (create mode)
 /// or edited (edit mode) agent's id once the dialog is submitted.
 pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
-                                settings: knot_core::Settings, request: AgentEditorRequest,
+                                request: AgentEditorRequest,
                                 on_created: impl Fn(Uuid, &mut Window, &mut App) + 'static,
                                 cx: &mut App) {
     let AgentEditorRequest { workspace_id,
                              prefill,
                              insert_after,
                              edit_target, } = request;
-    // Re-read from disk rather than trusting the caller's copy. Every
-    // window holds its own `Settings` snapshot taken when it opened, and
-    // personas are edited in a different window that persists to disk -
-    // so a persona added or renamed since this window opened was missing
-    // from the picker, which is the whole content of this dialog's
-    // persona field. Falls back to the caller's snapshot if the file
-    // can't be read.
-    let settings = knot_core::Settings::load().unwrap_or(settings);
+    // No re-read here any more. This loaded from disk because every window
+    // held its own snapshot taken when it opened, so a persona added or
+    // renamed since - in a different window, which persists to disk - was
+    // missing from the picker, which is the whole content of this dialog's
+    // persona field. The surface is never stale, so there is nothing to
+    // re-read.
     let editing = edit_target.and_then(|id| store.lock().agent(id).cloned());
     let title = if editing.is_some() {
         knot_core::l10n::t("agent_editor.title_edit")
@@ -132,7 +130,6 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                        .map(|a| a.persona_id)
                                                        .unwrap_or(prefill.persona_id);
                                AgentEditor { store,
-                                          settings,
                                           workspace_id,
                                           name_input,
                                           shell_command_input,
@@ -172,7 +169,6 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
 
 pub(crate) struct AgentEditor {
     pub(super) store:                Arc<Mutex<knot_agents::AgentStore>>,
-    pub(super) settings:             knot_core::Settings,
     pub(super) workspace_id:         Uuid,
     pub(super) name_input:           Entity<InputState>,
     pub(super) shell_command_input:  Entity<InputState>,
