@@ -389,7 +389,9 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
               // the moment anything in the reopened
               // window
               // persists.
-              let settings = knot_core::Settings::load().unwrap_or_default();
+              let settings = knot_core::Settings::load().unwrap_or_else(|_| {
+                                                            knot_core::Settings::platform_default()
+                                                        });
               open_settings_window(&settings_window, settings, Arc::clone(&store), cx);
           });
     }
@@ -500,7 +502,8 @@ fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
 }
 
 pub(crate) fn run() {
-    let mut settings = knot_core::Settings::load().unwrap_or_default();
+    let mut settings =
+        knot_core::Settings::load().unwrap_or_else(|_| knot_core::Settings::platform_default());
     if let Err(err) = settings.init_source_folder() {
         eprintln!("failed to initialize source folder: {err}");
     }
