@@ -2,11 +2,11 @@
 
 ## 1. A testable seam for the title
 
-- [ ] 1.1 Add a pure resolver that maps a workspace id to the title to show —
+- [x] 1.1 Add a pure resolver that maps a workspace id to the title to show —
       `Option<String>` from the store's workspaces, `None` when the id is not
       there — beside the other workspace-window helpers, not inside the render
       function; verify it compiles with `make build`
-- [ ] 1.2 Add `crates/knot/src/tests/workspace_title.rs` (registered in
+- [x] 1.2 Add `crates/knot/src/tests/workspace_title.rs` (registered in
       `tests/mod.rs`) covering: the named workspace resolves to its name, a
       renamed workspace resolves to the new name from the same store, an unknown
       id resolves to `None`, and a name carrying a newline resolves to one line
@@ -32,7 +32,7 @@
 
 ## 3. Keeping the title current
 
-- [ ] 3.1 Add a `titled_as: String` field to `WorkspaceWindow`, initialised from
+- [x] 3.1 Add a `titled_as: String` field to `WorkspaceWindow`, initialised from
       the name `open.rs` already sets as the OS title, with a comment saying it
       caches the last value *written* to AppKit and is not a copy of the state
       (per design.md, and issue #238 for the failure it avoids); verify with
@@ -49,7 +49,7 @@
 
 ## 4. Gate
 
-- [ ] 4.1 Run `make` and confirm the whole gate passes — `fmt-check`,
+- [x] 4.1 Run `make` and confirm the whole gate passes — `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build
 - [ ] 4.2 Walk the spec's scenarios against the running app: two open windows
       name themselves differently, a rename reaches the open window and its OS

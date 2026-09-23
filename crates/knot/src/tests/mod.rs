@@ -32,6 +32,7 @@ mod startup;
 mod window_bounds;
 mod window_registry;
 mod workspace_dialog;
+mod workspace_title;
 mod workspace_window_config;
 mod workspace_window_open;
 

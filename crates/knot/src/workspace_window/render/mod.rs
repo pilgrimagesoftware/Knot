@@ -34,6 +34,7 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::resizable::h_resizable;
 use gpui_kit::component::resizable::resizable_panel;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::div;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::px;
@@ -52,6 +53,7 @@ use crate::workspace_window::panel::input::PERMISSION_SELECTOR_ID;
 use crate::workspace_window::sidebar_background_context_menu;
 use crate::workspace_window::sidebar_is_compact;
 use crate::workspace_window::with_agents_menu_actions;
+use crate::workspace_window::workspace_title;
 
 mod content;
 mod overview;
@@ -61,40 +63,58 @@ mod sidebar;
 mod sidebar_compact;
 mod title_bar;
 
+/// The rows `render` has already built by the time it hands the sidebar
+/// over, in the order they are stacked.
+///
+/// One struct rather than three parameters because `sidebar_column` also
+/// takes the window's title, the compact flag and the background menu's
+/// targets, and the three prebuilt rows are the group that belongs together.
+struct SidebarRows {
+    dashboard_row:     gpui_kit::AnyElement,
+    pull_requests_row: Option<gpui_kit::AnyElement>,
+    agent_rows:        Vec<gpui_kit::AnyElement>,
+}
+
 impl WorkspaceWindow {
-    /// The rows the sidebar draws, read from the store in one lock, or
-    /// `None` when this window's workspace is gone - which is a window that
-    /// can only say so.
-    fn agent_row_snapshot(&self) -> Option<Vec<AgentRow>> {
+    /// What a frame reads out of the store in one lock - the window's own
+    /// title and the rows the sidebar draws - or `None` when this window's
+    /// workspace is gone, which is a window that can only say so.
+    ///
+    /// The title rides along rather than being resolved separately so the
+    /// two are read from the same lock scope, and so the title bar cannot
+    /// disagree with the rows about which workspace this window is.
+    fn frame_snapshot(&self) -> Option<(String, Vec<AgentRow>)> {
         let store = self.store.lock();
+        let title = workspace_title(&store, self.workspace_id)?;
         let workspace = store.workspaces()
                              .iter()
                              .find(|workspace| workspace.id == self.workspace_id)?;
-        Some(workspace.agent_ids
-                      .iter()
-                      .filter_map(|id| store.agent(*id))
-                      .map(|agent| {
-                          let persona_name =
-                              agent.persona_id.and_then(|id| {
-                                                  self.settings
-                                                      .personas
-                                                      .iter()
-                                                      .find(|persona| persona.id == id)
-                                                      .map(|persona| persona.name.clone())
-                                              });
-                          AgentRow { id: agent.id,
-                                     avatar: agent.avatar.clone(),
-                                     name: agent.name.clone(),
-                                     folder: agent.folder.clone(),
-                                     state: agent.state,
-                                     is_shell: agent.is_shell(),
-                                     is_companion: agent.is_companion,
-                                     header_title: agent.header_title().to_string(),
-                                     persona_name,
-                                     agent_type: agent.agent_type.clone(),
-                                     is_running: agent.activated }
-                      })
-                      .collect())
+        Some((title,
+              workspace.agent_ids
+                       .iter()
+                       .filter_map(|id| store.agent(*id))
+                       .map(|agent| {
+                           let persona_name =
+                               agent.persona_id.and_then(|id| {
+                                                   self.settings
+                                                       .personas
+                                                       .iter()
+                                                       .find(|persona| persona.id == id)
+                                                       .map(|persona| persona.name.clone())
+                                               });
+                           AgentRow { id: agent.id,
+                                      avatar: agent.avatar.clone(),
+                                      name: agent.name.clone(),
+                                      folder: agent.folder.clone(),
+                                      state: agent.state,
+                                      is_shell: agent.is_shell(),
+                                      is_companion: agent.is_companion,
+                                      header_title: agent.header_title().to_string(),
+                                      persona_name,
+                                      agent_type: agent.agent_type.clone(),
+                                      is_running: agent.activated }
+                       })
+                       .collect()))
     }
 
     /// The work a frame does before it draws: match the terminal to its
@@ -140,17 +160,43 @@ impl WorkspaceWindow {
 
     /// The sidebar's own title bar, which owns the traffic lights.
     ///
-    /// Compact drops the application name and keeps the icon: at this width
-    /// the label has nowhere to go but into the traffic lights.
-    fn sidebar_title_bar(compact: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    /// It names the workspace, not the application: several of these windows
+    /// can be open at once and the workspace is the only thing that tells
+    /// them apart, which is also why the OS window title already carries it.
+    ///
+    /// Compact drops the label and keeps the icon - at this width the label
+    /// has nowhere to go but into the traffic lights - and hands the name to
+    /// a tooltip instead, the way a compact agent row does, so a narrow
+    /// window still says which workspace it is.
+    fn sidebar_title_bar(&self, title: &str, compact: bool, cx: &mut Context<Self>)
+                         -> impl IntoElement + use<> {
+        let title = title.to_owned();
         TitleBar::new().h(px(window_options::WORKSPACE_TITLE_BAR_HEIGHT))
                        .border_color(gpui_kit::transparent_black())
                        .bg(cx.theme().title_bar)
-                       .child(h_flex().gap_2()
+                       .child(h_flex().id("workspace-title-bar-name")
+                                      .flex_1()
+                                      .min_w_0()
+                                      .gap_2()
                                       .items_center()
-                                      .child(app_titlebar_icon())
+                                      .child(div().flex_shrink_0().child(app_titlebar_icon()))
                                       .when(!compact, |row| {
-                                          row.child(knot_core::l10n::t("app.name"))
+                                          // `min_w_0` as well as `flex_1`: a
+                                          // flex child keeps `min-width:
+                                          // auto` otherwise, so a long name
+                                          // would push the traffic lights
+                                          // rather than ellipsize.
+                                          row.child(div().flex_1()
+                                                         .min_w_0()
+                                                         .overflow_hidden()
+                                                         .whitespace_nowrap()
+                                                         .text_ellipsis()
+                                                         .child(title.clone()))
+                                      })
+                                      .when(compact, |row| {
+                                          row.tooltip(move |window, cx| {
+                                                 Tooltip::new(title.clone()).build(window, cx)
+                                             })
                                       }))
     }
 
@@ -185,11 +231,12 @@ impl WorkspaceWindow {
     /// The sidebar column: the window's own title bar, the scrolling agent
     /// list with the dashboard row above it, the error line, and the new
     /// agent button.
-    fn sidebar_column(&self, compact: bool, dashboard_row: gpui_kit::AnyElement,
-                      pull_requests_row: Option<gpui_kit::AnyElement>,
-                      agent_rows: Vec<gpui_kit::AnyElement>,
+    fn sidebar_column(&self, title: &str, compact: bool, rows: SidebarRows,
                       background_targets: SidebarMenuTargets, cx: &mut Context<Self>)
                       -> impl IntoElement + use<> {
+        let SidebarRows { dashboard_row,
+                          pull_requests_row,
+                          agent_rows, } = rows;
         // The sidebar column owns the traffic lights (Swift's own
         // sidebar panel does the same - they sit within its width,
         // not the content pane's). The content header below is a
@@ -200,7 +247,7 @@ impl WorkspaceWindow {
         v_flex().w_full()
                 .h_full()
                 .bg(cx.theme().title_bar)
-                .child(Self::sidebar_title_bar(compact, cx))
+                .child(self.sidebar_title_bar(title, compact, cx))
                 .child(
                        div().id("workspace-agent-list")
                             .flex_1()
@@ -250,12 +297,21 @@ impl Render for WorkspaceWindow {
         // (Adamina), so it needs no override here.
         let title_font_name = self.settings.title_font_name.clone();
         let title_font_size = px(self.settings.title_font_size as f32);
-        let Some(agents) = self.agent_row_snapshot()
+        let Some((window_title, agents)) = self.frame_snapshot()
         else {
             return v_flex().size_full()
                            .child(TitleBar::new().border_color(gpui_kit::transparent_black()))
                            .child(knot_core::l10n::t("workspace.missing"));
         };
+        // The OS title (Window menu, Cmd+`, Mission Control) has to follow a
+        // rename too, and `open.rs` sets it once, from the name the workspace
+        // had at open. Guarded on the last value written rather than set
+        // every frame: this crosses into AppKit, and a sidebar drag renders
+        // continuously.
+        if self.titled_as != window_title {
+            window.set_window_title(&window_title);
+            self.titled_as = window_title.clone();
+        }
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
         let is_pull_requests = self.view_mode == WorkspaceViewMode::PullRequests;
         // Every takeover hides the selected agent's header and pane, so the
@@ -347,10 +403,11 @@ impl Render for WorkspaceWindow {
                         // flexible one has to opt out or it takes the slack
                         // back on the frame after a drag.
                         .flex_none()
-                        .child(self.sidebar_column(compact,
-                                                   dashboard_row,
-                                                   pull_requests_row,
-                                                   agent_rows,
+                        .child(self.sidebar_column(&window_title,
+                                                   compact,
+                                                   SidebarRows { dashboard_row,
+                                                                 pull_requests_row,
+                                                                 agent_rows },
                                                    background_targets,
                                                    cx)))
                     .child(resizable_panel().child(self.content_column(is_takeover,

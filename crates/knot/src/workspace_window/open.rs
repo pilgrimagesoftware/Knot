@@ -29,6 +29,7 @@ use crate::window_registry::WindowRegistry;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::repaint::spawn_repaint_poll;
+use crate::workspace_window::workspace_title;
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
@@ -60,13 +61,13 @@ impl WorkspaceWindow {
             }
             return;
         }
-        let workspace_name = {
-                                 let store = store.lock();
-                                 store.workspaces()
-                                      .iter()
-                                      .find(|workspace| workspace.id == workspace_id)
-                                      .map(|workspace| workspace.name.clone())
-                             }.unwrap_or_else(|| "Workspace".to_string());
+        // Through the same resolver the title bar renders from, so the OS
+        // title and the drawn one agree by construction rather than by two
+        // lookups that happen to match. The fallback is only reachable for a
+        // workspace that is already gone, whose window draws
+        // `workspace.missing` instead.
+        let workspace_name =
+            workspace_title(&store.lock(), workspace_id).unwrap_or_else(|| "Workspace".to_string());
         let saved_bounds = {
             let store = store.lock();
             store.workspaces()
@@ -136,6 +137,7 @@ impl WorkspaceWindow {
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
                     window_handle: window.window_handle(),
+                    titled_as: workspace_name.clone(),
                     working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
