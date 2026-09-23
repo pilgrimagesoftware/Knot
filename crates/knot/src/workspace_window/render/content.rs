@@ -23,7 +23,6 @@ use crate::consts;
 use crate::terminal_view;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::terminal_cell_size;
-use crate::workspace_window::terminal_font_family;
 
 impl WorkspaceWindow {
     /// The column that fills the window beside the sidebar.
@@ -225,10 +224,7 @@ impl WorkspaceWindow {
                                                         let (_, cell_height) =
                                                             terminal_cell_size(
                                                                 cx,
-                                                                terminal_font_family(
-                                                                    &view.settings,
-                                                                    cx,
-                                                                ),
+                                                                view.terminal_font_family(),
                                                                 px(view
                                                                     .settings
                                                                     .terminal_font_size
@@ -260,10 +256,7 @@ impl WorkspaceWindow {
                                                 ))
                                                 .child(terminal_view::render_grid(
                                                     &grid.lock(),
-                                                    terminal_font_family(
-                                                        &self.settings,
-                                                        cx,
-                                                    ),
+                                                    self.terminal_font_family(),
                                                     px(self.settings.terminal_font_size
                                                         as f32),
                                                 ))
