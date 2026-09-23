@@ -162,6 +162,12 @@ settings:
     agent: "Agent"
     command: "Command"
     no_setup: "No manual setup needed."
+    status: "Status"
+    status_disabled: "Disabled"
+    status_starting: "Starting…"
+    status_running: "Running on %{address}"
+    status_retrying: "Retrying - attempt %{attempt} failed: %{error}"
+    status_stopped: "Stopped"
   appearance:
     fonts: "Fonts"
     ui: "UI"
@@ -184,6 +190,11 @@ settings:
 
 menu:
   agents: "Agents"
+  # The Window menu's own items. macOS appends and maintains the list of
+  # open windows below them.
+  window:
+    command_center: "Command Center"
+    workspaces: "Workspaces"
   # One agent row's context menu, and the menu bar's Agents menu,
   # which is built from the same entry list.
   agent:
@@ -335,3 +346,64 @@ import:
 plan:
   title: "Plan"
   empty: "No plan committed yet."
+
+pull_requests:
+  title: "Pull Requests"
+  empty: "No pull requests yet. Knot lists the ones it sees in an agent's output."
+  opened_by: "Opened by %{name}"
+  open: "Open"
+  draft: "Draft"
+  merged: "Merged"
+  closed: "Closed"
+  pending: "Checking…"
+  checks_passing: "Checks passing"
+  checks_failing: "Checks failing"
+  checks_pending: "Checks running"
+  remove: "Remove from this list"
+  remove_title: "Remove this pull request?"
+  remove_body: "Knot stops listing %{url}. Nothing on GitHub changes, and it is listed again if an agent prints it again."
+  open_failed: "That pull request could not be opened in a browser."
+  counts_total: "%{count} recorded"
+  count_open: "%{count} open"
+  count_merged: "%{count} merged"
+  count_closed: "%{count} closed"
+  count_pending: "%{count} checking"
+  forge_missing: "The gh command is not installed, so no status can be read. The list still opens each pull request."
+  forge_unauthenticated: "gh is not signed in, so no status can be read. Run gh auth login."
+  forge_failed: "Status could not be read: %{reason}"
+
+mcp_server:
+  failure_title: "Knot - MCP server"
+  failure_body: "The MCP server is not running. Agents cannot reach Knot until it recovers."
+
+processes:
+  title: "Processes"
+  # Before the first sample lands there is no count to give. Deliberately
+  # not "0": a section that says nothing is running while it is still
+  # looking is worse than one that admits it does not know yet.
+  count_unknown: "Counting…"
+  count: "%{count} background"
+  column_command: "Command"
+  column_runtime: "Runtime"
+  column_pid: "PID"
+  background: "Background"
+  foreground: "Foreground"
+  # Runtime, one entry per shape rather than assembled from units at the
+  # call site, so the order and the spacing stay the translator's.
+  runtime_days: "%{days}d %{hours}h"
+  runtime_hours: "%{hours}h %{minutes}m"
+  runtime_minutes: "%{minutes}m %{seconds}s"
+  runtime_seconds: "%{seconds}s"
+  terminate: "Terminate"
+  terminating: "Terminating…"
+  terminate_title: "Terminate this process?"
+  terminate_body: "Knot asks %{command} to stop, and kills it if it does not. Anything it has not saved is lost."
+  terminate_failed: "That process could not be terminated: %{reason}"
+  copy_pid: "Copy process ID"
+  copied_pid: "Copied the process ID"
+  copy_command: "Copy full command"
+  copied_command: "Copied the full command"
+  open_viewer: "Open Activity Monitor"
+  empty_not_running: "This agent is not running, so nothing descends from it."
+  empty_none: "This agent has not started anything that is still running."
+  sample_failed: "The process list could not be read: %{reason}"

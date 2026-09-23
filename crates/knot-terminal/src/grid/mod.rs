@@ -14,6 +14,9 @@ pub use alacritty_terminal::term::ClipboardType;
 pub use alacritty_terminal::term::cell::Cell;
 use alacritty_terminal::term::{Config as TermConfig, Term};
 use alacritty_terminal::vte::ansi::Processor;
+use knot_core::pull_request_url::PullRequestUrlScanner;
+
+mod pull_requests;
 
 /// A terminal's fixed size, in columns and (visible) rows. `alacritty_terminal`
 /// also tracks scrollback beyond `rows`, addressed separately from the grid.
@@ -54,14 +57,21 @@ impl EventListener for EventForwarder {
 /// visible cell grid and any events (title changes, clipboard requests,
 /// bell) the running program triggered.
 pub struct Grid {
-    term:   Term<EventForwarder>,
-    parser: Processor,
-    events: mpsc::Receiver<Event>,
+    term:                 Term<EventForwarder>,
+    parser:               Processor,
+    events:               mpsc::Receiver<Event>,
     /// Set whenever the visible grid changes (feed/resize/selection); a UI
     /// poll loop reads and clears this via [`Self::take_dirty`] to decide
     /// whether a repaint is actually needed, since the PTY reader thread
     /// that calls `feed` has no way to trigger one itself.
-    dirty:  bool,
+    dirty:                bool,
+    /// Watches the byte stream for pull request URLs. Carries a bounded tail
+    /// across chunk boundaries, since a PTY read can split a URL anywhere.
+    /// See [`pull_requests`].
+    pull_request_scanner: PullRequestUrlScanner,
+    /// URLs found but not yet handed to the window that owns the agent
+    /// store, drained by `take_pull_request_urls`.
+    pull_request_urls:    Vec<String>,
 }
 
 impl Grid {
@@ -71,12 +81,33 @@ impl Grid {
         Self { term,
                parser: Processor::new(),
                events: rx,
-               dirty: false }
+               dirty: false,
+               pull_request_scanner: pull_requests::new_scanner(),
+               pull_request_urls: Vec::new() }
     }
 
     /// Parses `bytes` (raw PTY output) into the grid, updating cell
     /// contents, cursor position, and queuing any resulting events.
     pub fn feed(&mut self, bytes: &[u8]) {
+        // Before the parser, not after: the grid is a rendering surface that
+        // scrolls, and a URL that scrolled past between two repaints would
+        // never be seen there.
+        self.scan_for_pull_requests(bytes);
+        self.feed_without_scan(bytes);
+    }
+
+    /// [`Self::feed`] without the pull request scan, so the benchmark in
+    /// `pull_requests::tests` can price the VT parse on its own.
+    #[cfg(test)]
+    fn feed_without_scan(&mut self, bytes: &[u8]) {
+        self.parser.advance(&mut self.term, bytes);
+        self.dirty = true;
+    }
+
+    /// The parse, with no scan in front of it. Inlined into [`Self::feed`]
+    /// outside tests.
+    #[cfg(not(test))]
+    fn feed_without_scan(&mut self, bytes: &[u8]) {
         self.parser.advance(&mut self.term, bytes);
         self.dirty = true;
     }
@@ -113,6 +144,18 @@ impl Grid {
         use alacritty_terminal::term::TermMode;
         let mode = self.term.mode();
         mode.contains(TermMode::SGR_MOUSE) && mode.intersects(TermMode::MOUSE_MODE)
+    }
+
+    /// Whether the running program has enabled bracketed paste, and so
+    /// wants pasted text wrapped in markers it can recognize.
+    ///
+    /// A shell that has it on uses it to refuse to *run* a pasted multi-line
+    /// command until the user presses Enter, which is the difference between
+    /// pasting a script and executing one by accident.
+    pub fn bracketed_paste_mode(&self) -> bool {
+        use alacritty_terminal::term::TermMode;
+
+        self.term.mode().contains(TermMode::BRACKETED_PASTE)
     }
 
     /// Starts (replacing any existing) a simple text selection anchored at

@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 use parking_lot::Mutex;
@@ -32,6 +33,13 @@ pub struct PtyTransport {
     writer: Mutex<Box<dyn Write + Send>>,
     child:  Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     master: Box<dyn MasterPty + Send>,
+    /// Set once the waiter thread has reaped the child.
+    ///
+    /// `portable_pty` remembers the PID it spawned and goes on reporting it
+    /// after the process is gone, so the flag -- not the child -- is what
+    /// makes [`PtyTransport::process_id`] stop naming a PID the kernel has
+    /// since handed to somebody else.
+    exited: Arc<AtomicBool>,
 }
 
 impl PtyTransport {
@@ -58,6 +66,8 @@ impl PtyTransport {
                              .try_clone_reader()
                              .map_err(|error| TerminalError::Transport(error.to_string()))?;
         let child_for_wait = Arc::clone(&child);
+        let exited = Arc::new(AtomicBool::new(false));
+        let exited_for_wait = Arc::clone(&exited);
         thread::spawn(move || {
             let mut buffer = [0_u8; 4096];
             loop {
@@ -70,6 +80,9 @@ impl PtyTransport {
                                      .wait()
                                      .ok()
                                      .map(|status| status.exit_code() as i32);
+            // Before `on_exit`, so anything the callback wakes already sees
+            // the session as having no root.
+            exited_for_wait.store(true, Ordering::Release);
             on_exit(code);
         });
         let writer = pair.master
@@ -77,7 +90,8 @@ impl PtyTransport {
                          .map_err(|error| TerminalError::Transport(error.to_string()))?;
         Ok(Self { writer: Mutex::new(writer),
                   child,
-                  master: pair.master })
+                  master: pair.master,
+                  exited })
     }
 }
 
@@ -116,6 +130,14 @@ impl TerminalTransport for PtyTransport {
                               pixel_width: 0,
                               pixel_height: 0 })
             .map_err(|error| TerminalError::Transport(error.to_string()))
+    }
+
+    fn process_id(&self) -> Option<u32> {
+        if self.exited.load(Ordering::Acquire) {
+            return None;
+        }
+
+        self.child.lock().process_id()
     }
 }
 
@@ -171,5 +193,28 @@ mod tests {
 
         assert_eq!(status, Some(3));
         assert!(String::from_utf8_lossy(&output).contains("ready"));
+    }
+
+    #[test]
+    fn process_id_names_the_child_until_it_exits() {
+        let folder = tempfile::tempdir().unwrap();
+        let (exit_tx, exit_rx) = mpsc::channel();
+        let mut transport = PtyTransport::spawn(folder.path(),
+                                                "/bin/sh",
+                                                |_| {},
+                                                move |status| {
+                                                    let _ = exit_tx.send(status);
+                                                }).unwrap();
+
+        let pid = transport.process_id()
+                           .expect("a running session has a root process");
+        assert!(pid > 1, "got {pid}");
+
+        transport.send_text("exit 0\n").unwrap();
+        exit_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+        assert_eq!(transport.process_id(),
+                   None,
+                   "the root is gone once the child exits");
     }
 }

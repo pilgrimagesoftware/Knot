@@ -40,6 +40,66 @@ messages, assistant messages, and system/tool content.
 - **THEN** the panel reflects the latest accumulated text without visible
   flicker or reordering
 
+### Requirement: The conversation shows that a turn is in progress
+
+While a turn is active the conversation SHALL show a turn-in-progress indicator
+as its last row, below every message and below the permission prompt and
+ended-session banner when either is present. The row SHALL appear when the turn
+becomes active and SHALL be gone once the turn ends, so its presence is itself
+the statement that the agent is still answering.
+
+The indicator SHALL be an animated rendering of the application's own icon. It
+SHALL NOT be the dashboard card's working indicator: that mark exists to
+distinguish four agent states in a dense grid, and this row has one thing to
+say. This diverges from the Swift reference, whose panel has no indicator of
+this kind at all.
+
+The animation SHALL be continuous while the turn is active — it SHALL NOT stop
+on a frame, run once, or wait for unrelated activity to advance it. A reader
+watching a turn that produces no output for several seconds SHALL still see
+motion.
+
+The indicator SHALL respect the system's reduced-motion setting: when reduced
+motion is in effect the row SHALL still be present and SHALL still show the
+icon, held still rather than animating. Presence, not motion, is what carries
+the meaning in that case.
+
+The indicator SHALL carry no text. It SHALL be drawn large enough to read as a
+deliberate mark rather than as a stray glyph, and SHALL reserve the same space
+whether it is animating or held still, so the conversation does not reflow when
+the setting changes.
+
+#### Scenario: A turn is running
+
+- **WHEN** an agent's turn is active
+- **THEN** the conversation's last row shows the animated application icon
+
+#### Scenario: The turn ends
+
+- **WHEN** the agent's turn ends
+- **THEN** the indicator row is gone and the rows above it are unchanged
+
+#### Scenario: A quiet turn still shows motion
+
+- **WHEN** a turn is active and the agent has produced no output for several
+  seconds
+- **THEN** the indicator is still animating
+
+#### Scenario: The indicator sits below a permission prompt
+
+- **WHEN** a turn is active and a permission request is awaiting a decision
+- **THEN** the permission prompt is rendered above the indicator row
+
+#### Scenario: Reduced motion is in effect
+
+- **WHEN** the system's reduced-motion setting is on and a turn is active
+- **THEN** the indicator row is present and shows the icon without animating
+
+#### Scenario: The conversation does not reflow when motion is disabled
+
+- **WHEN** the indicator is shown animating and then shown held still
+- **THEN** it occupies the same space in both cases
+
 ### Requirement: Rendered Markdown separates body from headers by font
 
 Every Markdown surface — the panel's assistant messages and the Markdown pane
@@ -168,6 +228,66 @@ preformatted text in a web view with no copy affordance of any kind.
   activates "copy response" on its action bar
 - **THEN** the clipboard holds the full response text, code block and prose
   alike, exactly as it did before code blocks carried their own control
+
+### Requirement: Prompt cell copy control
+
+Each user message in the panel SHALL expose a copy control that places the
+message's text on the system clipboard. The control SHALL be revealed on
+hover of the message and SHALL copy exactly the prompt text, without the
+bubble's surrounding chrome and without any attached-context payload.
+
+The hover target SHALL be the prompt and its control together, as one region.
+The control sits beside the bubble rather than inside it, so a target limited to
+the bubble would hide the control at the moment the pointer reached it; moving
+the pointer from the bubble onto the control SHALL keep it shown, and it SHALL
+stay shown for as long as the pointer rests on it.
+
+The hover target SHALL NOT extend beyond that region. A user message is
+right-aligned within a full-width row, and pointing at the empty space beside it
+SHALL reveal nothing.
+
+Revealing and hiding the control SHALL NOT move anything on screen. Its space
+SHALL be reserved whether it is shown or not, so a pointer travelling down a
+conversation does not make the messages shift as it passes them.
+
+The control SHALL NOT be drawn for anything but a user message, and hovering one
+user message SHALL reveal only that message's control.
+
+#### Scenario: Copying a prompt
+- **WHEN** the user activates the copy control on a user message while
+  hovering it
+- **THEN** the message's text is placed on the system clipboard
+
+#### Scenario: Attachments are not part of the copy
+- **WHEN** the user copies a prompt that had files or images attached when it
+  was sent
+- **THEN** the clipboard receives the prompt text alone, with none of the
+  attachment payload
+
+#### Scenario: The control is not persistent chrome
+- **WHEN** the pointer leaves the user message
+- **THEN** the copy control is no longer shown, and the bubble itself is
+  unchanged
+
+#### Scenario: The control survives being pointed at
+- **WHEN** the pointer moves from a user message's bubble onto the revealed copy
+  control
+- **THEN** the control stays shown and can be activated
+
+#### Scenario: Empty space beside a prompt reveals nothing
+- **WHEN** the pointer rests in the empty area to the left of a right-aligned
+  user message, on the same line
+- **THEN** no copy control is shown
+
+#### Scenario: Hovering does not move the conversation
+- **WHEN** the pointer moves down a conversation across several user messages
+- **THEN** each control appears and disappears in place, and no message, bubble
+  or surrounding content shifts position
+
+#### Scenario: Only the hovered message reveals its control
+- **WHEN** a conversation holds several user messages and the pointer rests on
+  one of them
+- **THEN** only that message's copy control is shown
 
 ### Requirement: Tool-call rendering
 The system SHALL render each tool call as a distinct card showing its kind,
@@ -542,6 +662,97 @@ when activated again.
 - **WHEN** the user activates the expand control on the expanded input
   area
 - **THEN** the input area returns to its default size
+
+### Requirement: Selecting a Panel-mode agent focuses its prompt input
+
+When a Panel-mode agent becomes a workspace window's selected agent and its
+conversation is what the content area shows, that agent's prompt input SHALL
+receive keyboard focus. The user SHALL be able to select an agent and begin
+typing a message with no intervening click.
+
+This SHALL hold however the selection was made: clicking the agent's sidebar
+row, clicking its card in the window's overview, creating the agent, or the
+window opening on a restored selection. This diverges from the Swift reference,
+which leaves focus wherever it was.
+
+Focus SHALL be taken once per selection, not held. Once the user moves focus
+elsewhere in the window, it SHALL stay where they put it until the selection
+changes again — a window SHALL NOT pull focus back into the composer while the
+user is working somewhere else in it.
+
+Focus SHALL NOT be taken when the composer is not what the content area shows.
+That covers the window showing its dashboard rather than an agent, an open
+markdown or diagram pane holding the content area ahead of the conversation, a
+deactivated agent whose pane shows the stopped placeholder, and an agent that
+runs in Terminal mode rather than Panel mode. In each of those cases focus SHALL
+be left where it is.
+
+Focus SHALL NOT be taken from a modal dialog while one is open.
+
+Taking focus SHALL NOT raise, activate or reorder any window. It places focus
+within a window; which window the system considers frontmost is unaffected.
+
+Each agent's composer keeps its own contents, so returning to an agent SHALL
+focus that agent's composer with the text the user last left in it, caret
+placement included where the composer already preserves it.
+
+#### Scenario: Selecting an agent and typing
+
+- **WHEN** the user clicks a Panel-mode agent's sidebar row and types
+- **THEN** the typed text goes into that agent's prompt input, with no click on
+  the composer
+
+#### Scenario: A window opens on a restored selection
+
+- **WHEN** a workspace window opens with a Panel-mode agent as its restored
+  selection and its conversation on screen
+- **THEN** that agent's prompt input has keyboard focus
+
+#### Scenario: A newly created agent is ready to be prompted
+
+- **WHEN** the user creates a Panel-mode agent and the window selects it
+- **THEN** its prompt input has keyboard focus
+
+#### Scenario: Focus is not pulled back
+
+- **WHEN** the user selects a Panel-mode agent, then clicks a control elsewhere
+  in the window, and the window redraws several times
+- **THEN** focus stays on the control the user clicked
+
+#### Scenario: Returning to an agent refocuses its own composer
+
+- **WHEN** the user types a partial message to one agent, selects a second
+  agent, and then selects the first again
+- **THEN** the first agent's prompt input has focus and still holds the partial
+  message
+
+#### Scenario: A Terminal-mode agent does not move focus
+
+- **WHEN** the user selects an agent that runs in Terminal mode
+- **THEN** focus is left where it was, and no composer is focused
+
+#### Scenario: The dashboard is showing
+
+- **WHEN** the window is showing its dashboard rather than an agent's
+  conversation
+- **THEN** no prompt input is focused
+
+#### Scenario: A markdown pane holds the content area
+
+- **WHEN** the user selects a Panel-mode agent that has a markdown file open, so
+  the markdown pane takes the content area
+- **THEN** focus is left where it was
+
+#### Scenario: A deactivated agent is selected
+
+- **WHEN** the user selects a Panel-mode agent that is deactivated, so its pane
+  shows the stopped placeholder
+- **THEN** focus is left where it was
+
+#### Scenario: A dialog keeps focus
+
+- **WHEN** a modal dialog is open and the window's selection changes beneath it
+- **THEN** the dialog keeps focus
 
 ### Requirement: A finished tool call collapses to its header
 

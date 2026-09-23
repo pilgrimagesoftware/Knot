@@ -3,19 +3,18 @@ use std::path::Path;
 use knot_core::Workspace;
 use uuid::Uuid;
 
+/// The workspace a store with agents but no saved workspace falls back to.
+///
+/// Configuration only: a fresh workspace has no arrangement, which is what
+/// [`knot_core::WorkspaceUiState::default`] already means. The one piece the
+/// caller may want - the first agent showing - is set through
+/// `set_workspace_layout` rather than fabricated here, so there is one place
+/// that writes UI state.
 pub(super) fn default_workspace(agent_ids: Vec<Uuid>) -> Workspace {
     Workspace { id: Uuid::new_v4(),
                 name: super::DEFAULT_WORKSPACE_NAME.to_string(),
                 color_hex: super::DEFAULT_WORKSPACE_COLOR.to_string(),
-                active_agent_ids: agent_ids.first().copied().into_iter().collect(),
-                agent_ids,
-                layout_mode: "single".to_string(),
-                focused_pane_index: 0,
-                split_ratio: 0.5,
-                split_ratio_secondary: None,
-                show_dashboard: None,
-                is_detached: None,
-                window_bounds: None }
+                agent_ids }
 }
 
 pub(super) fn last_path_component(folder: &str) -> String {

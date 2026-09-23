@@ -15,7 +15,6 @@ use crate::agent_editor::AgentEditorRequest;
 use crate::agent_editor::AgentPrefill;
 use crate::agent_editor::open_agent_editor;
 use crate::app_state;
-use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 
 /// Parameters for [`open_agent_editor`], grouped to keep the function's
@@ -76,13 +75,7 @@ impl WorkspaceWindow {
         let weak = cx.entity().downgrade();
         move |id, _window, app| {
             if let Some(entity) = weak.upgrade() {
-                entity.update(app, |view, cx| {
-                          view.select_agent(id);
-                          view.view_mode = WorkspaceViewMode::Terminal;
-                          view.ensure_session(id);
-                          view.ensure_panel_session(id);
-                          cx.notify();
-                      });
+                entity.update(app, |view, cx| view.reveal_agent(id, cx));
             }
         }
     }

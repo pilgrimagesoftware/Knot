@@ -22,10 +22,14 @@ use uuid::Uuid;
 use crate::app_state::agent_selection_for_workspace;
 use crate::app_support::observe_system_appearance;
 use crate::dashboard;
+use crate::window_options::reconciled_workspace_bounds;
 use crate::window_options::workspace_window_options;
+use crate::window_registry::WindowKey;
+use crate::window_registry::WindowRegistry;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::repaint::spawn_repaint_poll;
+use crate::workspace_window::workspace_title;
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
@@ -42,21 +46,31 @@ impl WorkspaceWindow {
                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                       settings: knot_core::Settings, workspace_id: Uuid,
                                       select_agent: Option<Uuid>, cx: &mut App) {
-        let workspace_name = {
-                                 let store = store.lock();
-                                 store.workspaces()
-                                      .iter()
-                                      .find(|workspace| workspace.id == workspace_id)
-                                      .map(|workspace| workspace.name.clone())
-                             }.unwrap_or_else(|| "Workspace".to_string());
-        let saved_bounds = {
-            let store = store.lock();
-            store.workspaces()
-                 .iter()
-                 .find(|workspace| workspace.id == workspace_id)
-                 .and_then(|workspace| workspace.window_bounds)
-        };
-        let options = workspace_window_options(saved_bounds, cx);
+        // One window per workspace: a second request raises the first rather
+        // than opening another, and shows the agent it named if it named one
+        // (`openspec/specs/window-lifecycle`). Every route that opens a
+        // workspace - the manager, a Command Center card or heading, the agent
+        // editor's post-create jump - arrives here, so the check belongs here
+        // rather than at each of them.
+        let key = WindowKey::Workspace(workspace_id);
+        if WindowRegistry::activate(key, cx) {
+            if let Some(requested) = select_agent
+               && let Some(view) = WindowRegistry::workspace_view(key, cx)
+            {
+                view.update(cx, |view, cx| view.reveal_agent(requested, cx));
+            }
+            return;
+        }
+        // Through the same resolver the title bar renders from, so the OS
+        // title and the drawn one agree by construction rather than by two
+        // lookups that happen to match. The fallback is only reachable for a
+        // workspace that is already gone, whose window draws
+        // `workspace.missing` instead.
+        let workspace_name =
+            workspace_title(&store.lock(), workspace_id).unwrap_or_else(|| "Workspace".to_string());
+        let saved_bounds = store.lock().workspace_ui(workspace_id).window_bounds;
+        let placed = reconciled_workspace_bounds(saved_bounds, cx);
+        let options = workspace_window_options(placed, cx);
         if let Err(error) =
             cx.open_window(options, move |window, cx| {
                   // Every window tracks the OS appearance, so a light/dark flip
@@ -86,6 +100,10 @@ impl WorkspaceWindow {
                     exited_sessions: Arc::clone(&exited_sessions),
                     window_bounds_subscription: None,
                     diff_stats: crate::diff_stats::DiffStatsCache::default(),
+                    pull_request_states:
+                        crate::pull_request_state::PullRequestStateCache::default(),
+                    forge_status: crate::pull_request_state::ForgeStatus::default(),
+                    pull_request_open_failed: false,
                     open_config_selector: None,
                     store,
                     messages,
@@ -104,6 +122,7 @@ impl WorkspaceWindow {
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     last_spinner_frame: 0,
+                    focused_composer: None,
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
@@ -113,10 +132,19 @@ impl WorkspaceWindow {
                     panel_lists: BTreeMap::new(),
                     panel_list_row_counts: BTreeMap::new(),
                     window_handle: window.window_handle(),
+                    titled_as: workspace_name.clone(),
                     working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
                     panel_lookups: BTreeMap::new(),
+                    process_sections: BTreeMap::new(),
+                    process_publish: Arc::new(Mutex::new(
+                        crate::agent_processes::Published::default(),
+                    )),
+                    process_generation: 0,
+                    process_sampled_at: None,
+                    process_sampling: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    process_failures: Arc::new(Mutex::new(Vec::new())),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     error: None,
@@ -155,6 +183,10 @@ impl WorkspaceWindow {
                             }
                             window
                         });
+                  // Registered from inside the open closure because the
+                  // view is only in scope here: `cx.open_window` hands back a
+                  // handle to the `Root` wrapper, not to this.
+                  WindowRegistry::register(key, window.window_handle(), Some(view.downgrade()), cx);
                   spawn_repaint_poll(view.clone(),
                                      clipboard_writes,
                                      Arc::clone(&exited_sessions),
@@ -167,6 +199,16 @@ impl WorkspaceWindow {
                           let subscription =
                               cx.observe_window_bounds(window, move |view, window, _cx| {
                                     let bounds = window.window_bounds().get_bounds();
+                                    // Our own placement is not a move the user
+                                    // made. Writing it back would replace the
+                                    // remembered frame with the one we fell
+                                    // back to, so a window arranged on a
+                                    // display that is merely unplugged would
+                                    // lose its place the first time it was
+                                    // reopened without it.
+                                    if Some(bounds) == placed {
+                                        return;
+                                    }
                                     let saved =
                                         knot_core::SavedWindowBounds { x:      bounds.origin
                                                                                      .x
@@ -185,7 +227,9 @@ impl WorkspaceWindow {
                                             .lock()
                                             .set_workspace_window_bounds(workspace_id, saved);
                                     if changed {
-                                        view.persist_agents();
+                                        // The UI-state document alone: a
+                                        // drag must not rewrite the roster.
+                                        view.persist_workspace_ui();
                                     }
                                 });
                           view.window_bounds_subscription = Some(subscription);

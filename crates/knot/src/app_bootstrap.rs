@@ -34,18 +34,35 @@ use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;
+use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
+use crate::mcp_status;
+use crate::mcp_status::McpServerStatus;
 use crate::quit_guard;
 use crate::settings_window::open_settings_window;
 use crate::window_options::manager_window_options;
 use crate::workspace_manager::WorkspaceManager;
 
+/// Starts the MCP server under supervision, reporting the stop signal that
+/// ends both and the status the rest of the application watches.
+///
+/// The server used to be started once here and never watched again: when
+/// its serve task ended the port went quiet for the rest of the process's
+/// life, and a failed bind ended the MCP subsystem for the session. The
+/// supervisor owns that lifecycle now; this still owns the thread, the
+/// runtime and the oneshot that stops it.
+///
+/// A server configuration has turned off leaves the status at
+/// [`knot_mcp::ServerState::Disabled`]: nothing is bound and nothing is
+/// supervised.
 pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::Settings, notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
-                               -> tokio::sync::oneshot::Sender<()> {
+                               -> (tokio::sync::oneshot::Sender<()>, McpServerStatus) {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
+    let status = McpServerStatus::new();
+    let thread_status = status.clone();
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
@@ -81,24 +98,36 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                        Arc::new(move || catalog.agents_snapshot())
                    };
                    let hook_handler = catalog.clone();
-                   let mut server =
-                       knot_mcp::McpServer::new(settings.mcp_server_port,
-                                                catalog as Arc<dyn ToolCatalog>,
-                                                agents_snapshot).with_hook_handler(hook_handler);
-                   if let Err(err) = server.start().await {
-                       eprintln!("failed to start MCP server: {err}");
-                       return;
+                   let mut supervisor =
+                       knot_mcp::Supervisor::new(settings.mcp_server_port,
+                                                 catalog as Arc<dyn ToolCatalog>,
+                                                 agents_snapshot).with_hook_handler(hook_handler);
+                   // A packaged `Knot.app` has no stderr anyone reads, so
+                   // the file is the only record of what the server did.
+                   // With no resolvable home directory there is nowhere to
+                   // put one, and the server runs as it always has.
+                   //
+                   // Given to the supervisor rather than to a server: it
+                   // builds a fresh one per attempt, and one writer has to
+                   // span every restart for the entries either side of a
+                   // failure to land in the same file.
+                   if let Some(directory) = knot_core::log_dir() {
+                       supervisor = supervisor.with_log(directory.join(knot_mcp::LOG_FILE_NAME));
                    }
-
-                   tokio::select! {
-                       _ = stop_rx => {}
-                       _ = std::future::pending::<()>() => {}
-                   }
-                   server.stop();
+                   // Subscribed before `run`, so no transition is missed -
+                   // though a `watch` receiver would read the current value
+                   // even if it were not.
+                   let mirroring =
+                       tokio::spawn(mcp_status::mirror_server_state(supervisor.state(),
+                                                                    thread_status));
+                   // Returns only on the stop signal, having released the
+                   // port; everything else it retries.
+                   supervisor.run(stop_rx).await;
+                   mirroring.abort();
                    drop(discovery);
                });
     });
-    stop
+    (stop, status)
 }
 
 actions!(knot_app,
@@ -127,11 +156,23 @@ actions!(knot_app,
 // handler on the window that owns the behavior; the binding is already
 // here.
 actions!(knot_app,
-         [NewWorkspace,
-          CloseWindow,
-          EnterFullScreen,
-          MinimizeWindow,
-          KnotHelp]);
+         [NewWorkspace, CloseWindow, MinimizeWindow, KnotHelp]);
+
+// Enter Full Screen is deliberately absent. macOS adds its own item to the
+// View menu when it does not find an equivalent one, and it judges
+// equivalence by the action behind the item rather than by its label - so a
+// Knot item it does not recognize was added beside rather than instead, and
+// the menu showed the same command twice under the same key. cmd-ctrl-f is
+// also a key the platform reserves, and `app-menu` forbids a Knot item from
+// holding one: AppKit claims a menu key equivalent ahead of the window, so
+// such an item takes the key rather than sharing it. The same rule moved Fork
+// Agent off cmd-f.
+
+// The Window menu's two openers. Unlike the items above these are wired, and
+// enabled at all times: they are how a user gets back to a window, so an
+// enablement rule that depended on a window being focused would disable them
+// exactly when they are needed.
+actions!(knot_app, [OpenCommandCenter, OpenWorkspaces]);
 
 /// Every user-facing quit path lands here - the application menu's Quit
 /// Knot item and the `cmd-q` binding both dispatch `Quit` - so the guard
@@ -248,14 +289,25 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
             MenuItem::action("Copy", input::Copy),
             MenuItem::action("Paste", input::Paste),
         ]),
-        Menu::new("View")
-            .items([MenuItem::action("Enter Full Screen", EnterFullScreen).disabled(true)]),
+        // No items of Knot's own: macOS creates and populates this menu's
+        // Enter Full Screen itself. See the note beside the `actions!` block.
+        Menu::new("View").items([]),
         agents_menu(snapshot),
+        // Knot's own items first, then a separator, then the list of open
+        // windows macOS appends and maintains below them. Without the
+        // separator a workspace called "Zoom" is indistinguishable from the
+        // Zoom command, and these four shift down every time a window opens.
+        // The two openers are their own group: they open windows, Minimize
+        // and Zoom manipulate the focused one.
         Menu::new("Window").items([
+            MenuItem::action(knot_core::l10n::t("menu.window.command_center"), OpenCommandCenter),
+            MenuItem::action(knot_core::l10n::t("menu.window.workspaces"), OpenWorkspaces),
+            MenuItem::separator(),
             MenuItem::action("Minimize", MinimizeWindow).disabled(true),
             // Zoom keeps `NoAction`: macOS gives it no key equivalent, so
             // it has no reason to be named.
             MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
+            MenuItem::separator(),
         ]),
         Menu::new("Help").items([MenuItem::action("Knot Help", KnotHelp).disabled(true)]),
     ]);
@@ -307,9 +359,13 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
     // menu points at those same actions rather than at ours.
     cx.bind_keys([KeyBinding::new("cmd-n", NewWorkspace, None),
                   KeyBinding::new("cmd-w", CloseWindow, None),
-                  KeyBinding::new("cmd-ctrl-f", EnterFullScreen, None),
                   KeyBinding::new("cmd-m", MinimizeWindow, None),
                   KeyBinding::new("cmd-shift-/", KnotHelp, None)]);
+    // The Window menu's openers. macOS reserves neither: cmd-0 is
+    // conventionally "reset zoom" in a browser or an editor, and Knot has no
+    // zoom level for it to reset.
+    cx.bind_keys([KeyBinding::new("cmd-alt-0", OpenCommandCenter, None),
+                  KeyBinding::new("cmd-0", OpenWorkspaces, None)]);
     // The Agents menu's own keys. No platform convention names these -
     // the items are Knot's - so they come from the Swift reference; see
     // `agent_menu::agent_menu_key_bindings`.
@@ -340,45 +396,109 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
 }
 
 /// Opens the workspace manager - the window the application starts in.
+/// Wires the Window menu's two openers.
+///
+/// Registered here rather than in `install_actions_and_keys` because these
+/// need the message store as well, and because what they do - raise a window
+/// or open one - is this module's business rather than the keymap's.
+///
+/// Reopening the manager after it has been closed passes no `mcp_stop`; see
+/// [`open_workspace_manager`].
+fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
+                           messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                           settings: knot_core::Settings, cx: &mut App) {
+    {
+        let store = Arc::clone(&store);
+        let messages = Arc::clone(&messages);
+        let settings = settings.clone();
+        cx.on_action(move |_: &OpenCommandCenter, cx| {
+              CommandCenterWindow::open(Arc::clone(&store),
+                                        Arc::clone(&messages),
+                                        settings.clone(),
+                                        cx);
+          });
+    }
+    cx.on_action(move |_: &OpenWorkspaces, cx| {
+          crate::window_registry::activate_or_open(
+              crate::window_registry::WindowKey::WorkspaceManager,
+              cx,
+              |cx| {
+                  open_manager_window(Arc::clone(&store), Arc::clone(&messages), settings.clone(), None, cx)
+              },
+          );
+      });
+}
+
+/// Opens the workspace manager, or raises it when one is already open.
+///
+/// One manager window, like the Command Center
+/// (`openspec/specs/window-lifecycle`). Reopening after a close passes no
+/// `mcp_stop`: the oneshot that keeps the MCP server alive went with the
+/// window that held it, and this does not resurrect it - closing the manager
+/// has always stopped the server, and that is a separate question from how
+/// many manager windows there are.
 fn open_workspace_manager(parts: WorkspaceManagerWindow, cx: &mut App) {
     let WorkspaceManagerWindow { store,
                                  messages,
                                  settings,
                                  mcp_stop, } = parts;
+    crate::window_registry::activate_or_open(crate::window_registry::WindowKey::WorkspaceManager,
+                                             cx,
+                                             move |cx| {
+                                                 open_manager_window(store,
+                                                                     messages,
+                                                                     settings,
+                                                                     Some(mcp_stop),
+                                                                     cx)
+                                             });
+}
+
+/// The manager window itself, reporting its handle.
+fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
+                       settings: knot_core::Settings,
+                       mcp_stop: Option<tokio::sync::oneshot::Sender<()>>, cx: &mut App)
+                       -> Option<gpui_kit::AnyWindowHandle> {
     let options = manager_window_options(cx);
-    cx.open_window(options, |window, cx| {
-          // Every window tracks the OS appearance, so a light/dark flip
-          // re-resolves the system palette and repaints.
-          observe_system_appearance(window);
-          // macOS leaves untitled windows out of the Window menu, which is
-          // why only open workspaces were listed there.
-          window.set_window_title(&knot_core::l10n::t("workspace.manager"));
-          let name_input = cx.new(|cx| {
-                                 InputState::new(window, cx)
+    match cx.open_window(options, |window, cx| {
+                // Every window tracks the OS appearance, so a light/dark flip
+                // re-resolves the system palette and repaints.
+                observe_system_appearance(window);
+                // macOS leaves untitled windows out of the Window menu, which
+                // is why only open workspaces were listed
+                // there.
+                window.set_window_title(&knot_core::l10n::t("workspace.manager"));
+                let name_input = cx.new(|cx| {
+                                       InputState::new(window, cx)
                         .placeholder(knot_core::l10n::t("workspace.name_placeholder"))
+                                   });
+                let view = cx.new(|cx| {
+                                 let name_subscription =
+                                     cx.subscribe(&name_input,
+                                                  |_: &mut WorkspaceManager, _, event, cx| {
+                                                      if matches!(event, InputEvent::Change) {
+                                                          cx.notify();
+                                                      }
+                                                  });
+                                 WorkspaceManager { store,
+                                                    messages,
+                                                    settings,
+                                                    name_input,
+                                                    editing_id: None,
+                                                    workspace_dialog_id: None,
+                                                    show_workspace_dialog: false,
+                                                    error: None,
+                                                    _name_subscription: name_subscription,
+                                                    _mcp_stop: mcp_stop }
                              });
-          let view = cx.new(|cx| {
-                           let name_subscription =
-                               cx.subscribe(&name_input,
-                                            |_: &mut WorkspaceManager, _, event, cx| {
-                                                if matches!(event, InputEvent::Change) {
-                                                    cx.notify();
-                                                }
-                                            });
-                           WorkspaceManager { store,
-                                              messages,
-                                              settings,
-                                              name_input,
-                                              editing_id: None,
-                                              workspace_dialog_id: None,
-                                              show_workspace_dialog: false,
-                                              error: None,
-                                              _name_subscription: name_subscription,
-                                              _mcp_stop: Some(mcp_stop) }
-                       });
-          cx.new(|cx| Root::new(view, window, cx))
-      })
-      .expect("failed to open workspace manager");
+                cx.new(|cx| Root::new(view, window, cx))
+            }) {
+        Ok(window) => Some(window.into()),
+        Err(error) => {
+            eprintln!("failed to open workspace manager: {error}");
+            None
+        }
+    }
 }
 
 pub(crate) fn run() {
@@ -395,19 +515,22 @@ pub(crate) fn run() {
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
     let activation = Arc::new(Mutex::new(Vec::new()));
-    let mcp_stop = start_mcp_server(Arc::clone(&store),
-                                    settings.clone(),
-                                    Arc::clone(&notifier),
-                                    Arc::clone(&messages),
-                                    Arc::clone(&awaiting_input),
-                                    Arc::clone(&activation));
+    let (mcp_stop, mcp_status) = start_mcp_server(Arc::clone(&store),
+                                                  settings.clone(),
+                                                  Arc::clone(&notifier),
+                                                  Arc::clone(&messages),
+                                                  Arc::clone(&awaiting_input),
+                                                  Arc::clone(&activation));
 
     gpui_kit::application()
                            // `Assets` only embeds gpui-component's own curated icon subset; our
                            // settings-window icon buttons (folder-open/pencil/trash/x/plus/copy)
                            // aren't in it, so `Icon::path(...)` silently resolved to nothing and
-                           // rendered invisible. `AllAssets` embeds the complete Lucide catalog.
-                           .with_assets(gpui_kit::assets::AllAssets)
+                           // rendered invisible. `AllAssets` embeds the complete Lucide catalog,
+                           // and `KnotAssets` layers Knot's own assets over it - the panel's
+                           // working animation only decodes as an animation when it arrives
+                           // through this source rather than as raw bytes.
+                           .with_assets(app_support::KnotAssets)
                            .run(move |cx| {
                                // Before `set_app_menus`: AppKit labels the
                                // application menu from the process name.
@@ -427,13 +550,32 @@ pub(crate) fn run() {
                                // window claims it once one is.
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(Activation(Arc::clone(&activation)));
+                               // The MCP server's state, for the settings
+                               // pane's row and the failure notification.
+                               cx.set_global(mcp_status);
                                cx.set_global(AgentsMenuState::default());
+                               // Every window that can be reopened is
+                               // registered here, so a second request for
+                               // one raises it rather than making another.
+                               crate::window_registry::WindowRegistry::install(cx);
+                               register_window_actions(Arc::clone(&store),
+                                                       Arc::clone(&messages),
+                                                       settings.clone(),
+                                                       cx);
                                set_app_menus(&AgentMenuSnapshot::default(), cx);
 
                                cx.on_system_notification_response(|response, cx| {
-                                     if notification_response_agent_id(&response).is_some() {
-                                         cx.activate(true);
-                                     }
+                                     // Every notification brings Knot
+                                     // forward. An agent's carries its id so
+                                     // a click can route to that agent; the
+                                     // MCP server's failure is not tied to
+                                     // an agent and carries a tag that
+                                     // deliberately parses as none - which
+                                     // is why activation is no longer gated
+                                     // on finding one.
+                                     let _agent_to_route_to =
+                                         notification_response_agent_id(&response);
+                                     cx.activate(true);
                                  });
 
                                open_workspace_manager(WorkspaceManagerWindow { store:

@@ -67,6 +67,7 @@ impl WorkspaceWindow {
         // is where an agent going idle is noticed.
         self.deliver_inbox_nudges();
         self.raise_awaiting_notifications(cx);
+        self.raise_mcp_failure_notification(cx);
         // Before the repaint checks below, so an agent started here has its
         // slot in place when they run.
         let activated = self.activate_messaged_agents(cx);
@@ -74,17 +75,26 @@ impl WorkspaceWindow {
                              .and_then(|id| self.sessions.get(&id))
                              .and_then(|session| session.lock().grid())
                              .is_some_and(|grid| grid.lock().take_dirty());
+        // Every agent's taps, not just the selected one's: an agent working
+        // in an unselected pane is the case this feature exists for.
+        let pull_requests_recorded = self.drain_pull_requests();
         let prompts_completed = self.drain_prompt_results();
         self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
         let spinner_dirty = self.spinner_repaint_due();
+        // Runs `ps` on its own much slower cadence, and only while a
+        // processes section is expanded on the shown agent - see
+        // `workspace_window::processes`.
+        let processes_sampled = self.process_sampling_tick();
         if grid_dirty
            || panel_dirty
            || spinner_dirty
            || activated
+           || processes_sampled
            || prompts_completed
            || prompts_sent
+           || pull_requests_recorded
         {
             cx.notify();
         }

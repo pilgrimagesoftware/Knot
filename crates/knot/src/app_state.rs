@@ -418,11 +418,20 @@ pub(crate) fn stale_session_ids(session_ids: &[Uuid], live_ids: &BTreeSet<Uuid>)
 /// agent type)` via the `knot-history` provider registry.
 pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::AgentStore {
     if !settings.restore_layout_on_launch {
+        // No recorded pull requests either: every one of them names an agent
+        // that is not being restored, and a record with no agent has nothing
+        // to show it under - the same rule that drops a removed agent's
+        // records.
         return knot_agents::AgentStore::new();
     }
 
     let mut store = knot_agents::AgentStore::from_saved(&settings.saved_agents,
                                                         settings.saved_workspaces.clone());
+    store.set_pull_requests(settings.pull_requests.clone());
+    // From its own document, like the pull requests above: how a window was
+    // arranged is not derivable from the roster, and `from_saved` deliberately
+    // does not invent it.
+    store.set_workspace_ui(settings.workspace_ui.clone());
 
     if settings.restore_conversation_on_launch {
         let persisted: BTreeMap<Uuid, String> =
@@ -447,11 +456,14 @@ pub(crate) fn agent_selection_for_workspace(store: &knot_agents::AgentStore, wor
     let workspace = store.workspaces()
                          .iter()
                          .find(|workspace| workspace.id == workspace_id)?;
-    workspace.active_agent_ids
-             .iter()
-             .chain(workspace.agent_ids.iter())
-             .find(|id| store.agent(**id).is_some())
-             .copied()
+    // Which agents the layout is showing is arrangement, so it comes from the
+    // UI state; which agents belong to the workspace is configuration, and
+    // comes from the record.
+    let active = store.workspace_ui(workspace_id).active_agent_ids;
+    active.iter()
+          .chain(workspace.agent_ids.iter())
+          .find(|id| store.agent(**id).is_some())
+          .copied()
 }
 
 // UNWIRED: ported from the Swift reference, no view reads it yet.

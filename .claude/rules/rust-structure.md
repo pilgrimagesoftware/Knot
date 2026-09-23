@@ -135,6 +135,46 @@ Prefer one struct per key over N maps keyed alike. Where the maps already
 exist, teardown belongs in one function and every new field must be added to
 it in the same commit.
 
+## `mod.rs` declares; it does not implement
+
+A `mod.rs` holds module declarations, re-exports, and the doc comment saying
+what the module owns. Implementation goes in sibling files named for what they
+do - `import_window/window.rs` for the entity and its lifecycle,
+`import_window/pane.rs` for what it draws.
+
+Unlike the rest of these rules, this one is a standing decision rather than a
+postmortem: it was adopted while moving the Import surface out of the settings
+window, before it had cost anything. The reasoning is that the 700-line limit
+is a ceiling, not a target, and it is the only signal that had been enforcing
+placement at all. `import_window` would have been 443 lines in one `mod.rs` -
+comfortably legal, and still wrong, because nothing about the name says where
+the rendering is.
+
+Six `mod.rs` files predated the rule - `agent_editor`, `panel_state`,
+`panel_view`, `settings_window`, `about_window` and `workspace_window`. They
+were treated as a backlog rather than as exceptions, and split under issue
+#300, one module per PR so a regression is bisectable to a single split.
+Grandfathering has to be argued for, not assumed, or a rule the codebase
+visibly breaks stops being a rule.
+
+Splitting those six turned up one hazard worth naming. A parent's private
+items are visible to its descendants, so anything declared in a `mod.rs` can be
+read from every child module. Moving it to a sibling breaks that: widen to
+`pub(super)` - the module and no further - never `pub(crate)` "to be safe".
+`rustc` reporting a `pub(crate) use` re-export as an unused import is the
+signal that nothing outside actually consumed the item, and that it should
+narrow rather than be re-exported.
+
+`mod.rs` files still holding implementation elsewhere in the workspace -
+`workspace_window/render`, `workspace_manager` and `plan_view` in `knot`, and
+several in `knot-acp` and `knot-terminal` - were outside that issue's scope and
+are still to do.
+
+A `mod.rs` that is only declarations and re-exports also makes the module's
+shape readable in one screen, which is the same argument as splitting by
+concern: you should be able to see what a module is made of without reading
+what it does.
+
 ## Orphaned files
 
 Rust emits no diagnostic for a `.rs` file that no `mod` declares - it is

@@ -117,6 +117,40 @@ pub(crate) fn open_folder(app: OpenInApp, folder: &str) {
     }
 }
 
+/// Opens `url` in the user's default browser, returning whether it worked.
+///
+/// The same `/usr/bin/open` path as [`open_folder`], with no `-a`: the point
+/// is the browser the user has chosen, not one Knot picked. A pull request
+/// opens there rather than in an embedded view, so it arrives already signed
+/// in, with the user's extensions and their session.
+///
+/// The return value is read, unlike `open_folder`'s: a row that could not be
+/// opened has to say so rather than looking like it did nothing.
+pub(crate) fn open_url(url: &str) -> bool {
+    run_open(&[], url)
+}
+
+/// Whether this platform has a process viewer to offer at all.
+///
+/// The processes section leaves the action out entirely where this is
+/// false, rather than showing a control that does nothing.
+pub(crate) const fn has_process_viewer() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// Opens the platform's process viewer - Activity Monitor on macOS.
+///
+/// The application only. macOS exposes no supported way to select a given
+/// process inside Activity Monitor from outside it, so the row pairs this
+/// with copy-identifier rather than claiming a selection it cannot perform.
+pub(crate) fn open_process_viewer() -> bool {
+    if !has_process_viewer() {
+        return false;
+    }
+
+    run_open(&["-a"], "Activity Monitor")
+}
+
 #[cfg(target_os = "macos")]
 fn run_open(arguments: &[&str], folder: &str) -> bool {
     Command::new("/usr/bin/open").args(arguments)
@@ -177,5 +211,22 @@ mod tests {
         assert!(OpenInApp::Finder.open_arguments().is_empty());
         assert_eq!(OpenInApp::Terminal.open_arguments(),
                    ["-b", "com.mitchellh.ghostty"]);
+    }
+
+    /// The processes section offers the process-viewer action only where
+    /// there is a viewer to open, so this is what decides whether the
+    /// control exists at all.
+    #[test]
+    fn a_process_viewer_is_offered_only_on_macos() {
+        assert_eq!(has_process_viewer(), cfg!(target_os = "macos"));
+    }
+
+    /// Where there is no viewer, the action is not merely hidden - calling
+    /// it reports that nothing was opened rather than claiming success.
+    #[test]
+    fn opening_a_process_viewer_where_there_is_none_reports_failure() {
+        if !has_process_viewer() {
+            assert!(!open_process_viewer());
+        }
     }
 }

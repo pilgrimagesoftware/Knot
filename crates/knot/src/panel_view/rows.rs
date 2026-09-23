@@ -9,7 +9,7 @@
 
 use gpui_kit::ListState;
 
-use crate::panel_view::PanelState;
+use crate::panel_state::PanelState;
 
 /// One virtualized row of the conversation: every message in order, then
 /// the pending permission prompt, then the ended-session banner. Modelling

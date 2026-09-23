@@ -17,16 +17,36 @@ pub struct AdoptedCounts {
 impl AgentStore {
     pub fn from_saved(saved_agents: &[SavedAgent], workspaces: Vec<knot_core::Workspace>) -> Self {
         let agents = saved_agents.iter().map(from_saved).collect::<Vec<_>>();
-        let workspaces = if agents.is_empty() || !workspaces.is_empty() {
+        let use_saved_workspaces = agents.is_empty() || !workspaces.is_empty();
+        let workspaces = if use_saved_workspaces {
             workspaces
         }
         else {
             vec![super::helpers::default_workspace(agents.iter().map(|agent| agent.id).collect())]
         };
         let current_workspace_id = workspaces.first().map(|workspace| workspace.id);
-        Self { agents,
-               workspaces,
-               current_workspace_id }
+        let mut store = Self { agents,
+                               workspaces,
+                               // Filled from its own document by the caller,
+                               // the same as `pull_requests`: which agents
+                               // this store holds says nothing about how any
+                               // window was arranged.
+                               workspace_ui: BTreeMap::new(),
+                               current_workspace_id,
+                               // Filled from its own document by the caller,
+                               // which is what loads it: rebuilding the
+                               // roster says nothing about what Knot has
+                               // seen.
+                               pull_requests: Vec::new() };
+        // A workspace invented here has no saved arrangement to restore, so
+        // the first agent is what its window shows.
+        if !use_saved_workspaces
+           && let (Some(id), Some(first)) =
+               (store.current_workspace_id, store.agents.first().map(|agent| agent.id))
+        {
+            store.set_workspace_active_agents(id, vec![first]);
+        }
+        store
     }
 
     /// Take in agents and workspaces that already exist elsewhere, keeping

@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::consts::{DEFAULT_AGENT_TYPE, DEFAULT_AVATAR};
+use crate::consts::{
+    DEFAULT_AGENT_TYPE, DEFAULT_AVATAR, WORKSPACE_LAYOUT_DEFAULT, WORKSPACE_SPLIT_RATIO_DEFAULT,
+};
 use crate::settings::capabilities::Capabilities;
 use crate::settings::vocabulary::CostTier;
 
@@ -220,34 +222,52 @@ impl BenchAgent {
 // Workspace
 // ---------------------------------------------------------------------------
 
-/// A saved group of agents with its own layout state. The port stores the
-/// layout fields as opaque data; it does not interpret them here.
+/// A saved group of agents: what the user configured about it, and nothing
+/// more. How its window was last arranged is [`WorkspaceUiState`], in its own
+/// document - see `openspec/specs/settings-persistence/spec.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
-    pub id:                    Uuid,
-    pub name:                  String,
-    pub color_hex:             String,
+    pub id:        Uuid,
+    pub name:      String,
+    pub color_hex: String,
     #[serde(default)]
-    pub agent_ids:             Vec<Uuid>,
-    #[serde(default)]
+    pub agent_ids: Vec<Uuid>,
+}
+
+/// What the application recorded about how one workspace's window was last
+/// arranged. The user never entered any of it and would not miss it if it
+/// were discarded, which is why it is not part of [`Workspace`]: where a
+/// window sits is the most frequently written value in the store and the
+/// least valuable, and it must not be a reason to rewrite the roster.
+///
+/// The port stores the layout fields as opaque data; it does not interpret
+/// them here.
+///
+/// Every field carries its own serde default, so an entry written before a
+/// field existed loads with that field defaulted rather than failing.
+///
+/// [`Default`] is written out rather than derived: `layout_mode` and
+/// `split_ratio` default to `"single"` and `0.5`, which is what every record
+/// written before the split already holds. Deriving would give `""` and
+/// `0.0`, so a workspace with no entry would read as a layout that does not
+/// exist and a divider at the far edge - a change to what the state *means*,
+/// which moving this record is not supposed to make.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WorkspaceUiState {
+    #[serde(default = "default_workspace_layout")]
     pub layout_mode:           String,
-    #[serde(default)]
     pub active_agent_ids:      Vec<Uuid>,
-    #[serde(default)]
     pub focused_pane_index:    i32,
-    #[serde(default)]
+    #[serde(default = "default_split_ratio")]
     pub split_ratio:           f64,
-    #[serde(default)]
     pub split_ratio_secondary: Option<f64>,
-    #[serde(default)]
     pub show_dashboard:        Option<bool>,
-    #[serde(default)]
     pub is_detached:           Option<bool>,
     /// Where this workspace's window was last seen, so reopening it puts
     /// it back rather than re-centring. `None` until the window has been
     /// opened once.
-    #[serde(default)]
     pub window_bounds:         Option<SavedWindowBounds>,
 }
 
@@ -264,6 +284,27 @@ pub struct SavedWindowBounds {
 // ---------------------------------------------------------------------------
 // serde defaults
 // ---------------------------------------------------------------------------
+
+impl Default for WorkspaceUiState {
+    fn default() -> Self {
+        Self { layout_mode:           default_workspace_layout(),
+               active_agent_ids:      Vec::new(),
+               focused_pane_index:    0,
+               split_ratio:           default_split_ratio(),
+               split_ratio_secondary: None,
+               show_dashboard:        None,
+               is_detached:           None,
+               window_bounds:         None, }
+    }
+}
+
+fn default_workspace_layout() -> String {
+    WORKSPACE_LAYOUT_DEFAULT.to_string()
+}
+
+fn default_split_ratio() -> f64 {
+    WORKSPACE_SPLIT_RATIO_DEFAULT
+}
 
 pub(super) fn default_avatar() -> String {
     DEFAULT_AVATAR.to_string()
@@ -285,6 +326,71 @@ fn default_persona_type() -> PersonaType {
 
 fn default_persona_state() -> PersonaState {
     PersonaState::Enabled
+}
+
+// ---------------------------------------------------------------------------
+// SavedPullRequest
+// ---------------------------------------------------------------------------
+
+/// A pull request Knot saw in an agent's output.
+///
+/// The record is evidence of what was seen, not a copy of the pull request:
+/// no title, no number, no status. Those are fetched and refreshed, because a
+/// merged pull request shown as open after a restart is worse than a blank,
+/// and there is no way to know a remembered status is still true.
+///
+/// Identity is the agent plus the canonical URL: the same pull request seen by
+/// two agents is two records, because who opened it is part of what is
+/// recorded.
+///
+/// The Swift reference has no counterpart, so the field names here are chosen
+/// rather than inherited.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedPullRequest {
+    /// The canonical URL, as `knot_core::pull_request_url::PullRequestUrl`
+    /// renders it - never the decorated form the output carried, so two
+    /// spellings of one pull request are one record.
+    pub url:          String,
+    /// The agent whose output carried the URL.
+    pub agent_id:     Uuid,
+    /// The workspace that agent belonged to when the URL was seen. Held on
+    /// the record rather than looked up through the agent, so a list can be
+    /// built for a workspace without walking every agent.
+    pub workspace_id: Uuid,
+    /// When the URL was first seen, in seconds since the Unix epoch.
+    ///
+    /// Seconds rather than a formatted timestamp because the only thing the
+    /// store does with it is order rows newest-first, and an integer cannot
+    /// sort wrong across time zones the way a string can. Formatting it for
+    /// a person is the view's business.
+    pub first_seen:   i64,
+}
+
+impl SavedPullRequest {
+    /// A record of `url`, seen now, against `agent_id` in `workspace_id`.
+    #[must_use]
+    pub fn new(url: impl Into<String>, agent_id: Uuid, workspace_id: Uuid) -> Self {
+        Self { url: url.into(),
+               agent_id,
+               workspace_id,
+               first_seen: now_unix() }
+    }
+
+    /// Whether this record is the same pull request seen by the same agent -
+    /// which is what makes recording idempotent.
+    #[must_use]
+    pub fn is_same_sighting(&self, url: &str, agent_id: Uuid) -> bool {
+        self.agent_id == agent_id && self.url == url
+    }
+}
+
+/// Seconds since the Unix epoch, or `0` if the clock is set before it.
+fn now_unix() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                                .map_or(0, |since| {
+                                    i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
+                                })
 }
 
 #[cfg(test)]
@@ -394,35 +500,145 @@ mod tests {
 
     #[test]
     fn workspace_round_trips() {
-        let ws = Workspace { id:                    id(),
-                             name:                  "Main".to_string(),
-                             color_hex:             "#1B4FB2".to_string(),
-                             agent_ids:             vec![id()],
-                             layout_mode:           "grid".to_string(),
-                             active_agent_ids:      vec![id()],
-                             focused_pane_index:    1,
-                             split_ratio:           0.5,
-                             split_ratio_secondary: Some(0.3),
-                             show_dashboard:        Some(false),
-                             is_detached:           Some(true),
-                             window_bounds:         Some(SavedWindowBounds { x:      12.,
-                                                                             y:      34.,
-                                                                             width:  960.,
-                                                                             height: 640., }), };
+        let ws = Workspace { id:        id(),
+                             name:      "Main".to_string(),
+                             color_hex: "#1B4FB2".to_string(),
+                             agent_ids: vec![id()], };
         let json = serde_json::to_string(&ws).unwrap();
         let back: Workspace = serde_json::from_str(&json).unwrap();
         assert_eq!(ws, back);
     }
 
-    /// A workspace saved before window frames were remembered must still
-    /// load - the field is absent from every existing settings file.
     #[test]
-    fn a_workspace_without_saved_window_bounds_still_loads() {
+    fn workspace_ui_state_round_trips() {
+        let ui = WorkspaceUiState { layout_mode:           "grid".to_string(),
+                                    active_agent_ids:      vec![id()],
+                                    focused_pane_index:    1,
+                                    split_ratio:           0.5,
+                                    split_ratio_secondary: Some(0.3),
+                                    show_dashboard:        Some(false),
+                                    is_detached:           Some(true),
+                                    window_bounds:         Some(SavedWindowBounds { x:      12.,
+                                                                                    y:      34.,
+                                                                                    width:  960.,
+                                                                                    height: 640., }), };
+        let json = serde_json::to_string(&ui).unwrap();
+        let back: WorkspaceUiState = serde_json::from_str(&json).unwrap();
+        assert_eq!(ui, back);
+    }
+
+    /// The wire keys are what an existing `workspaces.json` was written with,
+    /// so the split can only find them under these exact names.
+    #[test]
+    fn workspace_ui_state_keeps_the_camel_case_keys_it_was_stored_under() {
+        let json = serde_json::to_value(WorkspaceUiState::default()).unwrap();
+        let object = json.as_object().unwrap();
+        for key in ["layoutMode",
+                    "activeAgentIds",
+                    "focusedPaneIndex",
+                    "splitRatio",
+                    "splitRatioSecondary",
+                    "showDashboard",
+                    "isDetached",
+                    "windowBounds"]
+        {
+            assert!(object.contains_key(key), "UI state missing key {key}");
+        }
+    }
+
+    // --- SavedPullRequest --------------------------------------------------
+
+    #[test]
+    fn saved_pull_request_round_trips_in_camel_case() {
+        let record = SavedPullRequest { url:
+                                            "https://github.com/acme/widget/pull/42".to_string(),
+                                        agent_id:     id(),
+                                        workspace_id: id(),
+                                        first_seen:   1_758_566_400, };
+
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("\"agentId\""), "camelCase key: {json}");
+        assert!(json.contains("\"workspaceId\""), "camelCase key: {json}");
+        assert!(json.contains("\"firstSeen\""), "camelCase key: {json}");
+
+        let back: SavedPullRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, record);
+    }
+
+    /// The record is evidence of a sighting, not a copy of the pull request.
+    /// A status persisted here would be shown as current after a restart
+    /// when it is not.
+    #[test]
+    fn saved_pull_request_carries_no_fetched_state() {
+        let json = serde_json::to_string(&SavedPullRequest::new("https://github.com/a/b/pull/1",
+                                                                id(),
+                                                                id())).unwrap();
+
+        for absent in ["title", "number", "state", "status", "isDraft"] {
+            assert!(!json.contains(absent),
+                    "{absent} must not be persisted: {json}");
+        }
+    }
+
+    #[test]
+    fn a_new_saved_pull_request_is_stamped_with_the_current_time() {
+        let record = SavedPullRequest::new("https://github.com/a/b/pull/1", id(), id());
+
+        // 2026-01-01, comfortably in the past whenever this runs.
+        assert!(record.first_seen > 1_767_225_600, "{}", record.first_seen);
+    }
+
+    /// Idempotence is per agent: the same URL from a second agent is a second
+    /// record, because who opened it is part of what is recorded.
+    #[test]
+    fn a_sighting_matches_only_the_same_url_from_the_same_agent() {
+        let agent = id();
+        let other_agent = id();
+        let record = SavedPullRequest::new("https://github.com/a/b/pull/1", agent, id());
+
+        assert!(record.is_same_sighting("https://github.com/a/b/pull/1", agent));
+        assert!(!record.is_same_sighting("https://github.com/a/b/pull/2", agent));
+        assert!(!record.is_same_sighting("https://github.com/a/b/pull/1", other_agent));
+    }
+
+    /// The defaults are what every record written before the split already
+    /// holds. Deriving `Default` would give `""` and `0.0` instead, which is
+    /// a layout that does not exist and a divider at the far edge - a change
+    /// to what the state means, not just to where it is stored.
+    #[test]
+    fn ui_state_defaults_match_what_existing_records_hold() {
+        let ui = WorkspaceUiState::default();
+
+        assert_eq!(ui.layout_mode, "single");
+        assert_eq!(ui.split_ratio, 0.5);
+
+        // And an entry that names neither reads the same way, rather than
+        // taking serde's zero values.
+        let decoded: WorkspaceUiState = serde_json::from_str("{}").unwrap();
+        assert_eq!(decoded, ui);
+    }
+
+    /// UI state saved before window frames were remembered must still load -
+    /// the field is absent from every entry written before it existed.
+    #[test]
+    fn ui_state_without_saved_window_bounds_still_loads() {
+        let ui: WorkspaceUiState = serde_json::from_str(r#"{"layoutMode":"single"}"#).unwrap();
+
+        assert_eq!(ui.layout_mode, "single");
+        assert_eq!(ui.window_bounds, None);
+    }
+
+    /// A workspace record still carrying the UI keys - every existing
+    /// `workspaces.json` - must load as a workspace, because the split reads
+    /// the document as JSON and decodes each record after lifting them out.
+    #[test]
+    fn a_combined_workspace_record_still_decodes_as_a_workspace() {
         let json = r##"{"id":"00000000-0000-0000-0000-000000000001","name":"Main",
-                        "colorHex":"#1B4FB2"}"##;
+                        "colorHex":"#1B4FB2","layoutMode":"grid","splitRatio":0.25}"##;
 
         let ws: Workspace = serde_json::from_str(json).unwrap();
 
-        assert_eq!(ws.window_bounds, None);
+        assert_eq!(ws.name, "Main");
+        assert!(ws.agent_ids.is_empty());
     }
 }

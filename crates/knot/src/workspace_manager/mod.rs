@@ -67,6 +67,7 @@ impl WorkspaceManager {
             return;
         }
         let mut store = self.store.lock();
+        let renamed = editing_id.is_some();
         if let Some(id) = editing_id {
             if !store.rename_workspace(id, name) {
                 self.error = Some(knot_core::l10n::t("workspace_manager.error_missing"));
@@ -76,18 +77,7 @@ impl WorkspaceManager {
         }
         else {
             let id = Uuid::new_v4();
-            store.add_workspace(knot_core::Workspace { id,
-                                                       name,
-                                                       color_hex: consts::COLOR_WORKSPACE_DEFAULT_HEX.to_string(),
-                                                       agent_ids: Vec::new(),
-                                                       layout_mode: "single".to_string(),
-                                                       active_agent_ids: Vec::new(),
-                                                       focused_pane_index: 0,
-                                                       split_ratio: 0.5,
-                                                       split_ratio_secondary: None,
-                                                       show_dashboard: None,
-                                                       is_detached: None,
-                                                       window_bounds: None });
+            store.add_workspace(knot_core::Workspace { id,name,color_hex: consts::COLOR_WORKSPACE_DEFAULT_HEX.to_string(),agent_ids: Vec::new() });
             store.set_current_workspace(id);
         }
         drop(store);
@@ -98,6 +88,16 @@ impl WorkspaceManager {
               input.clean(window, input_cx);
           });
         cx.notify();
+        if renamed {
+            // The renamed workspace's own window draws its title from this
+            // shared store, and `cx.notify()` marks only *this* window dirty
+            // - so without a scheduled paint over there it keeps showing the
+            // name it last drew. Reading live state does not cause a paint;
+            // being scheduled for one does. `import_window/window.rs`'s
+            // `redraw_every_window` is the same fix for the same class of
+            // staleness.
+            cx.refresh_windows();
+        }
     }
 
     pub(crate) fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>,

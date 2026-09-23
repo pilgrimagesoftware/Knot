@@ -13,6 +13,27 @@ pub const AGENTS_FILE: &str = "agents.json";
 /// The saved-workspaces collection.
 pub const WORKSPACES_FILE: &str = "workspaces.json";
 
+/// The layout a workspace window uses until something changes it: a single
+/// pane. Every record written by the Swift app and by every Rust build so far
+/// carries this value, so an entry that does not name a layout has to read as
+/// this one rather than as the empty string.
+pub const WORKSPACE_LAYOUT_DEFAULT: &str = "single";
+
+/// Where a split layout's divider sits until it is dragged: the middle. Like
+/// [`WORKSPACE_LAYOUT_DEFAULT`], this is what every stored record already
+/// holds, so a missing value must read as this and not as zero.
+pub const WORKSPACE_SPLIT_RATIO_DEFAULT: f64 = 0.5;
+
+/// Per-workspace UI state, keyed by workspace id.
+///
+/// Not a collection: a lookup table the app writes about itself. Every read
+/// is "the state for this workspace" and every write is "this workspace's
+/// state", so it is a map rather than a list of records each carrying an id.
+/// Separate from [`WORKSPACES_FILE`] so that moving a window - the most
+/// frequent write in the store, and the least valuable - does not rewrite the
+/// roster the user built.
+pub const WORKSPACE_UI_STATE_FILE: &str = "workspace-ui-state.json";
+
 /// The personas collection.
 pub const PERSONAS_FILE: &str = "personas.json";
 
@@ -21,6 +42,14 @@ pub const BENCH_FILE: &str = "bench.json";
 
 /// The recent-repositories collection.
 pub const RECENT_REPOS_FILE: &str = "recent-repos.json";
+
+/// The recorded-pull-requests collection.
+///
+/// Durable data rather than a preference even though the user did not type
+/// it: a collection of objects with identity that grows without bound, which
+/// is what separates the two kinds. Its own document rather than a field on
+/// `SavedAgent`, so a URL scrolling past does not rewrite `agents.json`.
+pub const PULL_REQUESTS_FILE: &str = "pull-requests.json";
 
 /// The single document every setting used to live in, read once on load and
 /// renamed to [`LEGACY_MIGRATED_EXTENSION`] after its values have been
@@ -168,3 +197,18 @@ pub const SKWAD_WORKSPACES_KEY: &str = "savedWorkspacesData";
 pub const SKWAD_AGENTS_KEY: &str = "savedAgentsData";
 pub const SKWAD_PERSONAS_KEY: &str = "personasData";
 pub const SKWAD_BENCH_AGENTS_KEY: &str = "benchAgentsData";
+
+/// The scheme a pull request URL is recognized under. GitHub serves nothing
+/// over plain HTTP, so a `http://` link is not one Knot records.
+pub const PULL_REQUEST_URL_SCHEME: &str = "https://";
+
+/// The host Knot recognizes without being told. Enterprise hosts are
+/// supplied by the forge layer, which is the only part that knows which ones
+/// are configured.
+pub const PULL_REQUEST_HOST_GITHUB: &str = "github.com";
+
+/// The longest a pull request URL can be and still parse, and so the most a
+/// stream scanner needs to carry across a chunk boundary: a 253-byte host, a
+/// 39-byte owner, a 100-byte repository, the scheme, the separators and the
+/// number, rounded up.
+pub const MAX_PULL_REQUEST_URL_LEN: usize = 512;

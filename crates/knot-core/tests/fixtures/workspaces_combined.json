@@ -1,0 +1,128 @@
+[
+  {
+    "id": "0a94f36c-8760-4bd2-b210-c2758f56cf5d",
+    "name": "Alpha",
+    "colorHex": "#1B4FB2",
+    "agentIds": [
+      "ef85cc87-32f3-48ee-ad50-dbecee1dec45",
+      "d893a284-0968-4d8f-994d-1e06a31d73ba",
+      "0d240f38-e421-41b0-92ae-c1aacad9a0e7",
+      "0c0fb306-fc36-4186-858a-2025617aea2a",
+      "b82da782-0fca-451f-8c63-804c22814d9f",
+      "57972db2-ea7b-4681-a47c-294b51dd1ad4",
+      "f9e87c04-b098-48f1-b56f-e3feb9d1dfe7"
+    ],
+    "layoutMode": "single",
+    "activeAgentIds": [
+      "ef85cc87-32f3-48ee-ad50-dbecee1dec45"
+    ],
+    "focusedPaneIndex": 0,
+    "splitRatio": 0.5,
+    "splitRatioSecondary": null,
+    "showDashboard": null,
+    "isDetached": null,
+    "windowBounds": {
+      "x": 10.0,
+      "y": 42.0,
+      "width": 1708.0,
+      "height": 1065.0
+    }
+  },
+  {
+    "id": "c74d260f-41f5-437c-8d5d-eb8d66f2c438",
+    "name": "Bravo",
+    "colorHex": "#1B4FB2",
+    "agentIds": [
+      "3828a18e-a600-4585-bbf7-88c34d6e550e"
+    ],
+    "layoutMode": "single",
+    "activeAgentIds": [
+      "3828a18e-a600-4585-bbf7-88c34d6e550e"
+    ],
+    "focusedPaneIndex": 0,
+    "splitRatio": 0.5,
+    "splitRatioSecondary": null,
+    "showDashboard": null,
+    "isDetached": null,
+    "windowBounds": {
+      "x": 865.0,
+      "y": 10.0,
+      "width": 1710.0,
+      "height": 1420.0
+    }
+  },
+  {
+    "id": "b37d5e80-3188-4bd4-9b39-287f40a7faae",
+    "name": "Charlie",
+    "colorHex": "#1B4FB2",
+    "agentIds": [
+      "4dab9792-1878-4500-a4b5-c44bab7d8bf1"
+    ],
+    "layoutMode": "single",
+    "activeAgentIds": [
+      "4dab9792-1878-4500-a4b5-c44bab7d8bf1"
+    ],
+    "focusedPaneIndex": 0,
+    "splitRatio": 0.5,
+    "splitRatioSecondary": null,
+    "showDashboard": null,
+    "isDetached": null,
+    "windowBounds": {
+      "x": 1725.0,
+      "y": 10.0,
+      "width": 1705.0,
+      "height": 1420.0
+    }
+  },
+  {
+    "id": "a3040a10-f552-4837-a72f-a037ecff3bd0",
+    "name": "Delta",
+    "colorHex": "#7158D4",
+    "agentIds": [
+      "b77d6ea6-5876-4216-91ac-cea3597cee33",
+      "79765833-dfd5-41e6-b782-5715c520692a"
+    ],
+    "layoutMode": "single",
+    "activeAgentIds": [
+      "b77d6ea6-5876-4216-91ac-cea3597cee33"
+    ],
+    "focusedPaneIndex": 0,
+    "splitRatio": 0.7087120378521127,
+    "splitRatioSecondary": null,
+    "showDashboard": false,
+    "isDetached": false,
+    "windowBounds": null
+  },
+  {
+    "id": "c32e36a3-da5c-4241-a874-06326ee7917c",
+    "name": "Echo",
+    "colorHex": "#EA3E81",
+    "agentIds": [],
+    "layoutMode": "single",
+    "activeAgentIds": [],
+    "focusedPaneIndex": 0,
+    "splitRatio": 0.5,
+    "splitRatioSecondary": null,
+    "showDashboard": false,
+    "isDetached": false,
+    "windowBounds": null
+  },
+  {
+    "id": "6b1f0f27-1a4c-4f0e-9a1f-2f4d8a6c3b51",
+    "name": "Foxtrot",
+    "colorHex": "#0093FF",
+    "agentIds": [
+      "9c2e7a44-5d18-4a63-8f0b-71e5c9d2a806"
+    ],
+    "layoutMode": "single",
+    "activeAgentIds": [
+      "9c2e7a44-5d18-4a63-8f0b-71e5c9d2a806"
+    ],
+    "focusedPaneIndex": 0,
+    "splitRatio": 0.5,
+    "splitRatioSecondary": null,
+    "showDashboard": true,
+    "isDetached": false,
+    "windowBounds": null
+  }
+]

@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use knot_core::{ActivationMode, Capabilities, CostTier, Workspace};
+use knot_core::{
+    ActivationMode, Capabilities, CostTier, SavedPullRequest, Workspace, WorkspaceUiState,
+};
 use uuid::Uuid;
 
 use crate::agent::{Agent, AgentState};
@@ -12,6 +14,7 @@ mod lifecycle;
 mod ordering;
 mod panels;
 mod persistence;
+mod pull_requests;
 
 pub use persistence::AdoptedCounts;
 mod workspace;
@@ -89,7 +92,23 @@ pub struct RemovedAgent {
 pub struct AgentStore {
     agents:               Vec<Agent>,
     workspaces:           Vec<Workspace>,
+    /// How each workspace's window is arranged, keyed by workspace id.
+    ///
+    /// A second per-key map on a struct that already has several, which the
+    /// parallel-maps rule warns about. Accepted here because the two have
+    /// genuinely different lifetimes - a workspace's configuration outlives
+    /// any window, and its arrangement is meaningless without one - and
+    /// because only this one is rewritten by a pointer drag. The pruning that
+    /// keeps them from disagreeing is in `remove_workspace` and, for anything
+    /// that removes a workspace by another path, on load in `knot-core`. See
+    /// `openspec/specs/settings-persistence/spec.md`.
+    workspace_ui:         BTreeMap<Uuid, WorkspaceUiState>,
     current_workspace_id: Option<Uuid>,
+    /// The pull requests Knot has seen in these agents' output. Held here
+    /// rather than only in the settings document so that removing an agent
+    /// or a workspace can take its records with it, in the one place that
+    /// knows either is going away. See [`pull_requests`].
+    pull_requests:        Vec<SavedPullRequest>,
 }
 
 impl AgentStore {
@@ -107,6 +126,11 @@ impl AgentStore {
 
     pub fn saved_workspaces(&self) -> Vec<Workspace> {
         self.workspaces.clone()
+    }
+
+    /// The whole UI-state map, for persisting it.
+    pub fn saved_workspace_ui(&self) -> BTreeMap<Uuid, WorkspaceUiState> {
+        self.workspace_ui.clone()
     }
 
     pub fn agent(&self, id: Uuid) -> Option<&Agent> {

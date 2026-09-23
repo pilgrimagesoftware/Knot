@@ -1,5 +1,6 @@
 mod lifecycle;
 mod persistence;
+mod pull_requests;
 mod workspace;
 
 use super::*;
@@ -15,7 +16,8 @@ fn create_from_folder_with_defaults() {
     assert_eq!(store.agent(id).unwrap().name, "proj");
     assert_eq!(store.agent(id).unwrap().agent_type, "claude");
     assert_eq!(store.workspaces()[0].agent_ids, vec![id]);
-    assert_eq!(store.workspaces()[0].active_agent_ids, vec![id]);
+    let workspace_id = store.workspaces()[0].id;
+    assert_eq!(store.workspace_ui(workspace_id).active_agent_ids, vec![id]);
 }
 
 #[test]

@@ -161,6 +161,12 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 - **No `.rs` file over 700 lines.** Enforced by `make size-check` in CI. Split
   by concern, not by line count; move colocated tests to a sibling `tests.rs`
   first. Do not raise the limit to make a change fit.
+- **`mod.rs` declares; it does not implement.** Module declarations,
+  re-exports and the module doc comment only - implementation goes in sibling
+  files named for what they do. Being under the line limit is not evidence the
+  code is in the right place. The six that predated the rule were split under
+  issue #300; the ones still holding code elsewhere in the workspace are a
+  backlog, not exceptions.
 - **No crate-wide `allow`.** Allow on the item, with a comment saying why.
   `UNWIRED` marks ported-but-unconnected code, `SUPERSEDED` marks code a newer
   path replaced - both greppable.

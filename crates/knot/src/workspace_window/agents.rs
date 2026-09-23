@@ -10,8 +10,9 @@ use gpui_kit::Context;
 use uuid::Uuid;
 
 use crate::app_support::Activation;
-use crate::workspace_window::PromptOrigin;
+use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::prompt_queue::PromptOrigin;
 use crate::workspace_window::workspace_agent_ids;
 
 impl WorkspaceWindow {
@@ -55,6 +56,22 @@ impl WorkspaceWindow {
     pub(super) fn select_agent(&mut self, id: Uuid) {
         self.selected_agent = Some(id);
         self.store.lock().set_activated(id, true);
+    }
+
+    /// Brings `id` to the front of this window: selects it, leaves the
+    /// dashboard for the terminal view, and starts its session.
+    ///
+    /// This is what a window opened for a particular agent shows on its first
+    /// frame, so it is also what a window *raised* for one has to show - the
+    /// two paths call this rather than agreeing by hand
+    /// (`openspec/specs/window-lifecycle`, "A workspace has at most one
+    /// window").
+    pub(crate) fn reveal_agent(&mut self, id: Uuid, cx: &mut Context<Self>) {
+        self.select_agent(id);
+        self.view_mode = WorkspaceViewMode::Terminal;
+        self.ensure_session(id);
+        self.ensure_panel_session(id);
+        cx.notify();
     }
 
     /// Starts every agent a direct message activated, per `mcp-messaging`'s
@@ -140,6 +157,35 @@ impl WorkspaceWindow {
             // would be worse than the loss it warns about. Logged because a
             // failure here is what makes a relaunch come back empty.
             eprintln!("failed to persist the agent roster: {error}");
+        }
+    }
+
+    /// Writes the store's per-workspace UI state back to settings, and
+    /// nothing else.
+    ///
+    /// The reason the UI state is a document of its own. A bounds observer
+    /// fires continuously through a pointer drag, and routing that through
+    /// `persist_agents` meant every one of those frames rewrote
+    /// `agents.json` and `workspaces.json` from this window's `Settings`
+    /// snapshot - the highest-frequency, lowest-value write in the app
+    /// republishing the roster the user built, stale copy included. This
+    /// writes `workspace-ui-state.json` alone.
+    ///
+    /// The map is read from the store rather than from the snapshot: the
+    /// store is shared between windows, so it is what another window's
+    /// arrangement has already reached.
+    pub(super) fn persist_workspace_ui(&mut self) {
+        // Scoped so the store guard is released before the write: the same
+        // blocking-I/O rule `persist_agents` follows.
+        {
+            let store = self.store.lock();
+            self.settings.workspace_ui = store.saved_workspace_ui();
+        }
+        if let Err(error) = self.settings.persist_workspace_ui() {
+            // Not surfaced, for the same reason `persist_agents` does not:
+            // this runs on every arrangement change, and what is lost is
+            // where a window sits.
+            eprintln!("failed to persist workspace UI state: {error}");
         }
     }
 
