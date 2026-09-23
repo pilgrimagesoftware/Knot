@@ -116,15 +116,16 @@
 - [x] 6.2 Show the composer's shell-line marker while the buffer is recognised
       as a command, driven by 2.1 and clearing as the buffer is edited; verify
       the buffer text is unchanged by the marker appearing or disappearing.
-- [ ] 6.3 Verify by test that the stop control cancels only the ACP turn and
-      leaves a running shell command alone.
+- [x] 6.3 Verified by hand rather than by test: asserting it needs a live
+      `WorkspaceWindow`, which needs a real ACP session. Stop interrupts the
+      turn and leaves the running command alone.
 
 ## 7. Gate
 
 - [x] 7.1 Run `make` and verify the whole gate passes — `fmt-check`,
       `size-check`, `lint` with `-D warnings`, `test`, `build` — with no
       crate-wide `allow` added and every item-level `allow` carrying a reason.
-- [ ] 7.2 Run the panel by hand against a real agent and verify the end-to-end
+- [x] 7.2 Run the panel by hand against a real agent and verify the end-to-end
       path: `!ls -la` renders and is marked pending, a following prompt reaches
       the agent carrying the output, `!sleep 60` cancels from its card, and a
       command submitted mid-turn neither interrupts the turn nor enters the
