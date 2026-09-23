@@ -37,6 +37,6 @@
 ## 4. Gate
 
 - [x] 4.1 `make` (fmt-check, size-check, lint, test, build)
-- [ ] 4.2 Launch the packaged app from Finder and open the pull request view on
+- [x] 4.2 Launch the packaged app from Finder and open the pull request view on
       a workspace with a recorded pull request; confirm state is fetched and no
       "not installed" message appears
