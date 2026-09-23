@@ -47,9 +47,9 @@ impl SettingsWindow {
                                                           })
                                                           .collect(),
                                        settings_window.clone(),
-                                       |view, mode, _, _| {
+                                       |view, mode, _, cx| {
                                            view.settings.appearance_mode = *mode;
-                                           view.persist();
+                                           view.persist(cx);
                                        }),
                     ))
                     .child(Self::hint(
@@ -73,9 +73,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.restore_layout_on_launch = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),
@@ -91,9 +91,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.restore_conversation_on_launch = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),
@@ -106,9 +106,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.keep_in_menu_bar = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),
@@ -127,9 +127,9 @@ impl SettingsWindow {
                             let settings_window = settings_window.clone();
                             move |checked, _, app| {
                                 let checked = *checked;
-                                settings_window.update(app, |view, _| {
+                                settings_window.update(app, |view, cx| {
                                     view.settings.desktop_notifications_enabled = checked;
-                                    view.persist();
+                                    view.persist(cx);
                                 })
                             }
                         }),
@@ -154,9 +154,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.agent_panel_shift_enter_sends = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),
@@ -176,9 +176,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.agent_panel_compact_tool_calls = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),

@@ -54,6 +54,7 @@ use uuid::Uuid;
 mod documents;
 mod legacy;
 mod paths;
+mod refresh;
 mod workspace_split;
 
 pub use paths::StorePaths;
