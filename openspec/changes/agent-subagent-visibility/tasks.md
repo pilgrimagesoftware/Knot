@@ -2,11 +2,11 @@
 
 ## 1. `knot-subagents`: the typed model
 
-- [ ] 1.1 Create the crate with a `thiserror`-based `SubagentError` and a crate `Result` alias, registered in the workspace and in `[workspace.dependencies]`; verify `cargo build --workspace` picks it up and `make size-check` still passes
-- [ ] 1.2 Define `SubagentState` as a closed enum — `Running`, `Finished`, `Failed { reason: Option<String> }` — with `Display`/`FromStr` and no `_ => default` arm at any match site; verify a round-trip test covers every variant and that adding one breaks the match rather than falling through
-- [ ] 1.3 Define `SubagentKind` so an unstated kind is a distinct value, not an empty string or a substituted default; verify a dispatch with no kind renders as unstated and is not equal to a dispatch naming a kind called "unstated"
-- [ ] 1.4 Define `Subagent { id: SubagentId, kind: SubagentKind, task: String, started: Instant, state: SubagentState }` with `elapsed(now)` running to completion for a finished record and to `now` for a running one; verify a finished record's elapsed stops advancing and a running one's does not
-- [ ] 1.5 Define `SubagentEvent::{Dispatched { id, kind, task }, Completed { id, outcome }}` as the single shape both feeds produce; verify the ACP and hook recognizers in group 2 can each be written against it with no feed-specific variant
+- [x] 1.1 Create the crate with a `thiserror`-based `SubagentError` and a crate `Result` alias, registered in the workspace and in `[workspace.dependencies]`; verify `cargo build --workspace` picks it up and `make size-check` still passes
+- [x] 1.2 Define `SubagentState` as a closed enum — `Running`, `Finished`, `Failed { reason: Option<String> }` — with `Display`/`FromStr` and no `_ => default` arm at any match site; verify a round-trip test covers every variant and that adding one breaks the match rather than falling through
+- [x] 1.3 Define `SubagentKind` so an unstated kind is a distinct value, not an empty string or a substituted default; verify a dispatch with no kind renders as unstated and is not equal to a dispatch naming a kind called "unstated"
+- [x] 1.4 Define `Subagent { id: SubagentId, kind: SubagentKind, task: String, started: Instant, state: SubagentState }` with `elapsed(now)` running to completion for a finished record and to `now` for a running one; verify a finished record's elapsed stops advancing and a running one's does not
+- [x] 1.5 Define `SubagentEvent::{Dispatched { id, kind, task }, Completed { id, outcome }}` as the single shape both feeds produce; verify the ACP and hook recognizers in group 2 can each be written against it with no feed-specific variant
 
 ## 2. `knot-subagents`: recognition, fixtures first
 
