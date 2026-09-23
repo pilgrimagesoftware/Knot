@@ -33,3 +33,22 @@ rust-i18n = "4.2.2"
 # alternative: a lossy text format that has to be re-parsed, macOS-only in a
 # way a library is not, and a subprocess whose output shape is a UI convention.
 plist = "1.10.1"
+
+# `gpui-base` puts `auto_grow`, `set_auto_grow`, `rows` and `set_rows` on
+# `impl InputBaseState<TextareaMode>`, so an `EditorState` has no row sizing at
+# all - and the panel composer needs both: `EditorState` for the styled ranges
+# (decorations are keyed off the mode marker, and `TextareaMode`'s is `()`,
+# which carries no decoration layers) and auto-grow for the sizing it already
+# has. Nothing in the layout or render path requires a textarea; only the
+# `impl` block's bound does.
+#
+# The fork moves those four methods to the existing `impl<M: MultiLineMode>`
+# block with no change to any body. It is branched from `v0.6.4` - the version
+# the workspace already resolves - so this patch is those four methods and
+# nothing else, rather than a version bump wearing a patch's clothes.
+#
+# Delete this entry, and the fork, once a release carries the relaxed bound.
+# `docs/adr/0002-gpui-base-auto-grow-fork.md` records the upstream PR and the
+# exit condition.
+[patch.crates-io]
+gpui-base = { git = "https://github.com/pilgrimagesoftware/gpui-kit", branch = "knot/auto-grow-0.6.4" }

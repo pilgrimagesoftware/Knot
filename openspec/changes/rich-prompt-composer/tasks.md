@@ -7,10 +7,10 @@
 
 ## 2. Unblock styling plus auto-grow
 
-- [ ] 2.1 Fork `gpui-base`, moving `auto_grow`, `set_auto_grow`, `rows` and `set_rows` from `impl InputBaseState<TextareaMode>` to `impl<M: MultiLineMode> InputBaseState<M>` with no body change; verify the fork builds and its own test suite passes
+- [x] 2.1 Fork `gpui-base`, moving `auto_grow`, `set_auto_grow`, `rows` and `set_rows` from `impl InputBaseState<TextareaMode>` to `impl<M: MultiLineMode> InputBaseState<M>` with no body change; verify the fork builds and its own test suite passes
 - [ ] 2.2 Open the upstream PR at `longbridge/gpui-kit` with that diff and a note that `element.rs` already drives `AutoGrow` generically over the mode marker; verify the PR URL is recorded in the ADR from 2.4
-- [ ] 2.3 Wire `[patch.crates-io]` for `gpui-base` in the root `Cargo.toml`; verify `make` passes end to end and `cargo tree` shows one `gpui-base`, the patched one
-- [ ] 2.4 Write `docs/adr/` recording the fork, why the bound blocks the composer, the upstream PR link, and the exit condition (delete the patch when a release carries the relaxed bound); verify it is indexed in `docs/adr/README.md`
+- [x] 2.3 Wire `[patch.crates-io]` for `gpui-base` in the root `Cargo.toml`; verify `make` passes end to end and `cargo tree` shows one `gpui-base`, the patched one
+- [x] 2.4 Write `docs/adr/` recording the fork, why the bound blocks the composer, the upstream PR link, and the exit condition (delete the patch when a release carries the relaxed bound); verify it is indexed in `docs/adr/README.md`
 
 ## 3. Swap the widget, preserving behaviour
 
