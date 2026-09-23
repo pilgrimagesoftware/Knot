@@ -3914,6 +3914,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "knot-mcp-probe"
+version = "1.14.0"
+dependencies = [
+ "knot-core",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "knot-mcp-tools"
 version = "1.14.0"
 dependencies = [

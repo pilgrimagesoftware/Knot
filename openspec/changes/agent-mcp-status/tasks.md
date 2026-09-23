@@ -2,10 +2,10 @@
 
 ## 1. `knot-mcp-probe`: the typed inventory
 
-- [ ] 1.1 Create the crate with `thiserror`-based `ProbeError` and a crate `Result` alias, registered in the workspace and in `[workspace.dependencies]` where it is shared; verify `cargo build --workspace` picks it up and `make size-check` still passes
-- [ ] 1.2 Define `ServerState` as a closed enum — `Connected`, `NeedsAuthentication`, `PendingApproval`, `Disabled`, `Failed { detail }`, `Unknown` — with `Display`/`FromStr` and no `_ => default` arm anywhere it is matched; verify a round-trip test covers every variant and that adding one breaks the match rather than falling through
-- [ ] 1.3 Define `ServerRow { name, target, state }` with `Target::{Http { url }, Stdio { command } }` and a `short_label()` that yields host for HTTP and the program's basename for stdio; verify a 1.5 KB `node -e` command yields a label under the cap and that `short_label()` never returns the full command
-- [ ] 1.4 Define `Inventory` as the probe's outcome — rows, the instant the probe ran, and a distinct `Unprobeable` for a type with no list command — so "none configured" and "cannot tell" are different values, not an empty vec twice; verify the spec's two scenarios map to two distinct variants
+- [x] 1.1 Create the crate with `thiserror`-based `ProbeError` and a crate `Result` alias, registered in the workspace and in `[workspace.dependencies]` where it is shared; verify `cargo build --workspace` picks it up and `make size-check` still passes
+- [x] 1.2 Define `ServerState` as a closed enum — `Connected`, `NeedsAuthentication`, `PendingApproval`, `Disabled`, `Failed { detail }`, `Unknown` — with `Display`/`FromStr` and no `_ => default` arm anywhere it is matched; verify a round-trip test covers every variant and that adding one breaks the match rather than falling through
+- [x] 1.3 Define `ServerRow { name, target, state }` with `Target::{Http { url }, Stdio { command } }` and a `short_label()` that yields host for HTTP and the program's basename for stdio; verify a 1.5 KB `node -e` command yields a label under the cap and that `short_label()` never returns the full command
+- [x] 1.4 Define `Inventory` as the probe's outcome — rows, the instant the probe ran, and a distinct `Unprobeable` for a type with no list command — so "none configured" and "cannot tell" are different values, not an empty vec twice; verify the spec's two scenarios map to two distinct variants
 
 ## 2. `knot-mcp-probe`: running and parsing
 
