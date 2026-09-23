@@ -121,14 +121,18 @@ impl WorkspaceWindow {
                        .collect()))
     }
 
-    /// The work a frame does before it draws: match the terminal to its
-    /// pane, ask for diff stats that have aged out, and make sure something
-    /// holds focus.
+    /// The work a frame does before it draws: settle the terminal's font
+    /// family, match the terminal to its pane, ask for diff stats that have
+    /// aged out, and make sure something holds focus.
     ///
-    /// None of it draws, and none of it runs `git` here - `refresh_diff_stats`
+    /// None of it draws, none of it runs `git` here - `refresh_diff_stats`
     /// is a map lookup and an `Instant` compare, with the subprocess behind
-    /// it running at most every `DIFF_STATS_MAX_AGE`.
+    /// it running at most every `DIFF_STATS_MAX_AGE` - and none of it asks
+    /// the text system which fonts exist: `refresh_terminal_font` is a string
+    /// compare unless the configured name changed (see `terminal_font`).
     fn prepare_frame(&mut self, is_dashboard: bool, window: &mut Window, cx: &mut Context<Self>) {
+        // Ahead of the resize, which is the frame's first reader of it.
+        self.refresh_terminal_font(cx);
         if !is_dashboard && let Some(id) = self.selected_agent {
             self.resize_session_to_pane(id, window, cx);
         }
