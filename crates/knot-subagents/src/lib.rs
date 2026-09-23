@@ -20,15 +20,18 @@
 //! tools' persona *definition* files off disk. That answers what a subagent
 //! could be; this answers what one is doing.
 
+pub mod consts;
 pub mod error;
 pub mod event;
 pub mod kind;
 pub mod recognize;
+pub mod registry;
 pub mod state;
 pub mod subagent;
 
 pub use error::{Result, SubagentError};
 pub use event::SubagentEvent;
 pub use kind::SubagentKind;
+pub use registry::SubagentRegistry;
 pub use state::{Outcome, SubagentState};
 pub use subagent::{Subagent, SubagentId};

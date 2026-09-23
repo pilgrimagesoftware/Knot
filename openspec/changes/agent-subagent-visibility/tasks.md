@@ -19,11 +19,11 @@
 
 ## 3. `knot-subagents`: the registry
 
-- [ ] 3.1 Implement `SubagentRegistry` keyed by agent `Uuid`, applying a `SubagentEvent` to create or update one record; verify a `Completed` for an id with no dispatch is ignored and creates nothing
-- [ ] 3.2 Order each agent's records running-first, then longest-running first within each group, as `agent-processes` requires; verify a mixed set of two running and one finished sorts as the spec's scenario states
-- [ ] 3.3 Implement `clear(agent)` for a turn ending, an agent stopping and a session ending; verify a cleared agent holds no records and that clearing one agent leaves another's intact
-- [ ] 3.4 Cap retained finished and failed records per agent at a `consts.rs` value, discarding oldest first and never discarding a running record; verify a cap of N plus one finished record drops the oldest, and that N running records plus one more retains all of them
-- [ ] 3.5 Add `take_changed()` clearing a dirty flag set by every mutation; verify a mutation sets it, a second read returns false, and — the breakage `.claude/rules/rust-structure.md` names four times — that a test fails if any caller other than the repaint drain calls it
+- [x] 3.1 Implement `SubagentRegistry` keyed by agent `Uuid`, applying a `SubagentEvent` to create or update one record; verify a `Completed` for an id with no dispatch is ignored and creates nothing
+- [x] 3.2 Order each agent's records running-first, then longest-running first within each group, as `agent-processes` requires; verify a mixed set of two running and one finished sorts as the spec's scenario states
+- [x] 3.3 Implement `clear(agent)` for a turn ending, an agent stopping and a session ending; verify a cleared agent holds no records and that clearing one agent leaves another's intact
+- [x] 3.4 Cap retained finished and failed records per agent at a `consts.rs` value, discarding oldest first and never discarding a running record; verify a cap of N plus one finished record drops the oldest, and that N running records plus one more retains all of them
+- [x] 3.5 Add `take_changed()` clearing a dirty flag set by every mutation; verify a mutation sets it, a second read returns false, and — the breakage `.claude/rules/rust-structure.md` names four times — that a test fails if any caller other than the repaint drain calls it
 
 ## 4. ACP carries the raw input it already receives
 
