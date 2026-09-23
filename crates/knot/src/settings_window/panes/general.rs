@@ -30,7 +30,8 @@ impl SettingsWindow {
     /// How the window looks.
     fn appearance_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
-        let appearance_label = Self::appearance_label(self.settings.appearance_mode);
+        let appearance_label =
+            Self::appearance_label(crate::settings_global::read(cx).appearance_mode);
         crate::controls::group(knot_core::l10n::t("settings.general.appearance"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.appearance"),
@@ -48,7 +49,9 @@ impl SettingsWindow {
                                                           .collect(),
                                        settings_window.clone(),
                                        |view, mode, _, cx| {
-                                           view.settings.appearance_mode = *mode;
+                                           crate::settings_global::write(cx, |settings| {
+                                               settings.appearance_mode = *mode;
+                                           });
                                            // Writes, then hands the new
                                            // preferences to open workspace
                                            // windows (#238).
@@ -72,9 +75,10 @@ impl SettingsWindow {
     /// What the app restores when it launches.
     fn startup_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
-        let restore_layout_on_launch = self.settings.restore_layout_on_launch;
-        let restore_conversation_on_launch = self.settings.restore_conversation_on_launch;
-        let keep_in_menu_bar = self.settings.keep_in_menu_bar;
+        let restore_layout_on_launch = crate::settings_global::read(cx).restore_layout_on_launch;
+        let restore_conversation_on_launch =
+            crate::settings_global::read(cx).restore_conversation_on_launch;
+        let keep_in_menu_bar = crate::settings_global::read(cx).keep_in_menu_bar;
         crate::controls::group(knot_core::l10n::t("settings.general.startup"))
                     .child(Self::row(
                         knot_core::l10n::t("settings.general.restore_agents"),
@@ -85,7 +89,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.restore_layout_on_launch = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.restore_layout_on_launch = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }
@@ -103,7 +109,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.restore_conversation_on_launch = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.restore_conversation_on_launch = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }
@@ -118,7 +126,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.keep_in_menu_bar = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.keep_in_menu_bar = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }
@@ -129,7 +139,8 @@ impl SettingsWindow {
     /// Whether an agent waiting for input raises a desktop notification.
     fn notifications_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
-        let desktop_notifications_enabled = self.settings.desktop_notifications_enabled;
+        let desktop_notifications_enabled =
+            crate::settings_global::read(cx).desktop_notifications_enabled;
         crate::controls::group(knot_core::l10n::t("settings.general.notifications")).child(Self::row(
                     knot_core::l10n::t("settings.general.desktop_notifications"),
                     Switch::new("desktop-notifications-enabled")
@@ -139,7 +150,9 @@ impl SettingsWindow {
                             move |checked, _, app| {
                                 let checked = *checked;
                                 settings_window.update(app, |view, cx| {
-                                    view.settings.desktop_notifications_enabled = checked;
+                                    crate::settings_global::write(cx, |settings| {
+                                        settings.desktop_notifications_enabled = checked;
+                                    });
                                     view.persist(cx);
                                 })
                             }
@@ -150,8 +163,10 @@ impl SettingsWindow {
     /// How the agent panel's composer and tool calls behave.
     fn agent_panel_group(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let settings_window = cx.entity();
-        let agent_panel_shift_enter_sends = self.settings.agent_panel_shift_enter_sends;
-        let agent_panel_compact_tool_calls = self.settings.agent_panel_compact_tool_calls;
+        let agent_panel_shift_enter_sends =
+            crate::settings_global::read(cx).agent_panel_shift_enter_sends;
+        let agent_panel_compact_tool_calls =
+            crate::settings_global::read(cx).agent_panel_compact_tool_calls;
         // Bound here rather than inline: `row`/`hint` borrow their text,
         // so a `t(..)` temporary in the call would not outlive it.
         let compact_tool_calls_label = knot_core::l10n::t("settings.compact_tool_calls");
@@ -166,7 +181,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.agent_panel_shift_enter_sends = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.agent_panel_shift_enter_sends = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }
@@ -188,7 +205,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.agent_panel_compact_tool_calls = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.agent_panel_compact_tool_calls = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }

@@ -712,10 +712,11 @@ user is working somewhere else in it.
 
 Focus SHALL NOT be taken when the composer is not what the content area shows.
 That covers the window showing its dashboard rather than an agent, an open
-markdown or diagram pane holding the content area ahead of the conversation, a
-deactivated agent whose pane shows the stopped placeholder, and an agent that
-runs in Terminal mode rather than Panel mode. In each of those cases focus SHALL
-be left where it is.
+markdown or diagram pane holding the content area ahead of the conversation,
+and a deactivated agent whose pane shows the stopped placeholder. In each of
+those cases focus SHALL be left where it is. A Terminal-mode agent focuses its
+terminal surface instead, under `terminal-input`'s "Selecting a Terminal-mode
+agent focuses its terminal surface"; no composer is focused for it.
 
 Focus SHALL NOT be taken from a modal dialog while one is open.
 
@@ -759,7 +760,10 @@ placement included where the composer already preserves it.
 #### Scenario: A Terminal-mode agent does not move focus
 
 - **WHEN** the user selects an agent that runs in Terminal mode
-- **THEN** focus is left where it was, and no composer is focused
+- **THEN** no prompt input is focused
+- **AND** that agent's terminal surface takes focus instead, per
+  `terminal-input`'s "Selecting a Terminal-mode agent focuses its terminal
+  surface"
 
 #### Scenario: The dashboard is showing
 

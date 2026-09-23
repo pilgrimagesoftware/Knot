@@ -194,8 +194,8 @@ impl WorkspaceWindow {
                         ("markdown-pane-body", id.as_u128() as u64),
                         body,
                         cx.theme().font_family.clone(),
-                        self.settings.title_font_name.clone().into(),
-                        px(self.settings.markdown_font_size as f32),
+                        crate::settings_global::read(cx).title_font_name.clone().into(),
+                        px(crate::settings_global::read(cx).markdown_font_size as f32),
                     )),
             )
             .into_any_element()
@@ -232,7 +232,7 @@ impl WorkspaceWindow {
                                                          window: &mut Window,
                                                          cx: &mut Context<Self>)
                                                          -> gpui_kit::AnyElement {
-        self.ensure_panel_session(id);
+        self.ensure_panel_session(id, cx);
         let Some(slot) = self.panel_sessions.get(&id)
         else {
             return div().into_any_element();
@@ -280,7 +280,7 @@ impl WorkspaceWindow {
                             .accessibility_label(knot_core::l10n::t("panel.retry_connect"))
                             .primary()
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
-                                view.retry_panel_session(id);
+                                view.retry_panel_session(id, cx);
                                 cx.notify();
                             })),
                     )
@@ -354,11 +354,11 @@ impl WorkspaceWindow {
                 let theme = cx.theme();
                 let panel_style =
                     panel_view::PanelStyle { permission_risk,
-                                             markdown_font_size: px(self.settings.markdown_font_size
+                                             markdown_font_size: px(crate::settings_global::read(cx).markdown_font_size
                                                                     as f32),
                                              mono_font_family: theme.mono_font_family.clone(),
                                              ui_font_family: theme.font_family.clone(),
-                                             title_font_family: self.settings
+                                             title_font_family: crate::settings_global::read(cx)
                                                                     .title_font_name
                                                                     .clone()
                                                                     .into(),
@@ -369,7 +369,7 @@ impl WorkspaceWindow {
                                              prompt_color: theme.primary,
                                              prompt_foreground: theme.primary_foreground,
                                              compact_tool_calls:
-                                                 self.settings.agent_panel_compact_tool_calls };
+                                                 crate::settings_global::read(cx).agent_panel_compact_tool_calls };
                 drop(state);
                 drop(slot_guard);
                 // Reconcile the virtualized list with the folded state:

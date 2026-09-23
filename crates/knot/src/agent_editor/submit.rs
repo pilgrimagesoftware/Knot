@@ -88,12 +88,14 @@ impl AgentEditor {
             {
                 eprintln!("failed to fork the agent's session: {error}");
             }
-            self.settings.saved_agents =
-                store.saved_agents(self.settings.restore_conversation_on_launch);
-            self.settings.saved_workspaces = store.saved_workspaces();
             id
         };
-        if let Err(error) = self.settings.persist_roster() {
+        let installed = crate::settings_global::write(cx, |settings| {
+            let store = self.store.lock();
+            settings.saved_agents = store.saved_agents(settings.restore_conversation_on_launch);
+            settings.saved_workspaces = store.saved_workspaces();
+        });
+        if let Err(error) = installed.persist_roster() {
             eprintln!("failed to persist the agent roster: {error}");
         }
         (self.on_created)(created_id, window, cx);
@@ -141,11 +143,13 @@ impl AgentEditor {
                 cx.notify();
                 return;
             }
-            self.settings.saved_agents =
-                store.saved_agents(self.settings.restore_conversation_on_launch);
-            self.settings.saved_workspaces = store.saved_workspaces();
         }
-        if let Err(error) = self.settings.persist_roster() {
+        let installed = crate::settings_global::write(cx, |settings| {
+            let store = self.store.lock();
+            settings.saved_agents = store.saved_agents(settings.restore_conversation_on_launch);
+            settings.saved_workspaces = store.saved_workspaces();
+        });
+        if let Err(error) = installed.persist_roster() {
             eprintln!("failed to persist the agent roster: {error}");
         }
         (self.on_created)(id, window, cx);

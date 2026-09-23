@@ -366,7 +366,7 @@ fn cost_tier_label(tier: knot_core::CostTier) -> gpui_kit::SharedString {
 
 impl Render for AgentEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let personas = persona_choices(&self.settings);
+        let personas = persona_choices(&crate::settings_global::read(cx));
         let identity_rows = self.identity_rows(cx);
         let agent_rows = self.agent_rows(personas, cx);
         let registry_rows = self.registry_rows(cx);

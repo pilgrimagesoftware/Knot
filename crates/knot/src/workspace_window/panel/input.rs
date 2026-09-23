@@ -73,7 +73,7 @@ impl WorkspaceWindow {
         if !turn_active {
             self.panel_stopping.remove(&id);
         }
-        let shift_to_send = self.settings.agent_panel_shift_enter_sends;
+        let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
         let send_tooltip = if shift_to_send {
             "Send (Shift+Enter)"
         }
@@ -349,7 +349,7 @@ impl WorkspaceWindow {
                                 div()
                                     .flex_shrink_0()
                                     .text_xs()
-                                    .font_family(self.settings.title_font_name.clone())
+                                    .font_family(crate::settings_global::read(cx).title_font_name.clone())
                                     .text_color(cx.theme().muted_foreground)
                                     // While the buffer is a command, the hint
                                     // says so instead of saying how to send:
@@ -513,14 +513,15 @@ impl WorkspaceWindow {
                                 };
                                 let config_id = config_id.clone();
                                 let value_id = value_id.clone();
-                                entity.update(app, move |view, _cx| {
+                                entity.update(app, move |view, cx| {
                                     view.open_config_selector = None;
                                     // Persist first: the selection is durable
                                     // whether or not a session is live to
                                     // apply it to.
                                     view.remember_session_config(id,
                                                                  config_id.clone(),
-                                                                 value_id.clone());
+                                                                 value_id.clone(),
+                                                                 cx);
                                     if let panel_session::PanelSessionSlot::Ready(handle) =
                                         &*session_arc.lock()
                                     {
