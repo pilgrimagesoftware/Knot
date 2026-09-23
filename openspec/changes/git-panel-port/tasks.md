@@ -2,10 +2,11 @@
 
 ## 1. Backend: the missing diff method
 
-- [ ] 1.1 Add `consts::PATHSPEC_SEP` (`--`) to `knot-git` and verify `cargo build -p knot-git` succeeds
-- [ ] 1.2 Add `Repository::file_diff(path, staged) -> Result<Option<FileDiff>>` building `git diff --no-color [--staged] -- <path>` and parsing with `parse_diff`; verify a new test in `crates/knot-git/tests/` gets a hunk for a modified tracked file
-- [ ] 1.3 Verify `file_diff` returns `None` for a path with no changes, and the staged variant returns the index-against-HEAD diff for a path that is both staged and further modified — the case the panel's two rows depend on
-- [ ] 1.4 Verify `file_diff` on a path whose name also matches a branch name resolves as a path, proving the `--` separator works, and that a binary file yields a `FileDiff` with `binary` set
+- [x] 1.1 Add `consts::PATHSPEC_SEP` (`--`) to `knot-git` and verify `cargo build -p knot-git` succeeds
+- [x] 1.2 Add `Repository::file_diff(path, orig_path, staged) -> Result<Option<FileDiff>>` building `git diff --no-color [--staged] -- <path>` and parsing with `parse_diff`; verify a new test in `crates/knot-git/tests/` gets a hunk for a modified tracked file
+- [x] 1.3 Verify `file_diff` returns `None` for a path with no changes, and the staged variant returns the index-against-HEAD diff for a path that is both staged and further modified — the case the panel's two rows depend on
+- [x] 1.4 Verify `file_diff` on a path whose name also matches a branch name resolves as a path, proving the `--` separator works, and that a binary file yields a `FileDiff` with `binary` set
+- [x] 1.5 Take `orig_path` so a rename stays a rename: git needs both sides to detect one, and the destination alone reports a whole new file. Verify `tests/file_diff.rs` pins both the unscoped failure and the two-path fix
 
 ## 2. Panel state and caches
 

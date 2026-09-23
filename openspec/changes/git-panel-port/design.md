@@ -143,13 +143,21 @@ status read records, so the settle window covers the tail of both.
 ### The new `knot-git` method
 
 ```rust
-pub fn file_diff(&self, path: &str, staged: bool) -> Result<Option<FileDiff>>
+pub fn file_diff(&self, path: &str, orig_path: Option<&str>, staged: bool)
+                 -> Result<Option<FileDiff>>
 ```
 
-argv is `["diff", "--no-color"]`, plus `"--staged"` when staged, plus `"--"` and
-the path. The `--` separator is new (`consts::PATHSPEC_SEP`) and is not optional:
-without it a path that matches a ref name is ambiguous to git, and agent branches
-and file paths collide often enough for that to be real.
+argv is `["diff", "--no-color"]`, plus `"--staged"` when staged, plus `"--"`,
+the path, and the original path when there is one. The `--` separator is new
+(`consts::PATHSPEC_SEP`) and is not optional: without it a path that matches a
+ref name is ambiguous to git, and agent branches and file paths collide often
+enough for that to be real.
+
+`orig_path` exists because git detects a rename by comparing both sides. Scoped
+to the destination alone it reports a whole new file — the rename disappears and
+a pure rename reads as if every line were added. `FileEntry::orig_path` already
+carries the source, so the panel passes it back for a rename or copy row. Found
+while testing 1.4; `tests/file_diff.rs` pins both halves.
 
 Returns `Option` rather than `Vec` because the call is path-scoped to one file,
 so `parse_diff` yields at most one entry. Swift takes `.first` of a vector and
