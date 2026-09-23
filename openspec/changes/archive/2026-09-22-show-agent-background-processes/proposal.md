@@ -26,6 +26,9 @@ that started it.
   publish snapshots into window state the renderer reads — no process enumeration during a
   GPUI frame.
 - Add `sysinfo` to the workspace dependencies as the cross-platform process source.
+  (Superseded during design: `design.md` reads the table with `ps` instead, because
+  `Cargo.lock` already carries `sysinfo` transitively and a second major version of it
+  would be compiled for six fields. No workspace dependency was added.)
 
 Non-goals, stated so the boundary is explicit:
 
@@ -52,7 +55,7 @@ requirement to how agents are created, launched, torn down, or persisted.
 
 ## Impact
 
-- **New crate `knot-processes`**: descendant enumeration over `sysinfo`, foreground
+- **New crate `knot-processes`**: descendant enumeration over `ps` (see above), foreground
   process-group lookup, and termination with escalation. Runtime-agnostic, no async runtime;
   callers wrap blocking sampling in `spawn_blocking`.
 - **`knot-terminal`**: expose the PTY child's PID and the master fd's foreground process group
@@ -64,7 +67,7 @@ requirement to how agents are created, launched, torn down, or persisted.
   helpers.
 - **`knot-core`**: new `l10n` keys for the section header, the count, the row actions, and the
   terminate confirmation.
-- **Workspace `Cargo.toml`**: `sysinfo` pinned in `[workspace.dependencies]`.
+- **Workspace `Cargo.toml`**: unchanged - see the superseded `sysinfo` note above.
 - **Platform**: the foreground/background split and termination are Unix paths. CI builds on
   Linux as well as macOS, so both must compile; behavior is specified for Unix and the
   classification degrades to "all descendants are background" where no controlling terminal
