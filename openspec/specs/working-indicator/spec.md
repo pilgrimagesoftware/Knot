@@ -31,6 +31,15 @@ carries by dimming as a whole, per `agent-list-ui`'s requirement that a
 stopped agent is distinguishable in the sidebar. The card has no such dimming
 and no status dot, which is why it takes the indicator and the row does not.
 
+The indicator SHALL NOT be rendered as the agent conversation's
+turn-in-progress row either, and that row SHALL NOT be treated as a surface
+that has drifted from this one. The two are deliberately different marks: this
+indicator distinguishes four states plus not-running in a dense grid, while the
+conversation's row conveys one thing — that a turn is running — and is
+specified by `acp-panel-ui`. The conversation briefly used this indicator with
+its state pinned to Working, which made four of its five states unreachable
+there; that is the coupling this sentence exists to prevent being restored.
+
 #### Scenario: Agent is actively working
 - **WHEN** `activity-detection` reports the agent as Working
 - **THEN** the indicator shows the agent as actively working
@@ -58,6 +67,12 @@ and no status dot, which is why it takes the indicator and the row does not.
 #### Scenario: The sidebar row carries no indicator
 - **WHEN** a workspace sidebar agent row renders, whatever the agent's state
 - **THEN** it shows its status dot and no working indicator
+
+#### Scenario: The conversation carries its own mark
+- **WHEN** an agent's turn is active and its conversation is open
+- **THEN** the conversation's turn-in-progress row is the mark specified by
+  `acp-panel-ui`, not this indicator, and the agent's dashboard card still
+  shows this indicator as Working
 
 ### Requirement: Animated state change
 

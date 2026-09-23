@@ -16,7 +16,7 @@
       with no visible seam at the loop point, ~1.5s per revolution, and under
       100KB; verify with `ffprobe` for frame count and dimensions and by opening
       the file
-- [ ] 1.4 Commit the asset and the script together, so the bytes and the recipe
+- [x] 1.4 Commit the asset and the script together, so the bytes and the recipe
       that produced them land in the same commit
 
 ## 2. Load and render it
