@@ -15,8 +15,14 @@ use knot_git::Repository;
 use uuid::Uuid;
 
 use crate::consts;
-use crate::git_panel::state::{DiffOutcome, GitStatusSnapshot, Selection};
+use crate::git_panel::state::{DiffKey, DiffOutcome, GitStatusSnapshot, Selection};
+use crate::refresh_cache::RefreshWriter;
 use crate::workspace_window::WorkspaceWindow;
+
+/// The write half of one claimed status refresh.
+type StatusWriter = RefreshWriter<Uuid, GitStatusSnapshot>;
+/// The write half of one claimed diff refresh.
+type DiffWriter = RefreshWriter<DiffKey, DiffOutcome>;
 
 impl WorkspaceWindow {
     /// Requests a fresh working-tree status for `id` if the cached one has
@@ -27,11 +33,7 @@ impl WorkspaceWindow {
         else {
             return;
         };
-
-        let folder = folder.to_string();
-        let _runtime_guard = self.runtime.enter();
-        self.runtime
-            .spawn_blocking(move || writer.record(read_status(&folder)));
+        self.spawn_status_read(writer, folder);
     }
 
     /// Requests the diff for `selection` if the cached one has aged out.
@@ -45,7 +47,33 @@ impl WorkspaceWindow {
         else {
             return;
         };
+        self.spawn_diff_read(writer, folder, selection);
+    }
 
+    /// Hands a claimed writer to the blocking pool.
+    ///
+    /// Separate from the claim so the gap between them is *empty*, not merely
+    /// free of early returns today. `claim_refresh` marks the key as
+    /// requested before it returns, so a writer dropped without calling
+    /// `record` leaves that key reading as freshly-requested, with no value
+    /// behind it, until the age expires - a stall rather than a missed
+    /// repaint, which is the harder kind to notice because a late value looks
+    /// like a slow subprocess.
+    ///
+    /// **This function must stay infallible.** No `?`, no early return, no
+    /// fallible call before `spawn_blocking`. Adding one reintroduces exactly
+    /// the gap this shape exists to remove - and it would be a one-line edit
+    /// that reviews as harmless.
+    fn spawn_status_read(&self, writer: StatusWriter, folder: &str) {
+        let folder = folder.to_string();
+        let _runtime_guard = self.runtime.enter();
+        self.runtime
+            .spawn_blocking(move || writer.record(read_status(&folder)));
+    }
+
+    /// The diff half of [`Self::spawn_status_read`], under the same
+    /// must-stay-infallible rule.
+    fn spawn_diff_read(&self, writer: DiffWriter, folder: &str, selection: &Selection) {
         let folder = folder.to_string();
         let selection = selection.clone();
         let _runtime_guard = self.runtime.enter();
