@@ -82,6 +82,12 @@ impl WorkspaceWindow {
         let panel_states_moved = self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
+        // A `!` command's output lands on its own drain threads with no
+        // context to notify from. Taken into a local rather than into the
+        // `||` chain below: `take_dirty` clears as it reads, so a
+        // short-circuit past it would strand a command's output until its
+        // next append - and a finished command has no next append.
+        let shell_runs_moved = self.poll_panel_shell_runs();
         // Both land from `spawn_blocking` with no context to notify from, so
         // without this a fetched pull request state drew only when something
         // unrelated happened to repaint the window - and on a workspace with
@@ -117,6 +123,7 @@ impl WorkspaceWindow {
            || git_commits_landed
            || git_watches_fired
            || git_reads_landed
+           || shell_runs_moved
         {
             cx.notify();
         }

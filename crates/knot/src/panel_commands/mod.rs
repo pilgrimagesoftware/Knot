@@ -7,17 +7,22 @@
 //! - [`builtin`] supplies knot's own command tokens.
 //! - [`skills`] reads `SKILL.md` frontmatter out of an agent's skill roots.
 //! - [`token`] finds the slash token under the caret in the prompt buffer.
+//! - [`shell`] recognises the `!` that makes a buffer a shell command
+//!   (`openspec/specs/panel-shell-passthrough/spec.md`).
 //!
-//! Everything here deals in text - a token and a description - so nothing
-//! in this module can execute a command or reach an agent's internals. The
-//! popup completes; the agent interprets.
+//! Everything here deals in text, so nothing in this module can execute a
+//! command or reach an agent's internals. The popup completes and the agent
+//! interprets; `shell` says what a buffer *is*, and the panel decides what to
+//! do about it.
 
 mod builtin;
+mod shell;
 mod skills;
 mod token;
 
 use std::path::Path;
 
+pub(crate) use shell::{can_send, has_shell_trigger, is_shell_command, shell_command};
 pub(crate) use token::ActiveToken;
 pub(crate) use token::active_token;
 

@@ -10,8 +10,11 @@ use std::collections::HashSet;
 use knot_acp::ConfigOption;
 use knot_acp::PermissionRequest;
 use knot_acp::SessionEndCause;
+use knot_processes::ShellRunState;
+use uuid::Uuid;
 
 use super::message::PanelMessage;
+use super::message::ShellCard;
 use super::message::ToolCallCard;
 
 /// Folded state for one ACP session, per `acp-panel-ui`'s streaming
@@ -143,6 +146,84 @@ impl PanelState {
     pub fn push_error(&mut self, text: String) {
         self.messages.push(PanelMessage::Error(text));
         self.turn_active = false;
+    }
+
+    /// Records a `!` command the user just submitted, per
+    /// `panel-shell-passthrough`.
+    ///
+    /// Deliberately does *not* touch `turn_active` or `tracking` the way
+    /// `push_user_message` does: a shell command is not a turn. Running one
+    /// while the agent is answering must leave that answer exactly as it
+    /// was, and running one while the agent is idle must not make the panel
+    /// think a turn has begun.
+    pub fn push_shell_command(&mut self, card: ShellCard) {
+        self.messages.push(PanelMessage::Shell(card));
+    }
+
+    /// Updates the card for `id` with the run's latest state, reporting
+    /// whether the card was found.
+    ///
+    /// A missing card is not an error: the conversation can be cleared out
+    /// from under a run that is still going, and the run has no way to know.
+    pub fn update_shell_command(&mut self, id: Uuid, run: ShellRunState) -> bool {
+        let Some(card) = self.shell_card_mut(id)
+        else {
+            return false;
+        };
+
+        card.absorb(run);
+        true
+    }
+
+    /// The card for `id`, if the conversation still holds it.
+    ///
+    /// Only the tests ask this: production reaches a card through
+    /// `update_shell_command` or the pending list, which is what keeps the
+    /// promotion rule in one place.
+    #[cfg(test)]
+    pub fn shell_card(&self, id: Uuid) -> Option<&ShellCard> {
+        self.messages.iter().find_map(|message| match message {
+                                PanelMessage::Shell(card) if card.id == id => Some(card),
+                                _ => None,
+                            })
+    }
+
+    pub(super) fn shell_card_mut(&mut self, id: Uuid) -> Option<&mut ShellCard> {
+        self.messages.iter_mut().find_map(|message| match message {
+                                    PanelMessage::Shell(card) if card.id == id => Some(card),
+                                    _ => None,
+                                })
+    }
+
+    /// Drops one card's pending result so no later prompt carries it.
+    pub fn discard_shell_result(&mut self, id: Uuid) {
+        if let Some(card) = self.shell_card_mut(id) {
+            card.discard();
+        }
+    }
+
+    /// The cards, in submission order, whose results are waiting for a
+    /// prompt.
+    pub fn pending_shell_results(&self) -> Vec<&ShellCard> {
+        self.messages
+            .iter()
+            .filter_map(|message| match message {
+                PanelMessage::Shell(card) if card.is_pending() => Some(card),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Marks every pending result as delivered, which is what sending a
+    /// prompt that carried them means.
+    pub fn mark_shell_results_shared(&mut self) {
+        for message in &mut self.messages {
+            if let PanelMessage::Shell(card) = message
+               && card.is_pending()
+            {
+                card.mark_shared();
+            }
+        }
     }
 
     /// Turns off auto-scroll for the in-flight response, per the track

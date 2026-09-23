@@ -326,6 +326,19 @@ impl WorkspaceWindow {
                         handle.clear_tracking();
                     }
                 };
+                // The `!` command controls. Cancel reaches the run table
+                // rather than the session: a shell command is not the agent's
+                // and stopping one must not touch its turn.
+                let shell_runs = Arc::clone(&self.panel_shell_runs);
+                let on_cancel_shell = move |card_id: Uuid| {
+                    super::shell::cancel_run(&shell_runs, card_id);
+                };
+                let discard_slot = Arc::clone(slot);
+                let on_discard_shell = move |card_id: Uuid| {
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*discard_slot.lock() {
+                        handle.discard_shell_result(card_id);
+                    }
+                };
                 let follow_slot = Arc::clone(slot);
                 let list_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
@@ -417,7 +430,8 @@ impl WorkspaceWindow {
                                     on_toggle_tool_call,
                                     on_toggle_tool_run,
                                     on_manual_scroll,
-                                ),
+                                )
+                                .with_shell(on_cancel_shell, on_discard_shell),
                             ))
                             .children(scrolled_up.then(|| {
                                 div().absolute().bottom_3().right_4().child(

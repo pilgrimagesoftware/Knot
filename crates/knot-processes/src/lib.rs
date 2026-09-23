@@ -27,6 +27,6 @@ pub mod terminate;
 pub use error::{ProcessError, Result};
 pub use record::{ProcessRecord, parse_table};
 pub use sample::sample;
-pub use shell::{ShellRequest, ShellRun, ShellRunState, ShellStatus};
+pub use shell::{ShellRequest, ShellRun, ShellRunState, ShellStatus, ShellStream};
 pub use table::{Activity, DescendantProcess, ProcessTable};
 pub use terminate::{Termination, TerminationTarget, terminate};
