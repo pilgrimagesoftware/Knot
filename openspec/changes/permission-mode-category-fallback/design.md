@@ -20,11 +20,13 @@ fixes all four; there is no per-caller variation to preserve.
 
 The candidate lists are already mixed in kind. `["mode",
 "permission_mode", "permission-mode"]` and `["model"]` name ACP
-categories. `["effort", "reasoning", "reasoning_effort", ...]` name option
-ids - ACP's category for that concept is `thought_level`. So the callers
-have been passing two different vocabularies to a parameter named
-`categories` from the start, which is why widening the match is a
-correction rather than a loosening.
+categories. The effort slot's list holds both: `"thought_level"` and
+`"thought-level"` are ACP categories, while `"effort"`, `"reasoning"`,
+`"reasoning_effort"` and `"reasoning-effort"` are id-shaped spellings that
+no category will ever carry. So the callers have been passing two
+vocabularies to a parameter named `categories` from the start, and half of
+one list has been inert. That is why widening the match is a correction
+rather than a loosening.
 
 `knot_acp::ConfigOption` needs no change: `category` is already
 `Option<String>` (`crates/knot-acp/src/protocol/mod.rs:87`), and `id` and
@@ -88,13 +90,13 @@ pass gets this for free - it needs stating, not building.
 A non-select option cannot populate a picker whichever field matched it.
 The filter stays outermost so the fallback passes cannot smuggle one in.
 
-### Add `thought_level` to the effort slot's candidates
+### Leave every candidate list alone
 
-Without it the effort slot has no ACP category to match and depends
-entirely on the new id fallback. Adding it lets a well-labelled agent
-resolve on the fast path like the other two slots. The existing
-id-shaped candidates stay, and now finally match on the pass that suits
-them.
+An earlier revision of this design proposed adding `thought_level` to the
+effort slot, on the belief that it had no ACP category to match. It
+already has one, and `thought-level` besides. The lists need no edit: the
+three passes are what the id-shaped spellings in that list were always
+waiting for.
 
 ### Leave the parameter named `categories`? No - rename it
 
