@@ -300,6 +300,12 @@ impl WorkspaceWindow {
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
+        // Keyed by card, not by agent, so this is the one prune that has to
+        // look inside its values. A command outliving the panel it ran in has
+        // nothing left to report to.
+        self.panel_shell_runs
+            .lock()
+            .retain(|_, shell| shell.agent != id);
         self.panel_input_expanded.remove(&id);
         self.panel_lookups.remove(&id);
         self.forget_process_section(id);

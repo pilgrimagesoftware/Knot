@@ -16,6 +16,8 @@ mod state;
 mod summary;
 
 pub use message::PanelMessage;
+pub use message::ShellCard;
+pub use message::ShellDelivery;
 pub use message::ToolCallCard;
 pub use state::PanelState;
 pub use summary::ToolRunSummary;

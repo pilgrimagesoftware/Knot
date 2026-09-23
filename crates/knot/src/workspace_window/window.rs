@@ -172,6 +172,17 @@ pub(crate) struct WorkspaceWindow {
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    /// Live `!` commands, keyed by the id of the card drawing each one.
+    ///
+    /// Not keyed by agent: a panel may have several commands running at
+    /// once, each finishing on its own. An entry is removed the poll after
+    /// its run settles, by which point the card holds everything the
+    /// conversation needs - see `panel::shell`.
+    ///
+    /// Shared rather than owned outright because the cancel control is a
+    /// render closure with no `Context` to reach the window through - the
+    /// same reason a panel's session slot is an `Arc`.
+    pub(super) panel_shell_runs: Arc<Mutex<BTreeMap<Uuid, panel::shell::PanelShellRun>>>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     pub(super) panel_input_expanded:             BTreeSet<Uuid>,

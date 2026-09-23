@@ -16,6 +16,10 @@ count:
   agents: "agents"
   file: "file"
   files: "files"
+  minute: "minute"
+  minutes: "minutes"
+  second: "second"
+  seconds: "seconds"
 
 git:
   stats_pending: "Getting stats…"
@@ -74,6 +78,23 @@ panel:
   retry_connect: "Try again"
   context_usage: "Context usage"
   lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  # The `!` shell passthrough: a command the user ran from the prompt, which
+  # the agent never sees until the next prompt carries it.
+  shell:
+    marker: "Runs in the shell — the agent will not see this line"
+    ran_in: "in %{folder}"
+    running: "Running…"
+    cancel: "Stop this command"
+    cancelled: "Stopped"
+    timed_out: "Stopped: took longer than %{limit}"
+    truncated: "Output was too long and was cut off here"
+    exit_ok: "Finished"
+    exit_failed: "Exited %{code}"
+    signalled: "Ended by a signal"
+    failed_to_start: "The command could not be run: %{error}"
+    pending: "Waiting to be sent with your next message"
+    discard: "Do not send this to the agent"
+    shared: "Sent with your message"
   command:
     broadcast: "Send a message to every other agent in the workspace"
     check: "Check messages sent to this agent"

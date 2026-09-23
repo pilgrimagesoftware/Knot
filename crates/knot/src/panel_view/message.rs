@@ -28,6 +28,7 @@ use gpui_kit::rgb;
 use crate::panel_state::PanelMessage;
 use crate::panel_state::PanelState;
 use crate::panel_view::callbacks::PanelCallbacks;
+use crate::panel_view::shell_card::render_shell_card;
 use crate::panel_view::style::ERROR_COLOR;
 use crate::panel_view::style::PanelStyle;
 use crate::panel_view::tool_call::render_tool_call_card;
@@ -163,6 +164,15 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                                                               state.is_collapsed(card),
                                                               callbacks.on_toggle_tool_call
                                                                        .clone()).into_any_element(),
+        // The user's own command. Full width and on the card surface like a
+        // tool call, but led by a `$` and the command itself, so it never
+        // reads as something the agent did.
+        PanelMessage::Shell(card) => {
+            render_shell_card(card,
+                              style,
+                              callbacks.on_cancel_shell.clone(),
+                              callbacks.on_discard_shell.clone()).into_any_element()
+        }
         // Left-aligned like the assistant's own text, since it stands
         // where that answer would have been, but in the error color and
         // outlined so it doesn't read as something the agent said.

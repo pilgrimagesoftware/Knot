@@ -148,6 +148,7 @@ impl WorkspaceWindow {
                     window_handle: window.window_handle(),
                     titled_as: workspace_name.clone(),
                     panel_pending_context: BTreeMap::new(),
+                    panel_shell_runs: Arc::new(Mutex::new(BTreeMap::new())),
                     panel_input_expanded: BTreeSet::new(),
                     panel_lookups: BTreeMap::new(),
                     process_sections: BTreeMap::new(),

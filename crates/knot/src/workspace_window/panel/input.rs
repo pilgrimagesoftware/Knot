@@ -61,7 +61,15 @@ impl WorkspaceWindow {
                                                                config_options: &[knot_acp::ConfigOption],
                                                                cx: &mut Context<Self>)
                                                                -> impl IntoElement {
-        let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        // A `!` command runs locally and never touches the session, so none of
+        // the reasons a prompt may not be sent apply to it: not a pending
+        // permission, not a turn in flight. Recomputed per frame from the
+        // buffer rather than kept as state, which is what stops the mark and
+        // the control from drifting apart from what is actually typed.
+        let value = input.read(cx).value();
+        let is_shell = crate::panel_commands::is_shell_command(&value);
+        let can_send = crate::panel_commands::can_send(&value, blocked, turn_active);
+        drop(value);
         if !turn_active {
             self.panel_stopping.remove(&id);
         }
@@ -294,7 +302,7 @@ impl WorkspaceWindow {
                             })
                             .child(Textarea::new(input).w_full().disabled(blocked)),
                     )
-                    .child(if turn_active {
+                    .children(turn_active.then(|| {
                         Button::new("panel-stop-prompt")
                             .child(div().size(px(10.)).rounded(px(1.)).bg(rgb(0xFFFFFF)))
                             .tooltip(knot_core::l10n::t("panel.stop"))
@@ -305,8 +313,13 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
                                 view.stop_panel_prompt(id, cx);
                             }))
-                            .into_any_element()
-                    } else {
+                    }))
+                    // Shown beside stop rather than instead of it while a `!`
+                    // command is typed during a turn: the command has to be
+                    // runnable and the turn has to stay interruptible, and
+                    // swapping one control for the other would cost whichever
+                    // it replaced.
+                    .children((!turn_active || is_shell).then(|| {
                         Button::new("panel-send-prompt")
                             .icon(gpui_kit::assets::IconName::Send)
                             .tooltip(send_tooltip)
@@ -316,8 +329,7 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
                             }))
-                            .into_any_element()
-                    }),
+                    })),
             )
             .child(
                 h_flex()
@@ -339,7 +351,15 @@ impl WorkspaceWindow {
                                     .text_xs()
                                     .font_family(crate::settings_global::read(cx).title_font_name.clone())
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(Self::panel_prompt_send_hint(shift_to_send)),
+                                    // While the buffer is a command, the hint
+                                    // says so instead of saying how to send:
+                                    // what happens on Enter is the thing the
+                                    // user needs to know before pressing it.
+                                    .child(if is_shell {
+                                        knot_core::l10n::t("panel.shell.marker")
+                                    } else {
+                                        Self::panel_prompt_send_hint(shift_to_send).to_string()
+                                    }),
                             ),
                     )
                     .child(
