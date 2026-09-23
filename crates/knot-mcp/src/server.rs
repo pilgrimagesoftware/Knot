@@ -87,6 +87,21 @@ impl McpServer {
         Ok(())
     }
 
+    /// Lends the serve task's handle so a supervisor can await its end.
+    ///
+    /// A `JoinHandle` is itself a future and is `Unpin`, so the borrow can
+    /// sit in a `tokio::select!` arm directly. Its completion is the only
+    /// signal that covers every way the task can stop - returning,
+    /// panicking, or being aborted - which is why supervision watches this
+    /// rather than a channel the task would have to remember to send on.
+    ///
+    /// Additive: `start`, `stop` and `Drop` are unchanged, and a caller
+    /// that never asks for the handle behaves exactly as before. `None`
+    /// before `start` and after `stop`.
+    pub fn serve_handle(&mut self) -> Option<&mut JoinHandle<()>> {
+        self.handle.as_mut()
+    }
+
     pub fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();
@@ -241,3 +256,6 @@ fn json_rpc_error_response(code: i64, message: String) -> Response {
     let response = JsonRpcResponse::error(None::<JsonRpcId>, code, message);
     (StatusCode::BAD_REQUEST, axum::Json(response)).into_response()
 }
+
+#[cfg(test)]
+mod tests;
