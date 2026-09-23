@@ -1,44 +1,48 @@
 #!/usr/bin/env bash
 #
-# Regenerates the panel's turn-in-progress animation from the committed app
-# icon: one full plane rotation, assembled into a looping animated WebP.
+# Rebuilds the panel's turn-in-progress animation from the authored source
+# animation committed under `images/`.
 #
 # Not wired into `make`. It needs tools CI does not have, and the asset
 # changes roughly never - the point of committing the recipe beside the bytes
 # is that the bytes are reproducible, not that they are rebuilt.
 #
-# WebP rather than GIF because the icon has a soft alpha edge and GIF
-# transparency is one bit, which fringes against both themes. WebP costs bytes
-# for that: measured at these settings, the GIF is 68KB and the WebP 95KB. If
-# `img2webp` genuinely cannot be installed, GIF is the documented fallback - it
-# plays through the same `img` element and only looks worse at the edge.
+# The artwork is authored, not generated. An earlier version of this script
+# built the animation itself by rotating `assets/icon/icon.png` one full turn;
+# the source of truth is now `images/knot-progress-pulse.webp`, so all this
+# does is scale that down and re-encode it at a size the panel can embed.
+#
+# The source ships in two formats. WebP is the one to use: the icon has a soft
+# alpha edge, GIF transparency is one bit, and the difference fringes against
+# both themes. `images/knot-progress-pulse.gif` is the documented fallback if
+# the WebP is ever unavailable - it plays through the same `img` element and
+# only looks worse at the edge.
 #
 # ffmpeg's Homebrew build has no libwebp encoder, so the two halves need two
-# tools: ffmpeg rotates the artwork, img2webp (`brew install webp`) assembles
-# the frames.
+# tools: ffmpeg decodes and scales the frames, img2webp (`brew install webp`)
+# reassembles them.
 #
 # Usage: scripts/make-working-animation.sh
 
 set -euo pipefail
 
-# One revolution in FRAMES steps at DELAY ms each, so a revolution takes
-# FRAMES*DELAY = 1488ms. Frame FRAMES would be frame 0 again, so generating
-# 0..FRAMES-1 is what makes the loop seamless.
-FRAMES=24
-DELAY=62
+# The source is 36 frames at 42ms, so a cycle takes 1512ms. FRAME_DELAY has to
+# match what the source declares or the rebuilt animation plays at a different
+# speed than the artwork was timed for.
+FRAME_DELAY=42
 # 3x the 24px slot the panel draws it in, which still clears a 2x display's
-# 48 device pixels. Not the 4x app-icon-32.png uses for its 16px slot: the
-# rotation gives every frame different alpha, so nothing compresses across
-# frames and the file scales with area x frames. 4x at 30 frames measured
-# 182KB against the design's ~100KB ceiling; this is 95KB. Drop FRAMES or
-# SIZE before accepting a larger file.
+# 48 device pixels. Not the 4x app-icon-32.png uses for its 16px slot: every
+# frame differs, so nothing compresses across frames and the file scales with
+# area x frames. At 72px and q80 this measures 111KB for 36 frames - above the
+# ~95KB the 24-frame rotation cost, but cheaper per frame (3.1KB against
+# 4.0KB). Drop SIZE or QUALITY before accepting a materially larger file.
 SIZE=72
 QUALITY=80
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-ICON="crates/knot/assets/icon/icon.png"
+SOURCE="images/knot-progress-pulse.webp"
 OUT="crates/knot/assets/working-knot.webp"
 
 for tool in ffmpeg img2webp; do
@@ -52,27 +56,26 @@ for tool in ffmpeg img2webp; do
     fi
 done
 
-if [ ! -f "$ICON" ]; then
-    printf 'make-working-animation: %s not found\n' "$ICON" >&2
+if [ ! -f "$SOURCE" ]; then
+    printf 'make-working-animation: %s not found\n' "$SOURCE" >&2
     exit 2
 fi
 
 frames="$(mktemp -d)"
 trap 'rm -rf "$frames"' EXIT
 
-# `format=rgba` before the rotation so `c=none` has an alpha channel to fill
-# the corners with; without it the rotation lands on an opaque background.
-# `n` is the frame number, so the angle sweeps one full turn across the run.
+# ffmpeg decodes the animated WebP to RGBA frames, so the soft alpha edge
+# survives the scale; `lanczos` keeps it from muddying at a 7x reduction.
 ffmpeg -y -loglevel error \
-    -loop 1 -i "$ICON" \
-    -vf "format=rgba,rotate=2*PI*n/${FRAMES}:c=none,scale=${SIZE}:${SIZE}:flags=lanczos" \
-    -frames:v "$FRAMES" \
+    -i "$SOURCE" \
+    -vf "scale=${SIZE}:${SIZE}:flags=lanczos" \
     -start_number 0 \
     "$frames/frame-%03d.png"
 
 # A plain glob rather than `find | mapfile`: macOS ships bash 3.2, and the
 # frame names sort correctly as written.
-img2webp -loop 0 -lossy -q "$QUALITY" -m 6 -d "$DELAY" "$frames"/frame-*.png -o "$OUT"
+img2webp -loop 0 -lossy -q "$QUALITY" -m 6 -d "$FRAME_DELAY" "$frames"/frame-*.png -o "$OUT"
 
 printf 'make-working-animation: wrote %s (%s bytes, %s frames at %sms)\n' \
-    "$OUT" "$(wc -c < "$OUT" | tr -d ' ')" "$FRAMES" "$DELAY"
+    "$OUT" "$(wc -c < "$OUT" | tr -d ' ')" \
+    "$(ls "$frames"/frame-*.png | wc -l | tr -d ' ')" "$FRAME_DELAY"
