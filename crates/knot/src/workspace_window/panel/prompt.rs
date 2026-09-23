@@ -17,9 +17,9 @@ use gpui_kit::ImageFormat;
 use gpui_kit::PathPromptOptions;
 use gpui_kit::Window;
 use gpui_kit::component::WindowExt;
+use gpui_kit::component::input::Editor;
+use gpui_kit::component::input::EditorState;
 use gpui_kit::component::input::InputEvent;
-use gpui_kit::component::input::Textarea;
-use gpui_kit::component::input::TextareaState;
 use uuid::Uuid;
 
 use crate::panel_session;
@@ -39,14 +39,18 @@ pub(crate) const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
 /// The state type behind the panel composer.
 ///
 /// Named once so the widget the composer is built on is a single
-/// declaration rather than a type repeated across the window. The
-/// rich-input change swaps this for `EditorState`, which is the only
-/// edit that swap should need outside the two functions below.
-pub(crate) type PanelInputState = TextareaState;
+/// declaration rather than a type repeated across the window.
+///
+/// It is an `EditorState` and not a `TextareaState` for one reason:
+/// styled ranges. Decorations are stored in `state.extras`, keyed off the
+/// **mode marker**, and `TextareaMode`'s extras are `()`, whose default
+/// `decoration_layers()` is empty - so a textarea cannot carry a
+/// decoration, ever. What the composer is *not* is a code editor; see
+/// [`new_panel_input`] for how that is arranged.
+pub(crate) type PanelInputState = EditorState;
 
-/// The widget that draws [`PanelInputState`], named for the same reason
-/// and swapped in the same breath.
-pub(crate) type PanelInput = Textarea;
+/// The widget that draws [`PanelInputState`].
+pub(crate) type PanelInput = Editor;
 
 /// How far `id`'s composer may grow, given whether it is expanded.
 ///
@@ -89,6 +93,28 @@ pub(crate) fn new_panel_input(shift_to_send: bool, max_rows: usize, window: &mut
                                           // chord that does *not* send is
                                           // the one that inserts a newline.
                                           .submit_on_enter(!shift_to_send)
+                                          // `EditorState::new` turns the
+                                          // built-in search panel on. A
+                                          // composer is written, not
+                                          // searched, and off also lets
+                                          // Cmd-F bubble to the window.
+                                          .searchable(false)
+                                          // Last, and load-bearing:
+                                          // `EditorState::new` starts in
+                                          // `LayoutMode::CodeEditor` and
+                                          // this replaces the mode
+                                          // outright. Line numbers, the
+                                          // gutter, indent guides,
+                                          // folding, auto-closing brackets
+                                          // and smart indent are all
+                                          // fields of that variant or
+                                          // gated on `is_code_editor()`,
+                                          // so leaving it is what makes
+                                          // "the composer stays a
+                                          // composer" true by
+                                          // construction rather than by
+                                          // turning flags off one at a
+                                          // time.
                                           .auto_grow(1, max_rows)
       })
 }

@@ -10,6 +10,10 @@
 //! are not repeated here: focus on selecting a Panel-mode agent is
 //! [`super::composer_focus`], and the lookup's own keys are
 //! [`super::panel_lookup`].
+//!
+//! Since the swap to `EditorState`, this module also carries
+//! `panel-rich-input`'s "The composer stays a composer" - the guard that
+//! the widget underneath is an editor and the thing on screen is not.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -187,4 +191,86 @@ fn expanding_and_collapsing_pick_the_two_row_bounds() {
     assert_eq!(panel_input_max_rows(false), PANEL_INPUT_ROWS_COLLAPSED);
     assert_eq!(panel_input_max_rows(true), PANEL_INPUT_ROWS_EXPANDED);
     const { assert!(PANEL_INPUT_ROWS_COLLAPSED < PANEL_INPUT_ROWS_EXPANDED) };
+}
+
+/// A composer is an editor that is not laid out as one, and the whole of
+/// "no line numbers, no gutter, no indent guides, no fold controls" rests
+/// on that: every one of them is a field of `LayoutMode::CodeEditor`, which
+/// [`new_panel_input`] leaves by calling `auto_grow` last.
+///
+/// `is_code_editor()` cannot be asked - it answers from the mode *marker*,
+/// so it is `true` for any `EditorState` however it is laid out. What the
+/// layout decides is observable through behaviour instead, which is what
+/// the tests below do.
+#[gpui_kit::test]
+fn the_composer_is_an_editor_that_is_not_laid_out_as_one(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+
+    assert!(cx.update(|_, cx| input.read(cx).is_code_editor()),
+            "the state is an EditorState - that is what carries decorations, and the reason for \
+             the swap");
+    assert!(cx.update(|_, cx| input.read(cx).is_multi_line()),
+            "and it is multi-line, which is what makes the row sizing apply at all");
+}
+
+/// `panel-rich-input`: "A bracket is not auto-closed".
+///
+/// Auto-closing is keyed to the layout (`LayoutMode::is_auto_close`), so
+/// leaving the code-editor layout is what turns it off - no flag is set.
+#[gpui_kit::test]
+fn typing_an_opening_bracket_leaves_it_alone(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+
+    cx.simulate_keystrokes("(");
+    cx.run_until_parked();
+
+    assert_eq!(value(&mut cx, &input),
+               "(",
+               "a composer that closes brackets is a code editor wearing a composer's layout");
+}
+
+/// `panel-rich-input`: the composer must not "re-indent on newline".
+///
+/// This one is not free. `enter()` upstream decides to indent from
+/// `self.is_code_editor()` - the mode marker, not the layout - so before
+/// the fork's second commit a newline here inherited the previous line's
+/// indent, and `"    indented"` became `"    indented\n    "`. The fork
+/// keys it to the layout, like the auto-close beside it; this is what says
+/// so, and what fails if a bump loses that commit.
+#[gpui_kit::test]
+fn a_newline_does_not_inherit_the_previous_lines_indent(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+
+    input.update_in(&mut cx, |state, window, cx| {
+             state.set_value("    indented", window, cx);
+             let end = state.value().len();
+             state.set_selected_range(end..end, cx);
+         });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes("shift-enter");
+    cx.run_until_parked();
+
+    assert_eq!(value(&mut cx, &input),
+               "    indented\n",
+               "the newline is bare - a prompt is prose, and what the user typed is what the \
+                agent receives");
+}
+
+/// A prompt is written left to right and wrapped, not scrolled sideways.
+/// Soft wrap is `gpui-base`'s default for a multi-line input and the
+/// composer never turns it off; this is the guard on that default.
+#[gpui_kit::test]
+fn a_long_line_is_not_turned_into_a_horizontal_scroll(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+
+    let long = "wrap ".repeat(200);
+    input.update_in(&mut cx, |state, window, cx| {
+             state.set_value(long.clone(), window, cx);
+         });
+    cx.run_until_parked();
+
+    assert_eq!(value(&mut cx, &input),
+               long,
+               "wrapping is presentation: the buffer holds one line however it is drawn");
 }

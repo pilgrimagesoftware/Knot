@@ -3,24 +3,27 @@
 //! text").
 //!
 //! The design flagged surgical replacement as this change's one real risk:
-//! the textarea has no replace-a-range call, so the lookup selects the
-//! token's span and replaces the selection instead. These assertions run
-//! that pair against a real `TextareaState`, which is the only way to know
-//! the caret lands where the spec says and the surrounding buffer survives.
+//! the input has no replace-a-range call, so the lookup selects the token's
+//! span and replaces the selection instead. These assertions run that pair
+//! against the composer the window actually builds, which is the only way
+//! to know the caret lands where the spec says and the surrounding buffer
+//! survives.
 
 use gpui_kit::AppContext;
 use gpui_kit::TestAppContext;
 use gpui_kit::VisualTestContext;
 use gpui_kit::WindowOptions;
 use gpui_kit::component::Root;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::{Context, Entity, IntoElement, Render, Window, div};
 
 use crate::panel_commands::active_token;
 use crate::workspace_window::panel::lookup::replace_lookup_token;
+use crate::workspace_window::panel::prompt::PanelInputState;
+use crate::workspace_window::panel::prompt::new_panel_input;
+use crate::workspace_window::panel::prompt::panel_input_max_rows;
 
-/// A root view with no content: these assertions read a textarea's buffer,
-/// not a rendered frame.
+/// A root view with no content: these assertions read the composer's
+/// buffer, not a rendered frame.
 struct Blank;
 
 impl Render for Blank {
@@ -29,9 +32,14 @@ impl Render for Blank {
     }
 }
 
-/// A prompt textarea holding `value` with the caret at byte offset `caret`.
+/// A composer holding `value` with the caret at byte offset `caret`.
+///
+/// Built through [`new_panel_input`] rather than from the state type
+/// directly, so surgical replacement is exercised against the composer the
+/// window actually creates - including its layout mode, which decides what
+/// an edit has to step over.
 fn prompt(cx: &mut TestAppContext, value: &str, caret: usize)
-          -> (VisualTestContext, Entity<TextareaState>) {
+          -> (VisualTestContext, Entity<PanelInputState>) {
     let window = cx.update(|cx| {
                        gpui_kit::init(cx);
                        cx.open_window(WindowOptions::default(), |window, cx| {
@@ -41,7 +49,8 @@ fn prompt(cx: &mut TestAppContext, value: &str, caret: usize)
                          .expect("failed to open the test window")
                    });
     let mut cx = VisualTestContext::from_window(window.into(), cx);
-    let input = cx.update(|window, cx| cx.new(|cx| TextareaState::new(window, cx)));
+    let input =
+        cx.update(|window, cx| new_panel_input(false, panel_input_max_rows(false), window, cx));
     let value = value.to_string();
     input.update_in(&mut cx, |state, window, cx| {
              state.set_value(value, window, cx);

@@ -14,9 +14,9 @@
 
 ## 3. Swap the widget, preserving behaviour
 
-- [ ] 3.1 Change `panel_prompt_input` to build `EditorState::new(..).placeholder(..).submit_on_enter(..).auto_grow(1, max_rows)` and `set_panel_input_expanded` to call `set_auto_grow` on it; verify every test from 1.2 passes unchanged against `EditorState`
-- [ ] 3.2 Move the render site from `Textarea` to `Editor`, keeping the drag-over, `on_drop`, `capture_action::<Paste>` and lookup wiring intact; verify dropping a file, pasting a screenshot and pasting text each behave as before
-- [ ] 3.3 Add tests for `panel-rich-input`'s "The composer stays a composer": no line numbers, gutter, indent guides or fold controls are drawn; typing `(` leaves `(` alone; soft wrap is on; the input grows to the same bound as before
+- [x] 3.1 Change `panel_prompt_input` to build `EditorState::new(..).placeholder(..).submit_on_enter(..).auto_grow(1, max_rows)` and `set_panel_input_expanded` to call `set_auto_grow` on it; verify every test from 1.2 passes unchanged against `EditorState`
+- [x] 3.2 Move the render site from `Textarea` to `Editor`, keeping the drag-over, `on_drop`, `capture_action::<Paste>` and lookup wiring intact; verify dropping a file, pasting a screenshot and pasting text each behave as before
+- [x] 3.3 Add tests for `panel-rich-input`'s "The composer stays a composer": no line numbers, gutter, indent guides or fold controls are drawn; typing `(` leaves `(` alone; soft wrap is on; the input grows to the same bound as before
 - [ ] 3.4 Verify by hand in a debug build that IME composition, the context menu, selection by mouse and keyboard, and undo/redo behave as they did before the swap; record the walkthrough in the change
 
 ## 4. The scanner

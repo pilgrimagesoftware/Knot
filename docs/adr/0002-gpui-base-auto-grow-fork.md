@@ -45,10 +45,28 @@ point above.
 We consume a forked `gpui-base` through `[patch.crates-io]` in the root
 `Cargo.toml` until upstream releases the relaxed bound.
 
-The fork moves those four methods into the **existing**
+The fork carries two commits.
+
+**1. Relax the bound.** Move those four methods into the **existing**
 `impl<M: crate::input::MultiLineMode> InputBaseState<M>` block, with no change
 to any body. `TextareaMode` keeps `new()`, which is genuinely mode-specific.
 Git reads the change as 11 insertions and 11 deletions in one file.
+
+**2. Key indent-on-newline to the layout.** Found by swapping the composer
+over, not by reading: `enter()` decides whether to indent a new line from
+`self.is_code_editor()`, which answers from the mode **marker** and so is
+`true` for an `EditorState` in any layout. Every code-editing affordance
+beside it keys off the layout instead - `is_auto_close` and `is_smart_indent`
+both match on `LayoutMode::CodeEditor` - so the composer did not auto-close a
+bracket but did inherit the previous line's indent on Enter, which
+`panel-rich-input` forbids. There is no setting that turns it off:
+`smart_indent` does not gate these two sites.
+
+The fix adds `LayoutMode::is_code_editor` next to its siblings and uses it at
+the two indent sites. A real code editor is in the `CodeEditor` layout and is
+unaffected. This configuration - an editor laid out as an auto-growing
+composer - is newly reachable *because of* the first commit, so the two belong
+in one upstream change.
 
 Two branches on `pilgrimagesoftware/gpui-kit`, carrying the same commit:
 
@@ -88,13 +106,18 @@ been left to the repository owner. Record the PR URL here once it exists.
 - `gpui-base` is a dependency of both `gpui-component` and `gpui-kit`, so the
   patch applies workspace-wide. `cargo tree` must continue to show exactly one
   `gpui-base`, the patched one.
-- Every gpui-kit bump has to rebase this. That is the point of keeping it to
-  four moved methods: a bump that will not rebase mechanically means the
-  upstream shape changed, which is exactly when a human should look.
+- Every gpui-kit bump has to rebase this. That is the point of keeping it
+  small - four moved methods and two changed conditions: a bump that will not
+  rebase mechanically means the upstream shape changed, which is exactly when
+  a human should look.
 - CI fetches the fork as a git dependency. A branch deleted or force-pushed on
   `pilgrimagesoftware/gpui-kit` breaks the build for everyone.
-- The fork's own suite passes (975 tests on the patch branch, 1078 on the PR
-  branch), so the move is not carrying a behaviour change with it.
+- The fork's own suite passes unchanged (975 tests on the patch branch, 1078
+  on the PR branch), so neither commit carries a behaviour change upstream
+  tests can see.
+- Losing the second commit on a rebase is silent upstream but not here:
+  `tests::panel_composer::a_newline_does_not_inherit_the_previous_lines_indent`
+  fails, which was verified by pinning the patch to the first commit alone.
 
 ### Exit condition
 
