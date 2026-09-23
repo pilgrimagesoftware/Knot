@@ -20,6 +20,7 @@ mod diff_stats;
 mod import_window;
 mod macos;
 mod markdown_view;
+mod mcp_status;
 mod open_in;
 mod panel_commands;
 mod panel_session;

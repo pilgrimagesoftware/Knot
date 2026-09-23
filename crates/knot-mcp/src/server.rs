@@ -86,16 +86,33 @@ impl McpServer {
     }
 
     /// Writes this server's diagnostics to the log file at `path`, in
-    /// addition to standard error.
+    /// addition to standard error, starting a writer for it.
     ///
     /// The path is the caller's to decide. `knot-mcp` has no business
     /// knowing where an application keeps its logs, and taking it as an
     /// argument is also what lets every test here write to a temporary
     /// directory instead of the real one.
+    ///
+    /// For a supervised server use [`Self::with_logger`] instead: a
+    /// supervisor builds a fresh server per attempt, and this would start a
+    /// writer per attempt, several of them appending to one file with
+    /// separate byte counters. One writer per log is what makes rotation
+    /// safe without locking.
     pub fn with_log(mut self, path: std::path::PathBuf) -> Self {
         let (logger, task) = Logger::spawn(path);
         self.state.log = Some(logger);
         self.log_task = Some(task);
+        self
+    }
+
+    /// Writes this server's diagnostics through an existing log, owned by
+    /// the caller.
+    ///
+    /// The handle is a sender; the writer behind it outlives any one server,
+    /// which is what lets a restarted server go on appending to the same
+    /// file rather than opening a second view of it.
+    pub fn with_logger(mut self, logger: Logger) -> Self {
+        self.state.log = Some(logger);
         self
     }
 
@@ -168,6 +185,21 @@ impl McpServer {
     /// How many MCP sessions are live.
     pub fn live_sessions(&self) -> usize {
         self.state.sessions.len()
+    }
+
+    /// Lends the serve task's handle so a supervisor can await its end.
+    ///
+    /// A `JoinHandle` is itself a future and is `Unpin`, so the borrow can
+    /// sit in a `tokio::select!` arm directly. Its completion is the only
+    /// signal that covers every way the task can stop - returning,
+    /// panicking, or being aborted - which is why supervision watches this
+    /// rather than a channel the task would have to remember to send on.
+    ///
+    /// Additive: `start`, `stop` and `Drop` are unchanged, and a caller
+    /// that never asks for the handle behaves exactly as before. `None`
+    /// before `start` and after `stop`.
+    pub fn serve_handle(&mut self) -> Option<&mut JoinHandle<()>> {
+        self.handle.as_mut()
     }
 
     pub fn stop(&mut self) {
@@ -358,3 +390,6 @@ fn json_rpc_error_response(code: i64, message: String) -> Response {
     let response = JsonRpcResponse::error(None::<JsonRpcId>, code, message);
     (StatusCode::BAD_REQUEST, axum::Json(response)).into_response()
 }
+
+#[cfg(test)]
+mod tests;

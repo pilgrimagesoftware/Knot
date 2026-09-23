@@ -54,6 +54,15 @@ pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
 #[cfg(target_os = "macos")]
 pub(crate) const FONT_PANEL_POLL_INTERVAL: Duration = Duration::from_millis(300);
 
+/// How often the settings window re-reads the MCP server's state.
+///
+/// The supervisor publishes over a channel on its own thread, which GPUI
+/// cannot await, so the MCP tab follows a change by polling the mirror. Far
+/// slower than the repaint poll: a lifecycle transition is a human-scale
+/// event, and the tick only notifies when the state differs from the one
+/// last drawn.
+pub(crate) const MCP_STATE_POLL_INTERVAL: Duration = Duration::from_millis(500);
+
 // ---------------------------------------------------------------------------
 // Palette
 // ---------------------------------------------------------------------------

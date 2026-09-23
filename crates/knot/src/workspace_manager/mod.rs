@@ -67,6 +67,7 @@ impl WorkspaceManager {
             return;
         }
         let mut store = self.store.lock();
+        let renamed = editing_id.is_some();
         if let Some(id) = editing_id {
             if !store.rename_workspace(id, name) {
                 self.error = Some(knot_core::l10n::t("workspace_manager.error_missing"));
@@ -98,6 +99,16 @@ impl WorkspaceManager {
               input.clean(window, input_cx);
           });
         cx.notify();
+        if renamed {
+            // The renamed workspace's own window draws its title from this
+            // shared store, and `cx.notify()` marks only *this* window dirty
+            // - so without a scheduled paint over there it keeps showing the
+            // name it last drew. Reading live state does not cause a paint;
+            // being scheduled for one does. `import_window/window.rs`'s
+            // `redraw_every_window` is the same fix for the same class of
+            // staleness.
+            cx.refresh_windows();
+        }
     }
 
     pub(crate) fn open_workspace_dialog(&mut self, editing_id: Option<Uuid>,

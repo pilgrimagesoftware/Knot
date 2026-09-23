@@ -36,17 +36,33 @@ use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;
 use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
+use crate::mcp_status;
+use crate::mcp_status::McpServerStatus;
 use crate::quit_guard;
 use crate::settings_window::open_settings_window;
 use crate::window_options::manager_window_options;
 use crate::workspace_manager::WorkspaceManager;
 
+/// Starts the MCP server under supervision, reporting the stop signal that
+/// ends both and the status the rest of the application watches.
+///
+/// The server used to be started once here and never watched again: when
+/// its serve task ended the port went quiet for the rest of the process's
+/// life, and a failed bind ended the MCP subsystem for the session. The
+/// supervisor owns that lifecycle now; this still owns the thread, the
+/// runtime and the oneshot that stops it.
+///
+/// A server configuration has turned off leaves the status at
+/// [`knot_mcp::ServerState::Disabled`]: nothing is bound and nothing is
+/// supervised.
 pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::Settings, notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
-                               -> tokio::sync::oneshot::Sender<()> {
+                               -> (tokio::sync::oneshot::Sender<()>, McpServerStatus) {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
+    let status = McpServerStatus::new();
+    let thread_status = status.clone();
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
@@ -82,31 +98,36 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                        Arc::new(move || catalog.agents_snapshot())
                    };
                    let hook_handler = catalog.clone();
-                   let mut server =
-                       knot_mcp::McpServer::new(settings.mcp_server_port,
-                                                catalog as Arc<dyn ToolCatalog>,
-                                                agents_snapshot).with_hook_handler(hook_handler);
+                   let mut supervisor =
+                       knot_mcp::Supervisor::new(settings.mcp_server_port,
+                                                 catalog as Arc<dyn ToolCatalog>,
+                                                 agents_snapshot).with_hook_handler(hook_handler);
                    // A packaged `Knot.app` has no stderr anyone reads, so
                    // the file is the only record of what the server did.
                    // With no resolvable home directory there is nowhere to
                    // put one, and the server runs as it always has.
+                   //
+                   // Given to the supervisor rather than to a server: it
+                   // builds a fresh one per attempt, and one writer has to
+                   // span every restart for the entries either side of a
+                   // failure to land in the same file.
                    if let Some(directory) = knot_core::log_dir() {
-                       server = server.with_log(directory.join(knot_mcp::LOG_FILE_NAME));
+                       supervisor = supervisor.with_log(directory.join(knot_mcp::LOG_FILE_NAME));
                    }
-                   if let Err(err) = server.start().await {
-                       eprintln!("failed to start MCP server: {err}");
-                       return;
-                   }
-
-                   tokio::select! {
-                       _ = stop_rx => {}
-                       _ = std::future::pending::<()>() => {}
-                   }
-                   server.stop();
+                   // Subscribed before `run`, so no transition is missed -
+                   // though a `watch` receiver would read the current value
+                   // even if it were not.
+                   let mirroring =
+                       tokio::spawn(mcp_status::mirror_server_state(supervisor.state(),
+                                                                    thread_status));
+                   // Returns only on the stop signal, having released the
+                   // port; everything else it retries.
+                   supervisor.run(stop_rx).await;
+                   mirroring.abort();
                    drop(discovery);
                });
     });
-    stop
+    (stop, status)
 }
 
 actions!(knot_app,
@@ -494,12 +515,12 @@ pub(crate) fn run() {
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
     let activation = Arc::new(Mutex::new(Vec::new()));
-    let mcp_stop = start_mcp_server(Arc::clone(&store),
-                                    settings.clone(),
-                                    Arc::clone(&notifier),
-                                    Arc::clone(&messages),
-                                    Arc::clone(&awaiting_input),
-                                    Arc::clone(&activation));
+    let (mcp_stop, mcp_status) = start_mcp_server(Arc::clone(&store),
+                                                  settings.clone(),
+                                                  Arc::clone(&notifier),
+                                                  Arc::clone(&messages),
+                                                  Arc::clone(&awaiting_input),
+                                                  Arc::clone(&activation));
 
     gpui_kit::application()
                            // `Assets` only embeds gpui-component's own curated icon subset; our
@@ -526,6 +547,9 @@ pub(crate) fn run() {
                                // window claims it once one is.
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(Activation(Arc::clone(&activation)));
+                               // The MCP server's state, for the settings
+                               // pane's row and the failure notification.
+                               cx.set_global(mcp_status);
                                cx.set_global(AgentsMenuState::default());
                                // Every window that can be reopened is
                                // registered here, so a second request for
@@ -538,9 +562,17 @@ pub(crate) fn run() {
                                set_app_menus(&AgentMenuSnapshot::default(), cx);
 
                                cx.on_system_notification_response(|response, cx| {
-                                     if notification_response_agent_id(&response).is_some() {
-                                         cx.activate(true);
-                                     }
+                                     // Every notification brings Knot
+                                     // forward. An agent's carries its id so
+                                     // a click can route to that agent; the
+                                     // MCP server's failure is not tied to
+                                     // an agent and carries a tag that
+                                     // deliberately parses as none - which
+                                     // is why activation is no longer gated
+                                     // on finding one.
+                                     let _agent_to_route_to =
+                                         notification_response_agent_id(&response);
+                                     cx.activate(true);
                                  });
 
                                open_workspace_manager(WorkspaceManagerWindow { store:
