@@ -368,11 +368,12 @@ impl WorkspaceWindow {
                 // using a scroller whose follow mode re-engages itself.
                 let list = self.panel_list(id, list_slot);
                 let known = self.panel_list_row_counts.get(&id).copied().unwrap_or(0);
-                {
+                let row_count = {
                     let state = state_arc.lock();
                     let count = panel_view::sync_row_count(&list, known, &state);
                     self.panel_list_row_counts.insert(id, count);
-                }
+                    count
+                };
                 if should_follow {
                     if !list.is_following_tail() {
                         list.set_follow_mode(FollowMode::Tail);
@@ -391,10 +392,13 @@ impl WorkspaceWindow {
                                          .unwrap_or_default();
                 let expanded = self.panel_input_expanded.contains(&id);
                 let input = self.panel_prompt_input(id, window, cx);
-                // A conversation shorter than its viewport is not
-                // scrollable, so `is_scrolled_to_end` is `None` and the
-                // control stays hidden.
-                let scrolled_up = matches!(list.is_scrolled_to_end(), Some(false));
+                // Asked of the tail row's position rather than of
+                // `is_scrolled_to_end`, which needs a total content height
+                // the virtualized list does not have: it measures only the
+                // rows near the viewport, so it answered `None` for every
+                // conversation longer than a screen and the control went
+                // missing. See `panel_view::scroll`.
+                let scrolled_up = panel_view::scrolled_away_from_tail(&list, row_count);
                 let list_to_bottom = list.clone();
                 v_flex()
                     .size_full()

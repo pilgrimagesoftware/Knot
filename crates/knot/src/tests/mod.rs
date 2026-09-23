@@ -23,6 +23,7 @@ mod mcp_supervision;
 mod menu_key_equivalents;
 mod notifications;
 mod panel_lookup;
+mod panel_scroll;
 mod plan_diagram;
 mod pull_request_records;
 mod quit_warning;
