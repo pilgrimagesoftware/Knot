@@ -1,4 +1,51 @@
 
+## 1.15.0 - 2026-09-23
+
+### Added
+- Swap the turn-in-progress animation for the pulse artwork
+- Let the application name the git it runs
+- Number a duplicated agent instead of suffixing "(copy)"
+- Show the bound keystroke on the permission prompt buttons
+- Add path-scoped file_diff
+- Add git panel state and section grouping
+- Add the git panel's work-tree relevance filter
+- Add git panel reads, actions and watch lifecycle
+- Render the git panel and wire it into the workspace window
+- Apply the chosen appearance mode
+- Name a new agent after its folder, and ask for the folder sooner
+
+
+### Changed
+- Host the workspace name dialog in the shared dialog layer
+- Drop the panel's vestigial 120ms indicator repaint
+- Make the claim-to-spawn gap empty, not merely safe
+- Move the folder-name rule out of the agent store
+
+
+### Documentation
+- Correct why gh is resolved before it is spawned
+- Record the off-thread-results rule and its four breaks
+
+
+### Fixed
+- Locate gh outside the launchd PATH
+- Decide the scroll-to-latest control from the tail row
+- Deliver a preference change to the windows already open
+- Summarize the processes section instead of counting forever
+- Take the gh availability probe off the render path
+- Repaint when an unselected panel agent changes state
+- Stop the grid scan benchmark failing the gate at random
+- An unbound Settings can no longer write to the real store
+- Release the process sampler's claim on unwind
+- Seed the diff list with a uniform row height
+- Draw diff line text from theme tokens, not the fixed palette
+- Use the computed line box for the diff row height hint
+- Resolve a pending slot even when the work unwinds
+- Stop the watch tests counting their own setup events
+- Stop requiring an optional ACP field to find a config option
+
+
+
 ## 1.14.0 - 2026-09-23
 
 ### Added

@@ -26,10 +26,14 @@ because the fixture hard-codes `"category":"mode"`
 (`crates/knot-acp/src/client/tests.rs:333`), so the gap only appears
 against a real agent.
 
-The effort selector is wrong a second way: it searches for `"effort"`,
-`"reasoning"`, `"reasoning_effort"`, which are option *ids*. ACP's
-categories are `mode`, `model`, `model_config` and `thought_level`, so
-that slot cannot match on category even when an agent supplies one.
+Correction, found while implementing: this proposal originally claimed the
+effort selector was wrong a second way - searching only id-shaped
+spellings, and so unable to match on category at all. That was read off a
+truncated view of the candidate list. `"thought_level"` and
+`"thought-level"` are already in it
+(`crates/knot/src/workspace_window/panel/input.rs:380-381`), beside the
+id-shaped spellings. The effort slot carries the same single defect as the
+other two, and no candidate list needs changing.
 
 ## What Changes
 
@@ -44,9 +48,6 @@ that slot cannot match on category even when an agent supplies one.
 - Keep the `kind == "select"` filter. A non-select option cannot drive a
   picker, and ACP tells clients to ignore option types they do not
   recognize.
-- Give the effort slot `thought_level` as a category candidate, so it can
-  match on category at all, keeping the existing id-shaped candidates for
-  the fallback pass.
 - Correct the permission-mode selector requirement's scope wording to
   describe what ships: the keybinding is registered on the pane and gated
   on the selected agent being Panel-mode, not on the input area holding
@@ -76,8 +77,8 @@ that slot cannot match on category even when an agent supplies one.
 - `crates/knot/src/workspace_window/creation.rs`: `find_config_option`
   gains the fallback passes. It is the single choke point all four callers
   share, so the fix lands in one function.
-- `crates/knot/src/workspace_window/panel/input.rs`: the effort slot's
-  candidate list gains `thought_level`.
+- `crates/knot/src/workspace_window/panel/input.rs`: untouched. The three
+  candidate lists are already right; only the matcher was wrong.
 - `crates/knot/src/tests/workspace_window_config.rs`: the three existing
   tests keep asserting the category pass; new ones cover a missing
   category, an unknown category, id and name fallback, array-order ties,

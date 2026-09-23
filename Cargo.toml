@@ -26,6 +26,13 @@ async-trait = "0.1.92"
 # No lock poisoning: `lock()` hands back the guard, so there is no `unwrap()`
 # to forget and no two-policy split between panicking and silently skipping.
 parking_lot = "0.12.5"
+# Holds the shared settings surface. A read is a refcount bump, not a lock,
+# which is what lets the render path read settings at GPUI's per-keystroke
+# rate; it also keeps the surface out of any lock-ordering relationship with
+# `AgentStore`'s mutex. A mutex was the alternative and is why #238 could not
+# simply be shared. Already in the lockfile transitively, so this promotes an
+# existing dependency rather than adding one.
+arc-swap = "1.9.2"
 rust-i18n = "4.2.2"
 # Reads Skwad's preferences for `data-import`. macOS-relevant only, but
 # declared unconditionally so the workspace goes on building on Linux for CI,

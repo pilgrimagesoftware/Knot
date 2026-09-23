@@ -51,7 +51,7 @@ fn a_disabled_server_binds_nothing_and_supervises_nothing() {
 
     let store = Arc::new(Mutex::new(crate::app_state::build_agent_store(&settings)));
     let (_stop, status) = start_mcp_server(store,
-                                           settings,
+                                           knot_core::SharedSettings::new(settings),
                                            Arc::new(knot_messaging::QueuedNotifier::new()),
                                            Arc::new(Mutex::new(knot_messaging::MessageStore::new())),
                                            Arc::new(Mutex::new(Vec::new())),

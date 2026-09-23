@@ -21,8 +21,10 @@ use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use super::pane_focus::FocusTarget;
 use super::panel;
 use super::prompt_queue::QueuedPanelPrompt;
+use super::terminal_font::TerminalFont;
 use super::view_mode::WorkspaceViewMode;
 use crate::composer_style::ComposerStyling;
 use crate::dashboard;
@@ -78,7 +80,6 @@ pub(crate) struct WorkspaceWindow {
     /// answered keeps arriving. This is what makes the second one a repeat
     /// rather than news, per `desktop-notifications`' suppression rule.
     pub(super) notified_awaiting:                BTreeMap<Uuid, String>,
-    pub(super) settings:                         knot_core::Settings,
     pub(super) workspace_id:                     Uuid,
     pub(super) selected_agent:                   Option<Uuid>,
     pub(super) sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
@@ -108,6 +109,10 @@ pub(crate) struct WorkspaceWindow {
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
     pub(super) terminal_focus:                   gpui_kit::FocusHandle,
+    /// The family the terminal draws and measures in, resolved from the
+    /// installed families once per configured name rather than once per
+    /// frame - see `terminal_font`.
+    pub(super) terminal_font:                    TerminalFont,
     /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
     /// `on_grid_event` (which runs on the PTY reader thread) and drained
     /// by a polling loop onto the OS pasteboard via GPUI's main-thread
@@ -126,16 +131,21 @@ pub(crate) struct WorkspaceWindow {
     /// Which spinner frame the working indicators were last repainted on -
     /// see `spinner_repaint_due`.
     pub(super) last_spinner_frame:               u128,
-    /// The agent whose composer this window last *focused*, or `None` when
-    /// the last frame showed no composer at all - see `prepare_frame`.
+    /// What this window last *focused* - an agent's composer or its terminal
+    /// surface - or `None` when the last frame showed neither; see
+    /// `prepare_frame`.
     ///
     /// It records what focus was taken for, not where focus is now. Those
     /// differ the moment the user clicks anything else, and that is the
-    /// point: the frame compares this against the composer it is about to
+    /// point: the frame compares this against the target it is about to
     /// show, so focus is taken once on the transition into an agent and
     /// never pulled back while the user is working elsewhere in the window.
     /// Reading where focus actually is would undo that.
-    pub(super) focused_composer:                 Option<Uuid>,
+    ///
+    /// One latch over both targets rather than one each, so switching
+    /// between agents of different modes is a transition for the one being
+    /// switched to - see `pane_focus`.
+    pub(super) focused_pane:                     Option<FocusTarget>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse

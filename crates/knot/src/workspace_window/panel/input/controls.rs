@@ -38,7 +38,7 @@ impl WorkspaceWindow {
                                            config_options: &[knot_acp::ConfigOption],
                                            cx: &mut Context<Self>)
                                            -> impl IntoElement + use<> {
-        let shift_to_send = self.settings.agent_panel_shift_enter_sends;
+        let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
         let context_usage =
             self.panel_sessions.get(&id).and_then(|slot| {
                                             let slot = slot.lock();
@@ -67,7 +67,7 @@ impl WorkspaceWindow {
                                 div()
                                     .flex_shrink_0()
                                     .text_xs()
-                                    .font_family(self.settings.title_font_name.clone())
+                                    .font_family(crate::settings_global::read(cx).title_font_name.clone())
                                     .text_color(cx.theme().muted_foreground)
                                     .child(Self::panel_prompt_send_hint(shift_to_send)),
                             ),
@@ -222,14 +222,15 @@ impl WorkspaceWindow {
                                 };
                                 let config_id = config_id.clone();
                                 let value_id = value_id.clone();
-                                entity.update(app, move |view, _cx| {
+                                entity.update(app, move |view, cx| {
                                     view.open_config_selector = None;
                                     // Persist first: the selection is durable
                                     // whether or not a session is live to
                                     // apply it to.
                                     view.remember_session_config(id,
                                                                  config_id.clone(),
-                                                                 value_id.clone());
+                                                                 value_id.clone(),
+                                                                 cx);
                                     if let panel_session::PanelSessionSlot::Ready(handle) =
                                         &*session_arc.lock()
                                     {

@@ -38,7 +38,7 @@ impl WorkspaceWindow {
                                          cx: &mut Context<Self>)
                                          -> impl IntoElement + use<> {
         let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
-        let send_tooltip = if self.settings.agent_panel_shift_enter_sends {
+        let send_tooltip = if crate::settings_global::read(cx).agent_panel_shift_enter_sends {
             "Send (Shift+Enter)"
         }
         else {

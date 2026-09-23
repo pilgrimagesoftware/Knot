@@ -291,7 +291,7 @@ impl WorkspaceWindow {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
-        let shift_to_send = self.settings.agent_panel_shift_enter_sends;
+        let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
         let max_rows = panel_input_max_rows(self.panel_input_expanded.contains(&id));
         let input = new_panel_input(shift_to_send, max_rows, window, cx);
         let palette = Palette::of(cx);

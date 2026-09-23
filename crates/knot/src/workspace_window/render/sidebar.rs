@@ -53,7 +53,6 @@ impl WorkspaceWindow {
                              cx: &mut Context<Self>)
                              -> Vec<gpui_kit::AnyElement> {
         let store_for_menu = Arc::clone(&self.store);
-        let settings_for_menu = self.settings.clone();
         let workspace_id = self.workspace_id;
         let window_entity = cx.entity();
 
@@ -260,14 +259,13 @@ impl WorkspaceWindow {
                                             // the selection
                                             // without ever showing the session.
                                             view.view_mode = WorkspaceViewMode::Terminal;
-                                            view.ensure_session(id);
-                                            view.ensure_panel_session(id);
+                                            view.ensure_session(id, cx);
+                                            view.ensure_panel_session(id, cx);
                                             cx.notify();
                                         }))
                             .context_menu({
                                 let targets =
                                     AgentMenuTargets { store: Arc::clone(&store_for_menu),
-                                                       settings: settings_for_menu.clone(),
                                                        window_entity: window_entity.clone(),
                                                        workspace_id,
                                                        id,
