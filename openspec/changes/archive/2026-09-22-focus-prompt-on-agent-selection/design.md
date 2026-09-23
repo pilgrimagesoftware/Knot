@@ -84,22 +84,34 @@ alongside the other per-agent state, per the parallel-maps rule — a stale id
 here is harmless but the field is per-agent and the teardown is one function by
 design.
 
-### Guard the dialog case with focus containment, not dialog enumeration
+### Guard the dialog case by asking whether a dialog is open
 
-Before focusing, require that focus is either nowhere or inside this window's
-own root subtree: `self.root_focus.contains_focused(window, cx)`.
+Before focusing, require that no dialog is open: `!window.has_active_dialog(cx)`.
 
-A dialog opened with `open_alert_dialog` renders through
-`Root::render_dialog_layer`, which `app_support::root_overlays` adds as a
-sibling of the view's own tree rather than inside it — so a trapped dialog focus
-should fail that containment check. **Confirm that before relying on it**: if
-the dialog layer turns out to be within the root's focus subtree, the guard has
-to become an explicit check for an active dialog instead.
+**This replaces the containment guard this section originally specified**, which
+does not work. The original read was that `app_support::root_overlays` adds the
+dialog layer as a sibling of the view's own tree, so a trapped dialog focus
+would fail `self.root_focus.contains_focused(window, cx)`. It is not a sibling:
+`root_overlays` is passed to `.children(..)` on the very element that carries
+`.track_focus(&self.root_focus)` (`render/mod.rs`), and `anchored()` positions
+the dialog without moving it in the dispatch tree. The dialog's focus handle is
+therefore a descendant of `root_focus`, and containment answers `true` with a
+dialog open — it cannot tell a dialog apart from the window's own panes.
 
-Asking `Root` whether a dialog is open is the obvious alternative and is worse:
-the only entry point is `render_dialog_layer`, which builds the layer as a side
-effect of answering, and calling a renderer as a predicate is how the dialog
-layer got broken the first time.
+`tests/composer_focus.rs::an_open_dialog_sits_inside_the_root_focus_subtree`
+is what establishes this. It asserts both halves, because only the pair is
+evidence: that opening a dialog moves focus off the root at all, and that focus
+is still contained in the root's subtree afterwards. It stays in the suite as a
+guard on the dependency — if a gpui-component upgrade ever moves the layer out,
+that test fails and this decision can be revisited.
+
+The rejected alternative was to ask `Root` directly, on the grounds that the
+only entry point is `render_dialog_layer`, which builds the layer as a side
+effect of answering. That objection does not apply to the API actually used
+here: `WindowExt::has_active_dialog` is a plain read —
+`Root::read(self, cx).active_dialogs.len() > 0` — and renders nothing. (The
+field itself is `pub(crate)` in gpui-component, so this method is the only way
+to reach it from Knot, and it is the right one.)
 
 ### Ordering against the `root_focus` guard
 
