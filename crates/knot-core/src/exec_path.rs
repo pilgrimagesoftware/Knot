@@ -59,11 +59,17 @@ pub fn search_path_for(process_path: &str, home: &str) -> String {
 /// The absolute path `program` resolves to on [`search_path`], or `None`
 /// when no directory on it holds an executable by that name.
 ///
-/// Spawning by absolute path rather than by bare name because a child's
-/// `PATH` and the lookup that finds its program are not reliably the same
-/// thing: the C library's `execvp` searches the *calling* process's `PATH`,
-/// so handing a subprocess a merged `PATH` does not by itself make the
-/// binary findable. Resolving first removes the question.
+/// Setting `PATH` on the child would in fact be enough on its own today:
+/// `std` deliberately avoids `posix_spawn` when the program is a bare name
+/// and `PATH` was set, falling back to `fork`/`exec` with the new
+/// environment in place so `execvp` searches it. That is std's
+/// implementation talking, though, not its documented contract - and the
+/// underlying C function searches the *calling* process's `PATH`.
+///
+/// Resolving first does not rely on it, and buys something either way:
+/// "not installed" becomes a decision this crate made about a list of
+/// directories it can name, rather than an inference from a spawn error
+/// that `NotFound` could also mean something else about.
 ///
 /// A `program` that already contains a separator is returned unchanged -
 /// it names a file, not something to look up.

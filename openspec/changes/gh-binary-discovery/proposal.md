@@ -24,9 +24,13 @@ was local to `knot-agent-launch`, so the next subsystem to spawn a tool -
   (`exec_path`), used by every subsystem that spawns an external tool, so
   "installed" means the same thing everywhere.
 - `knot-core` gains a program lookup over that merged path, resolving a bare
-  name to an absolute path. Handing a child a `PATH` does not decide where its
-  own program is found - `execvp` searches the *calling* process's `PATH` -
-  so locating the binary first is what actually fixes the spawn.
+  name to an absolute path. Setting the child's `PATH` alone would suffice on
+  today's `std` - it drops to `fork`/`exec` when the program is a bare name
+  and `PATH` was set, so the supplied environment is the one searched - but
+  that is std's implementation rather than its contract, and the C function
+  underneath searches the calling process's `PATH`. Resolving first also makes
+  "not installed" a decision about named directories rather than a reading of
+  a spawn error.
 - `GhRunner` spawns the located `gh`, and gives the child the merged `PATH`:
   `gh` shells out to `git` and to credential helpers itself.
 - A machine with no `gh` anywhere on the merged path still reports Missing,

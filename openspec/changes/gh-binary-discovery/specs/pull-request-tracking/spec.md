@@ -13,9 +13,13 @@ against the `HOME` environment variable. This is the same merged search path
 of locations, so a tool found by one part of the application is not reported
 missing by another.
 
-The tool SHALL be spawned by the absolute path it was located at, because the
-lookup that finds a subprocess's program runs against the calling process's
-`PATH` and not against the environment the subprocess is handed.
+The tool SHALL be spawned by the absolute path it was located at, so that
+"not installed" is a conclusion drawn from a search of named directories
+rather than an inference from a spawn error. Setting the subprocess's `PATH`
+alone happens to suffice on the current Rust standard library, which drops to
+`fork`/`exec` so the supplied environment is the one searched; that is an
+implementation detail of `std` rather than a guarantee it documents, and this
+requirement does not rest on it.
 
 The subprocess SHALL also be given the merged search path as its `PATH`: it
 runs `git` and credential helpers of its own, which are subject to the same
