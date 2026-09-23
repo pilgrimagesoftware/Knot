@@ -216,6 +216,11 @@ pub(crate) struct WorkspaceWindow {
     /// Where a finished probe reports and the poll drains - the same
     /// off-main-thread hand-off `process_failures` uses.
     pub(super) mcp_results: crate::workspace_window::mcp_panel::state::ProbeResults,
+    /// Shell companions opened to hand the user an agent's own MCP flow,
+    /// mapped to the agent whose section opened them. An entry's exit is what
+    /// makes that section re-probe, so it catches up with whatever the user
+    /// did in there.
+    pub(super) mcp_handover_terminals:           BTreeMap<Uuid, Uuid>,
     /// Agents whose git panel is open. Per-agent rather than a
     /// `WorkspaceViewMode`: the panel is scoped to one agent's folder and
     /// leaves that agent's content visible, so it is not a window mode.

@@ -448,8 +448,16 @@ mcp:
   age_hours: "%{hours}h"
   # Actions.
   action_refresh: "Check again"
-  action_manage: "Open in %{agent}"
+  # The delegated action. Knot opens the agent's own flow in a terminal; it
+  # never authenticates anything itself.
+  action_manage: "Fix in %{agent}"
+  # Appended when the agent has no per-server command and the user has to
+  # pick the server in its own UI, so the tooltip says what to type.
+  action_manage_hint: "Fix in %{agent} — then type %{send}"
   action_copy_target: "Copy address"
+  # The shell companion opened for the handover, named so it is obvious in
+  # the sidebar what it is and that closing it is fine.
+  terminal_name: "MCP"
 
 processes:
   title: "Processes"

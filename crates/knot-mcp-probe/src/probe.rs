@@ -39,13 +39,13 @@ pub enum ProbePlan {
 pub fn plan_for(agent_type: &str, cwd: impl Into<PathBuf>, env: Vec<(String, String)>,
                 program_override: Option<&str>)
                 -> ProbePlan {
-    let (Some(command), Some(format)) = (knot_core::agent_type::mcp_list_command(agent_type),
-                                         ListFormat::for_agent_type(agent_type))
+    let (Some(args), Some(default_program), Some(format)) =
+        (knot_core::agent_type::mcp_list_args(agent_type),
+         knot_core::agent_type::mcp_program(agent_type),
+         ListFormat::for_agent_type(agent_type))
     else {
         return ProbePlan::Unsupported;
     };
-
-    let (default_program, args) = command.split_first().expect("a non-empty list command");
 
     let program = program_override.and_then(|text| text.split_whitespace().next())
                                   .unwrap_or(default_program);

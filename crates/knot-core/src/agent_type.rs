@@ -29,7 +29,7 @@ pub enum McpManage {
     /// Knot has no MCP command for this type. A row for one of its servers
     /// offers no delegated action.
     None,
-    /// A command addressing one named server, where `%{server}` stands for
+    /// Arguments addressing one named server, where `%{server}` stands for
     /// the row's name. `opencode mcp auth <name>` is the shape.
     PerServer(&'static [&'static str]),
     /// An interactive flow: run the CLI with `args`, then send `send` to it.
@@ -39,6 +39,9 @@ pub enum McpManage {
         args: &'static [&'static str],
         send: &'static str,
     },
+    // Both arrays are *arguments only*, as is `mcp_list_args`: the program
+    // comes from `mcp_program`, or from the user's `agent_commands` when they
+    // set one, and is prepended by the caller.
 }
 
 impl McpManage {
@@ -70,20 +73,26 @@ pub struct AgentTypeInfo {
     /// Reports progress through hooks Knot can turn into an activity
     /// tracker, so its status updates without polling.
     pub hook_activity:       bool,
-    /// The read-only command that lists this type's MCP servers, as program
-    /// followed by arguments. Empty when Knot has no way to ask - which the
-    /// MCP section reports as "cannot determine", deliberately distinct from
-    /// "this agent has none".
+    /// The binary this type's CLI is invoked as by default. Empty for a type
+    /// with no vendor CLI of its own.
     ///
-    /// The program is the default; a user who set a command for this type in
-    /// `agent_commands` has theirs used instead, since that is the binary
-    /// their agent actually runs.
+    /// A column rather than the head of [`Self::mcp_list_args`] because the
+    /// two do not always both exist: OpenCode has a handover command and no
+    /// listing Knot can read yet, and deriving its program from a listing it
+    /// does not have would leave the handover with nothing to run.
+    ///
+    /// A user who set a command for this type in `agent_commands` has theirs
+    /// used instead, since that is the binary their agent actually runs.
+    pub mcp_program:         &'static str,
+    /// The arguments that list this type's MCP servers, read-only. Empty
+    /// when Knot has no way to ask - which the MCP section reports as
+    /// "cannot determine", deliberately distinct from "this agent has none".
     ///
     /// Populated only for a type whose real output has been captured. A
     /// parser written from documentation rather than from output fails
     /// silently, which is the one failure this whole capability exists to
     /// avoid.
-    pub mcp_list_command:    &'static [&'static str],
+    pub mcp_list_args:       &'static [&'static str],
     /// How the user is handed this type's own MCP flow.
     pub mcp_manage:          McpManage,
 }
@@ -96,7 +105,8 @@ pub const ALL: &[AgentTypeInfo] =
                       is_custom:           false,
                       inline_registration: true,
                       hook_activity:       true,
-                      mcp_list_command:    &["claude", "mcp", "list"],
+                      mcp_program:         "claude",
+                      mcp_list_args:       &["mcp", "list"],
                       mcp_manage:          McpManage::Interactive { args: &[],
                                                                     send: "/mcp", }, },
       // Codex has an `mcp` subcommand, but no machine this was built on had
@@ -109,7 +119,8 @@ pub const ALL: &[AgentTypeInfo] =
                       is_custom:           false,
                       inline_registration: true,
                       hook_activity:       true,
-                      mcp_list_command:    &[],
+                      mcp_program:         "codex",
+                      mcp_list_args:       &[],
                       mcp_manage:          McpManage::None, },
       // `opencode mcp auth <name>` is the only per-server command any agent
       // offers, so the handover is exact here. Its *listing* shape is still
@@ -121,18 +132,17 @@ pub const ALL: &[AgentTypeInfo] =
                       is_custom:           false,
                       inline_registration: true,
                       hook_activity:       false,
-                      mcp_list_command:    &[],
-                      mcp_manage:          McpManage::PerServer(&["opencode",
-                                                                  "mcp",
-                                                                  "auth",
-                                                                  "%{server}"]), },
+                      mcp_program:         "opencode",
+                      mcp_list_args:       &[],
+                      mcp_manage:          McpManage::PerServer(&["mcp", "auth", "%{server}"]), },
       AgentTypeInfo { id:                  "gemini",
                       label:               "Gemini",
                       is_shell:            false,
                       is_custom:           false,
                       inline_registration: true,
                       hook_activity:       false,
-                      mcp_list_command:    &["gemini", "mcp", "list"],
+                      mcp_program:         "gemini",
+                      mcp_list_args:       &["mcp", "list"],
                       mcp_manage:          McpManage::Interactive { args: &[],
                                                                     send: "/mcp", }, },
       AgentTypeInfo { id:                  "copilot",
@@ -141,7 +151,8 @@ pub const ALL: &[AgentTypeInfo] =
                       is_custom:           false,
                       inline_registration: true,
                       hook_activity:       false,
-                      mcp_list_command:    &[],
+                      mcp_program:         "copilot",
+                      mcp_list_args:       &[],
                       mcp_manage:          McpManage::None, },
       // The custom types are a user-configured command, not a vendor CLI:
       // there is no `mcp` subcommand to assume.
@@ -151,7 +162,8 @@ pub const ALL: &[AgentTypeInfo] =
                       is_custom:           true,
                       inline_registration: false,
                       hook_activity:       false,
-                      mcp_list_command:    &[],
+                      mcp_program:         "",
+                      mcp_list_args:       &[],
                       mcp_manage:          McpManage::None, },
       AgentTypeInfo { id:                  "custom2",
                       label:               "Custom 2",
@@ -159,7 +171,8 @@ pub const ALL: &[AgentTypeInfo] =
                       is_custom:           true,
                       inline_registration: false,
                       hook_activity:       false,
-                      mcp_list_command:    &[],
+                      mcp_program:         "",
+                      mcp_list_args:       &[],
                       mcp_manage:          McpManage::None, },
       // A bare shell runs no MCP client at all.
       AgentTypeInfo { id:                  "shell",
@@ -167,7 +180,8 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            true,
                       is_custom:           false,
                       inline_registration: true,
-                      mcp_list_command:    &[],
+                      mcp_program:         "",
+                      mcp_list_args:       &[],
                       mcp_manage:          McpManage::None,
                       hook_activity:       false, }];
 
@@ -221,10 +235,19 @@ pub fn has_hook_activity(id: &str) -> bool {
 /// thing there: not that the agent has no MCP servers, but that Knot cannot
 /// find out.
 #[must_use]
-pub fn mcp_list_command(id: &str) -> Option<&'static [&'static str]> {
-    let command = info(id)?.mcp_list_command;
+pub fn mcp_list_args(id: &str) -> Option<&'static [&'static str]> {
+    let args = info(id)?.mcp_list_args;
 
-    (!command.is_empty()).then_some(command)
+    (!args.is_empty()).then_some(args)
+}
+
+/// The binary `id`'s CLI is invoked as by default, or `None` for a type with
+/// no vendor CLI of its own - a bare shell, or a user-configured command.
+#[must_use]
+pub fn mcp_program(id: &str) -> Option<&'static str> {
+    let program = info(id)?.mcp_program;
+
+    (!program.is_empty()).then_some(program)
 }
 
 /// How `id` lets the user manage one MCP server.

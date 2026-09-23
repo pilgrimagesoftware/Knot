@@ -113,7 +113,7 @@ fn a_failing_command_surfaces_its_output() {
 #[test]
 fn every_listable_type_has_a_reader_and_the_reverse() {
     for agent_type in knot_core::agent_type::ALL {
-        let listable = knot_core::agent_type::mcp_list_command(agent_type.id).is_some();
+        let listable = knot_core::agent_type::mcp_list_args(agent_type.id).is_some();
         let readable = ListFormat::for_agent_type(agent_type.id).is_some();
 
         assert_eq!(listable, readable,

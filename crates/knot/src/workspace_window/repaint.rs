@@ -60,6 +60,10 @@ impl WorkspaceWindow {
         // A shell companion whose process exited has nothing left to show,
         // so close it rather than leaving a dead pane that looks hung.
         for id in exited {
+            // Before the removal: a terminal opened to hand the user an
+            // agent's own MCP flow is how that section finds out anything
+            // changed, and after `remove_agent` there is nothing left to ask.
+            self.finish_mcp_handover(*id);
             self.remove_agent(*id);
             cx.notify();
         }

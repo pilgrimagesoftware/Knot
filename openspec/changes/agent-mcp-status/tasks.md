@@ -46,10 +46,10 @@
 
 ## 7. The delegated action
 
-- [ ] 7.1 Offer the action only on an agent row in the needs-authentication, failed, pending-approval or disabled state, and only for a type with an `mcp_manage` value; verify a connected row, an unknown row and a row on an unprobeable type each offer none
-- [ ] 7.2 Spawn a plain terminal in the agent's working directory through the path `acp-panel-ui`'s "Terminal remains available" already provides, and inject through `send_text`/`send_return`; verify the agent's ACP session is untouched and the adapter subprocess is never the injection target
-- [ ] 7.3 Build the injected command from the roster only. For a per-server command, shell-quote the server name and reject it against a conservative pattern, falling back to the interactive flow when it fails; verify a name carrying `;`, `$(` or a newline never reaches the command line
-- [ ] 7.4 Re-probe when the delegated terminal exits; verify the section shows the new result and that a terminal closed without action leaves the rows consistent rather than cleared
+- [x] 7.1 Offer the action only on an agent row in the needs-authentication, failed, pending-approval or disabled state, and only for a type with an `mcp_manage` value; verify a connected row, an unknown row and a row on an unprobeable type each offer none
+- [x] 7.2 Spawn a plain terminal in the agent's working directory through the path `acp-panel-ui`'s "Terminal remains available" already provides, and inject through `send_text`/`send_return`; verify the agent's ACP session is untouched and the adapter subprocess is never the injection target
+- [x] 7.3 Build the injected command from the roster only. For a per-server command, shell-quote the server name and reject it against a conservative pattern, falling back to the interactive flow when it fails; verify a name carrying `;`, `$(` or a newline never reaches the command line
+- [x] 7.4 Re-probe when the delegated terminal exits; verify the section shows the new result and that a terminal closed without action leaves the rows consistent rather than cleared
 
 ## 8. Localization
 

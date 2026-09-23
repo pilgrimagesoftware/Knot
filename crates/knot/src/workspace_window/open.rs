@@ -160,6 +160,7 @@ impl WorkspaceWindow {
                     mcp_sections: BTreeMap::new(),
                     mcp_in_flight: Arc::new(Mutex::new(BTreeSet::new())),
                     mcp_results: Arc::new(Mutex::new(Vec::new())),
+                    mcp_handover_terminals: BTreeMap::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     error: None,

@@ -177,7 +177,10 @@ impl WorkspaceWindow {
             (agent.agent_type.clone(), agent.folder.clone())
         };
 
-        let configured = self.settings.agent_commands.get(&agent_type).cloned();
+        // The same resolver the handover uses, so the probe reads the
+        // configuration of the installation the flow would open. Two
+        // resolvers would drift invisibly.
+        let program = self.mcp_program_for(&agent_type);
 
         // The same `PATH` the ACP adapter is launched with. Knot started
         // from Finder inherits launchd's, which names no directory any agent
@@ -185,7 +188,7 @@ impl WorkspaceWindow {
         // CLI missing on a machine that has them all.
         let env = vec![("PATH".to_owned(), knot_core::exec_path::search_path())];
 
-        Some(knot_mcp_probe::plan_for(&agent_type, &folder, env, configured.as_deref()))
+        Some(knot_mcp_probe::plan_for(&agent_type, &folder, env, program.as_deref()))
     }
 
     /// Moves finished probes into their sections, answering whether any

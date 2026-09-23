@@ -133,6 +133,47 @@ impl WorkspaceWindow {
                      .into_any_element())
     }
 
+    /// The row's delegated action, as the server it names and the tooltip
+    /// that describes it - or `None` when the row offers none.
+    ///
+    /// Three conditions, all of which must hold: the state is one the
+    /// agent's flow can help with, the row is one of the agent's own (Knot
+    /// supervises its own server), and the type has a flow at all. A row on
+    /// an agent Knot cannot interrogate never reaches here, because it has no
+    /// rows.
+    fn mcp_row_action(&self, row: &SectionRow) -> Option<(String, String)> {
+        let SectionRow::Agent(server) = row
+        else {
+            return None;
+        };
+
+        if !row.offers_action() {
+            return None;
+        }
+
+        let agent_id = self.selected_agent?;
+        let agent_type = self.store
+                             .lock()
+                             .agent(agent_id)
+                             .map(|agent| agent.agent_type.clone())?;
+        let program = self.mcp_program_for(&agent_type)?;
+        let flow = crate::workspace_window::mcp_panel::handover::handover(&agent_type,
+                                                                          &program,
+                                                                          &server.name)?;
+        let label = knot_core::agent_type::label(&agent_type).to_owned();
+
+        // When the flow names no server, the user has to pick it themselves,
+        // so the tooltip says what to type rather than leaving them looking
+        // at a CLI wondering what Knot expected.
+        let tooltip = match flow.send() {
+            Some(send) => knot_core::l10n::t_with("mcp.action_manage_hint",
+                                                  &[("agent", &label), ("send", send)]),
+            None => knot_core::l10n::t_with("mcp.action_manage", &[("agent", &label)]),
+        };
+
+        Some((server.name.clone(), tooltip))
+    }
+
     /// The rows this agent's section shows: Knot's own, then the agent's own.
     ///
     /// Knot's state comes from the global its supervisor publishes to, not
@@ -262,6 +303,7 @@ impl WorkspaceWindow {
 
         let copy_tooltip = knot_core::l10n::t("mcp.action_copy_target");
         let address = row.short_label();
+        let action = self.mcp_row_action(row);
 
         v_flex()
             .w_full()
@@ -302,7 +344,23 @@ impl WorkspaceWindow {
                             .whitespace_nowrap()
                             .text_ellipsis()
                             .text_color(color)
-                            .child(state_text)))
+                            .child(state_text))
+                .children(action.map(|(server, tooltip)| {
+                    div().id(("mcp-manage", index as u64))
+                         .p_1()
+                         .rounded_sm()
+                         .cursor_pointer()
+                         .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+                         .on_click(cx.listener(move |view, _: &ClickEvent, _window, cx| {
+                                       if let Some(agent_id) = view.selected_agent {
+                                           view.open_mcp_handover(agent_id, &server);
+                                           cx.notify();
+                                       }
+                                   }))
+                         .child(Icon::new(IconName::ExternalLink)
+                             .size_3()
+                             .text_color(cx.theme().warning))
+                })))
             .children(detail.map(|text| {
                           div().text_xs()
                                .whitespace_nowrap()

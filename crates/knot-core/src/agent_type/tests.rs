@@ -94,12 +94,12 @@ fn every_known_type_has_a_deliberate_mcp_answer() {
                 UNPROBEABLE");
 
     for id in PROBEABLE {
-        assert!(mcp_list_command(id).is_some(),
+        assert!(mcp_list_args(id).is_some(),
                 "{id} is listed as probeable but has no command");
     }
 
     for id in UNPROBEABLE {
-        assert!(mcp_list_command(id).is_none(),
+        assert!(mcp_list_args(id).is_none(),
                 "{id} is listed as unprobeable but has a command");
     }
 }
@@ -109,7 +109,7 @@ fn every_known_type_has_a_deliberate_mcp_answer() {
 #[test]
 fn anything_that_can_be_listed_can_also_be_managed() {
     for agent_type in ALL {
-        if !agent_type.mcp_list_command.is_empty() {
+        if !agent_type.mcp_list_args.is_empty() {
             assert!(agent_type.mcp_manage.is_available(),
                     "{} can be listed but offers no handover",
                     agent_type.id);
@@ -137,7 +137,7 @@ fn handover_shape_matches_what_the_cli_offers() {
 /// offering something that cannot work.
 #[test]
 fn a_shell_has_no_mcp_support_at_all() {
-    assert_eq!(mcp_list_command("shell"), None);
+    assert_eq!(mcp_list_args("shell"), None);
     assert!(!mcp_manage("shell").is_available());
 }
 
@@ -145,6 +145,6 @@ fn a_shell_has_no_mcp_support_at_all() {
 /// it means the same thing: not "no servers", but "cannot find out".
 #[test]
 fn an_unknown_type_cannot_be_probed_or_managed() {
-    assert_eq!(mcp_list_command("nothing-by-that-name"), None);
+    assert_eq!(mcp_list_args("nothing-by-that-name"), None);
     assert!(!mcp_manage("nothing-by-that-name").is_available());
 }
