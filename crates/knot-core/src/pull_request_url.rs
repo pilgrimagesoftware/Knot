@@ -128,12 +128,32 @@ impl PullRequestUrlScanner {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Bytes handed to [`scan_bytes`] on this thread since it was last reset.
+    ///
+    /// The streaming scan runs on the same thread that parses PTY bytes into
+    /// cells, so its cost has to stay linear in the stream. That is a claim
+    /// about work done, and this is what lets a test assert it as one rather
+    /// than timing the scan and hoping the machine holds still - see
+    /// `tests::the_streaming_scan_does_work_linear_in_the_stream`.
+    ///
+    /// Thread-local rather than a global counter because the test suite runs
+    /// tests in parallel and a shared counter would make the assertion depend
+    /// on what else happened to be running - reintroducing exactly the
+    /// non-determinism it exists to remove.
+    pub(super) static BYTES_SCANNED: core::cell::Cell<u64> = const { core::cell::Cell::new(0) };
+}
+
 /// The shared scan. `at_end` says whether the input is the whole of what
 /// there will ever be, which decides a match whose digits touch the end.
 /// `consumed` reports the offset just past the last match, so a streaming
 /// caller knows what it can drop.
 fn scan_bytes(input: &[u8], hosts: &[&str], at_end: bool, found: &mut Vec<PullRequestUrl>,
               consumed: &mut usize) {
+    #[cfg(test)]
+    BYTES_SCANNED.with(|scanned| scanned.set(scanned.get() + input.len() as u64));
+
     let scheme = PULL_REQUEST_URL_SCHEME.as_bytes();
     let mut at = 0;
     while at + scheme.len() <= input.len() {
