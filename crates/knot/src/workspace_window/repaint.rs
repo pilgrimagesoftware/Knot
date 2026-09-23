@@ -79,7 +79,7 @@ impl WorkspaceWindow {
         // in an unselected pane is the case this feature exists for.
         let pull_requests_recorded = self.drain_pull_requests();
         let prompts_completed = self.drain_prompt_results();
-        self.sync_panel_agent_states();
+        let panel_states_moved = self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
         // Both land from `spawn_blocking` with no context to notify from, so
@@ -94,6 +94,7 @@ impl WorkspaceWindow {
         // `workspace_window::processes`.
         let processes_sampled = self.process_sampling_tick();
         if grid_dirty
+           || panel_states_moved
            || panel_dirty
            || spinner_dirty
            || activated
@@ -163,8 +164,17 @@ impl WorkspaceWindow {
     }
 
     /// Writes each ready panel session's lifecycle back to the store, so the
-    /// sidebar and dashboard show what the ACP session is actually doing.
-    fn sync_panel_agent_states(&mut self) {
+    /// sidebar and dashboard show what the ACP session is actually doing,
+    /// and says whether any of them moved.
+    ///
+    /// Reporting it matters because this is the only thing that notices an
+    /// *unselected* agent's turn ending: `panel_needs_repaint` consults the
+    /// selected slot alone, by design - you cannot see an unselected
+    /// panel - but the sidebar's state dot for that agent is on screen. Until
+    /// this was polled, the transition reached the store and stopped there,
+    /// and the dot caught up whenever something unrelated repainted the
+    /// window.
+    fn sync_panel_agent_states(&mut self) -> bool {
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
@@ -187,12 +197,15 @@ impl WorkspaceWindow {
                                    Some((*id, agent_state))
                                })
                                .collect::<Vec<_>>();
+        let mut moved = false;
         {
             let mut store = self.store.lock();
             for (id, state) in panel_states {
+                moved |= store.agent(id).is_some_and(|agent| agent.state != state);
                 store.set_state(id, state);
             }
         }
+        moved
     }
 
     /// Sends the next queued prompt to every agent that has one, and says
@@ -216,6 +229,23 @@ impl WorkspaceWindow {
         prompt_picked_up
     }
 
+    /// Whether anything the window draws outside the terminal grid has
+    /// changed since the last poll: the selected agent's panel, or the diff
+    /// stats any view may be showing.
+    ///
+    /// The two are combined here rather than inside
+    /// [`Self::selected_panel_needs_repaint`] because `take_changed` clears
+    /// the flag as it reads it. Asking for it down a path that can return
+    /// early is how a landed diff stat gets consumed and thrown away -
+    /// which it was, for any selected agent that had no panel session.
+    pub(super) fn panel_needs_repaint(&mut self) -> bool {
+        let stats_changed = self.diff_stats.take_changed();
+
+        // Not `||`: the panel check has to run even when the stats already
+        // decided the answer, because it clears its own flags too.
+        self.selected_panel_needs_repaint() | stats_changed
+    }
+
     /// Whether the selected agent's panel needs a repaint: either its live
     /// session has new events, or its slot changed lifecycle phase since
     /// the last poll.
@@ -227,34 +257,31 @@ impl WorkspaceWindow {
     /// showing "Connecting to agent…" indefinitely, making the connect
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
-    pub(super) fn panel_needs_repaint(&mut self) -> bool {
-        let stats_changed = self.diff_stats.take_changed();
+    ///
+    /// Nothing here is time-derived. The turn-in-progress row is an animated
+    /// WebP that re-arms its own `request_animation_frame` (see
+    /// `app_support::working_knot_animation`), so a turn that streams
+    /// nothing for a while still animates without this poll waking the
+    /// window. The braille spinner that did need driving from here is now
+    /// only the dashboard's, and `spinner_repaint_due` drives that.
+    fn selected_panel_needs_repaint(&mut self) -> bool {
         let Some(id) = self.selected_agent
         else {
-            return stats_changed;
+            return false;
         };
         let Some(slot) = self.panel_sessions.get(&id)
         else {
             return false;
         };
-        let (phase, events_arrived, turn_active) = {
+        let (phase, events_arrived) = {
             let slot = slot.lock();
             let events_arrived = matches!(&*slot,
                                           panel_session::PanelSessionSlot::Ready(handle)
                                           if handle.take_dirty());
-            let turn_active = match &*slot {
-                panel_session::PanelSessionSlot::Ready(handle) => handle.state().lock().turn_active,
-                _ => false,
-            };
-            (slot.phase(), events_arrived, turn_active)
+            (slot.phase(), events_arrived)
         };
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
-        let indicator_due = turn_active
-                            && self.working_indicator_last_repaint.elapsed()
-                               >= consts::WORKING_INDICATOR_MIN_REPAINT;
-        if indicator_due {
-            self.working_indicator_last_repaint = std::time::Instant::now();
-        }
-        phase_changed || events_arrived || indicator_due || stats_changed
+
+        phase_changed || events_arrived
     }
 }

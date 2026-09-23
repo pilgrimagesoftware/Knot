@@ -25,12 +25,6 @@ use gpui_kit::Rgba;
 /// actually moved.
 pub(crate) const REPAINT_POLL_INTERVAL: Duration = Duration::from_millis(33);
 
-/// Minimum gap between working-indicator repaints.
-///
-/// The spinner advances about five times a second, so repainting at the poll
-/// rate would redraw the same frame five times over.
-pub(crate) const WORKING_INDICATOR_MIN_REPAINT: Duration = Duration::from_millis(120);
-
 /// How stale a cached `git diff --numstat` may get before the next render
 /// asks for a fresh one.
 ///

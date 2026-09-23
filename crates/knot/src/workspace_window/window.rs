@@ -158,7 +158,6 @@ pub(crate) struct WorkspaceWindow {
     /// `render_panel_pane` can `splice` only the rows that actually
     /// changed and leave off-screen rows' measured heights alone.
     pub(super) panel_list_row_counts:            BTreeMap<Uuid, usize>,
-    pub(super) working_indicator_last_repaint:   std::time::Instant,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
