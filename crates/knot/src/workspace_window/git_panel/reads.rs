@@ -110,3 +110,161 @@ fn read_diff(folder: &str, selection: &Selection) -> DiffOutcome {
         Err(error) => DiffOutcome::Failed(error.to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    use knot_git::Runner;
+
+    use super::{read_diff, read_status};
+    use crate::git_panel::state::{DiffOutcome, GitStatusSnapshot, Selection};
+
+    fn init_repo(dir: &Path) {
+        let run = |args: &[&str]| {
+            Runner::new(dir).run(args).unwrap();
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "test@example.com"]);
+        run(&["config", "user.name", "Test"]);
+        run(&["config", "commit.gpgsign", "false"]);
+    }
+
+    fn selection(path: &str, staged: bool) -> Selection {
+        Selection { path: PathBuf::from(path),
+                    orig_path: None,
+                    staged }
+    }
+
+    /// The three answers Swift collapsed into one. Its repository layer
+    /// swallowed the error and returned an empty status, so a folder that was
+    /// not a checkout and a repository that could not be read both rendered
+    /// as "Working tree clean".
+    #[test]
+    fn a_folder_that_is_not_a_checkout_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+
+        assert_eq!(read_status(dir.path().to_str().unwrap()),
+                   GitStatusSnapshot::NotARepository);
+    }
+
+    #[test]
+    fn a_repository_that_cannot_be_read_is_a_failure_not_a_clean_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        // Exists, so `is_working_tree` says yes, but git cannot use it - the
+        // shape a corrupted or half-written checkout takes.
+        fs::write(dir.path().join(".git"), "not a gitdir").unwrap();
+
+        let status = read_status(dir.path().to_str().unwrap());
+
+        assert!(matches!(status, GitStatusSnapshot::Failed(_)),
+                "a failed read must not be reported as a clean tree, got {status:?}");
+    }
+
+    #[test]
+    fn a_clean_checkout_loads_an_empty_status() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+
+        match read_status(dir.path().to_str().unwrap()) {
+            GitStatusSnapshot::Loaded(status) => assert!(status.is_clean()),
+            other => panic!("expected a loaded status, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_dirty_checkout_loads_its_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        fs::write(dir.path().join("new.txt"), "hello\n").unwrap();
+
+        match read_status(dir.path().to_str().unwrap()) {
+            GitStatusSnapshot::Loaded(status) => {
+                assert!(!status.is_clean());
+                assert_eq!(status.untracked().count(), 1);
+            }
+            other => panic!("expected a loaded status, got {other:?}"),
+        }
+    }
+
+    /// `Absent` is git reporting no change on that side - a finished answer,
+    /// and a different one from "no answer has landed yet", which the cache
+    /// represents by having no entry at all.
+    #[test]
+    fn an_unchanged_path_reads_as_absent_rather_than_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        fs::write(dir.path().join("f.txt"), "one\n").unwrap();
+        let run = |args: &[&str]| {
+            Runner::new(dir.path()).run(args).unwrap();
+        };
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "init"]);
+
+        let folder = dir.path().to_str().unwrap();
+        assert_eq!(read_diff(folder, &selection("f.txt", false)),
+                   DiffOutcome::Absent);
+    }
+
+    #[test]
+    fn a_changed_path_loads_its_diff() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        fs::write(dir.path().join("f.txt"), "one\n").unwrap();
+        let run = |args: &[&str]| {
+            Runner::new(dir.path()).run(args).unwrap();
+        };
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "init"]);
+        fs::write(dir.path().join("f.txt"), "one\ntwo\n").unwrap();
+
+        let folder = dir.path().to_str().unwrap();
+        match read_diff(folder, &selection("f.txt", false)) {
+            DiffOutcome::Loaded(diff) => assert_eq!(diff.additions(), 1),
+            other => panic!("expected a loaded diff, got {other:?}"),
+        }
+    }
+
+    /// Each side of a staged-and-modified path reports only its own change.
+    /// The panel draws two rows for it and they must not show the same diff.
+    #[test]
+    fn the_two_sides_of_one_path_read_separately() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        fs::write(dir.path().join("f.txt"), "one\n").unwrap();
+        let run = |args: &[&str]| {
+            Runner::new(dir.path()).run(args).unwrap();
+        };
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "init"]);
+
+        fs::write(dir.path().join("f.txt"), "one\nstaged\n").unwrap();
+        run(&["add", "f.txt"]);
+        fs::write(dir.path().join("f.txt"), "one\nstaged\nunstaged\n").unwrap();
+
+        let folder = dir.path().to_str().unwrap();
+        let staged = read_diff(folder, &selection("f.txt", true));
+        let unstaged = read_diff(folder, &selection("f.txt", false));
+
+        assert_ne!(staged, unstaged, "the two sides must not read the same");
+        match (staged, unstaged) {
+            (DiffOutcome::Loaded(s), DiffOutcome::Loaded(u)) => {
+                assert_eq!(s.additions(), 1);
+                assert_eq!(u.additions(), 1);
+            }
+            other => panic!("expected both sides to load, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_read_against_a_broken_repository_is_a_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(".git"), "not a gitdir").unwrap();
+
+        let outcome = read_diff(dir.path().to_str().unwrap(), &selection("f.txt", false));
+
+        assert!(matches!(outcome, DiffOutcome::Failed(_)),
+                "expected a failure, got {outcome:?}");
+    }
+}
