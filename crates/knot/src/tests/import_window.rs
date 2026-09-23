@@ -118,19 +118,10 @@ fn import_opens_again_after_its_window_is_closed(cx: &mut TestAppContext) {
 /// actually brings across rather than on a name alone.
 #[test]
 fn a_workspace_import_label_names_its_agent_count() {
-    let mut workspace = knot_core::Workspace { id:                    Uuid::new_v4(),
-                                               name:                  "WIP".into(),
-                                               color_hex:             "#46A857".into(),
-                                               agent_ids:             vec![Uuid::new_v4(),
-                                                                           Uuid::new_v4()],
-                                               layout_mode:           "single".into(),
-                                               active_agent_ids:      Vec::new(),
-                                               focused_pane_index:    0,
-                                               split_ratio:           0.5,
-                                               split_ratio_secondary: None,
-                                               show_dashboard:        None,
-                                               is_detached:           None,
-                                               window_bounds:         None, };
+    let mut workspace = knot_core::Workspace { id:        Uuid::new_v4(),
+                                               name:      "WIP".into(),
+                                               color_hex: "#46A857".into(),
+                                               agent_ids: vec![Uuid::new_v4(), Uuid::new_v4()], };
 
     assert_eq!(ImportWindow::workspace_label(&workspace), "WIP (2 agents)");
 

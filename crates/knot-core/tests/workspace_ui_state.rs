@@ -240,3 +240,48 @@ fn an_already_split_installation_is_not_rewritten_by_a_load() {
                ui_before,
                "a second load rewrote the UI-state document");
 }
+
+/// The whole point of the change, as a test rather than a claim: writing
+/// arrangement must not touch what the user configured. `persist_workspace_ui`
+/// is what the bounds observer calls on every frame of a pointer drag.
+#[test]
+fn writing_ui_state_leaves_the_roster_documents_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut settings = Settings::with_store_root(dir.path());
+    let workspace = Uuid::new_v4();
+    settings.saved_workspaces
+            .push(knot_core::Workspace { id:        workspace,
+                                         name:      "Alpha".to_string(),
+                                         color_hex: "#101010".to_string(),
+                                         agent_ids: Vec::new(), });
+    settings.saved_agents
+            .push(knot_core::SavedAgent::new(Uuid::new_v4(), "agent", None, "/tmp"));
+    settings.persist().unwrap();
+
+    let agents_path = dir.path().join(knot_core::consts::AGENTS_FILE);
+    let workspaces_path = dir.path().join(WORKSPACES_FILE);
+    let agents_before = std::fs::read(&agents_path).unwrap();
+    let workspaces_before = std::fs::read(&workspaces_path).unwrap();
+
+    // A drag: the same call the bounds observer makes, many times over.
+    for step in 0..5u8 {
+        settings.update_workspace_ui(workspace, |ui| {
+                    ui.window_bounds = Some(knot_core::SavedWindowBounds { x:      f32::from(step),
+                                                                           y:      10.0,
+                                                                           width:  800.0,
+                                                                           height: 600.0, });
+                })
+                .unwrap();
+    }
+
+    assert_eq!(std::fs::read(&agents_path).unwrap(),
+               agents_before,
+               "a window move rewrote the saved agents");
+    assert_eq!(std::fs::read(&workspaces_path).unwrap(),
+               workspaces_before,
+               "a window move rewrote the saved workspaces");
+    let reloaded = Settings::load_from_root(dir.path()).unwrap();
+    assert_eq!(reloaded.workspace_ui(workspace).window_bounds.unwrap().x,
+               4.0,
+               "and the last position was kept");
+}

@@ -77,18 +77,7 @@ impl WorkspaceManager {
         }
         else {
             let id = Uuid::new_v4();
-            store.add_workspace(knot_core::Workspace { id,
-                                                       name,
-                                                       color_hex: consts::COLOR_WORKSPACE_DEFAULT_HEX.to_string(),
-                                                       agent_ids: Vec::new(),
-                                                       layout_mode: "single".to_string(),
-                                                       active_agent_ids: Vec::new(),
-                                                       focused_pane_index: 0,
-                                                       split_ratio: 0.5,
-                                                       split_ratio_secondary: None,
-                                                       show_dashboard: None,
-                                                       is_detached: None,
-                                                       window_bounds: None });
+            store.add_workspace(knot_core::Workspace { id,name,color_hex: consts::COLOR_WORKSPACE_DEFAULT_HEX.to_string(),agent_ids: Vec::new() });
             store.set_current_workspace(id);
         }
         drop(store);

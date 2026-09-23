@@ -42,18 +42,10 @@ mod workspace_window_open;
 use knot_core::Workspace;
 
 fn workspace(name: &str) -> Workspace {
-    Workspace { id:                    Uuid::new_v4(),
-                name:                  name.to_string(),
-                color_hex:             "#123456".to_string(),
-                agent_ids:             Vec::new(),
-                layout_mode:           "single".to_string(),
-                active_agent_ids:      Vec::new(),
-                focused_pane_index:    0,
-                split_ratio:           0.5,
-                split_ratio_secondary: None,
-                show_dashboard:        None,
-                is_detached:           None,
-                window_bounds:         None, }
+    Workspace { id:        Uuid::new_v4(),
+                name:      name.to_string(),
+                color_hex: "#123456".to_string(),
+                agent_ids: Vec::new(), }
 }
 
 /// The labels a given set of facts produces, separators rendered as

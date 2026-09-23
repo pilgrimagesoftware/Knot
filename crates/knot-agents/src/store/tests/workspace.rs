@@ -1,18 +1,10 @@
 use super::super::*;
 
 fn workspace(name: &str) -> knot_core::Workspace {
-    knot_core::Workspace { id:                    Uuid::new_v4(),
-                           name:                  name.to_string(),
-                           color_hex:             "#000000".to_string(),
-                           agent_ids:             Vec::new(),
-                           active_agent_ids:      Vec::new(),
-                           layout_mode:           "single".to_string(),
-                           focused_pane_index:    0,
-                           split_ratio:           0.5,
-                           split_ratio_secondary: None,
-                           show_dashboard:        None,
-                           is_detached:           None,
-                           window_bounds:         None, }
+    knot_core::Workspace { id:        Uuid::new_v4(),
+                           name:      name.to_string(),
+                           color_hex: "#000000".to_string(),
+                           agent_ids: Vec::new(), }
 }
 
 #[test]

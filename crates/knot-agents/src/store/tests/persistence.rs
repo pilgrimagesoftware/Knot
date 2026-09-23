@@ -4,18 +4,10 @@ use super::super::*;
 
 /// A workspace holding `agent_ids`, for the adoption tests below.
 fn workspace_named(name: &str, agent_ids: Vec<Uuid>) -> knot_core::Workspace {
-    knot_core::Workspace { id:                    Uuid::new_v4(),
-                           name:                  name.to_string(),
-                           color_hex:             "#000000".to_string(),
-                           agent_ids:             agent_ids.clone(),
-                           active_agent_ids:      agent_ids,
-                           layout_mode:           "single".to_string(),
-                           focused_pane_index:    0,
-                           split_ratio:           0.5,
-                           split_ratio_secondary: None,
-                           show_dashboard:        None,
-                           is_detached:           None,
-                           window_bounds:         None, }
+    knot_core::Workspace { id: Uuid::new_v4(),
+                           name: name.to_string(),
+                           color_hex: "#000000".to_string(),
+                           agent_ids }
 }
 
 #[test]
@@ -25,7 +17,8 @@ fn restores_agents_into_a_default_workspace_when_layout_is_missing() {
     let store = AgentStore::from_saved(&[saved], Vec::new());
     assert_eq!(store.workspaces().len(), 1);
     assert_eq!(store.workspaces()[0].agent_ids, vec![id]);
-    assert_eq!(store.workspaces()[0].active_agent_ids, vec![id]);
+    let workspace_id = store.workspaces()[0].id;
+    assert_eq!(store.workspace_ui(workspace_id).active_agent_ids, vec![id]);
 }
 
 #[test]

@@ -49,17 +49,17 @@
 
 ## 4. The runtime store and its callers
 
-- [ ] 4.1 Add the parallel UI map to `AgentStore` and move
+- [x] 4.1 Add the parallel UI map to `AgentStore` and move
       `set_workspace_window_bounds` and the other UI-state setters onto it in
       `crates/knot-agents/src/store/workspace.rs`; verify with
       `cargo test -p knot-agents`
-- [ ] 4.2 Add the map to whatever teardown already prunes per-key state, so the
+- [x] 4.2 Add the map to whatever teardown already prunes per-key state, so the
       two pruning rules cannot disagree; verify with `make lint`
-- [ ] 4.3 Follow the compiler through the call sites in `crates/knot` — around
+- [x] 4.3 Follow the compiler through the call sites in `crates/knot` — around
       100 references across the eight fields — changing reads and writes to go
       through the UI state and changing nothing else. Any improvement noticed on
       the way belongs in a separate change; verify with `make build`
-- [ ] 4.4 Update the `Workspace` literals in `crates/knot/src/workspace_manager/mod.rs`,
+- [x] 4.4 Update the `Workspace` literals in `crates/knot/src/workspace_manager/mod.rs`,
       `crates/knot/src/tests/mod.rs` and `crates/knot/src/tests/import_window.rs`;
       verify with `cargo test -p knot`
 - [x] 4.5 Check `crates/knot-core/src/import/workspaces.rs`: an imported
@@ -69,7 +69,7 @@
 
 ## 5. The payoff
 
-- [ ] 5.1 Change the bounds observer in `crates/knot/src/workspace_window/open.rs`
+- [x] 5.1 Change the bounds observer in `crates/knot/src/workspace_window/open.rs`
       to write the UI-state document alone, not through `persist_agents` and not
       through the window's `Settings` snapshot; verify by dragging a window and
       confirming `agents.json` and `workspaces.json` are byte-for-byte unchanged

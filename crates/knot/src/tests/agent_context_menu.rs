@@ -66,12 +66,15 @@ fn agent_menu_facts_exclude_the_agents_own_workspace_and_detached_ones() {
     let mut store = knot_agents::AgentStore::new();
     let here = workspace("Here");
     let there = workspace("There");
-    let mut detached = workspace("Detached");
-    detached.is_detached = Some(true);
+    let detached = workspace("Detached");
+    let detached_id = detached.id;
     let (here_id, there_id) = (here.id, there.id);
     store.add_workspace(here);
     store.add_workspace(there);
     store.add_workspace(detached);
+    // Detachment is arrangement, so it is set on the UI state rather than on
+    // the workspace record.
+    store.set_workspace_detached(detached_id, true);
     store.set_current_workspace(here_id);
     let id = store.create("~/alpha", knot_agents::CreateOptions::default());
 

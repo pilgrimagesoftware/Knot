@@ -79,9 +79,13 @@ fn initial_selection_prefers_active_agent_and_skips_stale_ids() {
     let first = store.create("~/first", knot_agents::CreateOptions::default());
     let second = store.create("~/second", knot_agents::CreateOptions::default());
 
-    let mut saved = store.saved_workspaces()[0].clone();
-    saved.active_agent_ids = vec![Uuid::new_v4(), second];
-    let restored = knot_agents::AgentStore::from_saved(&store.saved_agents(false), vec![saved]);
+    let saved = store.saved_workspaces()[0].clone();
+    let saved_id = saved.id;
+    let mut restored = knot_agents::AgentStore::from_saved(&store.saved_agents(false), vec![saved]);
+    // Which agents a layout shows is UI state now, restored from its own
+    // document rather than carried on the workspace record. The stale id is
+    // the point: it must be skipped, not selected.
+    restored.set_workspace_active_agents(saved_id, vec![Uuid::new_v4(), second]);
 
     assert_eq!(initial_agent_selection(&restored), Some(second));
     assert_ne!(initial_agent_selection(&restored), Some(first));
