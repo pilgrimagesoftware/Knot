@@ -73,6 +73,14 @@ git merge other 2>/dev/null   # leaves conflicted.txt unmerged
 printf 'one\nstaged\n' > tracked.txt && git add tracked.txt   # staged
 printf 'one\nstaged\nunstaged\n' > tracked.txt                # and unstaged
 printf 'new\n' > untracked.txt                                # untracked
+printf 'deep\nchanged\n' > nested/deep.txt                    # a nested path
+```
+
+Confirm it produced all four states before launching — `1 MM` is the
+staged-and-modified path that should draw two rows, `u UU` the conflict:
+
+```bash
+git -C /tmp/knot-verify-repo status --porcelain=v2 | grep -v '^# branch.oid'
 ```
 
 Point an agent at `/tmp/knot-verify-repo`. A terminal-mode agent is enough —
