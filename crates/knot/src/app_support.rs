@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use gpui_kit::App;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
@@ -239,6 +240,48 @@ pub(crate) const JETBRAINS_MONO_BOLD: &[u8] =
 
 pub(crate) const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app-icon-32.png");
 
+/// The panel's turn-in-progress animation: the app icon through one full
+/// rotation, 24 frames of animated WebP at 62ms each. Regenerate with
+/// `scripts/make-working-animation.sh`, which is committed beside it.
+pub(crate) const WORKING_KNOT_WEBP: &[u8] = include_bytes!("../assets/working-knot.webp");
+
+/// The path [`KnotAssets`] serves [`WORKING_KNOT_WEBP`] at, and the string
+/// [`working_knot_animation`] hands to `img` to ask for it.
+pub(crate) const WORKING_KNOT_PATH: &str = "working-knot.webp";
+
+/// Knot's own embedded assets, layered over gpui-kit's icon catalog.
+///
+/// The working animation has to reach `img` as an embedded *resource path*
+/// rather than as `Image::from_bytes`. Those are two different decoders in
+/// GPUI and only one of them animates a WebP: `Image::to_image_data`, which
+/// is what an `Arc<Image>` source goes through, sends every format but GIF
+/// to `decode_static_image` and yields a single frame. The resource loader
+/// behind `img("some/path")` asks `WebPDecoder::has_animation` first and
+/// decodes every frame. Serving the bytes from here is what puts the asset
+/// on the second path, and is why this exists rather than a sibling of
+/// [`app_titlebar_icon`] built the same way that one is.
+///
+/// `AllAssets` reports a miss as an `Err` rather than `Ok(None)`, so our own
+/// path is answered first and everything else is delegated untouched.
+pub(crate) struct KnotAssets;
+
+impl gpui_kit::AssetSource for KnotAssets {
+    fn load(&self, path: &str) -> gpui_kit::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        if path == WORKING_KNOT_PATH {
+            return Ok(Some(std::borrow::Cow::Borrowed(WORKING_KNOT_WEBP)));
+        }
+        gpui_kit::AssetSource::load(&gpui_kit::assets::AllAssets, path)
+    }
+
+    fn list(&self, path: &str) -> gpui_kit::Result<Vec<gpui_kit::SharedString>> {
+        let mut listed = gpui_kit::AssetSource::list(&gpui_kit::assets::AllAssets, path)?;
+        if WORKING_KNOT_PATH.starts_with(path) {
+            listed.push(WORKING_KNOT_PATH.into());
+        }
+        Ok(listed)
+    }
+}
+
 /// A small app-icon glyph for the leading edge of a custom `TitleBar`, sat
 /// between the traffic lights and the title text.
 pub(crate) fn app_titlebar_icon() -> impl IntoElement {
@@ -248,6 +291,30 @@ pub(crate) fn app_titlebar_icon() -> impl IntoElement {
                         .h(px(16.))
                         .rounded(px(4.))
                         .flex_shrink_0()
+}
+
+/// The conversation's turn-in-progress mark: the app icon, animating.
+///
+/// Everything that makes it an animation belongs to GPUI's `img` - it
+/// advances frames on the delay each one declares, holds frame 0 when
+/// `reduce_motion` is set, stops while the window is inactive, and requests
+/// its own animation frames. Knot schedules nothing, which is the whole
+/// reason this is an asset rather than a frame counter like
+/// [`crate::working_indicator`]'s.
+///
+/// The `id` is not decoration. `img` keeps the frame index in element state
+/// and both the advance and the `request_animation_frame` call are gated on
+/// the element having a global id; without one it renders frame 0 forever
+/// and looks like a still image that failed to load. One id is enough
+/// because the pane renders one panel at a time.
+///
+/// The box is fixed in both dimensions so the row reserves the same space
+/// animating or held still, per `acp-panel-ui`'s no-reflow scenario.
+pub(crate) fn working_knot_animation() -> impl IntoElement {
+    gpui_kit::img(WORKING_KNOT_PATH).id("working-knot")
+                                    .w(px(24.))
+                                    .h(px(24.))
+                                    .flex_shrink_0()
 }
 
 /// Replaces a `$HOME` prefix with `~` - matches the Swift reference's

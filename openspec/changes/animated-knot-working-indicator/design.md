@@ -46,6 +46,22 @@ animated-image handling then supplies frame timing, the reduced-motion
 behavior the spec requires, the inactive-window pause, and the repaint
 scheduling.
 
+Two conditions on that, both found in implementation and neither obvious from
+the outside, because failing either yields a still frame rather than an error:
+
+- **The bytes must arrive as an embedded resource path, not as an
+  `Arc<Image>`.** Those are two different decoders. `Image::to_image_data`,
+  which an `Arc<Image>` source goes through, special-cases GIF and sends every
+  other format — WebP included — to `decode_static_image`. Only the resource
+  loader behind `img("some/path")` asks `WebPDecoder::has_animation` and
+  decodes the rest of the frames. So the asset is served by an `AssetSource`
+  of Knot's own, layered over gpui-kit's icon catalog and registered in
+  `app_bootstrap.rs`, rather than built beside `app_titlebar_icon` the way
+  that still icon is.
+- **The element must carry an `id`.** `img` keeps the frame index in element
+  state, and both the advance and the `request_animation_frame` call are gated
+  on `global_id.is_some()`.
+
 The alternative — a still image plus a frame index the app advances, in the
 shape of today's `spinner_frame()` — was rejected. It would need its own
 repaint driver in the panel, its own reduced-motion check, and its own

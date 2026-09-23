@@ -23,7 +23,6 @@ use super::style::RiskLevel;
 use super::style::risk_color;
 use super::summary_row::*;
 use crate::panel_state::PanelState;
-use crate::working_indicator;
 
 /// How much extra space above and below the viewport the list lays out and
 /// measures, so scrolling does not pop rows in at the edges.
@@ -127,9 +126,7 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
                              .expect("row_at yields Ended only once the session has ended");
             render_ended_banner(cause).into_any_element()
         }
-        Some(PanelRow::Working) => {
-            working_indicator::render(knot_agents::AgentState::Running, true).into_any_element()
-        }
+        Some(PanelRow::Working) => crate::app_support::working_knot_animation().into_any_element(),
         None => return div().into_any_element(),
     };
     div().w_full()

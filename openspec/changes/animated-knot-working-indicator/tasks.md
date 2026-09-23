@@ -21,28 +21,42 @@
 
 ## 2. Load and render it
 
-- [ ] 2.1 Add the asset's loading site to `crates/knot/src/app_support.rs` beside
-      `app_titlebar_icon` — `include_bytes!` plus an `Image::from_bytes` with
-      `ImageFormat::Webp`, in a 24×24 box fixed in both dimensions — with a
-      comment saying GPUI's `img` supplies the frame timing, the reduced-motion
-      behavior and the repaint scheduling; verify with `make build`
-- [ ] 2.2 Point the `PanelRow::Working` arm in
+- [x] 2.1 Add the asset's loading site to `crates/knot/src/app_support.rs` beside
+      `app_titlebar_icon` — `include_bytes!` plus a `KnotAssets` asset source
+      serving it at `working-knot.webp`, drawn by `img(WORKING_KNOT_PATH).id(..)`
+      in a 24×24 box fixed in both dimensions — with a comment saying GPUI's
+      `img` supplies the frame timing, the reduced-motion behavior and the
+      repaint scheduling; verify with `make build`.
+      **Not** `Image::from_bytes(ImageFormat::Webp, ..)` as first planned: that
+      source decodes through `Image::to_image_data`, which sends every format
+      but GIF to `decode_static_image` and yields one frame. Only the resource
+      loader behind `img("<path>")` asks `WebPDecoder::has_animation`. The
+      `.id(..)` is load-bearing for the same reason — `img` keeps the frame
+      index in element state and gates both the advance and
+      `request_animation_frame` on the element having a global id
+- [x] 2.2 Register `KnotAssets` in `crates/knot/src/app_bootstrap.rs` in place of
+      the bare `AllAssets`, delegating every other path to it, so the asset
+      reaches `img` by the animating path; verify with `make build`
+- [x] 2.3 Point the `PanelRow::Working` arm in
       `crates/knot/src/panel_view/render.rs` at the new element and drop its
       `working_indicator` call and import; verify with `make lint`
-- [ ] 2.3 Update the module doc on `crates/knot/src/working_indicator.rs` to
+- [x] 2.4 Update the module doc on `crates/knot/src/working_indicator.rs` to
       record that the panel no longer calls it and why, pointing at the
       `working-indicator` spec; verify with `make lint`
 
 ## 3. Check nothing else moved
 
-- [ ] 3.1 Confirm the dashboard card still renders the braille spinner across
+- [x] 3.1 Confirm the dashboard card still renders the braille spinner across
       all five states and that `spinner_repaint_due`,
       `WORKING_INDICATOR_MIN_REPAINT` and `last_spinner_frame` are untouched;
       verify with `cargo test -p knot working_indicator` and by watching a
-      dashboard with a working agent
-- [ ] 3.2 Confirm the panel's row bookkeeping is unchanged — `row_count` still
+      dashboard with a working agent.
+      Automated half done: 3/3 pass, and the diff touches none of
+      `consts.rs`, `workspace_window/window.rs`, `open.rs` or `repaint.rs`.
+      Watching a live dashboard is outstanding with 4.1–4.3
+- [x] 3.2 Confirm the panel's row bookkeeping is unchanged — `row_count` still
       counts `turn_active` and `row_at` still yields `Working` last; verify with
-      `cargo test -p knot panel_view`
+      `cargo test -p knot panel_view` (26/26 pass)
 
 ## 4. Walk the spec
 
@@ -54,5 +68,5 @@
 - [ ] 4.3 Turn on Reduce Motion in System Settings > Accessibility > Display and
       confirm the row is still present, shows the icon held still, and occupies
       the same space as when animating
-- [ ] 4.4 Run `make` and confirm the whole gate passes — `fmt-check`,
+- [x] 4.4 Run `make` and confirm the whole gate passes — `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build
