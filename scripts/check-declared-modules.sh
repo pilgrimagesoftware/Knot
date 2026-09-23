@@ -35,6 +35,33 @@
 # containing a `mod.rs` and missed the first and third entirely - 92 files,
 # caught in review rather than by the check.
 #
+# ---------------------------------------------------------------------------
+# Why this is one grep and not a pipeline
+# ---------------------------------------------------------------------------
+#
+# Comments were once stripped with `sed 's,//.*,,' "$owner" | grep -q ...`.
+# Under `set -o pipefail` that is a race, not a filter: `grep -q` exits at its
+# first match, `sed` is still writing, `sed` takes SIGPIPE and exits 141, and
+# pipefail promotes 141 to the pipeline's status - so a FOUND declaration reads
+# as a missing one.
+#
+# The signature is backwards from every intuition about a flaky check, which is
+# how it survived review: EARLY matches fail and LATE matches pass, because a
+# late match leaves the producer with nothing left to write and therefore no
+# signal to take. Measured on this repo, on the file that exposed it:
+#
+#     store.rs, `mod documents` (line 54 of 678)   26 failures / 150
+#     store.rs, `mod tests`     (line 678 of 678)   0 failures / 150
+#
+# It is invisible on small inputs, so it survives any test written against a
+# short fixture. Forced with a match on line 1 of a 200k-line file it is not
+# rare at all - 40 failures out of 40.
+#
+# The rule generalises past this script: `set -o pipefail` plus ANY
+# early-exiting consumer - `grep -q`, `head`, `grep -m N` - is a latent race.
+# Fix it by removing the pipe. Retrying, or unsetting pipefail around it, both
+# leave the race and only change how often you notice.
+#
 # Usage: scripts/check-declared-modules.sh
 
 set -euo pipefail
