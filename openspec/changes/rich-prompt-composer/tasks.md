@@ -3,7 +3,7 @@
 ## 1. Make room in the composer
 
 - [ ] 1.1 Split `workspace_window/panel/input.rs` (517 lines, cap 700) by concern — chip strip, queued-prompt list, control bar, text entry — into sibling files, leaving `mod.rs` declaring only; verify `make size-check` and `make lint` pass and `make test` is unchanged
-- [ ] 1.2 Add a panel-composer test module covering today's behaviour before anything moves: send key honours `agent_panel_shift_enter_sends`, the other chord inserts a newline, expand/collapse switches between `PANEL_INPUT_ROWS_COLLAPSED` and `PANEL_INPUT_ROWS_EXPANDED`, and a selected Panel agent takes focus; verify all pass against the current `TextareaState`
+- [x] 1.2 Add a panel-composer test module covering today's behaviour before anything moves: send key honours `agent_panel_shift_enter_sends`, the other chord inserts a newline, expand/collapse switches between `PANEL_INPUT_ROWS_COLLAPSED` and `PANEL_INPUT_ROWS_EXPANDED`, and a selected Panel agent takes focus; verify all pass against the current `TextareaState`
 
 ## 2. Unblock styling plus auto-grow
 

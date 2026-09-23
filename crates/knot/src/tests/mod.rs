@@ -22,6 +22,7 @@ mod mcp_state_row;
 mod mcp_supervision;
 mod menu_key_equivalents;
 mod notifications;
+mod panel_composer;
 mod panel_lookup;
 mod panel_scroll;
 mod permission_keybindings;

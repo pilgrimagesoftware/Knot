@@ -29,7 +29,6 @@ use gpui_kit::component::input::Escape;
 use gpui_kit::component::input::IndentInline;
 use gpui_kit::component::input::MoveDown;
 use gpui_kit::component::input::MoveUp;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::div;
 use gpui_kit::px;
 use uuid::Uuid;
@@ -41,6 +40,7 @@ use crate::panel_commands::LookupRegistry;
 use crate::panel_commands::active_token;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::element_key;
+use crate::workspace_window::panel::prompt::PanelInputState;
 
 /// How many entries the popup shows at once before scrolling.
 const LOOKUP_MAX_VISIBLE: usize = 8;
@@ -90,7 +90,7 @@ impl WorkspaceWindow {
     }
 
     /// The token under the caret in `input`, or `None` when there is none.
-    fn panel_lookup_token(input: &Entity<TextareaState>, cx: &gpui_kit::App)
+    fn panel_lookup_token(input: &Entity<PanelInputState>, cx: &gpui_kit::App)
                           -> Option<ActiveToken> {
         let state = input.read(cx);
         active_token(&state.value(), state.cursor())
@@ -101,7 +101,7 @@ impl WorkspaceWindow {
     ///
     /// This is the single "is the popup open?" answer; the renderer and
     /// every key handler ask it rather than keeping a flag in step.
-    fn panel_lookup_matches(&mut self, id: Uuid, input: &Entity<TextareaState>,
+    fn panel_lookup_matches(&mut self, id: Uuid, input: &Entity<PanelInputState>,
                             cx: &gpui_kit::App)
                             -> Option<(ActiveToken, Vec<LookupEntry>)> {
         let token = Self::panel_lookup_token(input, cx)?;
@@ -126,7 +126,7 @@ impl WorkspaceWindow {
 
     /// The popup, when the lookup is open - a list above the prompt row.
     pub(in crate::workspace_window) fn render_panel_lookup(&mut self, id: Uuid,
-                                                           input: &Entity<TextareaState>,
+                                                           input: &Entity<PanelInputState>,
                                                            cx: &mut Context<Self>)
                                                            -> Option<impl IntoElement + use<>> {
         let (_, matches) = self.panel_lookup_matches(id, input, cx)?;
@@ -195,7 +195,7 @@ impl WorkspaceWindow {
 
     /// Closes the popup without touching the buffer, per Esc's scenario.
     pub(in crate::workspace_window) fn dismiss_panel_lookup(&mut self, id: Uuid,
-                                                            input: &Entity<TextareaState>,
+                                                            input: &Entity<PanelInputState>,
                                                             cx: &gpui_kit::App) {
         let filter = Self::panel_lookup_token(input, cx).map(|token| token.filter);
         self.panel_lookup(id).dismissed = filter.or(Some(String::new()));
@@ -203,7 +203,7 @@ impl WorkspaceWindow {
 
     /// Replaces the slash token under the caret with the selected entry's
     /// token, leaving the rest of the buffer alone.
-    fn insert_panel_lookup_entry(&mut self, id: Uuid, input: &Entity<TextareaState>,
+    fn insert_panel_lookup_entry(&mut self, id: Uuid, input: &Entity<PanelInputState>,
                                  window: &mut Window, cx: &mut Context<Self>) {
         let Some((token, matches)) = self.panel_lookup_matches(id, input, cx)
         else {
@@ -231,7 +231,7 @@ impl WorkspaceWindow {
     /// so the lookup has to see them first and stop them going further -
     /// but only while it is open, or ordinary typing would lose those keys.
     pub(in crate::workspace_window) fn wire_panel_lookup_keys<E>(&self, element: E, id: Uuid,
-                                                                 input: &Entity<TextareaState>,
+                                                                 input: &Entity<PanelInputState>,
                                                                  cx: &mut Context<Self>)
                                                                  -> E
         where E: InteractiveElement {
@@ -309,8 +309,9 @@ impl WorkspaceWindow {
 /// selection does exactly that, and `replace` documents the caret landing
 /// at the end of what it wrote - so the two calls together are the spec's
 /// "token is replaced in place" with no whole-buffer fallback needed.
-pub(crate) fn replace_lookup_token(input: &Entity<TextareaState>, range: std::ops::Range<usize>,
-                                   token: &str, window: &mut Window, cx: &mut gpui_kit::App) {
+pub(crate) fn replace_lookup_token(input: &Entity<PanelInputState>,
+                                   range: std::ops::Range<usize>, token: &str,
+                                   window: &mut Window, cx: &mut gpui_kit::App) {
     let text = format!("/{token}");
     input.update(cx, |state, cx| {
              state.set_selected_range(range, cx);

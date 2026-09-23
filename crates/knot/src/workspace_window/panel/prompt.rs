@@ -18,6 +18,7 @@ use gpui_kit::PathPromptOptions;
 use gpui_kit::Window;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::input::Textarea;
 use gpui_kit::component::input::TextareaState;
 use uuid::Uuid;
 
@@ -32,8 +33,65 @@ use crate::workspace_window::prompt_queue::QueuedPanelPrompt;
 /// a fixed height: a fixed height fights the textarea's own layout, so a
 /// second line made it scroll and jump on every keystroke instead of
 /// simply getting taller.
-const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
-const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
+pub(crate) const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
+pub(crate) const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
+
+/// The state type behind the panel composer.
+///
+/// Named once so the widget the composer is built on is a single
+/// declaration rather than a type repeated across the window. The
+/// rich-input change swaps this for `EditorState`, which is the only
+/// edit that swap should need outside the two functions below.
+pub(crate) type PanelInputState = TextareaState;
+
+/// The widget that draws [`PanelInputState`], named for the same reason
+/// and swapped in the same breath.
+pub(crate) type PanelInput = Textarea;
+
+/// How far `id`'s composer may grow, given whether it is expanded.
+///
+/// The bound is read in two places - when the entity is built and when the
+/// expand control re-issues it - and they have to agree, so the choice
+/// lives here rather than twice.
+pub(crate) fn panel_input_max_rows(expanded: bool) -> usize {
+    if expanded {
+        PANEL_INPUT_ROWS_EXPANDED
+    }
+    else {
+        PANEL_INPUT_ROWS_COLLAPSED
+    }
+}
+
+/// Whether a `PressEnter` carrying `shift` is the send chord, given the
+/// `agent_panel_shift_enter_sends` setting.
+///
+/// The widget reports *both* chords as `PressEnter` and distinguishes them
+/// only by this flag - `submit_on_enter` changes which one also types a
+/// newline, not which one reports - so this predicate is the whole of the
+/// send-chord decision.
+pub(crate) fn sends_on(shift_to_send: bool, shift: bool) -> bool {
+    shift == shift_to_send
+}
+
+/// Builds the composer's state entity: the placeholder, the send chord
+/// implied by `shift_to_send`, and the auto-grow bounds.
+///
+/// Separate from [`WorkspaceWindow::panel_prompt_input`], which owns the
+/// caching and the event subscription, so the widget's own configuration
+/// can be exercised in a test without a window's worth of state behind it.
+pub(crate) fn new_panel_input(shift_to_send: bool, max_rows: usize, window: &mut Window,
+                              cx: &mut App)
+                              -> Entity<PanelInputState> {
+    cx.new(|cx| {
+          PanelInputState::new(window, cx).placeholder(WorkspaceWindow::panel_prompt_placeholder())
+                                          // `submit_on_enter` is the
+                                          // inverse of the setting: the
+                                          // chord that does *not* send is
+                                          // the one that inserts a newline.
+                                          .submit_on_enter(!shift_to_send)
+                                          .auto_grow(1, max_rows)
+      })
+}
 
 impl WorkspaceWindow {
     /// Opens the native file/image picker and attaches the chosen paths to
@@ -124,12 +182,7 @@ impl WorkspaceWindow {
         };
         // The cap is part of the textarea's own layout mode, so expanding
         // has to update the live entity rather than just the render height.
-        let max_rows = if expanded {
-            PANEL_INPUT_ROWS_EXPANDED
-        }
-        else {
-            PANEL_INPUT_ROWS_COLLAPSED
-        };
+        let max_rows = panel_input_max_rows(expanded);
         if let Some(input) = self.panel_prompt_inputs.get(&id).cloned() {
             cx.update_entity(&input, |state, cx| state.set_auto_grow(1, max_rows, cx));
         }
@@ -173,29 +226,19 @@ impl WorkspaceWindow {
     pub(in crate::workspace_window) fn panel_prompt_input(&mut self, id: Uuid,
                                                           window: &mut Window,
                                                           cx: &mut Context<Self>)
-                                                          -> Entity<TextareaState> {
+                                                          -> Entity<PanelInputState> {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
-        let placeholder = Self::panel_prompt_placeholder();
-        let max_rows = if self.panel_input_expanded.contains(&id) {
-            PANEL_INPUT_ROWS_EXPANDED
-        }
-        else {
-            PANEL_INPUT_ROWS_COLLAPSED
-        };
-        let input = cx.new(|cx| {
-                          TextareaState::new(window, cx).placeholder(placeholder)
-                                                        .submit_on_enter(!shift_to_send)
-                                                        .auto_grow(1, max_rows)
-                      });
+        let max_rows = panel_input_max_rows(self.panel_input_expanded.contains(&id));
+        let input = new_panel_input(shift_to_send, max_rows, window, cx);
         let subscription = cx.subscribe_in(&input,
                                            window,
                                            move |view: &mut Self, input, event, window, cx| {
                                                match event {
                                                    InputEvent::PressEnter { shift, .. }
-                                                       if *shift == shift_to_send =>
+                                                       if sends_on(shift_to_send, *shift) =>
                                                    {
                                                        view.send_panel_prompt(id, window, cx);
                                                    }
@@ -276,7 +319,7 @@ impl WorkspaceWindow {
     /// starts between the click and the confirmation cannot be pulled back
     /// out from under the agent.
     pub(in crate::workspace_window) fn take_queued_prompt_into(&mut self,
-                                                               input: &Entity<TextareaState>,
+                                                               input: &Entity<PanelInputState>,
                                                                id: Uuid, prompt_id: Uuid,
                                                                window: &mut Window,
                                                                cx: &mut Context<Self>) {

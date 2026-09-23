@@ -15,7 +15,6 @@ use gpui_kit::AnyWindowHandle;
 use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::resizable::ResizableState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
@@ -141,7 +140,7 @@ pub(crate) struct WorkspaceWindow {
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
-    pub(super) panel_prompt_inputs:              BTreeMap<Uuid, Entity<TextareaState>>,
+    pub(super) panel_prompt_inputs: BTreeMap<Uuid, Entity<panel::prompt::PanelInputState>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).

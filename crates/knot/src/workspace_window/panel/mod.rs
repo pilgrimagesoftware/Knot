@@ -14,5 +14,5 @@
 pub(super) mod input;
 pub(crate) mod lookup;
 mod pane;
-mod prompt;
+pub(crate) mod prompt;
 mod session;

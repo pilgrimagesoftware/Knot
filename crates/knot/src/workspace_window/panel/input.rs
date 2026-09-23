@@ -21,8 +21,6 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Paste;
-use gpui_kit::component::input::Textarea;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::div;
 use gpui_kit::prelude::FluentBuilder;
@@ -36,6 +34,8 @@ use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::context_usage_indicator;
 use crate::workspace_window::element_key;
+use crate::workspace_window::panel::prompt::PanelInput;
+use crate::workspace_window::panel::prompt::PanelInputState;
 use crate::workspace_window::prompt_queue;
 use crate::workspace_window::prompt_queue::QueuedPanelPrompt;
 use crate::workspace_window::prompt_queue::queued_status_label;
@@ -53,7 +53,7 @@ impl WorkspaceWindow {
     /// `render_panel_pane`, per design decision "Control bar placement".
     #[allow(clippy::too_many_arguments)]
     pub(in crate::workspace_window) fn render_panel_input_area(&mut self, id: Uuid,
-                                                               input: &Entity<TextareaState>,
+                                                               input: &Entity<PanelInputState>,
                                                                pending_context: &[PathBuf],
                                                                queued_prompts: &[QueuedPanelPrompt],
                                                                expanded: bool, blocked: bool,
@@ -292,7 +292,7 @@ impl WorkspaceWindow {
                                     });
                                 }
                             })
-                            .child(Textarea::new(input).w_full().disabled(blocked)),
+                            .child(PanelInput::new(input).w_full().disabled(blocked)),
                     )
                     .child(if turn_active {
                         Button::new("panel-stop-prompt")
