@@ -133,7 +133,6 @@ impl WorkspaceWindow {
                     panel_list_row_counts: BTreeMap::new(),
                     window_handle: window.window_handle(),
                     titled_as: workspace_name.clone(),
-                    working_indicator_last_repaint: std::time::Instant::now(),
                     panel_pending_context: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
                     panel_lookups: BTreeMap::new(),

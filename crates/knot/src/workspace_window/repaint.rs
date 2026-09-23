@@ -208,6 +208,23 @@ impl WorkspaceWindow {
         prompt_picked_up
     }
 
+    /// Whether anything the window draws outside the terminal grid has
+    /// changed since the last poll: the selected agent's panel, or the diff
+    /// stats any view may be showing.
+    ///
+    /// The two are combined here rather than inside
+    /// [`Self::selected_panel_needs_repaint`] because `take_changed` clears
+    /// the flag as it reads it. Asking for it down a path that can return
+    /// early is how a landed diff stat gets consumed and thrown away -
+    /// which it was, for any selected agent that had no panel session.
+    pub(super) fn panel_needs_repaint(&mut self) -> bool {
+        let stats_changed = self.diff_stats.take_changed();
+
+        // Not `||`: the panel check has to run even when the stats already
+        // decided the answer, because it clears its own flags too.
+        self.selected_panel_needs_repaint() | stats_changed
+    }
+
     /// Whether the selected agent's panel needs a repaint: either its live
     /// session has new events, or its slot changed lifecycle phase since
     /// the last poll.
@@ -219,34 +236,31 @@ impl WorkspaceWindow {
     /// showing "Connecting to agent…" indefinitely, making the connect
     /// timeout look like it had never fired when in fact the error was
     /// sitting in the slot, undrawn.
-    pub(super) fn panel_needs_repaint(&mut self) -> bool {
-        let stats_changed = self.diff_stats.take_changed();
+    ///
+    /// Nothing here is time-derived. The turn-in-progress row is an animated
+    /// WebP that re-arms its own `request_animation_frame` (see
+    /// `app_support::working_knot_animation`), so a turn that streams
+    /// nothing for a while still animates without this poll waking the
+    /// window. The braille spinner that did need driving from here is now
+    /// only the dashboard's, and `spinner_repaint_due` drives that.
+    fn selected_panel_needs_repaint(&mut self) -> bool {
         let Some(id) = self.selected_agent
         else {
-            return stats_changed;
+            return false;
         };
         let Some(slot) = self.panel_sessions.get(&id)
         else {
             return false;
         };
-        let (phase, events_arrived, turn_active) = {
+        let (phase, events_arrived) = {
             let slot = slot.lock();
             let events_arrived = matches!(&*slot,
                                           panel_session::PanelSessionSlot::Ready(handle)
                                           if handle.take_dirty());
-            let turn_active = match &*slot {
-                panel_session::PanelSessionSlot::Ready(handle) => handle.state().lock().turn_active,
-                _ => false,
-            };
-            (slot.phase(), events_arrived, turn_active)
+            (slot.phase(), events_arrived)
         };
         let phase_changed = self.panel_phases.insert(id, phase) != Some(phase);
-        let indicator_due = turn_active
-                            && self.working_indicator_last_repaint.elapsed()
-                               >= consts::WORKING_INDICATOR_MIN_REPAINT;
-        if indicator_due {
-            self.working_indicator_last_repaint = std::time::Instant::now();
-        }
-        phase_changed || events_arrived || indicator_due || stats_changed
+
+        phase_changed || events_arrived
     }
 }
