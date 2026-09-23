@@ -15,9 +15,20 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::oneshot;
 
 use crate::consts;
 use crate::log::entry::Entry;
+
+/// What travels down the channel to the writer.
+pub(super) enum Message {
+    /// An entry to write.
+    Entry(Entry),
+    /// A barrier. The writer answers once everything sent before it is on
+    /// disk, which - the channel being FIFO - is what lets a caller wait for
+    /// its own entries without waiting on a clock.
+    Flush(oneshot::Sender<()>),
+}
 
 /// Owns the active file, its size, and the state of the current failure
 /// episode.
@@ -64,10 +75,17 @@ impl Writer {
         writer
     }
 
-    /// Drains `entries` until every sender is dropped.
-    pub(super) async fn run(mut self, mut entries: UnboundedReceiver<Entry>) {
-        while let Some(entry) = entries.recv().await {
-            self.write(&entry);
+    /// Drains `messages` until every sender is dropped.
+    pub(super) async fn run(mut self, mut messages: UnboundedReceiver<Message>) {
+        while let Some(message) = messages.recv().await {
+            match message {
+                Message::Entry(entry) => self.write(&entry),
+                // The receiver being gone means the waiter stopped caring,
+                // which is not this task's problem.
+                Message::Flush(ack) => {
+                    let _ = ack.send(());
+                }
+            }
         }
     }
 

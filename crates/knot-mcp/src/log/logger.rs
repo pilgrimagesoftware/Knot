@@ -3,10 +3,11 @@
 use std::path::PathBuf;
 
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::log::entry::{Entry, Level, Subject};
-use crate::log::writer::Writer;
+use crate::log::writer::{Message, Writer};
 
 /// A cheap, clonable handle to the log.
 ///
@@ -19,7 +20,7 @@ use crate::log::writer::Writer;
 /// log is the right failure.
 #[derive(Clone)]
 pub struct Logger {
-    entries: UnboundedSender<Entry>,
+    entries: UnboundedSender<Message>,
 }
 
 impl Logger {
@@ -42,7 +43,26 @@ impl Logger {
     /// during shutdown. There is nowhere useful to report that - the log is
     /// the thing that has stopped - so it is dropped.
     pub fn log(&self, level: Level, subject: Subject, message: impl Into<String>) {
-        let _ = self.entries.send(Entry::now(level, subject, message));
+        let _ = self.entries
+                    .send(Message::Entry(Entry::now(level, subject, message)));
+    }
+
+    /// Returns once everything logged through this handle before the call is
+    /// on disk.
+    ///
+    /// The channel is FIFO, so the writer reaching this barrier is proof it
+    /// has passed everything ahead of it. Nothing in the server waits on
+    /// this - it exists so a test can assert on file contents without
+    /// sleeping or yielding a guessed number of times, which is how a
+    /// logging test becomes a flaky one.
+    ///
+    /// Returns immediately if the writer is gone: there is nothing left to
+    /// wait for.
+    pub async fn flush(&self) {
+        let (ack, wait) = oneshot::channel();
+        if self.entries.send(Message::Flush(ack)).is_ok() {
+            let _ = wait.await;
+        }
     }
 
     /// Records an ordinary event.

@@ -16,7 +16,9 @@
 
 mod entry;
 mod logger;
+mod redact;
 mod writer;
 
 pub use entry::{Entry, Level, Subject};
 pub use logger::Logger;
+pub use redact::describe_call;

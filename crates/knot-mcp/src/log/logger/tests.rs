@@ -4,10 +4,11 @@ use super::Logger;
 use crate::consts;
 use crate::log::entry::Subject;
 
-/// Sends every entry, then closes the channel and waits for the writer to
-/// finish. Dropping the last sender is what ends `Writer::run`, so this
-/// drains deterministically rather than by sleeping.
+/// Waits for everything sent so far to reach disk, then closes the channel
+/// and waits for the writer to finish. Both steps are barriers rather than
+/// waits on a clock, so these tests do not depend on the scheduler.
 async fn drain(logger: Logger, task: tokio::task::JoinHandle<()>) {
+    logger.flush().await;
     drop(logger);
     task.await.expect("the writer task does not panic");
 }

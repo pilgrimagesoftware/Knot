@@ -31,25 +31,25 @@
 
 ## 3. Server vitals
 
-- [ ] 3.1 Add `len()` to `McpSessionManager` for the live session count; verify a test asserts it
+- [x] 3.1 Add `len()` to `McpSessionManager` for the live session count; verify a test asserts it
       tracks creation, replacement and stale cleanup.
-- [ ] 3.2 Add the start `Instant` and the `Arc<AtomicU64>` served-request counter to the server's
+- [x] 3.2 Add the start `Instant` and the `Arc<AtomicU64>` served-request counter to the server's
       state, incrementing the counter in the JSON-RPC handler; verify a test asserts the count
       after a known number of requests.
 
 ## 4. Wiring the log into the server
 
-- [ ] 4.1 Take the log path as a constructor argument on `McpServer`, construct the logger and
+- [x] 4.1 Take the log path as a constructor argument on `McpServer`, construct the logger and
       start the writer task with it, and hold the handle; verify a test constructs a server
       against a temporary path and finds the file created.
-- [ ] 4.2 Log the lifecycle events — bind attempted with its target, bind succeeded with the bound
+- [x] 4.2 Log the lifecycle events — bind attempted with its target, bind succeeded with the bound
       address, bind failed with the error, server stopped; verify tests assert each entry, using a
       port already in use for the failure case.
-- [ ] 4.3 Add a log call beside each of the four existing `eprintln!` sites for request in,
+- [x] 4.3 Add a log call beside each of the four existing `eprintln!` sites for request in,
       response out with its error flag, `tools/list` size, and `tools/call`; verify tests assert
       the request and response entries carry method and session, and that stderr output is
       unchanged from before.
-- [ ] 4.4 Build the redacted `tools/call` message — tool name, top-level argument key names,
+- [x] 4.4 Build the redacted `tools/call` message — tool name, top-level argument key names,
       payload byte size — at the same call site as the full stderr message; verify a test calls a
       tool with message text in its arguments and asserts the text is absent from the file while
       the key names and size are present, and that stderr still prints the arguments in full.

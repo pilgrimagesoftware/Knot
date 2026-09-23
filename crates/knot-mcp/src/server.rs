@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use axum::Router;
 use axum::body::Bytes;
@@ -12,6 +14,7 @@ use uuid::Uuid;
 
 use crate::consts;
 use crate::hooks::{AgentHookHandler, HookRequest};
+use crate::log::{Logger, Subject};
 use crate::rpc::{self, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::session::McpSessionManager;
 use crate::status::{self, AgentStatusEntry};
@@ -28,6 +31,13 @@ struct AppState {
     agents:   AgentsSnapshotFn,
     hooks:    Option<Arc<dyn AgentHookHandler>>,
     sessions: McpSessionManager,
+    /// Requests served since the heartbeat last reported. Read with
+    /// `swap(0)`, so a request arriving mid-tick is counted in exactly one
+    /// interval rather than in both or neither.
+    served:   Arc<AtomicU64>,
+    /// `None` when the server was built without a log path - the crate's own
+    /// tests, which assert on responses rather than on a file.
+    log:      Option<Logger>,
 }
 
 /// The local MCP HTTP server: health/info, JSON-RPC `/mcp`, SSE `/mcp`, and
@@ -37,6 +47,13 @@ pub struct McpServer {
     state:      AppState,
     handle:     Option<JoinHandle<()>>,
     bound_addr: Option<std::net::SocketAddr>,
+    /// When this server began serving, for the heartbeat's uptime. Set by
+    /// `start`, cleared by `stop`, so uptime is the current run's rather
+    /// than the process's.
+    started_at: Option<Instant>,
+    /// The log's writer task, owned here and aborted on stop so a spawned
+    /// task cannot outlive the server that started it.
+    log_task:   Option<JoinHandle<()>>,
 }
 
 impl Drop for McpServer {
@@ -51,14 +68,37 @@ impl McpServer {
                state: AppState { catalog,
                                  agents,
                                  hooks: None,
-                                 sessions: McpSessionManager::new() },
+                                 sessions: McpSessionManager::new(),
+                                 served: Arc::new(AtomicU64::new(0)),
+                                 log: None },
                handle: None,
-               bound_addr: None }
+               bound_addr: None,
+               started_at: None,
+               log_task: None }
     }
 
     pub fn with_hook_handler(mut self, handler: Arc<dyn AgentHookHandler>) -> Self {
         self.state.hooks = Some(handler);
         self
+    }
+
+    /// Writes this server's diagnostics to the log file at `path`, in
+    /// addition to standard error.
+    ///
+    /// The path is the caller's to decide. `knot-mcp` has no business
+    /// knowing where an application keeps its logs, and taking it as an
+    /// argument is also what lets every test here write to a temporary
+    /// directory instead of the real one.
+    pub fn with_log(mut self, path: std::path::PathBuf) -> Self {
+        let (logger, task) = Logger::spawn(path);
+        self.state.log = Some(logger);
+        self.log_task = Some(task);
+        self
+    }
+
+    /// The log this server writes to, if it has one.
+    pub fn log(&self) -> Option<&Logger> {
+        self.state.log.as_ref()
     }
 
     pub fn with_default_port(catalog: Arc<dyn ToolCatalog>, agents: AgentsSnapshotFn) -> Self {
@@ -78,20 +118,71 @@ impl McpServer {
     pub async fn start(&mut self) -> crate::Result<()> {
         let router = build_router(self.state.clone());
         let addr: std::net::SocketAddr = ([127, 0, 0, 1], self.port).into();
-        let listener = TcpListener::bind(addr).await
-                                              .map_err(|e| crate::McpError::Bind(addr, e))?;
+        if let Some(log) = self.log() {
+            log.info(Subject::Lifecycle, format!("binding {addr}"));
+        }
+        let listener = match TcpListener::bind(addr).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                if let Some(log) = self.log() {
+                    log.error(Subject::Lifecycle, format!("bind {addr} failed: {error}"));
+                }
+                return Err(crate::McpError::Bind(addr, error));
+            }
+        };
         self.bound_addr = Some(listener.local_addr().map_err(crate::McpError::Serve)?);
+        self.started_at = Some(Instant::now());
+        if let Some(log) = self.log()
+           && let Some(bound) = self.bound_addr
+        {
+            log.info(Subject::Lifecycle, format!("bound {bound}"));
+        }
         self.handle = Some(tokio::spawn(async move {
                                let _ = axum::serve(listener, router).await;
                            }));
         Ok(())
     }
 
+    /// How long this server has been serving, or `None` when it is not.
+    pub fn uptime(&self) -> Option<std::time::Duration> {
+        self.started_at.map(|at| at.elapsed())
+    }
+
+    /// Requests served since this was last called, resetting the count.
+    ///
+    /// `swap` rather than a read and a store: a request landing between the
+    /// two would otherwise be counted in both intervals or in neither.
+    pub fn take_served(&self) -> u64 {
+        self.state.served.swap(0, Ordering::Relaxed)
+    }
+
+    /// How many MCP sessions are live.
+    pub fn live_sessions(&self) -> usize {
+        self.state.sessions.len()
+    }
+
     pub fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.abort();
         }
+        if let Some(log) = self.log() {
+            log.info(Subject::Lifecycle, "stopped");
+        }
         self.bound_addr = None;
+        self.started_at = None;
+        // Dropping the sender, never aborting the writer.
+        //
+        // `Writer::run` ends when every sender is gone, so releasing this
+        // one - and the clones the aborted serve task was holding - lets it
+        // drain what is queued and exit on its own. Aborting it here would
+        // cancel it at its next await with the "stopped" entry still in the
+        // channel, losing the one line that explains why the log ends.
+        //
+        // That leaves the task briefly unowned, against this workspace's
+        // usual rule. It is bounded: the task's only exit condition is the
+        // channel closing, and this is what closes it.
+        self.state.log = None;
+        self.log_task = None;
     }
 }
 
@@ -177,6 +268,10 @@ async fn mcp_sse() -> Response {
 }
 
 async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    // Counted before parsing: a request that arrives malformed still
+    // arrived, and a heartbeat reporting zero while a client hammers the
+    // server with nonsense would be the more misleading of the two.
+    state.served.fetch_add(1, Ordering::Relaxed);
     state.sessions.cleanup_stale_default();
     let session_id = headers.get(SESSION_HEADER)
                             .and_then(|v| v.to_str().ok())
@@ -215,15 +310,23 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
     }
 
     eprintln!("knot-mcp: [{response_session_id}] -> {}", request.method);
-    let response = rpc::dispatch(&request, state.catalog.as_ref()).await;
-    eprintln!("knot-mcp: [{response_session_id}] <- {} {}",
-              request.method,
-              if response.error.is_some() {
-                  "error"
-              }
-              else {
-                  "ok"
-              });
+    if let Some(log) = state.log.as_ref() {
+        log.info(Subject::Request,
+                 format!("[{response_session_id}] {}", request.method));
+    }
+    let response = rpc::dispatch(&request, state.catalog.as_ref(), state.log.as_ref()).await;
+    let outcome = if response.error.is_some() {
+        "error"
+    }
+    else {
+        "ok"
+    };
+    eprintln!("knot-mcp: [{response_session_id}] <- {} {outcome}",
+              request.method);
+    if let Some(log) = state.log.as_ref() {
+        log.info(Subject::Response,
+                 format!("[{response_session_id}] {} {outcome}", request.method));
+    }
 
     if accepts_sse {
         let data = serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string());

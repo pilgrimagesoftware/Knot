@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::consts;
+use crate::log::{Logger, Subject, describe_call};
 use crate::tools::ToolCatalog;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,7 +64,11 @@ const INVALID_PARAMS: i64 = -32602;
 
 /// Dispatches a parsed JSON-RPC request to the built-in MCP lifecycle
 /// methods, routing `tools/list`/`tools/call` through `catalog`.
-pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> JsonRpcResponse {
+///
+/// `log` is `None` only where no log has been started - the crate's own unit
+/// tests. A running server always has one.
+pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog, log: Option<&Logger>)
+                      -> JsonRpcResponse {
     match request.method.as_str() {
         "initialize" => JsonRpcResponse::success(request.id.clone(),
                                                  serde_json::json!({
@@ -73,12 +78,15 @@ pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> Js
                                                  })),
         "tools/list" => {
             let tools = catalog.list();
-            eprintln!("knot-mcp: tools/list -> {} tools: {}",
-                      tools.len(),
-                      tools.iter()
-                           .map(|tool| tool.name.as_str())
-                           .collect::<Vec<_>>()
-                           .join(", "));
+            let names = tools.iter()
+                             .map(|tool| tool.name.as_str())
+                             .collect::<Vec<_>>()
+                             .join(", ");
+            eprintln!("knot-mcp: tools/list -> {} tools: {names}", tools.len());
+            if let Some(log) = log {
+                log.info(Subject::Tool,
+                         format!("tools/list -> {} tools", tools.len()));
+            }
             JsonRpcResponse::success(request.id.clone(), serde_json::json!({ "tools": tools }))
         }
         "tools/call" => {
@@ -96,7 +104,13 @@ pub async fn dispatch(request: &JsonRpcRequest, catalog: &dyn ToolCatalog) -> Js
                                    .and_then(|p| p.get("arguments"))
                                    .cloned()
                                    .unwrap_or_else(|| serde_json::json!({}));
+            // The two destinations part company here, and only here.
+            // Standard error keeps printing the arguments, as it always
+            // has; the file gets the call's shape and none of its content.
             eprintln!("knot-mcp: tools/call {name} {arguments}");
+            if let Some(log) = log {
+                log.info(Subject::Tool, describe_call(name, &arguments));
+            }
             let result = catalog.call(name, arguments).await;
             JsonRpcResponse::success(request.id.clone(), result)
         }
@@ -134,7 +148,7 @@ mod tests {
 
     #[tokio::test]
     async fn initialize_returns_protocol_and_server_info() {
-        let response = dispatch(&request("initialize", None), &EmptyCatalog).await;
+        let response = dispatch(&request("initialize", None), &EmptyCatalog, None).await;
         let result = response.result.unwrap();
         assert_eq!(result["protocolVersion"], consts::PROTOCOL_VERSION);
         assert!(result["capabilities"]["tools"].is_object());
@@ -143,7 +157,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_method_is_method_not_found() {
-        let response = dispatch(&request("nonexistent", None), &EmptyCatalog).await;
+        let response = dispatch(&request("nonexistent", None), &EmptyCatalog, None).await;
         let error = response.error.unwrap();
         assert_eq!(error.code, METHOD_NOT_FOUND);
         assert_eq!(response.id, Some(JsonRpcId::Int(1)));
@@ -171,7 +185,7 @@ mod tests {
     /// answered - so this asserts the wire key, not the Rust field.
     #[tokio::test]
     async fn tools_list_names_the_schema_field_the_way_mcp_does() {
-        let response = dispatch(&request("tools/list", None), &OneToolCatalog).await;
+        let response = dispatch(&request("tools/list", None), &OneToolCatalog, None).await;
         let tool = &response.result.unwrap()["tools"][0];
 
         assert!(tool.get("inputSchema").is_some(),
@@ -184,7 +198,7 @@ mod tests {
     #[tokio::test]
     async fn tool_call_result_has_one_text_content_item() {
         let params = serde_json::json!({ "name": "ping", "arguments": {} });
-        let response = dispatch(&request("tools/call", Some(params)), &OneToolCatalog).await;
+        let response = dispatch(&request("tools/call", Some(params)), &OneToolCatalog, None).await;
         let result = response.result.unwrap();
         assert_eq!(result["content"].as_array().unwrap().len(), 1);
         assert!(result.get("isError").is_none());
