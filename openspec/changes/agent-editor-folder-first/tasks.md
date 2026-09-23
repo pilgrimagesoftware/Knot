@@ -14,17 +14,17 @@
 
 ## 2. The name follows the folder
 
-- [ ] 2.1 Give `choose_folder` a `&mut Window`, switch its `cx.spawn` to
+- [x] 2.1 Give `choose_folder` a `&mut Window`, switch its `cx.spawn` to
       `cx.spawn_in(window, ..)` and its `cx.update` to `this.update_in(..)`,
       and delete the underscore at the call site in `render.rs` that is
       already discarding a window; verify with `cargo build -p knot`, which
       fails until the one call site is updated
-- [ ] 2.2 Fill the name field inside that `update_in` when the trimmed name is
+- [x] 2.2 Fill the name field inside that `update_in` when the trimmed name is
       empty and the chosen folder has a last component, leaving a non-blank
       name untouched. Read the field inside the closure, not before the spawn:
       a name typed while the picker was open must win; verify with the tests
       in 2.3
-- [ ] 2.3 Add tests for the four cases the spec names - blank name takes the
+- [x] 2.3 Add tests for the four cases the spec names - blank name takes the
       folder's name, a typed name survives, a second folder does not rename an
       already-filled field, and a whitespace-only name counts as blank - plus
       the no-last-component case leaving the field alone. Drive the input
@@ -33,11 +33,11 @@
 
 ## 3. The folder comes second
 
-- [ ] 3.1 Move the `folder_rows` section between the identity and agent
+- [x] 3.1 Move the `folder_rows` section between the identity and agent
       sections in `Render for AgentEditor`, leaving the other three in their
       current order; verify by reading the four `dialog_section` children back
       in order
-- [ ] 3.2 Update the scroll container's comment, which explains itself in
+- [x] 3.2 Update the scroll container's comment, which explains itself in
       terms of the folder path row being the last thing in the form and is
       wrong once it is not; verify by reading it back against the new order
 
