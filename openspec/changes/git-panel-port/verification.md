@@ -10,9 +10,30 @@ should happen, and which spec scenario it discharges.
 ## Before you start
 
 **Isolate the settings store.** Adding a workspace or agent writes to the
-real store, and the real store has already been clobbered once — there is an
-`agents.json.clobbered-20260922-145115` beside it. `directories` resolves the
-macOS base from `$HOME`, so a scratch `HOME` gives the app its own store:
+real store, and that store has already been clobbered once. Both documents
+went together in a single event:
+
+```
+agents.json.clobbered-20260922-145115
+workspaces.json.clobbered-20260922-145115
+```
+
+Same timestamp — the agent roster and the workspace list, not just one of
+them. `with_store_root` exists as the test-only escape hatch because of it,
+and the app itself does not use it.
+
+A scratch `HOME` relocates the whole store. The chain, read out of crate
+source rather than documentation:
+
+```
+StorePaths::platform()                   knot-core/src/settings/store/paths.rs:38
+  -> ProjectDirs::from(ORG_QUALIFIER, ORG_NAME, APP_NAME)
+  -> macOS base is $HOME/Library/Application Support/...
+                                         directories-6.0.0/src/lib.rs:198
+  -> dirs_sys::home_dir() reads $HOME first, falling back to getpwuid_r
+     only when it is unset or empty
+                                         dirs-sys-0.5.0/src/lib.rs:34
+```
 
 ```bash
 mkdir -p /tmp/knot-verify-home
@@ -27,8 +48,10 @@ find "$HOME/Library/Application Support/com.Pilgrimage-Software.Knot" \
   -type f -print0 | sort -z | xargs -0 shasum
 ```
 
-**Expect the MCP server to fail to bind** if another Knot is already running.
-That is fine for everything below; none of it touches agent messaging.
+**Expect the MCP server to fail to bind** if another Knot is already running
+— and note that `HOME` isolation does not help here, because the port is not
+in the store. That is harmless for everything below, none of which touches
+agent-to-agent messaging. It would not be harmless for anything that does.
 
 **Make a repository with all four section types**, so one agent exercises the
 whole panel:
