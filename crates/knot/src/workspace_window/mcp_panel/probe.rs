@@ -67,8 +67,26 @@ impl WorkspaceWindow {
     }
 
     /// Opens or shuts the section, answering its new state.
+    ///
+    /// Opening it shuts the processes section beside it. The two share a row
+    /// while collapsed and an open one takes the full width, so both open at
+    /// once has nowhere to go. Done here rather than at the click handler so
+    /// every caller gets it.
     pub(in crate::workspace_window) fn toggle_mcp_section(&mut self, agent_id: Uuid) -> bool {
-        self.mcp_sections.entry(agent_id).or_default().toggle()
+        let opened = self.mcp_sections.entry(agent_id).or_default().toggle();
+
+        if opened {
+            self.collapse_process_section(agent_id);
+        }
+
+        opened
+    }
+
+    /// Shuts this agent's MCP section, if it has one.
+    pub(in crate::workspace_window) fn collapse_mcp_section(&mut self, agent_id: Uuid) {
+        if let Some(section) = self.mcp_sections.get_mut(&agent_id) {
+            section.collapse();
+        }
     }
 
     /// Asks for a probe of this agent: the refresh action, and the

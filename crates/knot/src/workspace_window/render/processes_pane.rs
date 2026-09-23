@@ -174,7 +174,8 @@ impl WorkspaceWindow {
     ///
     /// Absent over the markdown and mermaid panes too: those are a document
     /// the agent put in front of the user, not its session.
-    pub(super) fn processes_section(&mut self, cx: &mut Context<Self>)
+    pub(super) fn processes_section(&mut self, layout: super::agent_sections::SectionLayout,
+                                    cx: &mut Context<Self>)
                                     -> Option<gpui_kit::AnyElement> {
         let agent_id = self.selected_agent?;
         let view_mode = self.store
@@ -198,10 +199,37 @@ impl WorkspaceWindow {
                 .and_then(crate::agent_processes::ProcessSection::processes),
         );
 
-        Some(v_flex().w_full()
-                     .flex_shrink_0()
-                     .border_t_1()
-                     .border_color(cx.theme().border)
+        // The divider between the two sections: a left border while they
+        // share a row, a top border while they stack. Drawn here rather than
+        // by the container so it is absent when this section is the only one
+        // showing, which is every Terminal-mode agent.
+        let alone = !super::mcp_pane::section_is_shown(view_mode,
+                                                       self.view_mode.is_takeover(),
+                                                       self.agent_has_document_pane(agent_id));
+        let stacked = layout.is_stacked();
+
+        Some(v_flex().map(|section| {
+                         if stacked {
+                             section.w_full()
+                         }
+                         else {
+                             // `flex_1` alone keeps the default `min-width:
+                             // auto`, so a collapsed header naming several
+                             // processes would push its neighbour off the row
+                             // instead of ellipsizing.
+                             section.flex_1().min_w_0()
+                         }
+                     })
+                     .when(!alone, |section| {
+                         let section = if stacked {
+                             section.border_t_1()
+                         }
+                         else {
+                             section.border_l_1()
+                         };
+
+                         section.border_color(cx.theme().border)
+                     })
                      .bg(cx.theme().background)
                      .child(self.processes_header(agent_id, expanded, summary, cx))
                      .children(expanded.then(|| self.processes_body(agent_id, cx)))

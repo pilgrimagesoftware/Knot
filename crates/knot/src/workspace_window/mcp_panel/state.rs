@@ -89,6 +89,15 @@ impl McpSection {
         self.expanded
     }
 
+    /// Shuts the section, whatever state it was in.
+    ///
+    /// Opening the processes section beside it shuts this one: the two share
+    /// a row while collapsed and an open one takes the full width, so both
+    /// open at once has nowhere to go.
+    pub(crate) fn collapse(&mut self) {
+        self.expanded = false;
+    }
+
     /// Asks for a probe: on first becoming visible, on refresh, and when a
     /// delegated terminal exits.
     pub(crate) fn request(&mut self) {

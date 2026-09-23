@@ -61,6 +61,15 @@ impl ProcessSection {
         self.expanded
     }
 
+    /// Shuts the section, whatever state it was in.
+    ///
+    /// Opening the MCP section beside it shuts this one: the two share a row
+    /// while collapsed and an open one takes the full width, so both open at
+    /// once has nowhere to go.
+    pub(crate) fn collapse(&mut self) {
+        self.expanded = false;
+    }
+
     /// The last completed sample, or `None` if none has landed.
     pub(crate) fn processes(&self) -> Option<&[DescendantProcess]> {
         self.snapshot.as_deref()

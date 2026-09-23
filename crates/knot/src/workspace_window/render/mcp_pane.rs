@@ -18,6 +18,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{StyledExt, h_flex, v_flex};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Icon};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     ClickEvent, Context, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, div, px,
@@ -26,6 +27,7 @@ use knot_core::ViewMode;
 use knot_mcp_probe::ServerState;
 use uuid::Uuid;
 
+use super::agent_sections::SectionLayout;
 use crate::app_support::single_line;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::mcp_panel::rows::{SectionRow, compose};
@@ -95,7 +97,7 @@ fn state_color(state: ServerState, cx: &Context<WorkspaceWindow>) -> gpui_kit::H
 impl WorkspaceWindow {
     /// The MCP section for the shown agent, or `None` when it does not
     /// belong on screen.
-    pub(super) fn mcp_servers_section(&mut self, cx: &mut Context<Self>)
+    pub(super) fn mcp_servers_section(&mut self, layout: SectionLayout, cx: &mut Context<Self>)
                                       -> Option<gpui_kit::AnyElement> {
         let agent_id = self.selected_agent?;
         let view_mode = self.store
@@ -123,10 +125,18 @@ impl WorkspaceWindow {
                                      row_count: rows.len() };
         let summary = summary_text(&status);
 
-        Some(v_flex().w_full()
-                     .flex_shrink_0()
-                     .border_t_1()
-                     .border_color(cx.theme().border)
+        // Sharing a row needs `flex_1` *and* `min_w_0`: `flex_1` alone keeps
+        // the default `min-width: auto`, so a collapsed header naming several
+        // servers would push its neighbour off the row instead of
+        // ellipsizing. Stacked, the section takes the width outright.
+        Some(v_flex().map(|section| {
+                         if layout.is_stacked() {
+                             section.w_full()
+                         }
+                         else {
+                             section.flex_1().min_w_0()
+                         }
+                     })
                      .bg(cx.theme().background)
                      .child(self.mcp_header(agent_id, expanded, summary, cx))
                      .children(expanded.then(|| self.mcp_body(agent_id, rows, cx)))
