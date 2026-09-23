@@ -176,6 +176,14 @@ impl AcpClient {
         &self.capabilities
     }
 
+    /// The adapter subprocess's process id, while the connection is live.
+    ///
+    /// A panel agent's session root: what the processes section enumerates
+    /// descendants of. `None` once the adapter has been reaped.
+    pub fn process_id(&self) -> Option<u32> {
+        self.transport.process_id()
+    }
+
     pub async fn session_new(&self, cwd: &str, mcp_url: Option<&str>) -> Result<NewSession> {
         let raw = self.transport
                       .request("session/new",

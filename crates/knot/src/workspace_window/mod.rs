@@ -14,6 +14,8 @@ mod menus;
 mod notifications;
 mod open;
 pub(crate) mod panel;
+mod process_actions;
+mod processes;
 pub(crate) mod prompt_queue;
 mod pull_requests;
 mod pull_requests_view;

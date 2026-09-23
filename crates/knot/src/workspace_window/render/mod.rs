@@ -59,6 +59,7 @@ use crate::workspace_window::workspace_title;
 
 mod content;
 mod overview;
+mod processes_pane;
 pub(super) mod pull_requests_pane;
 mod pull_requests_row;
 mod sidebar;
