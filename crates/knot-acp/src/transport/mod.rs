@@ -150,6 +150,16 @@ impl Transport {
         }
     }
 
+    /// The session root for a panel agent: the adapter subprocess, while it
+    /// runs.
+    ///
+    /// What the processes section enumerates descendants of. `None` once the
+    /// child has been reaped -- `tokio` drops the id at that point, which is
+    /// exactly the "a stopped agent has no session root" the spec asks for.
+    pub fn process_id(&self) -> Option<u32> {
+        self.child.lock().id()
+    }
+
     async fn exit_cause(&self) -> SessionEndCause {
         let status = self.child.lock().try_wait();
         match status {
@@ -342,5 +352,18 @@ mod tests {
                    serde_json::json!({ "echoed": true }));
         assert_eq!(second.expect("second response"),
                    serde_json::json!({ "echoed": true }));
+    }
+
+    #[tokio::test]
+    async fn the_adapter_subprocess_reports_its_pid() {
+        let (transport, _events) = Transport::spawn(echo_command()).expect("spawn");
+
+        let pid = transport.process_id()
+                           .expect("a live adapter has a process id");
+
+        assert!(pid > 1, "got {pid}");
+        // The spawned `sh` really is this process's child, which is what
+        // makes it usable as a session root.
+        assert_ne!(pid, std::process::id());
     }
 }

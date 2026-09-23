@@ -370,3 +370,20 @@ async fn set_config_option_sends_the_selection_and_returns_the_updated_list() {
 
     assert_eq!(updated[0].current_value, serde_json::json!("code"));
 }
+
+/// The panel agent's session root, reachable from the client because the
+/// transport module is private. See
+/// `openspec/specs/agent-processes/spec.md` -- "Every running agent exposes
+/// a session root process".
+#[tokio::test]
+async fn a_connected_client_reports_the_adapters_pid() {
+    let (client, _events) =
+        AcpClient::connect(fake_agent(PROTOCOL_VERSION, false)).await
+                                                               .expect("connect");
+
+    let pid = client.process_id()
+                    .expect("a live adapter has a process id");
+
+    assert!(pid > 1, "got {pid}");
+    assert_ne!(pid, std::process::id());
+}

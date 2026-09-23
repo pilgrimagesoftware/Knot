@@ -31,12 +31,12 @@
 
 ## 2. Root PID accessors
 
-- [ ] 2.1 Expose the PTY child's PID from `knot-terminal` (`PtyTransport` through its session
+- [x] 2.1 Expose the PTY child's PID from `knot-terminal` (`PtyTransport` through its session
       type) as `Option<u32>`; verify a test spawns a shell session and observes a PID that is
       present while running and absent after the child exits.
-- [ ] 2.2 Expose the adapter subprocess's PID from `knot-acp`'s `Transport` as `Option<u32>`;
+- [x] 2.2 Expose the adapter subprocess's PID from `knot-acp`'s `Transport` as `Option<u32>`;
       verify a test spawns a stub adapter and observes the PID.
-- [ ] 2.3 Add the session-root lookup in `crates/knot` that resolves an agent to its root PID —
+- [x] 2.3 Add the session-root lookup in `crates/knot` that resolves an agent to its root PID —
       PTY child for shell agents, adapter for panel agents, `None` when not running — and verify
       unit tests cover a shell agent, a panel agent, a deactivated agent, and an agent mid-restart.
 

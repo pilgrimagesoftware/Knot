@@ -13,6 +13,7 @@ mod menus;
 mod notifications;
 mod open;
 pub(crate) mod panel;
+mod processes;
 pub(crate) mod prompt_queue;
 mod pull_requests;
 mod pull_requests_view;

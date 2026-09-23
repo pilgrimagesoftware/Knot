@@ -66,6 +66,14 @@ impl<T: TerminalTransport + 'static> TerminalSession<T> {
         self.grid.clone()
     }
 
+    /// The session root: the process the transport spawned, while it runs.
+    ///
+    /// What the processes section enumerates descendants of. `None` once the
+    /// child has exited, and for a transport that spawns nothing.
+    pub fn process_id(&self) -> Option<u32> {
+        self.transport.lock().process_id()
+    }
+
     pub fn spawn_pty<Output>(config: &SessionConfig<'_>, sink: EventSink, on_output: Output)
                              -> Result<TerminalSession<PtyTransport>>
         where Output: Fn(&[u8]) + Send + Sync + 'static {
