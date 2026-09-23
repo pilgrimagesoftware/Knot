@@ -2,11 +2,11 @@
 
 ## 1. Capture the upgrade case before changing anything
 
-- [ ] 1.1 Capture a real combined `workspaces.json` from an installation — one
+- [x] 1.1 Capture a real combined `workspaces.json` from an installation — one
       with several workspaces, at least one moved, split and detached — and
       commit it as a test fixture; verify it holds all eight UI fields on at
       least one record
-- [ ] 1.2 Write the migration test against that fixture first, asserting field
+- [x] 1.2 Write the migration test against that fixture first, asserting field
       by field that every configured value lands in the workspaces document and
       every arrangement value in the UI-state document. It fails until section 3
       lands; that is the point — a migration written before its test is a
@@ -14,36 +14,36 @@
 
 ## 2. The records and the document
 
-- [ ] 2.1 Add `WorkspaceUiState` to `crates/knot-core/src/settings/records.rs`
+- [x] 2.1 Add `WorkspaceUiState` to `crates/knot-core/src/settings/records.rs`
       holding the eight fields with their current serde defaults, and remove
       them from `Workspace`; verify with `cargo build -p knot-core`
-- [ ] 2.2 Add the document: a constant beside the other filenames, a
+- [x] 2.2 Add the document: a constant beside the other filenames, a
       `StorePaths` accessor, and `Settings` holding
       `BTreeMap<Uuid, WorkspaceUiState>` with a `persist_workspace_ui` writer
       that writes that document alone; verify with `cargo test -p knot-core`
-- [ ] 2.3 Update the document table in `store.rs`'s module doc and the
+- [x] 2.3 Update the document table in `store.rs`'s module doc and the
       two-directory description in `store/paths.rs`'s module doc — both state
       the old layout in prose and are part of the change; verify by reading them
       back against the new set of documents
-- [ ] 2.4 Prune entries with no matching workspace on load, in one place, with a
+- [x] 2.4 Prune entries with no matching workspace on load, in one place, with a
       comment saying why pruning is on load rather than on deletion; verify with
       a test that loads a UI-state document holding an orphan
 
 ## 3. The migration
 
-- [ ] 3.1 Split a combined workspaces document on load: read it as a `Value`,
+- [x] 3.1 Split a combined workspaces document on load: read it as a `Value`,
       detect the UI keys, write the UI-state document first (existing entries
       winning), then rewrite the workspaces document without them; verify with
       the 1.2 test
-- [ ] 3.2 Add a test for the crash-part-way case — UI-state document already
+- [x] 3.2 Add a test for the crash-part-way case — UI-state document already
       written, workspaces document still combined — asserting the second load
       keeps the written entries and finishes; verify with
       `cargo test -p knot-core`
-- [ ] 3.3 Add a test for the two-step upgrade: a legacy `settings.json`
+- [x] 3.3 Add a test for the two-step upgrade: a legacy `settings.json`
       installation arrives at separate preferences, collection and UI-state
       documents with arrangement preserved. This is the path no one will try by
       hand; verify with `cargo test -p knot-core`
-- [ ] 3.4 Add tests for a missing UI-state document and for one undecodable
+- [x] 3.4 Add tests for a missing UI-state document and for one undecodable
       entry among decodable ones, asserting workspaces still load and only
       arrangement is lost; verify with `cargo test -p knot-core`
 
@@ -62,7 +62,7 @@
 - [ ] 4.4 Update the `Workspace` literals in `crates/knot/src/workspace_manager/mod.rs`,
       `crates/knot/src/tests/mod.rs` and `crates/knot/src/tests/import_window.rs`;
       verify with `cargo test -p knot`
-- [ ] 4.5 Check `crates/knot-core/src/import/workspaces.rs`: an imported
+- [x] 4.5 Check `crates/knot-core/src/import/workspaces.rs`: an imported
       workspace is configuration, so confirm it creates no UI-state entry and
       that an imported workspace opens with default arrangement; verify with
       `cargo test -p knot-core import`

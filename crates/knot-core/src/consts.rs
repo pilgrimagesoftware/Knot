@@ -13,6 +13,16 @@ pub const AGENTS_FILE: &str = "agents.json";
 /// The saved-workspaces collection.
 pub const WORKSPACES_FILE: &str = "workspaces.json";
 
+/// Per-workspace UI state, keyed by workspace id.
+///
+/// Not a collection: a lookup table the app writes about itself. Every read
+/// is "the state for this workspace" and every write is "this workspace's
+/// state", so it is a map rather than a list of records each carrying an id.
+/// Separate from [`WORKSPACES_FILE`] so that moving a window - the most
+/// frequent write in the store, and the least valuable - does not rewrite the
+/// roster the user built.
+pub const WORKSPACE_UI_STATE_FILE: &str = "workspace-ui-state.json";
+
 /// The personas collection.
 pub const PERSONAS_FILE: &str = "personas.json";
 

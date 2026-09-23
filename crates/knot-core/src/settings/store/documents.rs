@@ -5,12 +5,14 @@
 //! Every document is written atomically and read tolerantly. Writing goes to
 //! a temporary file beside the target and renames it into place, so a reader
 //! observes either the previous document or the new one. Reading yields that
-//! document's defaults - empty for a collection - for anything it cannot
-//! make sense of, so one unreadable document never stops the rest of the
-//! store, or the app, from loading.
+//! document's defaults - empty for a collection or a map - for anything it
+//! cannot make sense of, so one unreadable document never stops the rest of
+//! the store, or the app, from loading.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -54,6 +56,59 @@ pub fn write(path: &Path, bytes: &str) -> Result<()> {
 /// nesting level to hand-edit past.
 pub fn write_collection<T: Serialize>(path: &Path, records: &[T]) -> Result<()> {
     write(path, &serde_json::to_string_pretty(records)?)
+}
+
+/// Serialize `entries` as a JSON object keyed by the map's key and write it
+/// to `path`.
+///
+/// A map rather than the bare array [`write_collection`] produces, because
+/// the document it serves is a lookup table rather than a collection the user
+/// browses: every read is by key, and an array would admit duplicate keys the
+/// reader would then have to rule out.
+pub fn write_map<K: ToString, V: Serialize>(path: &Path, entries: &BTreeMap<K, V>) -> Result<()> {
+    let object: serde_json::Map<String, Value> =
+        entries.iter()
+               .map(|(key, value)| (key.to_string(), serde_json::to_value(value)))
+               .map(|(key, value)| value.map(|value| (key, value)))
+               .collect::<std::result::Result<_, _>>()?;
+    write(path, &serde_json::to_string_pretty(&object)?)
+}
+
+/// Read `path` as a JSON object keyed by `K`, decoding each entry on its own
+/// and dropping the ones that fail.
+///
+/// The same tolerance [`read_collection`] gives an array, for the same
+/// reason: a missing, unreadable or malformed document yields an empty map,
+/// and one entry a build can no longer decode - or one whose key is not a
+/// valid `K` - costs only what that entry held.
+pub fn read_map<K, V>(path: &Path) -> BTreeMap<K, V>
+    where K: FromStr + Ord,
+          V: DeserializeOwned {
+    let Ok(bytes) = fs::read(path)
+    else {
+        return BTreeMap::new();
+    };
+    let Ok(Value::Object(entries)) = serde_json::from_slice::<Value>(&bytes)
+    else {
+        return BTreeMap::new();
+    };
+    decode_map(entries)
+}
+
+/// Decode an already-parsed object as a map, on the same terms as
+/// [`read_map`].
+///
+/// The split of a combined workspaces document reads its entries out of a
+/// parsed document rather than off disk, and must apply exactly these rules.
+pub fn decode_map<K, V>(entries: serde_json::Map<String, Value>) -> BTreeMap<K, V>
+    where K: FromStr + Ord,
+          V: DeserializeOwned {
+    entries.into_iter()
+           .filter_map(|(key, value)| {
+               let key = K::from_str(&key).ok()?;
+               Some((key, serde_json::from_value(value).ok()?))
+           })
+           .collect()
 }
 
 /// Read `path` as a JSON object, or `None` if it is missing, unreadable, not

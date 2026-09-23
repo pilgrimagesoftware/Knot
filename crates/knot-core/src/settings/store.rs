@@ -5,7 +5,7 @@
 //!
 //! Contract: `openspec/specs/settings-persistence/spec.md`.
 //!
-//! One [`Settings`] value is one settings surface over seven documents, whose
+//! One [`Settings`] value is one settings surface over eight documents, whose
 //! locations [`StorePaths`] derives:
 //!
 //! | Document | Holds | Directory |
@@ -13,10 +13,18 @@
 //! | `preferences.json` | every scalar setting | user preferences |
 //! | `agents.json` | saved agents | application data |
 //! | `workspaces.json` | saved workspaces | application data |
+//! | `workspace-ui-state.json` | per-workspace UI state | application data |
 //! | `personas.json` | personas | application data |
 //! | `bench.json` | bench templates | application data |
 //! | `recent-repos.json` | recent repositories | application data |
 //! | `pull-requests.json` | recorded pull requests | application data |
+//!
+//! Three kinds, distinguished by what the values are rather than by which
+//! screen edits them: the scalars the user tunes, the collections the user
+//! built, and - in `workspace-ui-state.json` - what the application recorded
+//! about how its own windows were arranged, which the user never entered.
+//! That last one is separate so that moving a window, the most frequent write
+//! in the store and the least valuable, does not rewrite the roster.
 //!
 //! Every mutating helper writes immediately, and writes only the document it
 //! changed: [`Settings::persist`] is the whole surface, while
@@ -24,8 +32,11 @@
 //! the helpers actually call. Each document loads on its own, so one that
 //! fails to decode costs only what it held and the app still starts.
 //!
-//! An installation still holding the single `settings.json` is migrated once
-//! on load - see [`legacy`].
+//! Two one-way migrations run on load, and compose: an installation still
+//! holding the single `settings.json` is migrated off it - see [`legacy`] -
+//! and a `workspaces.json` whose records still carry UI state is split - see
+//! [`workspace_split`]. The legacy migration's own output is combined, so the
+//! split runs on its result as well as on a pre-existing document.
 //!
 //! Two upgrades run on the preferences document. The terminal font's
 //! `"SF Mono"` default is replaced value-for-value, and a document written
@@ -43,11 +54,13 @@ use uuid::Uuid;
 mod documents;
 mod legacy;
 mod paths;
+mod workspace_split;
 
 pub use paths::StorePaths;
 
 pub use super::records::{
     BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, SavedPullRequest, Workspace,
+    WorkspaceUiState,
 };
 use super::vocabulary::{AiProvider, AppearanceMode, AutopilotAction, UnknownVariant};
 use crate::consts::{
@@ -127,6 +140,15 @@ pub struct Settings {
     pub saved_agents:     Vec<SavedAgent>,
     #[serde(skip)]
     pub saved_workspaces: Vec<Workspace>,
+    /// How each workspace's window was last arranged, keyed by workspace id.
+    ///
+    /// Beside `saved_workspaces` rather than inside it: the two have
+    /// different lifetimes - a workspace's configuration outlives any window,
+    /// and its arrangement is meaningless without one - and only this one is
+    /// rewritten by a pointer drag. Written by
+    /// [`Settings::persist_workspace_ui`] alone.
+    #[serde(skip)]
+    pub workspace_ui:     BTreeMap<Uuid, WorkspaceUiState>,
     #[serde(skip)]
     pub personas:         Vec<Persona>,
     #[serde(skip)]
@@ -177,6 +199,7 @@ impl Default for Settings {
                agent_panel_compact_tool_calls: false,
                saved_agents:                   Vec::new(),
                saved_workspaces:               Vec::new(),
+               workspace_ui:                   BTreeMap::new(),
                personas:                       Vec::new(),
                bench_agents:                   Vec::new(),
                recent_repos:                   Vec::new(),
@@ -210,6 +233,10 @@ impl Settings {
     }
 
     fn load_with(paths: StorePaths) -> Result<Self> {
+        // The legacy migration's own output is a combined workspaces
+        // document, so the split has to run on its result too - hence the
+        // split inside `read_documents` rather than only on the branch that
+        // skipped the legacy migration.
         if let Some(migrated) = legacy::migrate(&paths)? {
             return Ok(migrated);
         }
@@ -224,13 +251,35 @@ impl Settings {
             None => Self::default(),
         };
         settings.saved_agents = documents::read_collection(&paths.agents());
-        settings.saved_workspaces = documents::read_collection(&paths.workspaces());
+        let workspaces = workspace_split::read(&paths);
+        settings.saved_workspaces = workspaces.workspaces;
+        settings.workspace_ui = workspaces.ui_state;
         settings.personas = documents::read_collection(&paths.personas());
         settings.bench_agents = documents::read_collection(&paths.bench());
         settings.recent_repos = documents::read_collection(&paths.recent_repos());
         settings.pull_requests = documents::read_collection(&paths.pull_requests());
+        settings.prune_workspace_ui();
         settings.paths = Some(paths);
+        if workspaces.needs_write {
+            // Best effort: a read-only store still loads, it simply splits
+            // again next launch. The values are already correct in memory.
+            let _ = settings.persist_workspace_ui();
+            let _ = settings.persist_workspaces();
+        }
         settings
+    }
+
+    /// Drop UI state for a workspace that no longer exists.
+    ///
+    /// On load rather than on deletion, and in this one place. Deleting a
+    /// workspace has several paths - the sidebar, the command centre, an
+    /// import that replaces the roster - and a missed one would leak an entry
+    /// silently and forever. Load is the single funnel every path's result
+    /// goes through, so pruning here cannot be bypassed by a new one.
+    fn prune_workspace_ui(&mut self) {
+        let live: std::collections::BTreeSet<Uuid> =
+            self.saved_workspaces.iter().map(|w| w.id).collect();
+        self.workspace_ui.retain(|id, _| live.contains(id));
     }
 
     /// Decode a preferences object and apply the load-time upgrades. The
@@ -284,6 +333,7 @@ impl Settings {
     pub fn persist(&self) -> Result<()> {
         self.persist_preferences()?;
         self.persist_roster()?;
+        self.persist_workspace_ui()?;
         self.persist_personas()?;
         self.persist_bench()?;
         self.persist_recent_repos()?;
@@ -313,6 +363,39 @@ impl Settings {
 
     fn persist_workspaces(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.workspaces(), &self.saved_workspaces)
+    }
+
+    /// Write the per-workspace UI-state document, and nothing else.
+    ///
+    /// The point of the whole arrangement: a window move, resize, split or
+    /// detach persists through here, so it costs one small document rather
+    /// than a rewrite of the saved agents and saved workspaces the user
+    /// built. See `openspec/specs/settings-persistence/spec.md`.
+    pub fn persist_workspace_ui(&self) -> Result<()> {
+        documents::write_map(&self.resolved_paths()?.workspace_ui_state(),
+                             &self.workspace_ui)
+    }
+
+    /// The UI state recorded for `workspace`, or the defaults if none was.
+    ///
+    /// An absent entry is a workspace whose window has not been arranged yet,
+    /// which is exactly the default arrangement - so a reader never has to
+    /// distinguish "missing" from "never moved".
+    pub fn workspace_ui(&self, workspace: Uuid) -> WorkspaceUiState {
+        self.workspace_ui
+            .get(&workspace)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Change `workspace`'s UI state and persist the UI-state document.
+    ///
+    /// Creates the entry if there is none, so a caller does not have to.
+    pub fn update_workspace_ui(&mut self, workspace: Uuid,
+                               edit: impl FnOnce(&mut WorkspaceUiState))
+                               -> Result<()> {
+        edit(self.workspace_ui.entry(workspace).or_default());
+        self.persist_workspace_ui()
     }
 
     fn persist_personas(&self) -> Result<()> {

@@ -7,7 +7,8 @@
 //! `settings.json` and read back through the migration.
 
 use knot_core::consts::{
-    AGENTS_FILE, LEGACY_SETTINGS_FILE, PERSONAS_FILE, PREFERENCES_FILE, WORKSPACES_FILE,
+    AGENTS_FILE, LEGACY_SETTINGS_FILE, PERSONAS_FILE, PREFERENCES_FILE, WORKSPACE_UI_STATE_FILE,
+    WORKSPACES_FILE,
 };
 use knot_core::{
     AiProvider, AppearanceMode, AutopilotAction, CostTier, PersonaState, PersonaType, Settings,
@@ -77,9 +78,13 @@ fn loads_swift_shaped_document() {
     assert_eq!(s.saved_workspaces.len(), 1);
     let ws = &s.saved_workspaces[0];
     assert_eq!(ws.name, "Main");
-    assert_eq!(ws.layout_mode, "splitVertical");
-    assert_eq!(ws.split_ratio_secondary, Some(0.4));
-    assert_eq!(ws.is_detached, Some(true));
+    // The legacy document's workspace records are combined, so the arrangement
+    // arrives in the UI-state map rather than on the workspace - see
+    // `tests/workspace_ui_state.rs`.
+    let ui = s.workspace_ui(ws.id);
+    assert_eq!(ui.layout_mode, "splitVertical");
+    assert_eq!(ui.split_ratio_secondary, Some(0.4));
+    assert_eq!(ui.is_detached, Some(true));
 
     assert_eq!(s.personas.len(), 2);
     assert_eq!(s.personas[0].persona_type, PersonaType::System);
@@ -145,9 +150,21 @@ fn reserializes_with_swift_keys() {
     }
 
     let workspaces = read_json(dir.path().join(WORKSPACES_FILE));
-    assert!(workspaces[0].as_object()
-                         .unwrap()
-                         .contains_key("layoutMode"));
+    let workspace = workspaces[0].as_object().unwrap();
+    assert!(workspace.contains_key("colorHex"));
+    assert!(!workspace.contains_key("layoutMode"),
+            "arrangement belongs to the UI-state document");
+
+    let ui_state = read_json(dir.path().join(WORKSPACE_UI_STATE_FILE));
+    let entry = ui_state.as_object()
+                        .unwrap()
+                        .values()
+                        .next()
+                        .unwrap()
+                        .as_object()
+                        .unwrap();
+    assert!(entry.contains_key("layoutMode"));
+    assert!(entry.contains_key("windowBounds"));
 
     let personas = read_json(dir.path().join(PERSONAS_FILE));
     let persona = personas[0].as_object().unwrap();

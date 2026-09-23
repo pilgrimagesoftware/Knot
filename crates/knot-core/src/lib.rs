@@ -20,5 +20,5 @@ pub use l10n::t;
 pub use settings::{
     ActivationMode, AiProvider, AppearanceMode, AutopilotAction, BenchAgent, Capabilities,
     CostTier, Persona, PersonaState, PersonaType, SavedAgent, SavedPullRequest, SavedWindowBounds,
-    Settings, UnknownVariant, ViewMode, Workspace, detect_source_base_folder,
+    Settings, UnknownVariant, ViewMode, Workspace, WorkspaceUiState, detect_source_base_folder,
 };

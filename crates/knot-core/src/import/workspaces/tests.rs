@@ -25,15 +25,7 @@ fn workspace(name: &str, agent_ids: Vec<Uuid>) -> Workspace {
     Workspace { id: Uuid::new_v4(),
                 name: name.into(),
                 color_hex: "#46A857".into(),
-                agent_ids,
-                layout_mode: "single".into(),
-                active_agent_ids: Vec::new(),
-                focused_pane_index: 0,
-                split_ratio: 0.5,
-                split_ratio_secondary: None,
-                show_dashboard: None,
-                is_detached: None,
-                window_bounds: None }
+                agent_ids }
 }
 
 fn agent(name: &str, persona_id: Option<Uuid>) -> SavedAgent {

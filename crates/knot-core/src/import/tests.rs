@@ -37,18 +37,10 @@ fn populated_store(dir: &TempDir) -> Settings {
     settings.saved_agents
             .push(SavedAgent::new(Uuid::new_v4(), "my-agent", None, "/mine"));
     settings.saved_workspaces
-            .push(Workspace { id:                    Uuid::new_v4(),
-                              name:                  "Mine".into(),
-                              color_hex:             "#46A857".into(),
-                              agent_ids:             Vec::new(),
-                              layout_mode:           "single".into(),
-                              active_agent_ids:      Vec::new(),
-                              focused_pane_index:    0,
-                              split_ratio:           0.5,
-                              split_ratio_secondary: None,
-                              show_dashboard:        None,
-                              is_detached:           None,
-                              window_bounds:         None, });
+            .push(Workspace { id:        Uuid::new_v4(),
+                              name:      "Mine".into(),
+                              color_hex: "#46A857".into(),
+                              agent_ids: Vec::new(), });
     settings
 }
 
@@ -139,18 +131,10 @@ fn running_both_imports_twice_changes_nothing_the_second_time() {
                             state:        PersonaState::Enabled, };
     let mut agent = SavedAgent::new(Uuid::new_v4(), "theirs", None, "/theirs");
     agent.persona_id = Some(persona.id);
-    let workspace = Workspace { id:                    Uuid::new_v4(),
-                                name:                  "Theirs".into(),
-                                color_hex:             "#46A857".into(),
-                                agent_ids:             vec![agent.id],
-                                layout_mode:           "single".into(),
-                                active_agent_ids:      Vec::new(),
-                                focused_pane_index:    0,
-                                split_ratio:           0.5,
-                                split_ratio_secondary: None,
-                                show_dashboard:        None,
-                                is_detached:           None,
-                                window_bounds:         None, };
+    let workspace = Workspace { id:        Uuid::new_v4(),
+                                name:      "Theirs".into(),
+                                color_hex: "#46A857".into(),
+                                agent_ids: vec![agent.id], };
     let workspace_id = workspace.id;
     let source = SkwadSource { workspaces:   vec![workspace],
                                agents:       vec![agent],
