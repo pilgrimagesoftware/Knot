@@ -48,14 +48,20 @@
 # The signature is backwards from every intuition about a flaky check, which is
 # how it survived review: EARLY matches fail and LATE matches pass, because a
 # late match leaves the producer with nothing left to write and therefore no
-# signal to take. Measured on this repo, on the file that exposed it:
+# signal to take.
 #
-#     store.rs, `mod documents` (line 54 of 678)   26 failures / 150
-#     store.rs, `mod tests`     (line 678 of 678)   0 failures / 150
+# Forced - a match on line 1 of a 200k-line file - it is not a race but a
+# certainty: 20 failures out of 20 for the pipeline form, 0 out of 20 for the
+# form below. That is the measurement worth keeping, because it reproduces on
+# demand.
 #
-# It is invisible on small inputs, so it survives any test written against a
-# short fixture. Forced with a match on line 1 of a 200k-line file it is not
-# rare at all - 40 failures out of 40.
+# On a real file the rate is low and moves with how busy the machine is. The
+# same case - store.rs, `mod documents` at line 54 of 678 - measured 26/150 on
+# a saturated machine, 3/100 at a third of that load, and 0/100 in a third
+# sample, while `mod tests` at line 678 of the same file measured 0 every time.
+# So the SIGNATURE is stable and the RATE is not. Do not read a clean run on a
+# quiet machine as evidence the pipeline form is safe; that is exactly how it
+# reached CI.
 #
 # The rule generalises past this script: `set -o pipefail` plus ANY
 # early-exiting consumer - `grep -q`, `head`, `grep -m N` - is a latent race.
@@ -117,9 +123,10 @@ while IFS= read -r file; do
     #
     # `^[^/]*` is what replaces stripping comments: the prefix cannot contain a
     # slash, so `// mod foo;` and `use a::b; // mod foo;` are both rejected,
-    # while every declaration form in the tree is accepted - bare `mod foo;`
-    # (281), `pub mod foo;` (52), `pub(crate) mod foo;` (10), `pub(super) mod
-    # foo;` (9), and `#[cfg(test)] mod foo;` on one line.
+    # while every declaration form the tree uses is accepted - bare `mod foo;`,
+    # `pub mod foo;`, `pub(crate) mod foo;`, `pub(super) mod foo;`, and
+    # `#[cfg(test)] mod foo;` on one line. Counts are deliberately not quoted:
+    # they move with every merge, and a stale number reads as a claim.
     if ! grep -qE "^[^/]*[[:space:]]*mod[[:space:]]+${base}[[:space:]]*;" "$owner"; then
         printf '%s: not declared in %s\n' "$file" "$owner" >&2
         missing=$((missing + 1))
