@@ -77,18 +77,23 @@ while IFS= read -r file; do
     fi
 
     checked=$((checked + 1))
-    # Line comments are stripped first, because `// mod foo;` otherwise
-    # satisfies the grep - and a declaration commented out during debugging and
-    # never restored is one of the ways a module goes quiet in the first place.
-    # (A `mod` inside a /* block comment */ would still slip through. Not worth
-    # parsing Rust for; the workspace has none.)
+    # One grep, no pipeline, deliberately.
     #
-    # The pattern deliberately allows any prefix, which covers every form in
-    # the tree: bare `mod foo;` (281), `pub mod foo;` (52), `pub(crate) mod
-    # foo;` (10) and `pub(super) mod foo;` (9), plus `#[cfg(test)] mod foo;`
-    # on one line.
-    if ! sed 's,//.*,,' "$owner" \
-        | grep -qE "(^|[[:space:]])mod[[:space:]]+${base}[[:space:]]*;"; then
+    # This was `sed 's,//.*,,' "$owner" | grep -q ...`, which is a latent flake
+    # under `set -o pipefail`: grep -q exits at the first match, sed is still
+    # writing, sed takes SIGPIPE, and the pipeline reports 141 even though the
+    # declaration was found. Whether that happens depends on file size, pipe
+    # buffer and scheduling, so it passed on one machine and failed on another
+    # - CI reported four declared modules in knot-core/settings/store.rs as
+    # missing while the fifth, declared 620 lines further down, passed, because
+    # by then sed had almost nothing left to write.
+    #
+    # `^[^/]*` is what replaces stripping comments: the prefix cannot contain a
+    # slash, so `// mod foo;` and `use a::b; // mod foo;` are both rejected,
+    # while every declaration form in the tree is accepted - bare `mod foo;`
+    # (281), `pub mod foo;` (52), `pub(crate) mod foo;` (10), `pub(super) mod
+    # foo;` (9), and `#[cfg(test)] mod foo;` on one line.
+    if ! grep -qE "^[^/]*[[:space:]]*mod[[:space:]]+${base}[[:space:]]*;" "$owner"; then
         printf '%s: not declared in %s\n' "$file" "$owner" >&2
         missing=$((missing + 1))
     fi
