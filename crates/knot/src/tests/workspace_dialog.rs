@@ -1,20 +1,26 @@
 //! The workspace name dialog answers Return and Escape, per
 //! `workspace-manager-ui`'s spec.
 //!
-//! The keys ride on the overlay's bubble-phase `on_key_down`, which only
-//! works because the focused `Input` propagates both: gpui-base binds
-//! `enter` and `escape` in its `Input` key context, and its handlers call
+//! The keys reach the dialog host's `Confirm` and `Cancel` bindings only
+//! because the focused `Input` propagates both: gpui-base binds `enter` and
+//! `escape` in its `Input` key context, and its handlers call
 //! `cx.propagate()` for a single-line field that does not set
-//! `clean_on_escape`. That is a property of a dependency rather than of
+//! `clean_on_escape`, which lets the dialog's own binding for the same
+//! keystroke run next. That is a property of a dependency rather than of
 //! this crate, so these tests drive real keystrokes through a real window
 //! instead of calling the two dialog methods directly - a gpui-component
 //! upgrade that stopped propagating would break the dialog silently, and
 //! this is what would catch it.
+//!
+//! Open-ness is asked of the window rather than of a flag on the view: the
+//! dialog is hosted by `Root`, so `has_active_dialog` is the only answer
+//! that means it is actually on screen.
 
 use std::sync::Arc;
 
 use gpui_kit::Entity;
 use gpui_kit::component::Root;
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::input::InputState;
 use gpui_kit::{AppContext, TestAppContext, VisualTestContext, WindowOptions};
@@ -60,9 +66,7 @@ fn manager(
                                                         messages,
                                                         settings,
                                                         name_input,
-                                                        editing_id: None,
                                                         workspace_dialog_id: None,
-                                                        show_workspace_dialog: false,
                                                         error: None,
                                                         _name_subscription: name_subscription,
                                                         _mcp_stop: None }
@@ -91,6 +95,57 @@ fn a_blank_workspace_name_is_one_with_nothing_but_whitespace_in_it() {
             "surrounding whitespace does not make a name blank");
 }
 
+/// The strings the name and delete dialogs are built from, none of which
+/// has a visible fallback: a missing key ships as the key itself, in a
+/// window title or in the sentence asking whether to destroy a workspace.
+#[test]
+fn workspace_dialog_labels_resolve() {
+    for key in ["workspace_manager.new_title",
+                "workspace_manager.rename_title",
+                "workspace_manager.create",
+                "workspace_manager.save",
+                "workspace_manager.cancel",
+                "workspace_manager.delete_title",
+                "workspace_manager.delete_body",
+                "workspace_manager.this_workspace"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
+/// The confirmation names the workspace it is about to destroy, so the
+/// interpolation has to land - `%{name}` reaching the screen literally
+/// would be the tell.
+#[test]
+fn the_delete_confirmation_names_the_workspace() {
+    let body = knot_core::l10n::t_with("workspace_manager.delete_body", &[("name", "Knot")]);
+    assert!(body.contains("Knot"),
+            "the delete body dropped the name: {body}");
+    assert!(!body.contains("%{name}"),
+            "the delete body left its placeholder unfilled: {body}");
+}
+
+/// Opening the dialog has to reach the `Root`, not just set a field: the
+/// window draws it through the shared dialog layer now, so a dialog the
+/// `Root` never heard about is a dialog nobody sees.
+#[gpui_kit::test]
+fn opening_the_name_dialog_puts_one_on_the_window(cx: &mut TestAppContext) {
+    let (_store, mut cx, manager) = manager(cx);
+
+    assert!(!dialog_is_open(&mut cx),
+            "a dialog was open before anything asked for one");
+
+    manager.update_in(&mut cx, |manager, window, cx| {
+               manager.open_workspace_dialog(None, window, cx);
+           });
+    cx.run_until_parked();
+
+    assert!(dialog_is_open(&mut cx),
+            "opening the name dialog put nothing on the window");
+}
+
 #[gpui_kit::test]
 fn escape_closes_the_workspace_dialog_and_creates_nothing(cx: &mut TestAppContext) {
     let (store, mut cx, manager) = manager(cx);
@@ -107,7 +162,7 @@ fn escape_closes_the_workspace_dialog_and_creates_nothing(cx: &mut TestAppContex
     cx.simulate_keystrokes("escape");
     cx.run_until_parked();
 
-    assert!(!manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
+    assert!(!dialog_is_open(&mut cx),
             "escape left the workspace dialog open");
     assert_eq!(store.lock().workspaces().len(),
                before,
@@ -129,7 +184,7 @@ fn return_creates_the_workspace_the_dialog_was_naming(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("enter");
     cx.run_until_parked();
 
-    assert!(!manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
+    assert!(!dialog_is_open(&mut cx),
             "return left the workspace dialog open");
     let names: Vec<String> = store.lock()
                                   .workspaces()
@@ -156,7 +211,7 @@ fn return_on_a_blank_name_does_nothing_at_all(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("enter");
     cx.run_until_parked();
 
-    assert!(manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
+    assert!(dialog_is_open(&mut cx),
             "return on a blank name closed the dialog");
     assert_eq!(store.lock().workspaces().len(),
                before,
@@ -200,8 +255,13 @@ fn the_same_two_keys_work_when_the_dialog_is_renaming(cx: &mut TestAppContext) {
     assert_eq!(workspace_name(&store, id).as_deref(),
                Some("After"),
                "return did not apply the rename");
-    assert!(!manager.read_with(&cx, |manager, _| manager.show_workspace_dialog),
+    assert!(!dialog_is_open(&mut cx),
             "return left the rename dialog open");
+}
+
+/// Whether the window has a dialog on screen at all.
+fn dialog_is_open(cx: &mut VisualTestContext) -> bool {
+    cx.update(|window, app| window.has_active_dialog(app))
 }
 
 fn workspace_name(store: &Arc<Mutex<knot_agents::AgentStore>>, id: Uuid) -> Option<String> {

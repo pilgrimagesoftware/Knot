@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use gpui_kit::App;
 use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::component::ActiveTheme;
@@ -80,16 +83,39 @@ impl WorkspaceWindow {
         }
     }
 
-    /// The selected agent's diff stat, with only the figures colored -
-    /// additions green, deletions red, the changed-file count blue - and
-    /// the words around them left muted. The count's noun goes through
-    /// `l10n::plural_noun` rather than a local `if count == 1`, so the
-    /// word (and its form) comes from the locale catalog.
-    pub(super) fn render_diff_stats(stats: &knot_git::DiffStats, font_family: String,
-                                    font_size: gpui_kit::Pixels, cx: &Context<Self>)
-                                    -> gpui_kit::AnyElement {
-        app_state::diff_stats_row(stats, cx.theme().muted_foreground).font_family(font_family)
-                                                                     .text_size(font_size)
-                                                                     .into_any_element()
+    /// The same stat row, made the control that opens the git panel.
+    ///
+    /// The entry point is here rather than in the agent row's context menu
+    /// so `agent-list-ui` needs no change for it, and because burying the
+    /// panel behind a right-click hides it from the one place already
+    /// pointing at what it shows.
+    pub(super) fn render_diff_stats_button(stats: &knot_git::DiffStats, font_family: String,
+                                           font_size: gpui_kit::Pixels, cx: &mut Context<Self>)
+                                           -> gpui_kit::AnyElement {
+        let row = app_state::diff_stats_row(stats, cx.theme().muted_foreground);
+
+        gpui_kit::div()
+            .id("agent-git-stats")
+            .cursor_pointer()
+            .rounded(cx.theme().radius)
+            .tooltip({
+                let text = knot_core::l10n::t("git_panel.title");
+                move |window, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
+                }
+            })
+            .on_click(cx.listener(|view, _: &gpui_kit::ClickEvent, _window, cx| {
+                          let Some(id) = view.selected_agent
+                          else {
+                              return;
+                          };
+                          let Some(folder) = view.agent_folder(id)
+                          else {
+                              return;
+                          };
+                          view.toggle_git_panel(id, &folder, cx);
+                      }))
+            .child(row.font_family(font_family).text_size(font_size))
+            .into_any_element()
     }
 }

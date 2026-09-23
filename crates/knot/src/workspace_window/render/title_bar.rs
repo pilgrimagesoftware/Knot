@@ -132,10 +132,16 @@ impl WorkspaceWindow {
                                                        .child(state_label(*state))))
                             .child(match git_stats {
                                        Some(Some(stats)) => {
-                                           Self::render_diff_stats(stats,
-                                                                   title_font_name.clone(),
-                                                                   title_font_size,
-                                                                   cx)
+                                           // The stat row is already the
+                                           // "this folder has N changes"
+                                           // indicator, so it is what opens
+                                           // the panel that shows what those
+                                           // changes are - the question the
+                                           // row raises and cannot answer.
+                                           Self::render_diff_stats_button(stats,
+                                                                          title_font_name.clone(),
+                                                                          title_font_size,
+                                                                          cx)
                                        }
                                        // The refresh ran and found no
                                        // repository: the agent's folder

@@ -92,6 +92,58 @@ aged out (`claim_refresh`); the `git` call runs off the main thread and a
 later frame draws the answer. Route through it rather than adding a fourth
 instance.
 
+## Off-thread results must reach a frame
+
+The rule above gets work off the render path. This one is about the answer
+coming back, which is a separate problem and the one that keeps recurring:
+five defects in one day, all of the shape "the code ran, the state was
+correct, and the result never reached the screen".
+
+Work that finishes off the main thread reports itself through a flag -
+`RefreshCache`'s dirty bit, `PanelSessionHandle::take_dirty`, an
+`Arc<AtomicBool>` a `spawn_blocking` sets. `repaint_poll_tick` reads those
+flags and calls `cx.notify()`. Every link in that chain has now been broken
+at least once:
+
+- **The flag nobody polls.** `pull_request_states` set its dirty bit on every
+  landed fetch and nothing ever called `take_changed()` on it - the poll read
+  `diff_stats` alone. Rows drew when something unrelated happened to notify,
+  and on a workspace with nothing running, possibly never.
+- **The flag read and then discarded.** `panel_needs_repaint` took
+  `diff_stats.take_changed()` - which *clears* as it reads - and then hit
+  `let Some(slot) = .. else { return false; }`. For every Terminal-mode agent
+  the answer was consumed and thrown away.
+- **The work reported to nobody.** `sync_panel_agent_states` wrote every panel
+  session's lifecycle into the store and returned `()`. An unselected agent
+  finishing its turn reached the store and stopped there; its sidebar dot was
+  on screen and did not move.
+- **The claim that never records.** `claim_refresh` *marks* the key as
+  requested before handing back the writer. Drop that writer without calling
+  `record()` and the key reads as fresh for the whole `MAX_AGE` with nothing
+  behind it - not a missed repaint but a stall, which looks like a slow
+  subprocess rather than a bug.
+
+What to check, in the order the mistakes were actually made:
+
+1. A new flag, cache or `spawn_blocking` result must appear in
+   `repaint_poll_tick`'s `if` chain. A cache nobody polls is
+   indistinguishable from one that works until the window goes quiet.
+2. A clearing read must not be *reachable on a path that discards it*. The
+   safe shape puts it where it cannot run on that path - inside the option
+   chain or the match guard, as `grid.lock().take_dirty()` and
+   `if handle.take_dirty()` both do - not merely below the early return.
+3. Assign clearing reads to locals before combining them. `a.take_changed()
+   || b.take_changed()` skips the second whenever the first is true, and
+   because the read is a consuming swap, the skipped flag stays set and fires
+   a spurious repaint on the next tick.
+4. Between `claim_refresh` and the writer moving into the work there must be
+   no early return and no `?`. Hand it to `spawn_blocking` on the next line,
+   which is safe by construction rather than by inspection.
+
+None of these fail a test or a lint. The symptom is an absence, and an
+absence has no output channel - which is why they are worth checking by hand
+when the chain is touched.
+
 ## Locks: `parking_lot`, and a guard that does not outlive its statement
 
 `workspace_window/mod.rs` once had 22 `lock().unwrap()` against 52

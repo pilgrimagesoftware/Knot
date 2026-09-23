@@ -3776,6 +3776,7 @@ dependencies = [
  "knot-processes",
  "knot-tasks",
  "knot-terminal",
+ "knot-watch",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
@@ -3863,8 +3864,10 @@ dependencies = [
 name = "knot-forge"
 version = "1.14.0"
 dependencies = [
+ "knot-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.20",
 ]
 

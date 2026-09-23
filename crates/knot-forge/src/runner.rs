@@ -1,7 +1,7 @@
 //! Running `gh` with a timeout, behind a trait so the rest of the crate can
 //! be tested without the binary.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -26,10 +26,17 @@ pub trait ForgeRunner {
 /// Output streams drain on worker threads so a full pipe buffer never wedges
 /// the child; the main thread polls for exit and kills on timeout. The same
 /// shape as `knot_git::Runner`, for the same reason.
+///
+/// The binary is located through `knot_core::exec_path` rather than left to
+/// the process's own `PATH`. Knot is a GUI app: launched from Finder it
+/// inherits launchd's `/usr/bin:/bin:/usr/sbin:/sbin`, which names no
+/// location `gh` is ever installed in, and the view would report the tool
+/// missing on a machine that has it.
 #[derive(Debug, Clone)]
 pub struct GhRunner {
-    timeout: Duration,
-    program: OsString,
+    timeout:     Duration,
+    program:     OsString,
+    search_path: OsString,
 }
 
 impl Default for GhRunner {
@@ -41,8 +48,11 @@ impl Default for GhRunner {
 impl GhRunner {
     #[must_use]
     pub fn new() -> Self {
-        Self { timeout: DEFAULT_TIMEOUT,
-               program: OsString::from(GH_PROGRAM), }
+        let search_path = knot_core::exec_path::search_path();
+
+        Self { timeout:     DEFAULT_TIMEOUT,
+               program:     locate_gh(&search_path),
+               search_path: OsString::from(search_path), }
     }
 
     #[must_use]
@@ -51,10 +61,20 @@ impl GhRunner {
         self
     }
 
+    /// Runs a named program instead of the located `gh`.
+    ///
+    /// Taken verbatim: an explicit choice of binary is not second-guessed by
+    /// a search. Bare names still resolve the way any other spawn does.
     #[must_use]
     pub fn with_program(mut self, program: impl Into<OsString>) -> Self {
         self.program = program.into();
         self
+    }
+
+    /// The `PATH` the child is given.
+    #[must_use]
+    pub fn search_path(&self) -> &OsStr {
+        &self.search_path
     }
 }
 
@@ -65,7 +85,12 @@ impl ForgeRunner for GhRunner {
         // No `current_dir`: every command this crate runs names its subject by
         // URL, so the working directory would only decide which repository
         // `gh` guessed at when the URL was already unambiguous.
+        // `PATH` as well as the located binary: `gh` shells out itself - to
+        // `git` for the repository it is standing in, and to whatever
+        // credential helper the user configured - and those lookups run
+        // under the environment it is handed.
         let mut child = match Command::new(&self.program).args(args)
+                                                         .env("PATH", &self.search_path)
                                                          .stdin(Stdio::null())
                                                          .stdout(Stdio::piped())
                                                          .stderr(Stdio::piped())
@@ -118,6 +143,20 @@ impl ForgeRunner for GhRunner {
                                   output:  output.trim().to_owned(),
                                   code:    status.code().unwrap_or(-1), })
     }
+}
+
+/// The `gh` to spawn: the binary located on `search_path`, or the bare name
+/// when no directory on it holds one.
+///
+/// The bare-name fallback is what keeps a genuinely missing tool
+/// distinguishable. Spawning it fails with `NotFound`, which becomes
+/// [`ForgeError::Missing`], and the view says "not installed" - the one
+/// answer that is still true after this change.
+fn locate_gh(search_path: &str) -> OsString {
+    knot_core::exec_path::resolve_program_on(search_path, GH_PROGRAM).map(OsString::from)
+                                                                     .unwrap_or_else(|| {
+                                                                         OsString::from(GH_PROGRAM)
+                                                                     })
 }
 
 fn read_to_string(pipe: &mut impl Read) -> String {

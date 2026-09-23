@@ -12,6 +12,9 @@ use gpui_kit::px;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod tests;
+
 /// The automatic nudge Knot sends an agent with unread mail.
 ///
 /// The closing sentence is load-bearing: the nudge can land behind work the
@@ -240,8 +243,9 @@ pub(crate) const JETBRAINS_MONO_BOLD: &[u8] =
 
 pub(crate) const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app-icon-32.png");
 
-/// The panel's turn-in-progress animation: the app icon through one full
-/// rotation, 24 frames of animated WebP at 62ms each. Regenerate with
+/// The panel's turn-in-progress animation: the app icon pulsing through one
+/// full cycle, 36 frames of animated WebP at 42ms each. Scaled down from the
+/// authored source at `images/knot-progress-pulse.webp` by
 /// `scripts/make-working-animation.sh`, which is committed beside it.
 pub(crate) const WORKING_KNOT_WEBP: &[u8] = include_bytes!("../assets/working-knot.webp");
 
@@ -475,15 +479,18 @@ pub(crate) fn apply_system_palette(cx: &mut App) {
 /// Re-resolves the theme whenever the OS appearance changes under `window`,
 /// so a light/dark flip repaints without a settings round-trip or a restart.
 ///
-/// `Theme::change` reloads the light or dark config wholesale, which wipes
-/// the palette laid over it - hence the re-ingestion straight after, in that
-/// order. Every window registers this: the palette is global, so a second
-/// window re-resolving it is harmless, and the app must keep tracking the
-/// appearance after any one window closes.
+/// Through [`crate::appearance::apply`] rather than straight to
+/// `Theme::change`: the OS appearance is one of two inputs, and under an
+/// explicit Light or Dark it is not the deciding one. Handing
+/// `cx.window_appearance()` to the theme here is exactly what used to
+/// overwrite a chosen appearance on the next flip.
+///
+/// Every window registers this: the palette is global, so a second window
+/// re-resolving it is harmless, and the app must keep tracking the appearance
+/// after any one window closes.
 pub(crate) fn observe_system_appearance(window: &Window) {
     window.observe_window_appearance(|window, cx| {
-              Theme::change(cx.window_appearance(), Some(window), cx);
-              apply_system_palette(cx);
+              crate::appearance::apply(Some(window), cx);
               window.refresh();
           })
           .detach();

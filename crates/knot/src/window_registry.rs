@@ -102,6 +102,24 @@ impl WindowRegistry {
           .upgrade()
     }
 
+    /// Every workspace window still open.
+    ///
+    /// For a change that has to reach all of them at once rather than one
+    /// named window - a preference write, which no window asked for and every
+    /// window draws from. Entries whose view has been dropped are skipped;
+    /// they are left in the map for `activate` to clear on the next request
+    /// for their key, which is where the map already does its pruning.
+    pub(crate) fn workspace_views(cx: &App) -> Vec<Entity<WorkspaceWindow>> {
+        let Some(registry) = cx.try_global::<Self>()
+        else {
+            return Vec::new();
+        };
+        registry.windows
+                .values()
+                .filter_map(|registered| registered.workspace.as_ref()?.upgrade())
+                .collect()
+    }
+
     /// Records a window that has just opened.
     ///
     /// `workspace` is the view for a workspace window and `None` for the

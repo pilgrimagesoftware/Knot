@@ -51,9 +51,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+mod binding;
 mod documents;
 mod legacy;
 mod paths;
+mod refresh;
 mod workspace_split;
 
 pub use paths::StorePaths;
@@ -70,7 +72,7 @@ use crate::consts::{
     TITLE_FONT_DEFAULT, TITLE_FONT_SIZE_DEFAULT, UI_FONT_DEFAULT, UI_FONT_SIZE_DEFAULT,
     VOICE_ENGINE_DEFAULT, VOICE_PUSH_TO_TALK_KEY_DEFAULT,
 };
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 /// The whole persisted configuration surface. Load with [`Settings::load`],
 /// mutate through the helpers (each persists), or set fields directly and call
@@ -226,12 +228,6 @@ impl Settings {
         Self::load_with(StorePaths::rooted(dir.as_ref()))
     }
 
-    /// An empty settings value whose documents live under `dir`.
-    pub fn with_store_root(dir: impl Into<PathBuf>) -> Self {
-        Self { paths: Some(StorePaths::rooted(dir)),
-               ..Self::default() }
-    }
-
     fn load_with(paths: StorePaths) -> Result<Self> {
         // The legacy migration's own output is a combined workspaces
         // document, so the split has to run on its result too - hence the
@@ -311,15 +307,6 @@ impl Settings {
         settings.sidebar_width = settings.sidebar_width
                                          .clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
         settings
-    }
-
-    /// Where this value's documents live, falling back to the platform
-    /// directories when it was not bound to an explicit root.
-    fn resolved_paths(&self) -> Result<StorePaths> {
-        self.paths
-            .clone()
-            .or_else(StorePaths::platform)
-            .ok_or_else(|| Error::Config("no config directory available".to_string()))
     }
 
     /// Write every document.

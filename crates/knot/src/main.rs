@@ -12,12 +12,16 @@ mod agent_processes;
 mod app_bootstrap;
 mod app_state;
 mod app_support;
+mod appearance;
 mod broadcast_sheet;
 mod command_center;
+mod commit_window;
 mod consts;
 mod controls;
 mod dashboard;
 mod diff_stats;
+mod external_tools;
+mod git_panel;
 mod import_window;
 mod macos;
 mod markdown_view;
@@ -31,6 +35,7 @@ mod plan_view;
 mod pull_request_state;
 mod quit_guard;
 mod refresh_cache;
+mod settings_broadcast;
 mod settings_window;
 mod terminal_view;
 #[cfg(test)]
@@ -42,5 +47,8 @@ mod workspace_manager;
 mod workspace_window;
 
 fn main() {
+    // Before anything builds a git runner: a Finder-launched app's PATH
+    // names none of the places git may actually live.
+    external_tools::configure();
     app_bootstrap::run();
 }

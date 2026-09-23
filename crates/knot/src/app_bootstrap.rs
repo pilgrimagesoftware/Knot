@@ -13,7 +13,6 @@ use gpui_kit::SystemMenuType;
 use gpui_kit::actions;
 use gpui_kit::base::input;
 use gpui_kit::component::Root;
-use gpui_kit::component::Theme;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::input::InputState;
 use knot_mcp::ToolCatalog;
@@ -389,7 +388,9 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
               // the moment anything in the reopened
               // window
               // persists.
-              let settings = knot_core::Settings::load().unwrap_or_default();
+              let settings = knot_core::Settings::load().unwrap_or_else(|_| {
+                                                            knot_core::Settings::platform_default()
+                                                        });
               open_settings_window(&settings_window, settings, Arc::clone(&store), cx);
           });
     }
@@ -484,9 +485,7 @@ fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                     messages,
                                                     settings,
                                                     name_input,
-                                                    editing_id: None,
                                                     workspace_dialog_id: None,
-                                                    show_workspace_dialog: false,
                                                     error: None,
                                                     _name_subscription: name_subscription,
                                                     _mcp_stop: mcp_stop }
@@ -502,7 +501,8 @@ fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
 }
 
 pub(crate) fn run() {
-    let mut settings = knot_core::Settings::load().unwrap_or_default();
+    let mut settings =
+        knot_core::Settings::load().unwrap_or_else(|_| knot_core::Settings::platform_default());
     if let Err(err) = settings.init_source_folder() {
         eprintln!("failed to initialize source folder: {err}");
     }
@@ -536,7 +536,13 @@ pub(crate) fn run() {
                                // application menu from the process name.
                                app_support::set_process_name(&knot_core::l10n::t("app.name"));
                                gpui_kit::init(cx);
-                               Theme::change(cx.window_appearance(), None, cx);
+                               // Before the first window: a stored Light or
+                               // Dark has to be in the first frame, not
+                               // arrive as a repaint after one.
+                               cx.set_global(crate::appearance::AppearancePreference(
+                                   settings.appearance_mode,
+                               ));
+                               crate::appearance::apply(None, cx);
                                apply_visual_identity(&settings, cx);
 
                                // Before `on_action(quit)`: the guard reads

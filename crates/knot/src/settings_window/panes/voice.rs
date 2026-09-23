@@ -56,9 +56,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.voice_enabled = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),
@@ -93,9 +93,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.voice_auto_insert = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),

@@ -1,4 +1,4 @@
-.PHONY: all fmt fmt-check size-check lint test build package print-rustfmt-nightly
+.PHONY: all fmt fmt-check size-check declared-check lint test build package print-rustfmt-nightly
 
 # Load .env if present, for anything a local toolchain wants configured.
 -include .env
@@ -7,7 +7,7 @@ export
 # Default: the whole gate, in the order CI runs it.
 default: all
 
-all: fmt-check size-check lint test build
+all: fmt-check size-check declared-check lint test build
 
 # The largest a Rust source file may get before it has to be split. See
 # scripts/check-file-size.sh for why this is enforced rather than advised.
@@ -15,6 +15,11 @@ RUST_FILE_LINE_LIMIT ?= 700
 
 size-check:
 	@./scripts/check-file-size.sh $(RUST_FILE_LINE_LIMIT)
+
+# A file beside a mod.rs that never declares it is not compiled, and nothing
+# else in the gate notices. See scripts/check-declared-modules.sh.
+declared-check:
+	@./scripts/check-declared-modules.sh
 
 # The single source of truth for the rustfmt toolchain. rustfmt.toml enables
 # unstable options, so formatting is only reproducible against one exact

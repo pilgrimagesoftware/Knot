@@ -14,9 +14,12 @@
 //! rows fill in as answers arrive.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use knot_forge::{ForgeAvailability, PullRequestState, PullRequestStatus};
+use parking_lot::Mutex;
 
 use crate::consts;
 use crate::refresh_cache::RefreshCache;
@@ -30,6 +33,9 @@ pub(crate) type PullRequestStateCache = RefreshCache<String, Option<PullRequestS
 
 /// How stale a pull request's state may be before it is fetched again.
 pub(crate) const MAX_AGE: Duration = consts::PULL_REQUEST_STATE_MAX_AGE;
+
+/// How stale the forge availability answer may be before it is asked again.
+pub(crate) const PROBE_MAX_AGE: Duration = consts::FORGE_PROBE_MAX_AGE;
 
 /// How many of a workspace's recorded pull requests are in each state.
 ///
@@ -90,34 +96,74 @@ pub(crate) fn counts_for(cache: &BTreeMap<String, Option<PullRequestState>>, url
 /// view's single availability message has something to read. `None` while it
 /// has never been probed, which is every moment before the view is first
 /// shown.
-#[derive(Debug, Clone, Default)]
+///
+/// The same claim/writer shape as [`crate::refresh_cache`], and for the same
+/// reason: a probe is `gh auth status`, a subprocess, and the only place
+/// that wants the answer is a render. Claiming marks the request
+/// immediately, the work runs off the main thread, and a later frame draws
+/// what landed.
+#[derive(Debug, Default)]
 pub(crate) struct ForgeStatus {
-    availability: Option<ForgeAvailability>,
+    availability: Arc<Mutex<Option<ForgeAvailability>>>,
+    /// Main-thread only: when a probe was last *requested*, so it runs on a
+    /// cadence rather than once per render.
+    requested:    Option<Instant>,
+    dirty:        Arc<AtomicBool>,
 }
 
 impl ForgeStatus {
     /// What the last probe found, or `None` if there has not been one.
-    pub(crate) fn availability(&self) -> Option<&ForgeAvailability> {
-        self.availability.as_ref()
+    pub(crate) fn availability(&self) -> Option<ForgeAvailability> {
+        self.availability.lock().clone()
     }
 
-    /// Record what a probe found.
-    pub(crate) fn set(&mut self, availability: ForgeAvailability) {
-        self.availability = Some(availability);
+    /// Claims a probe if none has been requested within `max_age`.
+    ///
+    /// Returns the writer the caller hands to whatever runs the subprocess,
+    /// or `None` when the last answer is still fresh - which is the common
+    /// case, since this is asked once per frame while the view is open.
+    ///
+    /// Ageing out rather than probing once per window is what lets the view
+    /// recover: a user who was signed out, ran `gh auth login` and came back
+    /// would otherwise keep reading "not authenticated" until the window was
+    /// closed and reopened.
+    pub(crate) fn claim_probe(&mut self, max_age: Duration) -> Option<ForgeProbeWriter> {
+        if self.requested.is_some_and(|at| at.elapsed() < max_age) {
+            return None;
+        }
+        self.requested = Some(Instant::now());
+        Some(ForgeProbeWriter { availability: Arc::clone(&self.availability),
+                                dirty:        Arc::clone(&self.dirty), })
     }
 
-    /// Whether state is worth fetching. False before the first probe, so a
-    /// view that has just opened asks `gh` what it is dealing with before it
-    /// asks about twenty pull requests.
+    /// Whether state is worth fetching. False before the first probe lands,
+    /// so a view that has just opened asks `gh` what it is dealing with
+    /// before it asks about twenty pull requests.
     pub(crate) fn is_ready(&self) -> bool {
         self.availability
+            .lock()
             .as_ref()
             .is_some_and(ForgeAvailability::is_ready)
     }
 
-    /// Whether a probe is still owed.
-    pub(crate) fn needs_probe(&self) -> bool {
-        self.availability.is_none()
+    /// Whether a probe has landed since this was last asked, clearing the
+    /// flag. For the poll that decides whether to redraw.
+    pub(crate) fn take_changed(&self) -> bool {
+        self.dirty.swap(false, Ordering::SeqCst)
+    }
+}
+
+/// Records one probe's answer from whatever thread ran it.
+pub(crate) struct ForgeProbeWriter {
+    availability: Arc<Mutex<Option<ForgeAvailability>>>,
+    dirty:        Arc<AtomicBool>,
+}
+
+impl ForgeProbeWriter {
+    /// Stores what the probe found and marks the view for a repaint.
+    pub(crate) fn record(self, availability: ForgeAvailability) {
+        *self.availability.lock() = Some(availability);
+        self.dirty.store(true, Ordering::SeqCst);
     }
 }
 
