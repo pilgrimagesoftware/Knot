@@ -67,6 +67,7 @@ impl WorkspaceWindow {
         // is where an agent going idle is noticed.
         self.deliver_inbox_nudges();
         self.raise_awaiting_notifications(cx);
+        self.raise_mcp_failure_notification(cx);
         // Before the repaint checks below, so an agent started here has its
         // slot in place when they run.
         let activated = self.activate_messaged_agents(cx);

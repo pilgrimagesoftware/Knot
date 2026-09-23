@@ -285,6 +285,9 @@ impl WorkspaceWindow {
         self.forget_awaiting_notification(id);
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
+        if self.focused_composer == Some(id) {
+            self.focused_composer = None;
+        }
         self.panel_prompt_input_subscriptions.remove(&id);
         self.panel_prompt_queues.remove(&id);
         self.panel_stopping.remove(&id);

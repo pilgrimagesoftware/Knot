@@ -8,6 +8,7 @@
 mod agent_row;
 mod agents;
 mod chrome;
+pub(crate) mod composer_focus;
 mod creation;
 mod menus;
 mod notifications;
@@ -21,6 +22,7 @@ mod repaint;
 mod sessions;
 mod sidebar_layout;
 mod terminal_input;
+mod title;
 mod view_mode;
 mod window;
 
@@ -29,5 +31,6 @@ mod window;
 pub(crate) use chrome::*;
 pub(crate) use menus::*;
 pub(crate) use sidebar_layout::sidebar_is_compact;
+pub(crate) use title::workspace_title;
 pub(crate) use view_mode::WorkspaceViewMode;
 pub(crate) use window::WorkspaceWindow;
