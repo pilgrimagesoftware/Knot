@@ -2,12 +2,17 @@
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use knot_processes::{Activity, ProcessRecord, ProcessTable};
 use uuid::Uuid;
 
-use super::{ProcessSection, Showing, descendants_for, observed_roots, sample_roots};
+use super::{
+    ProcessSection, SamplingClaim, SamplingFlag, Showing, descendants_for, observed_roots,
+    sample_roots,
+};
 
 fn record(pid: u32, ppid: u32, command: &str) -> ProcessRecord {
     ProcessRecord { pid,
@@ -307,4 +312,89 @@ fn descendant(pid: u32, activity: Activity) -> knot_processes::DescendantProcess
                                         command: format!("process {pid}"),
                                         elapsed: Duration::from_secs(u64::from(pid)),
                                         activity }
+}
+
+// ------------------------------------------------------- the sampler's claim
+
+/// The defect this guard exists to remove. The flag used to be lowered by a
+/// `store(false)` at the end of the sampling closure, so an unwind skipped it
+/// and every later claim was refused - the section stopped updating for the
+/// life of the window, silently, with no expiry to recover it.
+#[test]
+fn a_panic_in_the_sampling_task_still_releases_the_claim() {
+    let flag: SamplingFlag = Arc::new(AtomicBool::new(false));
+    let claim = SamplingClaim::claim(&flag).expect("the sampler starts free");
+
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                                               // Owned by the "task", exactly
+                                               // as the spawned closure owns
+                                               // it.
+                                               let _claim = claim;
+                                               panic!("ps blew up mid-sample");
+                                           }));
+
+    assert!(unwound.is_err(),
+            "the test needs the panic to actually happen");
+    assert!(SamplingClaim::claim(&flag).is_some(),
+            "an unwind must leave the sampler claimable, not wedged forever");
+}
+
+#[test]
+fn a_second_claim_is_refused_while_the_first_is_held() {
+    let flag: SamplingFlag = Arc::new(AtomicBool::new(false));
+    let _held = SamplingClaim::claim(&flag).expect("the sampler starts free");
+
+    assert!(SamplingClaim::claim(&flag).is_none(),
+            "one pass at a time - this is what stops `ps` being asked for twice");
+}
+
+#[test]
+fn dropping_a_claim_frees_the_sampler_for_the_next_pass() {
+    let flag: SamplingFlag = Arc::new(AtomicBool::new(false));
+
+    drop(SamplingClaim::claim(&flag).expect("the sampler starts free"));
+
+    assert!(SamplingClaim::claim(&flag).is_some());
+    assert!(!flag.load(Ordering::Acquire),
+            "the flag itself is lowered, not merely reclaimable");
+}
+
+/// Claims are made from the render thread today, but the flag is shared with
+/// the sampling task, so the claim must be atomic rather than a check and a
+/// separate mark.
+///
+/// Every thread HOLDS what it claimed until all of them have tried - a claim
+/// released at the end of its own statement would let eight sequential claims
+/// all succeed, which says nothing about exclusion.
+#[test]
+fn only_one_of_many_concurrent_claims_succeeds() {
+    const CLAIMANTS: usize = 8;
+
+    let flag: SamplingFlag = Arc::new(AtomicBool::new(false));
+    let everyone_has_tried = std::sync::Barrier::new(CLAIMANTS);
+
+    let granted = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..CLAIMANTS).map(|_| {
+                                                scope.spawn(|| {
+                                                         let claim = SamplingClaim::claim(&flag);
+                                                         let got = claim.is_some();
+                                                         // Still holding it
+                                                         // here.
+                                                         everyone_has_tried.wait();
+                                                         drop(claim);
+                                                         got
+                                                     })
+                                            })
+                                            .collect();
+
+        handles.into_iter()
+               .map(|handle| handle.join().expect("claiming must not panic"))
+               .filter(|got| *got)
+               .count()
+    });
+
+    assert_eq!(granted, 1,
+               "exactly one pass may hold the sampler at a time");
+    assert!(!flag.load(Ordering::Acquire),
+            "every claim was dropped, so the flag is lowered again");
 }
