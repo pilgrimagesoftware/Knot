@@ -10,11 +10,11 @@
 
 ## 2. Panel state and caches
 
-- [ ] 2.1 Create the `crates/knot/src/git_panel/` module tree with `mod.rs` declaring only (no implementation) and verify `make size-check` and `cargo build -p knot` pass
-- [ ] 2.2 Add `knot-watch` to `crates/knot/Cargo.toml` via `dep.workspace = true` and verify the workspace builds
-- [ ] 2.3 Define `DiffKey`, `GitStatusSnapshot`, `DiffOutcome` and the two `RefreshCache` aliases in `git_panel/state.rs`; verify they satisfy the `Clone + PartialEq` bounds by instantiating both caches in a compiling test
-- [ ] 2.4 Implement grouping a `RepoStatus` into the four sections in `git_panel/sections.rs`; verify unit tests in `git_panel/tests.rs` cover a staged-and-modified path appearing in both the staged and unstaged sections, and empty sections being omitted
-- [ ] 2.5 Implement selection as a `(path, staged)` pair with invalidation against a new `RepoStatus`; verify a test that selection survives a refresh keeping the pair, and is cleared when the path keeps only its other side
+- [x] 2.1 Create the `crates/knot/src/git_panel/` module tree with `mod.rs` declaring only (no implementation) and verify `make size-check` and `cargo build -p knot` pass
+- [x] 2.2 Add `knot-watch` to `crates/knot/Cargo.toml` as a path dep, matching how every sibling crate is declared there, and verify the workspace builds
+- [x] 2.3 Define `DiffKey`, `GitStatusSnapshot`, `DiffOutcome` and the two `RefreshCache` aliases in `git_panel/state.rs`; verify they satisfy the `Clone + PartialEq` bounds by instantiating both caches in a compiling test
+- [x] 2.4 Implement grouping a `RepoStatus` into the four sections in `git_panel/sections.rs`; verify unit tests in `git_panel/tests.rs` cover a staged-and-modified path appearing in both the staged and unstaged sections, and empty sections being omitted
+- [x] 2.5 Implement selection as a `(path, staged)` pair with invalidation against a new `RepoStatus`; verify a test that selection survives a refresh keeping the pair, and is cleared when the path keeps only its other side
 
 ## 3. Reads off the render path
 
