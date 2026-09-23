@@ -50,32 +50,34 @@ fn a_section_starts_collapsed_and_toggles() {
 }
 
 #[test]
-fn a_section_with_no_sample_yet_reports_an_unknown_count() {
+fn a_section_with_no_sample_yet_holds_no_list() {
     let section = ProcessSection::default();
 
-    assert_eq!(section.background_count(), None, "unknown, not zero");
-    assert_eq!(section.processes(), None);
+    assert_eq!(section.processes(), None, "unknown, not empty");
 }
 
 #[test]
-fn publishing_a_sample_counts_only_the_background_ones() {
+fn publishing_a_sample_keeps_every_descendant() {
     let mut section = ProcessSection::default();
 
     section.publish(vec![descendant(10, Activity::Background),
                          descendant(11, Activity::Background),
                          descendant(12, Activity::Foreground)]);
 
-    assert_eq!(section.background_count(), Some(2));
+    // Background and foreground alike: the header summarizes the whole list
+    // now, and the rows show the classification per row.
     assert_eq!(section.processes().map(<[_]>::len), Some(3));
 }
 
 #[test]
-fn an_empty_sample_counts_zero_rather_than_unknown() {
+fn an_empty_sample_is_empty_rather_than_unknown() {
     let mut section = ProcessSection::default();
 
     section.publish(Vec::new());
 
-    assert_eq!(section.background_count(), Some(0));
+    // `Some([])` and `None` render differently - "None" against "Counting…" -
+    // so an empty sample must not collapse into "no sample yet".
+    assert_eq!(section.processes(), Some(&[][..]));
 }
 
 #[test]
@@ -113,7 +115,7 @@ fn clearing_forgets_the_sample_without_closing_the_section() {
 
     assert!(section.is_expanded(),
             "the user's disclosure is theirs, not the sampler's");
-    assert_eq!(section.background_count(), None);
+    assert_eq!(section.processes(), None);
     assert_eq!(section.failure(), None);
     assert!(!section.is_terminating(10));
 }
@@ -194,58 +196,54 @@ fn a_failed_read_fails_the_pass() {
 }
 
 #[test]
-fn an_expanded_section_on_the_shown_agent_is_observed() {
+fn the_shown_agent_is_observed() {
     let agent = Uuid::new_v4();
-    let sections = BTreeMap::from([(agent, section(true))]);
 
-    let observed = observed_roots(&sections, Showing { agent: Some(agent) }, |_| Some(100));
+    let observed = observed_roots(Showing { agent: Some(agent) }, |_| Some(100));
 
     assert_eq!(observed, BTreeMap::from([(agent, 100)]));
 }
 
+/// The defect this gate change exists to remove. Sampling used to require an
+/// expanded section, so the collapsed header's summary - the thing that tells
+/// the user whether expanding is worth it - could never be computed, and read
+/// "Counting…" for the life of the window.
 #[test]
-fn collapsing_the_section_stops_the_sampling() {
+fn a_collapsed_section_is_still_observed() {
     let agent = Uuid::new_v4();
-    let sections = BTreeMap::from([(agent, section(false))]);
 
-    let observed = observed_roots(&sections, Showing { agent: Some(agent) }, |_| Some(100));
+    let observed = observed_roots(Showing { agent: Some(agent) }, |_| Some(100));
 
-    assert!(observed.is_empty());
+    assert_eq!(observed,
+               BTreeMap::from([(agent, 100)]),
+               "the collapsed header summarizes a sample, so one has to be taken");
 }
 
 #[test]
 fn an_agent_that_stopped_is_no_longer_observed() {
     let agent = Uuid::new_v4();
-    let sections = BTreeMap::from([(agent, section(true))]);
 
-    let observed = observed_roots(&sections, Showing { agent: Some(agent) }, |_| None);
+    let observed = observed_roots(Showing { agent: Some(agent) }, |_| None);
 
     assert!(observed.is_empty(), "no session root, nothing to sample");
 }
 
 #[test]
 fn a_pane_that_is_no_longer_shown_stops_the_sampling() {
-    let agent = Uuid::new_v4();
-    let other = Uuid::new_v4();
-    let sections = BTreeMap::from([(agent, section(true))]);
-
-    // Another agent selected.
-    assert!(observed_roots(&sections, Showing { agent: Some(other) }, |_| Some(100)).is_empty());
-
     // A takeover view -- the dashboard, the pull requests list -- showing no
     // agent pane at all.
-    assert!(observed_roots(&sections, Showing { agent: None }, |_| Some(100)).is_empty());
+    assert!(observed_roots(Showing { agent: None }, |_| Some(100)).is_empty());
 }
 
+/// One `ps -A` per interval per window, whatever else the window holds: only
+/// the agent on screen is ever sampled.
 #[test]
-fn an_agent_with_no_section_at_all_is_not_observed() {
-    let sections = BTreeMap::new();
+fn at_most_one_agent_is_observed_at_a_time() {
+    let agent = Uuid::new_v4();
 
-    let observed = observed_roots(&sections, Showing { agent: Some(Uuid::new_v4()), }, |_| {
-        Some(100)
-    });
+    let observed = observed_roots(Showing { agent: Some(agent) }, |_| Some(100));
 
-    assert!(observed.is_empty());
+    assert_eq!(observed.len(), 1);
 }
 
 /// The one rule this module exists to keep: a render never enumerates

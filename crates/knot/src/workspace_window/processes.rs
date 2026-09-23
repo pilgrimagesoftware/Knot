@@ -55,20 +55,13 @@ impl WorkspaceWindow {
     /// Expanding is what starts the sampler: the next poll tick sees a
     /// non-empty observed set. Collapsing is what stops it.
     pub(super) fn toggle_process_section(&mut self, agent_id: Uuid) -> bool {
-        let expanded = self.process_sections.entry(agent_id).or_default().toggle();
-
-        if !expanded {
-            // Nothing is shown while shut, and a stale list would be the
-            // first thing drawn on reopening.
-            if let Some(section) = self.process_sections.get_mut(&agent_id) {
-                section.clear();
-            }
-            // So reopening samples at once rather than waiting out the rest
-            // of an interval that elapsed while it was shut.
-            self.process_sampled_at = None;
-        }
-
-        expanded
+        // Deliberately keeps the snapshot either way. Collapsing used to
+        // `clear()` it, on the reasoning that nothing is shown while shut and
+        // a stale list would be the first thing drawn on reopening - but the
+        // collapsed header now names what is running, so clearing is what put
+        // it back to "Counting…" for good. Sampling continues while shut, so
+        // there is no staleness left to guard against.
+        self.process_sections.entry(agent_id).or_default().toggle()
     }
 
     /// Drops everything this agent's section held. Called from session
@@ -86,9 +79,7 @@ impl WorkspaceWindow {
                                     self.selected_agent
                                 }, };
 
-        agent_processes::observed_roots(&self.process_sections, showing, |agent| {
-            self.agent_session_root(agent)
-        })
+        agent_processes::observed_roots(showing, |agent| self.agent_session_root(agent))
     }
 
     /// Moves a completed pass into the sections, answering whether one had
@@ -102,6 +93,14 @@ impl WorkspaceWindow {
             (published.descendants.clone(), published.failure.clone(), published.generation)
         };
         self.process_generation = generation;
+
+        // An agent whose section has never been toggled still has a header to
+        // fill, and `toggle` is the only other thing that creates an entry.
+        // Without this the very agents the fix is for - the ones nobody has
+        // expanded - would go on showing nothing.
+        for agent in descendants.keys() {
+            self.process_sections.entry(*agent).or_default();
+        }
 
         for (agent, section) in &mut self.process_sections {
             match (failure.as_ref(), descendants.get(agent)) {

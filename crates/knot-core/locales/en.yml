@@ -380,11 +380,23 @@ mcp_server:
 
 processes:
   title: "Processes"
-  # Before the first sample lands there is no count to give. Deliberately
+  # Before the first sample lands there is no summary to give. Deliberately
   # not "0": a section that says nothing is running while it is still
-  # looking is worse than one that admits it does not know yet.
+  # looking is worse than one that admits it does not know yet. Now that the
+  # sampler runs while the section is merely shown, this is a moment rather
+  # than the permanent state it used to be.
   count_unknown: "Counting…"
-  count: "%{count} background"
+  # Nothing running - an idle agent, or one that has stopped.
+  count_none: "None"
+  # Expanded, the rows below are the detail, so the header counts them.
+  count_one: "process"
+  count_many: "processes"
+  # Collapsed, the header names what is running instead of counting it.
+  # Between two names in that list; punctuation is the translator's.
+  summary_separator: ", "
+  # What the listed names did not cover. `%{count}` counts processes, not
+  # names: the question behind a glance at the header is how much is running.
+  summary_more: "%{names} +%{count} more"
   column_command: "Command"
   column_runtime: "Runtime"
   column_pid: "PID"
