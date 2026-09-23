@@ -76,7 +76,13 @@ fn is_ignored_dotfile(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::Path;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use tokio::time::timeout;
 
     use super::is_relevant;
 
@@ -136,5 +142,129 @@ mod tests {
     #[test]
     fn dot_github_is_not_dot_git() {
         assert!(relevant("/repo/.github/workflows/ci.yml"));
+    }
+
+    /// How long to wait for the count to stop moving.
+    ///
+    /// Must exceed the debounce, or `settle` returns zero before the
+    /// callback it is waiting for has had a chance to fire - which reads as
+    /// "the watch is broken" rather than "the test asked too early".
+    fn quiet_window() -> Duration {
+        knot_watch::consts::GIT_STATUS_DEBOUNCE + Duration::from_millis(500)
+    }
+
+    /// Polls `count` until it stops moving for `quiet`, bounded overall so a
+    /// watch that never settles fails fast rather than hanging. The shape
+    /// `knot-watch`'s own burst test uses.
+    async fn settle(count: &AtomicUsize, quiet: Duration) -> usize {
+        timeout(Duration::from_secs(20), async {
+            loop {
+                let before = count.load(Ordering::SeqCst);
+                tokio::time::sleep(quiet).await;
+                if count.load(Ordering::SeqCst) == before {
+                    return before;
+                }
+            }
+        }).await
+          .expect("the watch did not go quiet within 20s")
+    }
+
+    /// A working tree with a `.git` directory, so the predicate has both
+    /// kinds of path to judge.
+    fn work_tree() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".git/objects")).unwrap();
+        fs::create_dir_all(dir.path().join(".git/refs/heads")).unwrap();
+        dir
+    }
+
+    /// The panel's watch under the predicate it actually runs with: fifty
+    /// files changing at once is one refresh, not fifty.
+    ///
+    /// `knot-watch` has its own burst test, but with an always-true
+    /// predicate. This one is the pair that ships - the real debounce and
+    /// the real relevance filter - because a filter that let each event
+    /// through separately would pass that test and fail here.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_burst_of_working_tree_changes_is_one_refresh() {
+        let dir = work_tree();
+        let count = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&count);
+
+        let watch = knot_watch::Watch::new(dir.path(),
+                                           knot_watch::consts::GIT_STATUS_DEBOUNCE,
+                                           is_relevant,
+                                           move || {
+                                               counted.fetch_add(1, Ordering::SeqCst);
+                                           });
+        watch.start().unwrap();
+
+        for i in 0..50 {
+            fs::write(dir.path().join(format!("file{i}.rs")), "changed").unwrap();
+        }
+
+        let fired = settle(&count, quiet_window()).await;
+        watch.stop();
+
+        assert_eq!(fired, 1,
+                   "fifty changes at once must collapse to one refresh");
+    }
+
+    /// The filter earning its keep: git rewrites these throughout its own
+    /// operations, so without it every stage would re-trigger the refresh
+    /// that follows it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn gits_own_churn_drives_no_refresh() {
+        let dir = work_tree();
+        let count = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&count);
+
+        let watch = knot_watch::Watch::new(dir.path(),
+                                           knot_watch::consts::GIT_STATUS_DEBOUNCE,
+                                           is_relevant,
+                                           move || {
+                                               counted.fetch_add(1, Ordering::SeqCst);
+                                           });
+        watch.start().unwrap();
+
+        for i in 0..20 {
+            fs::write(dir.path().join(format!(".git/objects/obj{i}")), "x").unwrap();
+        }
+        fs::write(dir.path().join(".git/COMMIT_EDITMSG"), "wip").unwrap();
+        fs::write(dir.path().join(".DS_Store"), "junk").unwrap();
+
+        // Past the debounce with room to spare: anything that was going to
+        // fire has had its chance.
+        tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE + Duration::from_millis(800)).await;
+        watch.stop();
+
+        assert_eq!(count.load(Ordering::SeqCst),
+                   0,
+                   "git's own churn and dotfiles must not drive a refresh");
+    }
+
+    /// The other half of the same filter: a change that does matter still
+    /// gets through. Without this, a predicate that always returned false
+    /// would pass the churn test above.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_staging_write_does_drive_a_refresh() {
+        let dir = work_tree();
+        let count = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&count);
+
+        let watch = knot_watch::Watch::new(dir.path(),
+                                           knot_watch::consts::GIT_STATUS_DEBOUNCE,
+                                           is_relevant,
+                                           move || {
+                                               counted.fetch_add(1, Ordering::SeqCst);
+                                           });
+        watch.start().unwrap();
+
+        fs::write(dir.path().join(".git/index"), "staged").unwrap();
+
+        let fired = settle(&count, quiet_window()).await;
+        watch.stop();
+
+        assert_eq!(fired, 1, "staging changes the index, which is a refresh");
     }
 }

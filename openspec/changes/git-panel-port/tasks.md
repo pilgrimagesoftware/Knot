@@ -63,7 +63,7 @@
 - [x] 8.2 Start one `Watch` per open panel inside the tokio runtime (`runtime.enter()` before `start()`) and stop it on close; verify opening a panel does not panic and that closing it leaves no running watch
 - [x] 8.3 Route the watch callback through an `AtomicBool` read by `repaint_poll_tick`, which forgets the status entry and notifies; verify an external edit to a tracked file refreshes the panel
 - [x] 8.4 Bracket every panel git operation with `pause` before and a `resume` scheduled after the follow-up status read records; verify staging a file does not produce a second refresh from its own writes
-- [ ] 8.5 Verify a burst of fifty file changes collapses to one refresh
+- [x] 8.5 Verify a burst of fifty file changes collapses to one refresh — automated in `git_panel/watch.rs`, with the churn and staging cases alongside it so a filter that always returned false could not pass
 
 ## 9. Integration and wiring
 
