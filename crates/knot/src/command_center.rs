@@ -191,7 +191,6 @@ impl CommandCenterWindow {
                                                          cx);
                 };
                 open_agent_editor(Arc::clone(&view.store),
-                                  (*crate::settings_global::read(cx)).clone(),
                                   AgentEditorRequest { workspace_id,
                                                        prefill:
                                                            AgentPrefill { folder,

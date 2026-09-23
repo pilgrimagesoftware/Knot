@@ -344,11 +344,17 @@ impl WorkspaceWindow {
 
 impl Render for WorkspaceWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // One read for the frame, not one per value: a write landing between
+        // two reads would draw a font name from either side of it. Cheap
+        // enough to take here rather than thread down - it is a refcount
+        // bump, which is the whole reason the surface is copy-on-write and
+        // not a mutex.
+        let settings = crate::settings_global::read(cx);
         // The title font (Manrope) applies explicitly to header and cell text
         // that isn't the agent's name - the name keeps the app-wide UI font
         // (Adamina), so it needs no override here.
-        let title_font_name = crate::settings_global::read(cx).title_font_name.clone();
-        let title_font_size = px(crate::settings_global::read(cx).title_font_size as f32);
+        let title_font_name = settings.title_font_name.clone();
+        let title_font_size = px(settings.title_font_size as f32);
         let Some((window_title, agents)) = self.frame_snapshot(cx)
         else {
             return v_flex().size_full()

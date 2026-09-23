@@ -125,3 +125,54 @@ fn concurrent_writes_of_different_fields_all_survive() {
                 now.recent_repos);
     }
 }
+
+/// Spec scenario "Two windows writing different values": one window writes a
+/// preference and another, open since before that write, then writes a
+/// different one. Neither may revert the other.
+#[test]
+fn two_writers_do_not_revert_each_other() {
+    let shared = SharedSettings::new(Settings::with_store_root("/tmp/knot-shared-test"));
+    // Both windows took their handle when they opened, before either wrote.
+    let first_window = shared.clone();
+    let second_window = shared.clone();
+
+    first_window.write(|settings| settings.mcp_server_port = 9000);
+    second_window.write(|settings| settings.ui_font_size = 18.0);
+
+    let now = shared.read();
+    assert_eq!(now.mcp_server_port, 9000,
+               "the second window's write reverted the first window's");
+    assert_eq!(now.ui_font_size, 18.0);
+}
+
+/// Spec scenario "A reader mid-frame sees one consistent set": a write landing
+/// while a frame is part-way through reading several preferences must not show
+/// up in half of them.
+#[test]
+fn a_frame_sees_one_consistent_set_of_values() {
+    let shared = SharedSettings::new(Settings::with_store_root("/tmp/knot-shared-test"));
+    shared.write(|settings| {
+              settings.ui_font_size = 12.0;
+              settings.markdown_font_size = 12;
+          });
+
+    // The frame takes its value, as `WorkspaceWindow::render` does.
+    let frame = shared.read();
+    let ui_at_start = frame.ui_font_size;
+
+    // A write lands mid-frame.
+    shared.write(|settings| {
+              settings.ui_font_size = 18.0;
+              settings.markdown_font_size = 18;
+          });
+
+    assert_eq!(frame.ui_font_size, ui_at_start,
+               "the frame's first read and its later reads must agree");
+    assert_eq!(frame.markdown_font_size, 12,
+               "a frame must not draw one value from before a write and another from after");
+
+    let next_frame = shared.read();
+    assert_eq!(next_frame.ui_font_size, 18.0,
+               "and the next frame sees the write whole");
+    assert_eq!(next_frame.markdown_font_size, 18);
+}

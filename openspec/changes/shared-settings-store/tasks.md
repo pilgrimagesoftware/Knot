@@ -43,7 +43,7 @@
       `settings` field, taking one `Arc<Settings>` per render rather than one
       per read. Verify `crates/knot/src/tests/settings_reach_open_windows.rs`
       still passes against the new path.
-- [ ] 3.2 Convert `workspace_manager` (`state.rs`) and delete its `settings`
+- [x] 3.2 Convert `workspace_manager` (`state.rs`) and delete its `settings`
       field. Verify a preference changed while the manager is open is visible
       to it without reopening, which it was not before.
 - [x] 3.3 Convert `import_window` and delete its `settings` field and its
@@ -51,16 +51,16 @@
       sees the change too" scenario.
 - [x] 3.4 Convert `command_center` and delete its `settings` field. Verify the
       command centre builds and its existing tests pass.
-- [ ] 3.5 Convert `agent_editor` and delete its `settings` field and its
+- [x] 3.5 Convert `agent_editor` and delete its `settings` field and its
       `Settings::load()` guard. Verify agent creation and editing still
       persist.
-- [ ] 3.6 Convert the `agent_row` menu targets and delete both
+- [x] 3.6 Convert the `agent_row` menu targets and delete both
       `Settings::load()` guards there. Verify the agent row menu actions still
       persist the roster.
-- [ ] 3.7 Rework `app_bootstrap` to seed the global once and stop threading
+- [x] 3.7 Rework `app_bootstrap` to seed the global once and stop threading
       `Settings` by value through window constructors. Verify the app starts
       and every window opens.
-- [ ] 3.8 Decide `knot-mcp-tools`'s `with_settings`: either take the handle or
+- [x] 3.8 Decide `knot-mcp-tools`'s `with_settings`: either take the handle or
       keep an owned value if it is genuinely a one-shot. Verify its tests pass
       and record which it is in the module doc.
 
@@ -72,16 +72,16 @@
 - [x] 4.2 Delete `Settings::reload_preferences`, its `#[serde(skip)]`
       transplant and the test that holds the two in step. Verify no caller
       remains.
-- [ ] 4.3 Confirm no struct field anywhere holds a `Settings` or an
+- [x] 4.3 Confirm no struct field anywhere holds a `Settings` or an
       `Arc<Settings>`: grep the workspace and verify the only holders are
       locals and the global.
 
 ## 5. Verification
 
-- [ ] 5.1 Add a test for each scenario in the delta spec that is not already
+- [x] 5.1 Add a test for each scenario in the delta spec that is not already
       covered by the tasks above, in particular "Two windows writing different
       values" and "A reader mid-frame sees one consistent set".
-- [ ] 5.2 Confirm no settings read on the render path acquires a lock: verify
+- [x] 5.2 Confirm no settings read on the render path acquires a lock: verify
       by inspection that the render path takes one `Arc` and reads from it.
-- [ ] 5.3 Run `make` and confirm formatting, size check, lint and the full test
+- [x] 5.3 Run `make` and confirm formatting, size check, lint and the full test
       suite pass. Split any file the conversion pushes over 700 lines.

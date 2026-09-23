@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use gpui_kit::AppContext;
-use gpui_kit::Context;
 use gpui_kit::Window;
 use gpui_kit::component::WindowExt;
+use gpui_kit::{App, Context};
 use uuid::Uuid;
 
 use crate::consts;
@@ -17,12 +17,17 @@ use crate::workspace_manager::WorkspaceManager;
 use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceManager {
-    pub(super) fn persist(&mut self) {
-        let store = self.store.lock();
-        self.settings.saved_agents =
-            store.saved_agents(self.settings.restore_conversation_on_launch);
-        self.settings.saved_workspaces = store.saved_workspaces();
-        if let Err(error) = self.settings.persist_roster() {
+    pub(super) fn persist(&mut self, cx: &App) {
+        // Scoped so the store guard is released before the file write: the
+        // same blocking-I/O rule the workspace window's persist follows.
+        let installed = {
+            let store = self.store.lock();
+            crate::settings_global::write(cx, |settings| {
+                settings.saved_agents = store.saved_agents(settings.restore_conversation_on_launch);
+                settings.saved_workspaces = store.saved_workspaces();
+            })
+        };
+        if let Err(error) = installed.persist_roster() {
             self.error = Some(knot_core::l10n::t_with("workspace_manager.error_save",
                                                       &[("error", &error.to_string())]));
         }
@@ -50,7 +55,7 @@ impl WorkspaceManager {
             store.set_current_workspace(id);
         }
         drop(store);
-        self.persist();
+        self.persist(cx);
         self.error = None;
         cx.update_entity(&self.name_input, |input, input_cx| {
               input.clean(window, input_cx);
@@ -73,7 +78,7 @@ impl WorkspaceManager {
             self.error = Some(knot_core::l10n::t("workspace_manager.error_last_workspace"));
         }
         else {
-            self.persist();
+            self.persist(cx);
             self.error = None;
         }
         cx.notify();
@@ -113,7 +118,7 @@ impl WorkspaceManager {
 
     pub(super) fn move_before(&mut self, id: Uuid, target_id: Uuid, cx: &mut Context<Self>) {
         if self.store.lock().move_workspace_before(id, target_id) {
-            self.persist();
+            self.persist(cx);
             cx.notify();
         }
     }

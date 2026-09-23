@@ -36,7 +36,6 @@ use crate::workspace_window::menus::confirm_then;
 #[derive(Clone)]
 pub(crate) struct AgentMenuTargets {
     pub(crate) store:         Arc<Mutex<knot_agents::AgentStore>>,
-    pub(crate) settings:      knot_core::Settings,
     pub(crate) window_entity: Entity<WorkspaceWindow>,
     pub(crate) workspace_id:  Uuid,
     pub(crate) id:            Uuid,
@@ -87,7 +86,6 @@ fn open_editor_from_menu(targets: &AgentMenuTargets, prefill: AgentPrefill,
                          insert_after: Option<Uuid>, edit_target: Option<Uuid>, app: &mut App) {
     let window_entity = targets.window_entity.clone();
     open_agent_editor(Arc::clone(&targets.store),
-                      targets.settings.clone(),
                       AgentEditorRequest { workspace_id: targets.workspace_id,
                                            prefill,
                                            insert_after,
@@ -329,17 +327,16 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                      cx.notify();
                                  });
         }
-        // Freshly loaded settings, not this window's snapshot: the bench
-        // is edited from the settings window too, and persisting a stale
-        // copy would drop whatever was added there since.
+        // The bench is edited from the settings window too. This used to
+        // re-read from disk before writing, because persisting this window's
+        // snapshot would have dropped whatever was added there since; the
+        // surface is never stale, so the entry goes straight onto it.
         AgentMenuEntry::SaveToBench => {
             let source = targets.store.lock().agent(targets.id).cloned();
             let Some(source) = source
             else {
                 return;
             };
-            let mut settings =
-                knot_core::Settings::load().unwrap_or_else(|_| targets.settings.clone());
             let mut entry = knot_core::BenchAgent::new(Uuid::new_v4(),
                                                        source.name.clone(),
                                                        Some(source.avatar.clone()),
@@ -353,7 +350,9 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
             entry.description = source.description.clone();
             entry.capabilities = source.capabilities.clone();
             entry.cost_tier = source.cost_tier;
-            if let Err(error) = settings.add_bench_agent(entry) {
+            if let Err(error) = crate::settings_global::write_persisting(app, |settings| {
+                settings.add_bench_agent(entry.clone())
+            }) {
                 eprintln!("failed to save the agent to the bench: {error}");
             }
         }

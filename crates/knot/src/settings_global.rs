@@ -34,9 +34,27 @@ impl gpui_kit::Global for SettingsGlobal {}
 /// whether the bootstrap already ran. The first caller wins: a second one
 /// replacing the surface would hand the windows already holding the first a
 /// value nothing else writes to, which is the bug rather than a fix for it.
+///
+/// Tests only. The bootstrap builds the surface before the GPUI app starts -
+/// the MCP server thread needs it first - so it installs that handle through
+/// [`install_handle`]; a second surface built from a clone here is exactly
+/// what this change exists to prevent.
+#[cfg(test)]
 pub(crate) fn install(settings: Settings, cx: &mut App) {
+    install_handle(SharedSettings::new(settings), cx);
+}
+
+/// Installs an existing handle as the shared surface, if one is not installed
+/// already.
+///
+/// The bootstrap builds the surface before the GPUI app starts, because the
+/// MCP server thread needs it and runs first. Handing that same handle here -
+/// rather than building a second surface from a clone - is what makes the
+/// server and the windows one surface instead of two that agree at startup
+/// and drift afterwards.
+pub(crate) fn install_handle(settings: SharedSettings, cx: &mut App) {
     if !cx.has_global::<SettingsGlobal>() {
-        cx.set_global(SettingsGlobal(SharedSettings::new(settings)));
+        cx.set_global(SettingsGlobal(settings));
     }
 }
 

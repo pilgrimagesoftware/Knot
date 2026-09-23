@@ -80,7 +80,6 @@ impl WorkspaceWindow {
 
     pub(super) fn open_new_agent_dialog(&mut self, cx: &mut Context<Self>) {
         open_agent_editor(Arc::clone(&self.store),
-                          (*crate::settings_global::read(cx)).clone(),
                           AgentEditorRequest { workspace_id: self.workspace_id,
                                                prefill:      AgentPrefill::default(),
                                                insert_after: None,

@@ -53,7 +53,6 @@ impl WorkspaceWindow {
                              cx: &mut Context<Self>)
                              -> Vec<gpui_kit::AnyElement> {
         let store_for_menu = Arc::clone(&self.store);
-        let settings_for_menu = (*crate::settings_global::read(cx)).clone();
         let workspace_id = self.workspace_id;
         let window_entity = cx.entity();
 
@@ -267,7 +266,6 @@ impl WorkspaceWindow {
                             .context_menu({
                                 let targets =
                                     AgentMenuTargets { store: Arc::clone(&store_for_menu),
-                                                       settings: settings_for_menu.clone(),
                                                        window_entity: window_entity.clone(),
                                                        workspace_id,
                                                        id,
