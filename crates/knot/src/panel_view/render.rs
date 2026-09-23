@@ -9,7 +9,8 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
-use gpui_kit::{ClickEvent, IntoElement, ListState, ParentElement, Styled, div, rgb};
+use gpui_kit::component::kbd::Kbd;
+use gpui_kit::{ClickEvent, IntoElement, ListState, ParentElement, Styled, Window, div, rgb};
 use knot_acp::PermissionDecision;
 use knot_acp::PermissionRequest;
 use parking_lot::Mutex;
@@ -22,6 +23,8 @@ use super::style::PanelStyle;
 use super::style::RiskLevel;
 use super::style::risk_color;
 use super::summary_row::*;
+use crate::app_bootstrap::PanelPermissionAllow;
+use crate::app_bootstrap::PanelPermissionDeny;
 use crate::panel_state::PanelState;
 
 /// How much extra space above and below the viewport the list lays out and
@@ -47,9 +50,9 @@ pub(crate) fn render_panel(state: Arc<Mutex<PanelState>>, list: ListState, style
     let row_state = Arc::clone(&state);
     let row_list = list.clone();
     let row_style = style.clone();
-    gpui_kit::list(list.clone(), move |index, _window, _cx| {
+    gpui_kit::list(list.clone(), move |index, window, _cx| {
         let state = row_state.lock();
-        render_row(index, &state, &row_style, &row_list, &callbacks)
+        render_row(index, &state, &row_style, &row_list, &callbacks, window)
     }).size_full()
       // `min_w_0` so a wide child (a markdown table, a long command line)
       // clips instead of stretching the pane and pushing the input row's
@@ -79,8 +82,11 @@ pub(crate) fn render_panel(state: Arc<Mutex<PanelState>>, list: ListState, style
 /// ignores the list's horizontal padding and has no gap concept, so this is
 /// where the content gets its breathing room from the pane edges and from
 /// neighbouring rows.
+///
+/// `window` is the frame's, carried only so the permission row can ask the
+/// live keymap what its decision buttons are bound to.
 fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListState,
-              callbacks: &PanelCallbacks)
+              callbacks: &PanelCallbacks, window: &Window)
               -> gpui_kit::AnyElement {
     let row = match row_at(state, index) {
         Some(PanelRow::Message(message_index)) => {
@@ -118,7 +124,8 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
             render_permission_prompt(state,
                                      request,
                                      style.permission_risk,
-                                     callbacks.on_permission_decision.clone()).into_any_element()
+                                     callbacks.on_permission_decision.clone(),
+                                     window).into_any_element()
         }
         Some(PanelRow::Ended) => {
             let cause = state.ended
@@ -141,12 +148,20 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
 /// `acp-panel-ui`'s permission-prompts requirement. Sending further
 /// prompts is blocked by the caller while this is rendered (the caller
 /// checks `PanelState::pending_permission` before calling `prompt`).
+///
+/// Each button carries the keystroke its action is actually bound to, per
+/// `permission-prompt-ui`'s keyboard-operability requirement. The lookup is
+/// against the live keymap rather than a hard-coded string, so a rebinding
+/// moves the hint with it, and an action with nothing bound yields `None` -
+/// which `children` draws as nothing at all, leaving the plain button.
 fn render_permission_prompt(panel_state: &PanelState, request: &PermissionRequest,
                             permission_risk: RiskLevel,
-                            on_decision: Rc<dyn Fn(PermissionDecision)>)
+                            on_decision: Rc<dyn Fn(PermissionDecision)>, window: &Window)
                             -> impl IntoElement {
     let allow = on_decision.clone();
     let deny = on_decision;
+    let allow_kbd = Kbd::global_binding_for_action(&PanelPermissionAllow, window);
+    let deny_kbd = Kbd::global_binding_for_action(&PanelPermissionDeny, window);
     v_flex()
         .gap_2()
         .p_3()
@@ -165,6 +180,7 @@ fn render_permission_prompt(panel_state: &PanelState, request: &PermissionReques
                         .label(knot_core::l10n::t("panel.allow"))
                         .primary()
                         .small()
+                        .children(allow_kbd)
                         .on_click(move |_: &ClickEvent, _, _| {
                             allow(PermissionDecision::Allow);
                         }),
@@ -174,6 +190,7 @@ fn render_permission_prompt(panel_state: &PanelState, request: &PermissionReques
                         .label(knot_core::l10n::t("panel.deny"))
                         .ghost()
                         .small()
+                        .children(deny_kbd)
                         .on_click(move |_: &ClickEvent, _, _| {
                             deny(PermissionDecision::Deny);
                         }),
