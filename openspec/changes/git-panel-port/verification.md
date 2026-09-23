@@ -92,20 +92,52 @@ The rule this guards is the one `crates/knot/src/diff_stats.rs` exists for.
 A render that shells out costs a subprocess per frame, and GPUI re-renders on
 every keystroke.
 
-1. Open the panel (click the diff-stat row in the agent header) and select a
-   file so a diff is on screen.
-2. In another terminal, watch for git processes:
+**Do not try to watch for `git` processes with `pgrep`.** `git status` on a
+small repository finishes in about 10ms, so a polling loop misses almost all
+of them — you would see nothing and conclude it passed. Count the
+invocations instead, by putting a counting shim earlier on `PATH`:
+
+```bash
+rm -rf /tmp/knot-git-count && mkdir -p /tmp/knot-git-count
+cat > /tmp/knot-git-count/git <<'SH'
+#!/bin/sh
+printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >> /tmp/knot-git-count/log
+exec /usr/bin/git "$@"
+SH
+chmod +x /tmp/knot-git-count/git
+```
+
+The shim is honoured because `knot_core::exec_path::search_path` puts the
+process's own `PATH` first, and the app is launched from a shell. Relaunch
+with it in front:
+
+```bash
+HOME=/tmp/knot-verify-home PATH=/tmp/knot-git-count:$PATH cargo run -p knot
+```
+
+Then:
+
+1. Open the panel and select a file, so a status and a diff are on screen.
+2. **Validate the instrument before measuring.** Check the log has entries:
    ```bash
-   while :; do pgrep -fl '(^|/)git ' | grep -v pgrep; sleep 0.2; done
+   wc -l < /tmp/knot-git-count/log
    ```
-3. Click **Commit** and type continuously in the message field for ~15
-   seconds.
+   It should be non-zero — opening the panel runs `status` and `diff`. **If
+   it is empty, the shim is not being used and the rest of this check is
+   meaningless**; a silent log would otherwise read as a perfect pass. Fix
+   that before continuing.
+3. Record the count, click **Commit**, and type continuously in the message
+   field for ~15 seconds.
+4. Record it again:
+   ```bash
+   wc -l < /tmp/knot-git-count/log
+   ```
 
-**Expected:** the watcher stays silent apart from at most one burst when the
-panel first loads or refreshes. A steady stream of `git status` / `git diff`
-while you type is the defect.
+**Expected:** the two counts are equal, or differ by a small handful from a
+background refresh. A count that climbs with your keystrokes — tens or
+hundreds of new lines — is the defect.
 
-**Also worth noting:** the panel should not flicker or blank while typing.
+`tail /tmp/knot-git-count/log` shows which commands, if it does climb.
 
 Discharges: *Git work stays off the render path* — "Rendering issues no git
 command" and "One request per outstanding refresh".
