@@ -25,4 +25,4 @@
 ## 5. Gate
 
 - [x] 5.1 Run `make` end to end — `fmt-check`, `size-check`, `lint`, `test`, `build`; verify no crate-wide `allow` was added and no file crossed 700 lines
-- [ ] 5.2 Verify by hand in a debug build: pick each of the four modes, flip the OS appearance under each, and relaunch under an explicit choice
+- [x] 5.2 Verify by hand in a debug build: pick each of the four modes, flip the OS appearance under each, and relaunch under an explicit choice
