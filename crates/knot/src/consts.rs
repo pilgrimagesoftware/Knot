@@ -75,10 +75,15 @@ pub(crate) const GIT_DIFF_LIST_OVERDRAW: f32 = 400.;
 /// Seeding a hint fixes that from the first frame, and real heights replace
 /// it as rows render.
 ///
-/// It works here and would not for a conversation: diff rows are uniform -
-/// one line each, one text size, no wrapping. An approximation is enough,
-/// since it only has to hold until the row is measured.
-pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 16.;
+/// The value is the computed line box, not an estimate: `text_xs` is
+/// `rems(0.75)` against the default 16px rem, so 12px; the default
+/// `line_height` is `phi` *relative to the font size*, so 12 x 1.618034 =
+/// 19.416, rounded to 19. A diff row carries horizontal padding only, and no
+/// border, so the line box is the whole row.
+///
+/// One hint works here and would not for a conversation: diff rows are
+/// uniform - one line each, one text size, no wrapping.
+pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 19.;
 
 /// How stale a pull request's fetched state may get before the Pull Requests
 /// view asks for it again.
