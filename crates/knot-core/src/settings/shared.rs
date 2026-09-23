@@ -91,6 +91,32 @@ impl SharedSettings {
               });
         self.read()
     }
+
+    /// Apply a fallible `change` that writes its own document, installing the
+    /// result only if it succeeded.
+    ///
+    /// For the helpers on [`Settings`] that mutate *and* persist as one step -
+    /// `add_persona`, `update_persona`, `remove_persona`,
+    /// `restore_default_personas`. Those cannot go through [`Self::write`]:
+    /// its closure is re-run on contention, and re-running one of these would
+    /// repeat the file write.
+    ///
+    /// So this attempts once rather than retrying. A racing writer's change
+    /// would be lost, which is the weaker guarantee [`Self::write`] exists to
+    /// avoid - acceptable only because these run from GPUI's single thread, in
+    /// response to a click. Prefer [`Self::write`] followed by an explicit
+    /// persist wherever the change and the write can be separated; reach for
+    /// this only when they cannot.
+    ///
+    /// A failed change installs nothing, so the surface never holds a value
+    /// whose document was not written.
+    pub fn write_persisting<F, T>(&self, change: F) -> crate::Result<T>
+        where F: FnOnce(&mut Settings) -> crate::Result<T> {
+        let mut next = Settings::clone(&self.0.load());
+        let outcome = change(&mut next)?;
+        self.0.store(Arc::new(next));
+        Ok(outcome)
+    }
 }
 
 #[cfg(test)]

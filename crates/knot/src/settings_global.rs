@@ -97,3 +97,16 @@ pub(crate) fn write<F>(cx: &App, change: F) -> Arc<Settings>
     where F: FnMut(&mut Settings) {
     cx.global::<SettingsGlobal>().0.write(change)
 }
+
+/// Applies a fallible `change` that writes its own document.
+///
+/// See [`SharedSettings::write_persisting`] for why this is separate from
+/// [`write`] and when to prefer that one.
+///
+/// # Panics
+///
+/// See [`handle`].
+pub(crate) fn write_persisting<F, T>(cx: &App, change: F) -> knot_core::Result<T>
+    where F: FnOnce(&mut Settings) -> knot_core::Result<T> {
+    cx.global::<SettingsGlobal>().0.write_persisting(change)
+}

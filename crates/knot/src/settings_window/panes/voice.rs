@@ -32,9 +32,10 @@ impl SettingsWindow {
 
     pub(crate) fn render_voice(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let voice_enabled = self.settings.voice_enabled;
-        let voice_auto_insert = self.settings.voice_auto_insert;
-        let key_name = Self::key_name_for_code(self.settings.voice_push_to_talk_key);
+        let voice_enabled = crate::settings_global::read(cx).voice_enabled;
+        let voice_auto_insert = crate::settings_global::read(cx).voice_auto_insert;
+        let key_name =
+            Self::key_name_for_code(crate::settings_global::read(cx).voice_push_to_talk_key);
 
         v_flex()
             .gap_3()
@@ -57,7 +58,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.voice_enabled = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.voice_enabled = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }
@@ -94,7 +97,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.voice_auto_insert = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.voice_auto_insert = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }

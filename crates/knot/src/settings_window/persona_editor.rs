@@ -97,10 +97,18 @@ impl PersonaEditor {
             window.remove_window();
             return;
         };
-        parent.update(cx, |view, view_cx| {
+        // The update is still needed for the repaint, but no longer to reach
+        // the settings: the personas live on the shared surface, which is why
+        // the writes below take `view_cx` rather than the parent view.
+        parent.update(cx, |_view, view_cx| {
                   let result = match self.editing_id {
-                      Some(id) => view.settings.update_persona(id, name, instructions),
-                      None => view.settings.add_persona(name, instructions).map(|_| ()),
+                      Some(id) => crate::settings_global::write_persisting(view_cx, |settings| {
+                          settings.update_persona(id, name.clone(), instructions.clone())
+                      }),
+                      None => crate::settings_global::write_persisting(view_cx, |settings| {
+                          settings.add_persona(name.clone(), instructions.clone())
+                                  .map(|_| ())
+                      }),
                   };
                   if let Err(error) = result {
                       eprintln!("failed to save persona: {error}");

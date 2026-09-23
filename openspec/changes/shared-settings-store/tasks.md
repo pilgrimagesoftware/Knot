@@ -29,7 +29,7 @@
 - [x] 2.2 Do the same for `import/workspaces.rs`, writing the roster documents
       only. Verify with the equivalent test, and that imported workspaces and
       agents still read back.
-- [ ] 2.3 Move `settings_window`'s persist path onto the handle and delete its
+- [x] 2.3 Move `settings_window`'s persist path onto the handle and delete its
       owned `settings` field. Verify the existing settings-window tests pass
       unchanged.
 - [ ] 2.4 Move `workspace_window/sidebar_layout.rs` onto the handle and delete

@@ -377,21 +377,11 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
         let settings_window = Rc::clone(&settings_window);
         let store = Arc::clone(&store);
         cx.on_action(move |_: &OpenSettings, cx| {
-              // Reload from disk rather than reusing
-              // a clone
-              // captured at bootstrap: reopening the
-              // window
-              // with a stale snapshot would both
-              // show old
-              // values and overwrite a since-saved
-              // change
-              // the moment anything in the reopened
-              // window
-              // persists.
-              let settings = knot_core::Settings::load().unwrap_or_else(|_| {
-                                                            knot_core::Settings::platform_default()
-                                                        });
-              open_settings_window(&settings_window, settings, Arc::clone(&store), cx);
+              // No reload here any more. This read from disk because
+              // reopening the window with a snapshot captured at bootstrap
+              // would show old values and overwrite a since-saved change -
+              // and the window has no snapshot now.
+              open_settings_window(&settings_window, Arc::clone(&store), cx);
           });
     }
 }
