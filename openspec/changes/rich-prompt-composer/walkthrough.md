@@ -31,12 +31,37 @@ arrival, the buffer survives styling byte for byte).
 A `/review` typed into the composer completed and dispatched normally, so the
 slash lookup and the send path still work over `EditorState`.
 
-### Not yet walked
+## 2026-09-23 — the full sweep (maintainer)
 
-- **3.4, the rest** — IME composition, selection by mouse, and undo/redo.
-  Undo/redo is the one to weight: `gpui-base`'s `enter()` calls
-  `undo_manager.break_transaction_coalescing()` on the submit path, and the
-  swap changed which branch of that function the composer takes.
-- **5.1/5.4 in the other appearance** — the light/dark switch restyling with
-  no edit.
-- **8.2** — the full scenario sweep, once groups 6 and 7 land.
+Debug build at `e966fc8e`, with groups 6 and 7 in. Every scenario below was
+walked and passed; nothing was raised.
+
+| Spec | Scenario | Result |
+| --- | --- | --- |
+| panel-rich-input | Token styled from the trigger, before it resolves (`/rev`) | **Pass** |
+| panel-rich-input | A slash inside a path is prose (`crates/knot/src`) | **Pass** |
+| panel-rich-input | An email address is prose (`paul@example.com`) | **Pass** |
+| panel-rich-input | Emphasis, strong, inline code, heading, list marker, block quote, link each distinct | **Pass** |
+| panel-rich-input | An unclosed marker does not bleed (`a * b`) | **Pass** |
+| panel-rich-input | A fenced block is one code treatment whatever its info string | **Pass** |
+| panel-rich-input | A bracket is not auto-closed | **Pass** |
+| panel-rich-input | A newline does not inherit the previous line's indent | **Pass** |
+| panel-rich-input | No gutter, line numbers, indent guides or fold controls | **Pass** |
+| panel-rich-input | Styling survives paste, undo, redo and cut | **Pass** |
+| panel-rich-input | An appearance switch restyles with no edit | **Pass** |
+| panel-file-mentions | `@` after a space opens the lookup; mid-word does not | **Pass** |
+| panel-file-mentions | The gathering state shows, and typing continues through it | **Pass** |
+| panel-file-mentions | A subsequence matches (`@kgs` reaches `knot-git/src/lib.rs`) | **Pass** |
+| panel-file-mentions | Name matches outrank directory matches | **Pass** |
+| panel-file-mentions | Matched characters are marked in the row | **Pass** |
+| panel-slash-commands | The caret moving between a `/` and an `@` token switches the list, never both | **Pass** |
+| acp-panel-ui | All three arrival paths produce a chip and a strip row | **Pass** |
+| acp-panel-ui | Deleting the chip removes the strip entry | **Pass** |
+| acp-panel-ui | Removing the strip entry removes the chip | **Pass** |
+| 3.4 | Undo/redo after the `Editor` swap | **Pass** |
+
+### Still not walked
+
+- **3.4, the remainder** — IME composition and selection by mouse. Neither is
+  reachable from a test: GPUI exposes no text through the accessibility tree
+  and the agent shell cannot post synthetic pointer events.

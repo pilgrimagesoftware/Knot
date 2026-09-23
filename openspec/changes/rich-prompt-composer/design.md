@@ -273,12 +273,33 @@ spent on top of it.
 code. Drafts are plain text before and after. The `[patch.crates-io]` entry
 is removed with step 2.
 
-## Open Questions
+## Resolved Questions
 
-- Whether the mention token's spaces-in-path form should be quoting
-  (`@"a b/c.rs"`) or escaping (`@a\ b/c.rs`). `panel-file-mentions` requires
-  only that the path stays one token; either satisfies it, and the choice can
-  follow whatever reads better once the chip styling is visible.
-- Whether an attachment's chip should show the file's base name or its path
-  relative to the agent's folder. Presentation only; no requirement turns on
-  it.
+Both were settled on 2026-09-23, against the styled composer in a debug
+build, which is the condition each was deferred for.
+
+**Spaces in a mention: escaping, not quoting.** `@a\ b/c.rs` rather than
+`@"a b/c.rs"`. Escaping is one rule in the scanner - a token ends at the
+first *unescaped* whitespace - where quoting needs the scanner to track an
+opening quote and decide what an unclosed one means, which is a second
+unclosed-construct problem next to markdown's. Both satisfy
+`panel-file-mentions`, and neither reads well in a prompt; the escaped form
+at least degrades to something a reader recognises. `token_end` and
+`escape_token` sit beside each other in `composer_scan::tokens` and a
+round-trip test holds them to being one rule read in two directions.
+
+**An attachment chip shows the file's base name.** `@screenshot.png`, not
+the path relative to the agent's folder. A chip is read at a glance, the
+strip above the input already carries the same name with its thumbnail, and
+the absolute path still reaches the agent on the `Attached:` line
+`send_panel_prompt` appends - so nothing is lost by the shorter form.
+
+The cost is that two attachments whose file names match produce the same
+chip text. That is a reconciliation problem rather than a presentation one,
+and it is handled where it arises: `surviving_attachments` counts
+occurrences rather than looking for the reference, so with two identical
+chips and one deleted exactly one row survives. A relative path would have
+made the collision rarer without removing it - two files of the same name in
+two checkouts of the same repository collide either way - so the counting
+was needed regardless, and the base name is the better-reading of two forms
+that need the same machinery.

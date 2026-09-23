@@ -56,7 +56,7 @@
 
 ## 8. Close out
 
-- [ ] 8.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass, with no `.rs` file over 700 lines
-- [ ] 8.2 Walk a debug build through every scenario in `panel-rich-input`, `panel-file-mentions` and the `acp-panel-ui` and `panel-slash-commands` deltas; record the walkthrough in the change
-- [ ] 8.3 Resolve the two open questions from `design.md` — mention quoting versus escaping for paths with spaces, and base name versus relative path on an attachment chip — now that the styling is visible; verify the choice is reflected in the code and the walkthrough
-- [ ] 8.4 Check whether the upstream PR from 2.2 has released; if so remove the `[patch.crates-io]` entry and the fork and verify `make` still passes, otherwise verify the ADR records the current upstream status
+- [x] 8.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass, with no `.rs` file over 700 lines
+- [x] 8.2 Walk a debug build through every scenario in `panel-rich-input`, `panel-file-mentions` and the `acp-panel-ui` and `panel-slash-commands` deltas; record the walkthrough in the change
+- [x] 8.3 Resolve the two open questions from `design.md` — mention quoting versus escaping for paths with spaces, and base name versus relative path on an attachment chip — now that the styling is visible; verify the choice is reflected in the code and the walkthrough
+- [x] 8.4 Check whether the upstream PR from 2.2 has released; if so remove the `[patch.crates-io]` entry and the fork and verify `make` still passes, otherwise verify the ADR records the current upstream status
