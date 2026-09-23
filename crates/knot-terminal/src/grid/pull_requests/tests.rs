@@ -100,12 +100,15 @@ fn ordinary_output_notes_nothing() {
 /// than the parse it contains.
 ///
 /// What actually guards the feed is deterministic and lives in knot-core,
-/// where the state is visible: `pull_request_url::tests` asserts the
-/// scanner's carry buffer stays bounded by `MAX_PULL_REQUEST_URL_LEN` across
-/// a thousand chunks. An unbounded carry is what would make each scan
-/// re-read an ever-larger buffer and turn the feed quadratic, and that is
-/// caught there without a clock. This test only adds a constant-factor
-/// check, which is benchmark territory.
+/// where the state is visible. `pull_request_url::tests` asserts both halves
+/// without a clock: `the_carry_buffer_stays_bounded` pins the invariant, and
+/// `the_streaming_scan_does_work_linear_in_the_stream` counts the bytes
+/// handed to the scan and holds them under a linear ceiling. An unbounded
+/// carry is what would make each scan re-read an ever-larger buffer and turn
+/// the feed quadratic; both of those fail if it does, and the second alone
+/// catches a scan that re-reads its buffer more than once per chunk. Counting
+/// work is the honest form of this claim - it is what "does not measurably
+/// slow the feed" means - and it cannot be descheduled.
 ///
 /// Both arms are warmed and then interleaved across repetitions, and the
 /// medians compared, so that a deliberate run is not measuring the order the
