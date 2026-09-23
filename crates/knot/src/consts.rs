@@ -47,6 +47,15 @@ pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 /// twenty `gh` runs a minute while it is open, and none while it is not.
 pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
 
+/// How stale the answer to "can state be fetched at all" may be.
+///
+/// The same minute as the rows it gates, and one `gh auth status` against
+/// their twenty `gh pr view`s. Re-asking at all is what makes signing in
+/// take effect while the window stays open; re-asking faster would spend a
+/// subprocess to notice something that only changes when the user goes and
+/// does it.
+pub(crate) const FORGE_PROBE_MAX_AGE: Duration = Duration::from_secs(60);
+
 /// How often the settings window drains the native font panel's selections.
 ///
 /// The panel is an AppKit window with no callback into GPUI, so its choice is
