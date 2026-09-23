@@ -17,10 +17,12 @@ use gpui_kit::ImageFormat;
 use gpui_kit::PathPromptOptions;
 use gpui_kit::Window;
 use gpui_kit::component::WindowExt;
+use gpui_kit::component::input::Editor;
+use gpui_kit::component::input::EditorState;
 use gpui_kit::component::input::InputEvent;
-use gpui_kit::component::input::TextareaState;
 use uuid::Uuid;
 
+use crate::composer_style::Palette;
 use crate::panel_session;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::prompt_queue;
@@ -32,8 +34,91 @@ use crate::workspace_window::prompt_queue::QueuedPanelPrompt;
 /// a fixed height: a fixed height fights the textarea's own layout, so a
 /// second line made it scroll and jump on every keystroke instead of
 /// simply getting taller.
-const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
-const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
+pub(crate) const PANEL_INPUT_ROWS_COLLAPSED: usize = 6;
+pub(crate) const PANEL_INPUT_ROWS_EXPANDED: usize = 20;
+
+/// The state type behind the panel composer.
+///
+/// Named once so the widget the composer is built on is a single
+/// declaration rather than a type repeated across the window.
+///
+/// It is an `EditorState` and not a `TextareaState` for one reason:
+/// styled ranges. Decorations are stored in `state.extras`, keyed off the
+/// **mode marker**, and `TextareaMode`'s extras are `()`, whose default
+/// `decoration_layers()` is empty - so a textarea cannot carry a
+/// decoration, ever. What the composer is *not* is a code editor; see
+/// [`new_panel_input`] for how that is arranged.
+pub(crate) type PanelInputState = EditorState;
+
+/// The widget that draws [`PanelInputState`].
+pub(crate) type PanelInput = Editor;
+
+/// How far `id`'s composer may grow, given whether it is expanded.
+///
+/// The bound is read in two places - when the entity is built and when the
+/// expand control re-issues it - and they have to agree, so the choice
+/// lives here rather than twice.
+pub(crate) fn panel_input_max_rows(expanded: bool) -> usize {
+    if expanded {
+        PANEL_INPUT_ROWS_EXPANDED
+    }
+    else {
+        PANEL_INPUT_ROWS_COLLAPSED
+    }
+}
+
+/// Whether a `PressEnter` carrying `shift` is the send chord, given the
+/// `agent_panel_shift_enter_sends` setting.
+///
+/// The widget reports *both* chords as `PressEnter` and distinguishes them
+/// only by this flag - `submit_on_enter` changes which one also types a
+/// newline, not which one reports - so this predicate is the whole of the
+/// send-chord decision.
+pub(crate) fn sends_on(shift_to_send: bool, shift: bool) -> bool {
+    shift == shift_to_send
+}
+
+/// Builds the composer's state entity: the placeholder, the send chord
+/// implied by `shift_to_send`, and the auto-grow bounds.
+///
+/// Separate from [`WorkspaceWindow::panel_prompt_input`], which owns the
+/// caching and the event subscription, so the widget's own configuration
+/// can be exercised in a test without a window's worth of state behind it.
+pub(crate) fn new_panel_input(shift_to_send: bool, max_rows: usize, window: &mut Window,
+                              cx: &mut App)
+                              -> Entity<PanelInputState> {
+    cx.new(|cx| {
+          PanelInputState::new(window, cx).placeholder(WorkspaceWindow::panel_prompt_placeholder())
+                                          // `submit_on_enter` is the
+                                          // inverse of the setting: the
+                                          // chord that does *not* send is
+                                          // the one that inserts a newline.
+                                          .submit_on_enter(!shift_to_send)
+                                          // `EditorState::new` turns the
+                                          // built-in search panel on. A
+                                          // composer is written, not
+                                          // searched, and off also lets
+                                          // Cmd-F bubble to the window.
+                                          .searchable(false)
+                                          // Last, and load-bearing:
+                                          // `EditorState::new` starts in
+                                          // `LayoutMode::CodeEditor` and
+                                          // this replaces the mode
+                                          // outright. Line numbers, the
+                                          // gutter, indent guides,
+                                          // folding, auto-closing brackets
+                                          // and smart indent are all
+                                          // fields of that variant or
+                                          // gated on `is_code_editor()`,
+                                          // so leaving it is what makes
+                                          // "the composer stays a
+                                          // composer" true by
+                                          // construction rather than by
+                                          // turning flags off one at a
+                                          // time.
+                                          .auto_grow(1, max_rows)
+      })
+}
 
 impl WorkspaceWindow {
     /// Opens the native file/image picker and attaches the chosen paths to
@@ -53,10 +138,14 @@ impl WorkspaceWindow {
               };
               cx.update(|app| {
                     this.update(app, |view, cx| {
-                            view.panel_pending_context
-                                .entry(id)
-                                .or_default()
-                                .extend(paths);
+                            for path in paths {
+                                view.panel_pending_context
+                                    .entry(id)
+                                    .or_default()
+                                    .push(path.clone());
+                                view.queue_attachment_reference(id, path);
+                            }
+                            view.restyle_panel_attachments(id, Palette::of(cx), cx);
                             cx.notify();
                         });
                 });
@@ -95,20 +184,50 @@ impl WorkspaceWindow {
             };
             let path = std::env::temp_dir().join(format!("knot-paste-{}.{extension}", image.id));
             if std::fs::write(&path, &image.bytes).is_ok() {
-                self.panel_pending_context.entry(id).or_default().push(path);
+                self.panel_pending_context
+                    .entry(id)
+                    .or_default()
+                    .push(path.clone());
+                self.queue_attachment_reference(id, path);
                 attached = true;
             }
+        }
+        if attached {
+            self.restyle_panel_attachments(id, Palette::of(cx), cx);
         }
         attached
     }
 
     /// Removes one attached path from `id`'s pending context by index.
-    pub(in crate::workspace_window) fn remove_panel_context(&mut self, id: Uuid, index: usize) {
+    /// Deletes the chip rather than the row: the deletion reports as an
+    /// ordinary edit, and the reconciliation that follows every edit is
+    /// what drops the row. One direction, so the strip and the buffer
+    /// cannot disagree about which of them was right.
+    ///
+    /// The row is removed directly only when there is no chip to delete -
+    /// a buffer that never received one, which is what an attachment
+    /// dismissed before its deferred insertion ran looks like.
+    pub(in crate::workspace_window) fn remove_panel_context(&mut self, id: Uuid, index: usize,
+                                                            window: &mut Window, cx: &mut App) {
+        let Some(path) = self.panel_pending_context
+                             .get(&id)
+                             .and_then(|paths| paths.get(index))
+                             .cloned()
+        else {
+            return;
+        };
+        if self.remove_attachment_reference(id, &path, window, cx) {
+            return;
+        }
         if let Some(paths) = self.panel_pending_context.get_mut(&id)
            && index < paths.len()
         {
             paths.remove(index);
         }
+        if let Some(queued) = self.panel_pending_attachments.get_mut(&id) {
+            queued.retain(|waiting| waiting != &path);
+        }
+        self.restyle_panel_attachments(id, Palette::of(cx), cx);
     }
 
     /// Toggles `id`'s input area between its default and expanded
@@ -124,12 +243,7 @@ impl WorkspaceWindow {
         };
         // The cap is part of the textarea's own layout mode, so expanding
         // has to update the live entity rather than just the render height.
-        let max_rows = if expanded {
-            PANEL_INPUT_ROWS_EXPANDED
-        }
-        else {
-            PANEL_INPUT_ROWS_COLLAPSED
-        };
+        let max_rows = panel_input_max_rows(expanded);
         if let Some(input) = self.panel_prompt_inputs.get(&id).cloned() {
             cx.update_entity(&input, |state, cx| state.set_auto_grow(1, max_rows, cx));
         }
@@ -173,48 +287,62 @@ impl WorkspaceWindow {
     pub(in crate::workspace_window) fn panel_prompt_input(&mut self, id: Uuid,
                                                           window: &mut Window,
                                                           cx: &mut Context<Self>)
-                                                          -> Entity<TextareaState> {
+                                                          -> Entity<PanelInputState> {
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
         let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
-        let placeholder = Self::panel_prompt_placeholder();
-        let max_rows = if self.panel_input_expanded.contains(&id) {
-            PANEL_INPUT_ROWS_EXPANDED
-        }
-        else {
-            PANEL_INPUT_ROWS_COLLAPSED
-        };
-        let input = cx.new(|cx| {
-                          TextareaState::new(window, cx).placeholder(placeholder)
-                                                        .submit_on_enter(!shift_to_send)
-                                                        .auto_grow(1, max_rows)
-                      });
-        let subscription = cx.subscribe_in(&input,
-                                           window,
-                                           move |view: &mut Self, input, event, window, cx| {
-                                               match event {
-                                                   InputEvent::PressEnter { shift, .. }
-                                                       if *shift == shift_to_send =>
-                                                   {
-                                                       view.send_panel_prompt(id, window, cx);
-                                                   }
-                                                   // Focus leaving the input closes the
-                                                   // slash lookup, per its dismissal rules
-                                                   // - a popup left open behind another
-                                                   // pane is exactly what the shared
-                                                   // dismissal path exists to prevent.
-                                                   InputEvent::Blur => {
-                                                       let input = input.clone();
-                                                       view.dismiss_panel_lookup(id, &input, cx);
-                                                       cx.notify();
-                                                   }
-                                                   _ => {}
-                                               }
-                                           });
+        let max_rows = panel_input_max_rows(self.panel_input_expanded.contains(&id));
+        let input = new_panel_input(shift_to_send, max_rows, window, cx);
+        let palette = Palette::of(cx);
+        let subscription =
+            cx.subscribe_in(&input,
+                            window,
+                            move |view: &mut Self, input, event, window, cx| {
+                                match event {
+                                    InputEvent::PressEnter { shift, .. }
+                                        if sends_on(shift_to_send, *shift) =>
+                                    {
+                                        view.send_panel_prompt(id, window, cx);
+                                    }
+                                    // Every way text arrives reports
+                                    // here - typing, paste, undo, redo,
+                                    // cut, a drag of text and the
+                                    // lookup's own insertion - so one
+                                    // arm restyles for all of them.
+                                    InputEvent::Change => {
+                                        let palette = Palette::of(cx);
+                                        // The buffer decides: a chip
+                                        // this edit removed detaches
+                                        // its row, and the restyle
+                                        // below then draws the table
+                                        // that is left.
+                                        if view.reconcile_panel_attachments(id, cx) {
+                                            view.restyle_panel_attachments(id, palette, cx);
+                                        }
+                                        view.restyle_panel_composer(id, palette, cx);
+                                        cx.notify();
+                                    }
+                                    // Focus leaving the input closes the
+                                    // slash lookup, per its dismissal rules
+                                    // - a popup left open behind another
+                                    // pane is exactly what the shared
+                                    // dismissal path exists to prevent.
+                                    InputEvent::Blur => {
+                                        let input = input.clone();
+                                        view.dismiss_panel_lookup(id, &input, cx);
+                                        cx.notify();
+                                    }
+                                    _ => {}
+                                }
+                            });
         self.panel_prompt_inputs.insert(id, input.clone());
         self.panel_prompt_input_subscriptions
             .insert(id, subscription);
+        // After the entity is in the map, since the styling reads it back
+        // out: a draft restored into a fresh composer is styled here, with
+        // no edit to trigger it.
+        self.ensure_panel_styling(id, palette, cx);
         input
     }
 
@@ -276,7 +404,7 @@ impl WorkspaceWindow {
     /// starts between the click and the confirmation cannot be pulled back
     /// out from under the agent.
     pub(in crate::workspace_window) fn take_queued_prompt_into(&mut self,
-                                                               input: &Entity<TextareaState>,
+                                                               input: &Entity<PanelInputState>,
                                                                id: Uuid, prompt_id: Uuid,
                                                                window: &mut Window,
                                                                cx: &mut Context<Self>) {

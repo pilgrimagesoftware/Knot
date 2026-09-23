@@ -300,6 +300,9 @@ impl WorkspaceWindow {
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
         self.panel_pending_context.remove(&id);
+        self.panel_composer_styling.remove(&id);
+        self.forget_panel_mentions(id);
+        self.panel_pending_attachments.remove(&id);
         // Keyed by card, not by agent, so this is the one prune that has to
         // look inside its values. A command outliving the panel it ran in has
         // nothing left to report to.

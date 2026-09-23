@@ -107,6 +107,11 @@ impl WorkspaceWindow {
         let git_commits_landed = self.drain_git_commits();
         let git_watches_fired = self.drain_git_watches();
         let git_reads_landed = self.git_panel_needs_repaint();
+        // A file listing walked off the main thread, and the folder watch
+        // that asks for a fresh one. Neither has a GPUI context, so
+        // without this an `@` lookup would show whatever it had when
+        // something unrelated last repainted the window.
+        let mentions_listed = self.drain_mention_listings();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -133,6 +138,7 @@ impl WorkspaceWindow {
            || git_commits_landed
            || git_watches_fired
            || git_reads_landed
+           || mentions_listed
            || shell_runs_moved
         {
             cx.notify();

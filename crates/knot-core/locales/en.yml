@@ -78,6 +78,8 @@ panel:
   retry_connect: "Try again"
   context_usage: "Context usage"
   lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  mentions_gathering: "Listing files…"
+  mentions_capped: "This folder is too large to list in full — showing what was found"
   # The `!` shell passthrough: a command the user ran from the prompt, which
   # the agent never sees until the next prompt carries it.
   shell:

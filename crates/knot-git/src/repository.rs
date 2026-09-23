@@ -28,6 +28,21 @@ impl Repository {
         &self.runner
     }
 
+    /// Every file in the working tree a picker should offer: tracked
+    /// files plus untracked ones that are not ignored.
+    ///
+    /// Paths are relative to the repository root and NUL-separated on the
+    /// wire, so one containing a space, a quote or a newline survives. A
+    /// deleted-but-still-tracked file is included - `ls-files` lists the
+    /// index, and a caller wanting only what exists on disk should check.
+    pub fn list_files(&self) -> Result<Vec<String>> {
+        let output = self.runner.run_raw(consts::LS_FILES)?;
+        Ok(output.split('\0')
+                 .filter(|path| !path.is_empty())
+                 .map(str::to_owned)
+                 .collect())
+    }
+
     /// Parsed `git status --porcelain=v2 --branch`.
     pub fn status(&self) -> Result<RepoStatus> {
         let output = self.runner.run(consts::STATUS)?;

@@ -1,12 +1,14 @@
 //! Unit tests for [`super`]: the entry sources, the registry that joins
-//! them, and slash-token detection.
+//! them, and which token the caret is in.
 
 use std::fs;
 use std::path::PathBuf;
 
 use super::*;
 use crate::panel_commands::builtin;
+use crate::panel_commands::entry::Matcher;
 use crate::panel_commands::skills;
+use crate::panel_commands::token::Trigger;
 
 /// Writes `<root>/<name>/SKILL.md` with `body` as its contents.
 fn write_skill(root: &std::path::Path, name: &str, body: &str) {
@@ -102,14 +104,15 @@ fn both_sources_feed_one_registry_and_filter_by_prefix() {
     let skills = skills::SkillRoots::from_roots(vec![root.path().to_path_buf()]);
 
     let registry = LookupRegistry::from_sources(&[&builtin, &skills]);
-    let tokens: Vec<&str> = registry.matching("send")
-                                    .into_iter()
-                                    .map(|entry| entry.token.as_str())
-                                    .collect();
+    let tokens: Vec<String> = registry.matching("send")
+                                      .into_iter()
+                                      .map(|found| found.entry.token)
+                                      .collect();
 
-    assert!(tokens.contains(&"send"),
+    assert!(tokens.iter().any(|token| token == "send"),
             "the built-in command should match");
-    assert!(tokens.contains(&"sendoff"), "the skill should match");
+    assert!(tokens.iter().any(|token| token == "sendoff"),
+            "the skill should match");
 }
 
 #[test]
@@ -122,10 +125,11 @@ fn an_earlier_source_keeps_a_token_a_later_one_repeats() {
     let skills = skills::SkillRoots::from_roots(vec![root.path().to_path_buf()]);
 
     let registry = LookupRegistry::from_sources(&[&builtin, &skills]);
-    let sends: Vec<&LookupEntry> = registry.matching("")
-                                           .into_iter()
-                                           .filter(|entry| entry.token == "send")
-                                           .collect();
+    let sends: Vec<LookupEntry> = registry.matching("")
+                                          .into_iter()
+                                          .map(|found| found.entry)
+                                          .filter(|entry| entry.token == "send")
+                                          .collect();
 
     assert_eq!(sends.len(), 1, "a skill must not shadow a built-in command");
     assert_ne!(sends[0].description, "A skill shadowing a command");
@@ -214,4 +218,203 @@ fn leading_whitespace_still_leaves_the_slash_first() {
 #[test]
 fn a_line_without_a_slash_has_no_token() {
     assert_eq!(active_token("plain text", 4), None);
+}
+
+#[test]
+fn a_slash_token_reports_the_slash_trigger() {
+    let token = active_token("/se", 3).expect("a slash token");
+
+    assert_eq!(token.trigger, Trigger::Slash);
+    assert_eq!(token.trigger.char(), '/');
+}
+
+#[test]
+fn a_mention_after_a_space_is_an_active_token() {
+    let token = active_token("look at @lib", 12).expect("an `@` after a space opens the lookup");
+
+    assert_eq!(token.trigger, Trigger::Mention);
+    assert_eq!(token.range, 8..12);
+    assert_eq!(token.filter, "lib");
+}
+
+#[test]
+fn a_bare_at_is_an_active_token_with_an_empty_filter() {
+    let token = active_token("@", 1).expect("the trigger alone opens the lookup");
+
+    assert_eq!(token.trigger, Trigger::Mention);
+    assert_eq!(token.filter, "");
+}
+
+/// `panel-file-mentions`: "`@` mid-word is not a trigger".
+#[test]
+fn an_at_inside_an_email_address_is_not_a_token() {
+    assert_eq!(active_token("write to paul@example.com", 25),
+               None,
+               "the `@` follows a letter, so the lookup must stay shut");
+}
+
+/// Task 6.1's own check: the two lookups are mutually exclusive because
+/// the caret decides, not because two flags are kept in step.
+#[test]
+fn a_buffer_holding_both_reports_the_one_the_caret_is_in() {
+    let value = "/review @lib.rs";
+    let at_slash = active_token(value, 4).expect("the caret is in the slash token");
+    let at_mention = active_token(value, 12).expect("the caret is in the mention");
+
+    assert_eq!(at_slash.trigger, Trigger::Slash);
+    assert_eq!(at_slash.filter, "review");
+    assert_eq!(at_mention.trigger, Trigger::Mention);
+    // The filter is the whole token, not the text up to the caret - the
+    // same rule the slash lookup has always used, so a caret in the middle
+    // of a token still filters on all of it.
+    assert_eq!(at_mention.filter, "lib.rs");
+    assert_ne!(at_slash.trigger, at_mention.trigger,
+               "one caret position cannot be in both, which is what makes the popup single");
+}
+
+/// Moving the caret between them switches which list the popup shows -
+/// the scenario `panel-slash-commands` adds for the slash lookup yielding.
+#[test]
+fn moving_the_caret_between_tokens_switches_the_trigger() {
+    let value = "/review the diff @src/lib.rs";
+    let triggers: Vec<Option<Trigger>> =
+        [1, 7, 12, 18, 27].iter()
+                          .map(|caret| active_token(value, *caret).map(|t| t.trigger))
+                          .collect();
+
+    assert_eq!(triggers,
+               vec![Some(Trigger::Slash),
+                    Some(Trigger::Slash),
+                    None,
+                    Some(Trigger::Mention),
+                    Some(Trigger::Mention)],
+               "the caret in the prose between them opens neither");
+}
+
+/// A path typed as a mention keeps its slashes: the mention claimed the
+/// run, and a slash only triggers at the head of a line anyway.
+#[test]
+fn a_mention_holding_slashes_stays_one_mention() {
+    let token = active_token("@crates/knot/src", 16).expect("a mention");
+
+    assert_eq!(token.trigger, Trigger::Mention);
+    assert_eq!(token.filter, "crates/knot/src");
+}
+
+/// Entries standing in for a repository's files, path as token.
+fn paths(paths: &[&str]) -> Vec<LookupEntry> {
+    paths.iter()
+         .map(|path| LookupEntry::new(*path, ""))
+         .collect()
+}
+
+/// The tokens `filter` selects from `entries`, best first.
+fn ranked(entries: &[LookupEntry], filter: &str) -> Vec<String> {
+    Matcher::Subsequence.matching(entries, filter)
+                        .into_iter()
+                        .map(|found| found.entry.token)
+                        .collect()
+}
+
+/// `panel-file-mentions`' own example: "A subsequence matches".
+#[test]
+fn a_subsequence_reaches_a_path_no_substring_would() {
+    let entries = paths(&["crates/knot-git/src/lib.rs",
+                          "crates/knot/src/main.rs",
+                          "README.md"]);
+
+    let found = ranked(&entries, "kgs");
+
+    assert!(found.contains(&"crates/knot-git/src/lib.rs".to_string()),
+            "`kgs` should reach it as k-g-s across the path, which no substring search finds");
+}
+
+/// `panel-file-mentions`: "Name matches outrank directory matches".
+#[test]
+fn a_name_match_outranks_a_directory_match() {
+    let entries = paths(&["lib/helper/main.rs", "crates/knot/src/lib.rs"]);
+
+    let found = ranked(&entries, "lib");
+
+    assert_eq!(found.first().map(String::as_str),
+               Some("crates/knot/src/lib.rs"),
+               "the one whose file name is `lib.rs` should come first, not the one under a \
+                directory called `lib`");
+}
+
+/// `panel-file-mentions`: consecutive matched characters outrank
+/// scattered ones.
+#[test]
+fn consecutive_characters_outrank_scattered_ones() {
+    let entries = paths(&["a/b/c/refactor.rs", "src/rust_examples/file_actions.rs"]);
+
+    let found = ranked(&entries, "rfa");
+
+    assert_eq!(found.first().map(String::as_str),
+               Some("a/b/c/refactor.rs"),
+               "`rfa` sits inside `refactor` as a near-run, which should beat three characters \
+                scattered across three segments");
+}
+
+/// A filter that is not a subsequence selects nothing - there is no typo
+/// tolerance, which is what keeps a list of thousands honest.
+#[test]
+fn a_filter_that_is_not_a_subsequence_matches_nothing() {
+    let entries = paths(&["crates/knot/src/lib.rs"]);
+
+    assert!(ranked(&entries, "zzz").is_empty());
+    assert!(ranked(&entries, "srcx").is_empty(),
+            "one missing character is a miss, not a fuzzy near-match");
+}
+
+#[test]
+fn matching_ignores_case_in_both_directions() {
+    let entries = paths(&["Crates/Knot/README.md"]);
+
+    assert_eq!(ranked(&entries, "readme").len(), 1);
+    assert_eq!(ranked(&entries, "CRATES").len(), 1);
+}
+
+/// An empty filter lists everything, so opening the lookup on a bare `@`
+/// shows the folder rather than nothing.
+#[test]
+fn an_empty_filter_lists_every_path() {
+    let entries = paths(&["a.rs", "b.rs", "c.rs"]);
+
+    assert_eq!(ranked(&entries, "").len(), 3);
+}
+
+/// `panel-file-mentions`: "The matched characters SHALL be marked in each
+/// listed row, so the user can see why a row is a match."
+#[test]
+fn a_match_reports_where_it_matched() {
+    let entries = paths(&["src/lib.rs"]);
+
+    let found = Matcher::Subsequence.matching(&entries, "sl");
+    let matched = &found.first().expect("a match").matched;
+
+    assert_eq!(matched.len(), 2, "one offset per filter character");
+    let marked: String = matched.iter()
+                                .map(|offset| entries[0].token[*offset..].chars().next().unwrap())
+                                .collect();
+    assert_eq!(marked.to_lowercase(),
+               "sl",
+               "the marked offsets have to point at the characters that actually matched");
+}
+
+/// Substring matching keeps registry order and marks nothing - there is
+/// nothing surprising to explain about a contiguous hit, and the declared
+/// order of a few dozen commands carries meaning a score would destroy.
+#[test]
+fn substring_matching_keeps_its_order_and_marks_nothing() {
+    let entries = paths(&["zeta", "alpha", "zebra"]);
+
+    let found = Matcher::Substring.matching(&entries, "z");
+
+    assert_eq!(found.iter()
+                    .map(|f| f.entry.token.as_str())
+                    .collect::<Vec<_>>(),
+               vec!["zeta", "zebra"],
+               "declared order, not alphabetical and not scored");
+    assert!(found.iter().all(|f| f.matched.is_empty()));
 }

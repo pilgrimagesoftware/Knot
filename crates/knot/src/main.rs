@@ -16,6 +16,8 @@ mod appearance;
 mod broadcast_sheet;
 mod command_center;
 mod commit_window;
+mod composer_scan;
+mod composer_style;
 mod consts;
 mod controls;
 mod dashboard;

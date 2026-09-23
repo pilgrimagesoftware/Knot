@@ -15,7 +15,6 @@ use gpui_kit::AnyWindowHandle;
 use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
-use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::resizable::ResizableState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
@@ -27,6 +26,7 @@ use super::panel;
 use super::prompt_queue::QueuedPanelPrompt;
 use super::terminal_font::TerminalFont;
 use super::view_mode::WorkspaceViewMode;
+use crate::composer_style::ComposerStyling;
 use crate::dashboard;
 use crate::panel_session;
 use crate::panel_state;
@@ -151,7 +151,7 @@ pub(crate) struct WorkspaceWindow {
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
-    pub(super) panel_prompt_inputs:              BTreeMap<Uuid, Entity<TextareaState>>,
+    pub(super) panel_prompt_inputs: BTreeMap<Uuid, Entity<panel::prompt::PanelInputState>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
@@ -172,6 +172,21 @@ pub(crate) struct WorkspaceWindow {
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    /// References waiting to be written into a composer. Attaching
+    /// context can complete without a window - the add-context control
+    /// finishes after its picker closes - and editing a buffer needs one,
+    /// so the insertion is deferred to the next frame that has it.
+    pub(super) panel_pending_attachments:        BTreeMap<Uuid, Vec<PathBuf>>,
+    /// Each Panel-mode agent's file listing for the `@` lookup: how far
+    /// along it is, what it found, and the watch following its folder.
+    /// Built on the agent's first `@`, since an agent nobody mentions a
+    /// file to should not cost a walk - see `panel::mentions`.
+    pub(super) panel_mentions:                   BTreeMap<Uuid, panel::mentions::PanelMentions>,
+    /// Each Panel-mode composer's styled runs: its three decoration
+    /// collections, the buffer they describe and the palette they were
+    /// painted from. Created with the composer entity, so a restored draft
+    /// arrives styled; see `panel::styling`.
+    pub(super) panel_composer_styling:           BTreeMap<Uuid, ComposerStyling>,
     /// Live `!` commands, keyed by the id of the card drawing each one.
     ///
     /// Not keyed by agent: a panel may have several commands running at
