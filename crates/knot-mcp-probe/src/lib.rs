@@ -39,7 +39,7 @@ pub use endpoint::same_endpoint;
 pub use error::{ProbeError, Result};
 pub use inventory::Inventory;
 pub use parse::ListFormat;
-pub use probe::{ProbePlan, probe};
+pub use probe::{ProbePlan, plan_for, probe};
 pub use runner::{CommandRunner, McpRunner, ProbeCommand};
 pub use server::{ServerRow, Target};
 pub use state::{ALL_STATES, ServerState};

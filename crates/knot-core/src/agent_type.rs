@@ -18,6 +18,37 @@
 //! `knot-history`); each of those has a test that fails when a row here has
 //! nothing matching it.
 
+/// How an agent type lets the user manage one MCP server.
+///
+/// An enum rather than an `Option<&str>` because the two supported cases need
+/// different handling at every call site - one names a server on a command
+/// line, the other drops the user into a UI that names nothing - and a
+/// nullable string would force each of them to re-derive which it is holding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpManage {
+    /// Knot has no MCP command for this type. A row for one of its servers
+    /// offers no delegated action.
+    None,
+    /// A command addressing one named server, where `%{server}` stands for
+    /// the row's name. `opencode mcp auth <name>` is the shape.
+    PerServer(&'static [&'static str]),
+    /// An interactive flow: run the CLI with `args`, then send `send` to it.
+    /// Claude Code has no per-server command, so its `/mcp` UI is the
+    /// handover.
+    Interactive {
+        args: &'static [&'static str],
+        send: &'static str,
+    },
+}
+
+impl McpManage {
+    /// Whether this type offers any handover at all.
+    #[must_use]
+    pub fn is_available(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
+
 /// One known agent type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgentTypeInfo {
@@ -39,57 +70,106 @@ pub struct AgentTypeInfo {
     /// Reports progress through hooks Knot can turn into an activity
     /// tracker, so its status updates without polling.
     pub hook_activity:       bool,
+    /// The read-only command that lists this type's MCP servers, as program
+    /// followed by arguments. Empty when Knot has no way to ask - which the
+    /// MCP section reports as "cannot determine", deliberately distinct from
+    /// "this agent has none".
+    ///
+    /// The program is the default; a user who set a command for this type in
+    /// `agent_commands` has theirs used instead, since that is the binary
+    /// their agent actually runs.
+    ///
+    /// Populated only for a type whose real output has been captured. A
+    /// parser written from documentation rather than from output fails
+    /// silently, which is the one failure this whole capability exists to
+    /// avoid.
+    pub mcp_list_command:    &'static [&'static str],
+    /// How the user is handed this type's own MCP flow.
+    pub mcp_manage:          McpManage,
 }
 
 /// Every known type, in the order a picker offers them.
-pub const ALL: &[AgentTypeInfo] = &[AgentTypeInfo { id:                  "claude",
-                                                    label:               "Claude",
-                                                    is_shell:            false,
-                                                    is_custom:           false,
-                                                    inline_registration: true,
-                                                    hook_activity:       true, },
-                                    AgentTypeInfo { id:                  "codex",
-                                                    label:               "Codex",
-                                                    is_shell:            false,
-                                                    is_custom:           false,
-                                                    inline_registration: true,
-                                                    hook_activity:       true, },
-                                    AgentTypeInfo { id:                  "opencode",
-                                                    label:               "OpenCode",
-                                                    is_shell:            false,
-                                                    is_custom:           false,
-                                                    inline_registration: true,
-                                                    hook_activity:       false, },
-                                    AgentTypeInfo { id:                  "gemini",
-                                                    label:               "Gemini",
-                                                    is_shell:            false,
-                                                    is_custom:           false,
-                                                    inline_registration: true,
-                                                    hook_activity:       false, },
-                                    AgentTypeInfo { id:                  "copilot",
-                                                    label:               "Copilot",
-                                                    is_shell:            false,
-                                                    is_custom:           false,
-                                                    inline_registration: true,
-                                                    hook_activity:       false, },
-                                    AgentTypeInfo { id:                  "custom1",
-                                                    label:               "Custom 1",
-                                                    is_shell:            false,
-                                                    is_custom:           true,
-                                                    inline_registration: false,
-                                                    hook_activity:       false, },
-                                    AgentTypeInfo { id:                  "custom2",
-                                                    label:               "Custom 2",
-                                                    is_shell:            false,
-                                                    is_custom:           true,
-                                                    inline_registration: false,
-                                                    hook_activity:       false, },
-                                    AgentTypeInfo { id:                  "shell",
-                                                    label:               "Shell",
-                                                    is_shell:            true,
-                                                    is_custom:           false,
-                                                    inline_registration: true,
-                                                    hook_activity:       false, }];
+pub const ALL: &[AgentTypeInfo] =
+    &[AgentTypeInfo { id:                  "claude",
+                      label:               "Claude",
+                      is_shell:            false,
+                      is_custom:           false,
+                      inline_registration: true,
+                      hook_activity:       true,
+                      mcp_list_command:    &["claude", "mcp", "list"],
+                      mcp_manage:          McpManage::Interactive { args: &[],
+                                                                    send: "/mcp", }, },
+      // Codex has an `mcp` subcommand, but no machine this was built on had
+      // it installed, so its output shape is unobserved and it reports
+      // "cannot determine" rather than getting a reader written from
+      // documentation.
+      AgentTypeInfo { id:                  "codex",
+                      label:               "Codex",
+                      is_shell:            false,
+                      is_custom:           false,
+                      inline_registration: true,
+                      hook_activity:       true,
+                      mcp_list_command:    &[],
+                      mcp_manage:          McpManage::None, },
+      // `opencode mcp auth <name>` is the only per-server command any agent
+      // offers, so the handover is exact here. Its *listing* shape is still
+      // unobserved - the machine this was built on had no OpenCode servers
+      // configured - so no rows are produced yet and the command waits.
+      AgentTypeInfo { id:                  "opencode",
+                      label:               "OpenCode",
+                      is_shell:            false,
+                      is_custom:           false,
+                      inline_registration: true,
+                      hook_activity:       false,
+                      mcp_list_command:    &[],
+                      mcp_manage:          McpManage::PerServer(&["opencode",
+                                                                  "mcp",
+                                                                  "auth",
+                                                                  "%{server}"]), },
+      AgentTypeInfo { id:                  "gemini",
+                      label:               "Gemini",
+                      is_shell:            false,
+                      is_custom:           false,
+                      inline_registration: true,
+                      hook_activity:       false,
+                      mcp_list_command:    &["gemini", "mcp", "list"],
+                      mcp_manage:          McpManage::Interactive { args: &[],
+                                                                    send: "/mcp", }, },
+      AgentTypeInfo { id:                  "copilot",
+                      label:               "Copilot",
+                      is_shell:            false,
+                      is_custom:           false,
+                      inline_registration: true,
+                      hook_activity:       false,
+                      mcp_list_command:    &[],
+                      mcp_manage:          McpManage::None, },
+      // The custom types are a user-configured command, not a vendor CLI:
+      // there is no `mcp` subcommand to assume.
+      AgentTypeInfo { id:                  "custom1",
+                      label:               "Custom 1",
+                      is_shell:            false,
+                      is_custom:           true,
+                      inline_registration: false,
+                      hook_activity:       false,
+                      mcp_list_command:    &[],
+                      mcp_manage:          McpManage::None, },
+      AgentTypeInfo { id:                  "custom2",
+                      label:               "Custom 2",
+                      is_shell:            false,
+                      is_custom:           true,
+                      inline_registration: false,
+                      hook_activity:       false,
+                      mcp_list_command:    &[],
+                      mcp_manage:          McpManage::None, },
+      // A bare shell runs no MCP client at all.
+      AgentTypeInfo { id:                  "shell",
+                      label:               "Shell",
+                      is_shell:            true,
+                      is_custom:           false,
+                      inline_registration: true,
+                      mcp_list_command:    &[],
+                      mcp_manage:          McpManage::None,
+                      hook_activity:       false, }];
 
 /// The type a new agent gets when nothing else says otherwise.
 pub const DEFAULT: &str = "claude";
@@ -132,6 +212,25 @@ pub fn supports_inline_registration(id: &str) -> bool {
 #[must_use]
 pub fn has_hook_activity(id: &str) -> bool {
     info(id).is_some_and(|agent_type| agent_type.hook_activity)
+}
+
+/// The read-only command that lists `id`'s MCP servers, or `None` when Knot
+/// has no way to ask.
+///
+/// `None` is the answer for an unrecognized type too, and it means the same
+/// thing there: not that the agent has no MCP servers, but that Knot cannot
+/// find out.
+#[must_use]
+pub fn mcp_list_command(id: &str) -> Option<&'static [&'static str]> {
+    let command = info(id)?.mcp_list_command;
+
+    (!command.is_empty()).then_some(command)
+}
+
+/// How `id` lets the user manage one MCP server.
+#[must_use]
+pub fn mcp_manage(id: &str) -> McpManage {
+    info(id).map_or(McpManage::None, |agent_type| agent_type.mcp_manage)
 }
 
 #[cfg(test)]

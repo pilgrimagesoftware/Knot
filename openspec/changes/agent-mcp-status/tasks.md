@@ -17,9 +17,9 @@
 
 ## 3. Per-type knowledge on the roster
 
-- [ ] 3.1 Add an `mcp_list_command` column to `AgentTypeInfo`, populated for Claude Code and left empty for types whose output shape is not yet captured; verify the roster's existing completeness test covers the new column and that an empty value reads as "cannot determine" rather than "none"
-- [ ] 3.2 Add an `mcp_manage` column as an enum — a command naming one server, an interactive flow to drop into, or nothing — rather than a nullable string; verify Claude Code resolves to the interactive flow, OpenCode to the per-server command, and a shell agent to nothing
-- [ ] 3.3 Extend the roster test so a known non-shell type missing both columns fails rather than silently shipping an unprobeable type; verify the test fails when a column is removed from a populated row
+- [x] 3.1 Add an `mcp_list_command` column to `AgentTypeInfo`, populated for Claude Code and left empty for types whose output shape is not yet captured; verify the roster's existing completeness test covers the new column and that an empty value reads as "cannot determine" rather than "none"
+- [x] 3.2 Add an `mcp_manage` column as an enum — a command naming one server, an interactive flow to drop into, or nothing — rather than a nullable string; verify Claude Code resolves to the interactive flow, OpenCode to the per-server command, and a shell agent to nothing
+- [x] 3.3 Extend the roster test so a known non-shell type missing both columns fails rather than silently shipping an unprobeable type; verify the test fails when a column is removed from a populated row
 
 ## 4. Panel state and scheduling
 

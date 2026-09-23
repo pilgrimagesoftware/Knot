@@ -2,6 +2,8 @@
 //!
 //! Blocking, like the rest of the crate. Call it from `spawn_blocking`.
 
+use std::path::PathBuf;
+
 use crate::error::Result;
 use crate::inventory::Inventory;
 use crate::parse::ListFormat;
@@ -22,6 +24,37 @@ pub enum ProbePlan {
         command: ProbeCommand,
         format:  ListFormat,
     },
+}
+
+/// What to run for one agent, from its type and where it is running.
+///
+/// `program_override` is the command the user configured for this agent type
+/// in settings, if any. Its first token is taken as the binary: the setting
+/// may carry flags meant for launching the agent (`claude --resume`), and
+/// those are not arguments to `mcp list`. Using it at all matters because a
+/// user who points Knot at a particular build of a CLI means that build - a
+/// probe that ran a different one on `PATH` would be reading a different
+/// installation's configuration.
+#[must_use]
+pub fn plan_for(agent_type: &str, cwd: impl Into<PathBuf>, env: Vec<(String, String)>,
+                program_override: Option<&str>)
+                -> ProbePlan {
+    let (Some(command), Some(format)) = (knot_core::agent_type::mcp_list_command(agent_type),
+                                         ListFormat::for_agent_type(agent_type))
+    else {
+        return ProbePlan::Unsupported;
+    };
+
+    let (default_program, args) = command.split_first().expect("a non-empty list command");
+
+    let program = program_override.and_then(|text| text.split_whitespace().next())
+                                  .unwrap_or(default_program);
+
+    let command = ProbeCommand::new(program,
+                                    args.iter().map(|arg| (*arg).to_owned()).collect(),
+                                    cwd).with_env(env);
+
+    ProbePlan::Run { command, format }
 }
 
 /// Asks an agent which MCP servers it has.

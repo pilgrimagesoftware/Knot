@@ -63,3 +63,88 @@ fn a_known_type_answers_from_its_row() {
     assert!(has_hook_activity("claude"));
     assert!(!has_hook_activity("gemini"));
 }
+
+/// The ids Knot can ask about their MCP servers today: the ones whose real
+/// listing output has been captured and has a parser pinned to a fixture.
+const PROBEABLE: &[&str] = &["claude", "gemini"];
+
+/// The ids that deliberately cannot be asked. Keeping them written down is
+/// the point: a new agent type added without an MCP decision changes this
+/// count and fails, rather than quietly inheriting "no MCP support" and
+/// telling its users nothing.
+///
+/// Why each one:
+///
+/// - `codex` - `codex mcp` exists; its output shape is unobserved.
+/// - `opencode` - `opencode mcp list` exists; its *populated* shape is
+///   unobserved. Its per-server handover is known and already recorded.
+/// - `copilot` - no MCP listing command is known.
+/// - `custom1`, `custom2` - a user-configured command, not a vendor CLI.
+/// - `shell` - runs no MCP client at all.
+const UNPROBEABLE: &[&str] = &["codex", "opencode", "copilot", "custom1", "custom2", "shell"];
+
+/// Adding an agent type must force a decision about its MCP support. Without
+/// this, a new row defaults to "cannot determine" and nobody finds out until
+/// a user asks why their agent's servers are not listed.
+#[test]
+fn every_known_type_has_a_deliberate_mcp_answer() {
+    assert_eq!(PROBEABLE.len() + UNPROBEABLE.len(),
+               ALL.len(),
+               "an agent type was added or removed without an MCP decision; update PROBEABLE or \
+                UNPROBEABLE");
+
+    for id in PROBEABLE {
+        assert!(mcp_list_command(id).is_some(),
+                "{id} is listed as probeable but has no command");
+    }
+
+    for id in UNPROBEABLE {
+        assert!(mcp_list_command(id).is_none(),
+                "{id} is listed as unprobeable but has a command");
+    }
+}
+
+/// A row that can be listed but not acted on is a dead end: the section
+/// would show a server needing attention and offer nothing to do about it.
+#[test]
+fn anything_that_can_be_listed_can_also_be_managed() {
+    for agent_type in ALL {
+        if !agent_type.mcp_list_command.is_empty() {
+            assert!(agent_type.mcp_manage.is_available(),
+                    "{} can be listed but offers no handover",
+                    agent_type.id);
+        }
+    }
+}
+
+/// The two handover shapes, each on the type that actually has it.
+#[test]
+fn handover_shape_matches_what_the_cli_offers() {
+    assert!(matches!(mcp_manage("claude"), McpManage::Interactive { send, .. } if send == "/mcp"),
+            "Claude Code has no per-server command; its /mcp UI is the handover");
+
+    let McpManage::PerServer(command) = mcp_manage("opencode")
+    else {
+        panic!("`opencode mcp auth <name>` addresses one server directly")
+    };
+    assert!(command.contains(&"%{server}"),
+            "a per-server command must name the server");
+
+    assert_eq!(mcp_manage("shell"), McpManage::None);
+}
+
+/// A bare shell runs no MCP client, so offering it either column would be
+/// offering something that cannot work.
+#[test]
+fn a_shell_has_no_mcp_support_at_all() {
+    assert_eq!(mcp_list_command("shell"), None);
+    assert!(!mcp_manage("shell").is_available());
+}
+
+/// An unrecognized type gets the same answer as a known-unprobeable one, and
+/// it means the same thing: not "no servers", but "cannot find out".
+#[test]
+fn an_unknown_type_cannot_be_probed_or_managed() {
+    assert_eq!(mcp_list_command("nothing-by-that-name"), None);
+    assert!(!mcp_manage("nothing-by-that-name").is_available());
+}

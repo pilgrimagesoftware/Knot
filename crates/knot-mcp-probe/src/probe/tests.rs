@@ -55,16 +55,27 @@ fn an_unsupported_type_runs_nothing_and_is_not_an_empty_list() {
     assert!(runner.calls().is_empty(), "nothing should have been run");
 }
 
-/// An agent that genuinely has none is the other answer, and it is an `Ok`
-/// empty list rather than an error.
+/// An agent that genuinely has none is the other answer, and the CLI says so
+/// in words rather than printing an empty listing. Reading that phrase is
+/// what separates "found none" from "could not read this".
 #[test]
-fn a_listing_with_no_entries_is_an_error_not_a_silent_empty() {
-    // `claude mcp list` with nothing configured prints a message, not an
-    // empty listing, so there is no entry to anchor on. Reporting that as
-    // "no servers" would be guessing; the section says it could not read it.
+fn a_cli_saying_there_are_none_is_found_none_and_not_an_error() {
     let runner = StubRunner::ok("No MCP servers configured. Use `claude mcp add` to add one.\n");
 
-    let err = probe(&runner, &plan()).expect_err("nothing anchored the parse");
+    let inventory = probe(&runner, &plan()).expect("an answer, not a failure");
+
+    assert!(inventory.found_none());
+    assert!(!inventory.is_unprobeable(), "we asked, and got an answer");
+    assert!(inventory.taken_at().is_some());
+}
+
+/// Output that says neither "here are the servers" nor "there are none" is
+/// the format having moved, and must not be reported as an empty list.
+#[test]
+fn output_that_says_nothing_recognizable_is_an_error() {
+    let runner = StubRunner::ok("Usage: claude mcp list [options]\n");
+
+    let err = probe(&runner, &plan()).expect_err("a usage message is not an answer");
 
     assert!(matches!(err, ProbeError::Unrecognized { .. }),
             "got {err:?}");
@@ -93,6 +104,67 @@ fn a_failing_command_surfaces_its_output() {
             assert_eq!(output, "not logged in");
         }
         other => panic!("got {other:?}"),
+    }
+}
+
+/// The coverage this crate owes the roster. A type that can be listed but has
+/// no reader here produces `Unsupported` at runtime while the roster claims
+/// otherwise - the silent drift the split between the two tables invites.
+#[test]
+fn every_listable_type_has_a_reader_and_the_reverse() {
+    for agent_type in knot_core::agent_type::ALL {
+        let listable = knot_core::agent_type::mcp_list_command(agent_type.id).is_some();
+        let readable = ListFormat::for_agent_type(agent_type.id).is_some();
+
+        assert_eq!(listable, readable,
+                   "{} has a list command ({listable}) but a reader ({readable})",
+                   agent_type.id);
+    }
+}
+
+#[test]
+fn a_plan_is_built_from_the_agent_type() {
+    let plan = super::plan_for("claude", Path::new("/projects/api"), vec![], None);
+
+    let ProbePlan::Run { command, format } = plan
+    else {
+        panic!("claude is listable")
+    };
+
+    assert_eq!(command.label(), "claude mcp list");
+    assert_eq!(command.cwd, Path::new("/projects/api"));
+    assert_eq!(format, ListFormat::ClaudeCode);
+}
+
+/// A user who points Knot at a particular build means that build. A probe
+/// that ran whatever was first on `PATH` would read another installation's
+/// configuration and report servers the agent does not have.
+#[test]
+fn a_configured_command_replaces_the_default_program() {
+    let plan = super::plan_for("claude",
+                               Path::new("/projects/api"),
+                               vec![],
+                               Some("/opt/custom/claude --resume"));
+
+    let ProbePlan::Run { command, .. } = plan
+    else {
+        panic!("claude is listable")
+    };
+
+    assert_eq!(command.program, "/opt/custom/claude");
+    assert_eq!(command.args,
+               vec!["mcp".to_owned(), "list".to_owned()],
+               "the setting's launch flags are not arguments to `mcp list`");
+}
+
+/// Not "no servers" - Knot has no way to ask. A shell runs no MCP client at
+/// all, and an unrecognized type is a working agent Knot knows nothing about.
+#[test]
+fn a_type_with_no_reader_yields_an_unsupported_plan() {
+    for id in ["shell", "codex", "copilot", "nothing-by-that-name"] {
+        assert!(matches!(super::plan_for(id, Path::new("/projects/api"), vec![], None),
+                         ProbePlan::Unsupported),
+                "{id} should not be probeable");
     }
 }
 
