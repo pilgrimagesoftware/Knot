@@ -60,12 +60,12 @@ impl WorkspaceWindow {
         // A shell companion whose process exited has nothing left to show,
         // so close it rather than leaving a dead pane that looks hung.
         for id in exited {
-            self.remove_agent(*id);
+            self.remove_agent(*id, cx);
             cx.notify();
         }
         // Messages arrive from the MCP server on another thread; this poll
         // is where an agent going idle is noticed.
-        self.deliver_inbox_nudges();
+        self.deliver_inbox_nudges(cx);
         self.raise_awaiting_notifications(cx);
         self.raise_mcp_failure_notification(cx);
         // Before the repaint checks below, so an agent started here has its
@@ -77,7 +77,7 @@ impl WorkspaceWindow {
                              .is_some_and(|grid| grid.lock().take_dirty());
         // Every agent's taps, not just the selected one's: an agent working
         // in an unselected pane is the case this feature exists for.
-        let pull_requests_recorded = self.drain_pull_requests();
+        let pull_requests_recorded = self.drain_pull_requests(cx);
         let prompts_completed = self.drain_prompt_results();
         let panel_states_moved = self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();

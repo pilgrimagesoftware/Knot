@@ -7,6 +7,7 @@
 //!
 //! Recording is `super::pull_requests`; this is the reading half.
 
+use gpui_kit::App;
 use gpui_kit::component::WindowExt;
 use gpui_kit::{Context, Window};
 use knot_forge::GhRunner;
@@ -140,7 +141,7 @@ impl WorkspaceWindow {
                        .confirm()
                        .on_ok(move |_, _, app| {
                            entity.update(app, |view, cx| {
-                                     view.remove_pull_request(agent_id, &url);
+                                     view.remove_pull_request(agent_id, &url, cx);
                                      cx.notify();
                                  });
                            true
@@ -149,10 +150,10 @@ impl WorkspaceWindow {
     }
 
     /// Forget one recorded pull request. Knot's record only.
-    pub(super) fn remove_pull_request(&mut self, agent_id: Uuid, url: &str) {
+    pub(super) fn remove_pull_request(&mut self, agent_id: Uuid, url: &str, cx: &App) {
         let removed = self.store.lock().remove_pull_request(agent_id, url);
         if removed {
-            self.persist_pull_requests();
+            self.persist_pull_requests(cx);
             self.prune_pull_request_states();
         }
     }

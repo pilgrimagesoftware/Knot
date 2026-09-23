@@ -56,35 +56,39 @@ impl SettingsWindow {
     }
 
     fn select_ai_provider(&mut self, provider: AiProvider, cx: &mut Context<Self>) {
-        self.settings.ai_provider = provider;
+        crate::settings_global::write(cx, |settings| settings.ai_provider = provider);
         self.persist(cx);
         cx.notify();
     }
 
     fn select_autopilot_action(&mut self, action: AutopilotAction, cx: &mut Context<Self>) {
-        self.settings.autopilot_action = action;
+        crate::settings_global::write(cx, |settings| settings.autopilot_action = action);
         self.persist(cx);
         cx.notify();
     }
 
     pub(crate) fn save_ai_api_key(&mut self, cx: &mut Context<Self>) {
-        self.settings.ai_api_key = self.ai_api_key_input.read(cx).value().to_string();
+        let key = self.ai_api_key_input.read(cx).value().to_string();
+        crate::settings_global::write(cx, |settings| settings.ai_api_key = key.clone());
         self.persist(cx);
     }
 
     pub(crate) fn save_autopilot_custom_prompt(&mut self, cx: &mut Context<Self>) {
-        self.settings.autopilot_custom_prompt = self.autopilot_custom_prompt_input
-                                                    .read(cx)
-                                                    .value()
-                                                    .to_string();
+        let prompt = self.autopilot_custom_prompt_input
+                         .read(cx)
+                         .value()
+                         .to_string();
+        crate::settings_global::write(cx, |settings| {
+            settings.autopilot_custom_prompt = prompt.clone();
+        });
         self.persist(cx);
     }
 
     pub(crate) fn render_autopilot(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let autopilot_enabled = self.settings.autopilot_enabled;
-        let ai_provider = self.settings.ai_provider;
-        let autopilot_action = self.settings.autopilot_action;
+        let autopilot_enabled = crate::settings_global::read(cx).autopilot_enabled;
+        let ai_provider = crate::settings_global::read(cx).ai_provider;
+        let autopilot_action = crate::settings_global::read(cx).autopilot_action;
         let provider_label = Self::ai_provider_label(ai_provider);
         let model_name = Self::ai_model_for(ai_provider);
         let action_label = Self::autopilot_action_label(autopilot_action);
@@ -103,7 +107,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.autopilot_enabled = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.autopilot_enabled = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }

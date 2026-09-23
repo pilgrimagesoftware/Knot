@@ -225,8 +225,7 @@ impl WorkspaceWindow {
                                                             terminal_cell_size(
                                                                 cx,
                                                                 view.terminal_font_family(),
-                                                                px(view
-                                                                    .settings
+                                                                px(crate::settings_global::read(cx)
                                                                     .terminal_font_size
                                                                     as f32),
                                                             );
@@ -257,7 +256,8 @@ impl WorkspaceWindow {
                                                 .child(terminal_view::render_grid(
                                                     &grid.lock(),
                                                     self.terminal_font_family(),
-                                                    px(self.settings.terminal_font_size
+                                                    px(crate::settings_global::read(cx)
+                                                        .terminal_font_size
                                                         as f32),
                                                 ))
                                                 .into_any_element(),

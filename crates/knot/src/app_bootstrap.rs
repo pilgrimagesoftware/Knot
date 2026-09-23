@@ -54,8 +54,16 @@ use crate::workspace_manager::WorkspaceManager;
 /// A server configuration has turned off leaves the status at
 /// [`knot_mcp::ServerState::Disabled`]: nothing is bound and nothing is
 /// supervised.
+///
+/// Takes the shared surface, not a snapshot. This runs before
+/// `gpui_kit::application()`, so it cannot read the global - the bootstrap
+/// builds the surface first and hands the same handle to both, which is what
+/// keeps the server's settings and the windows' settings one thing. The
+/// catalog it builds persists the roster hours into a session, and did so
+/// from a value captured here at startup.
 pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
-                               settings: knot_core::Settings, notifier: Arc<QueuedNotifier>,
+                               settings: knot_core::SharedSettings,
+                               notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
                                awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
                                -> (tokio::sync::oneshot::Sender<()>, McpServerStatus) {
@@ -71,14 +79,20 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
             }
         };
         runtime.block_on(async move {
-                   if !settings.mcp_server_enabled {
+                   // Read once here: what follows is startup configuration -
+                   // the enable flag, the port, the folder to watch - and the
+                   // supervisor does not re-read it while it runs. The
+                   // catalog gets the handle rather than this value, because
+                   // what *it* does happens later.
+                   let startup = settings.read();
+                   if !startup.mcp_server_enabled {
                        return;
                    }
 
                    let (discovery, repos_rx) = knot_discovery::Discovery::new();
-                   if !settings.source_base_folder.is_empty()
+                   if !startup.source_base_folder.is_empty()
                 && let Err(err) =
-                    discovery.set_source_folder(Some(PathBuf::from(&settings.source_base_folder)))
+                    discovery.set_source_folder(Some(PathBuf::from(&startup.source_base_folder)))
             {
                 eprintln!("failed to watch source folder: {err}");
             }
@@ -88,9 +102,9 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                     .with_message_store(messages)
                     .with_awaiting_input_queue(awaiting_input)
                     .with_activation_queue(activation)
-                    .with_settings(settings.clone()),
+                    .with_settings(settings),
             );
-                   catalog.set_bench_agents(settings.bench_agents.clone());
+                   catalog.set_bench_agents(startup.bench_agents.clone());
 
                    let agents_snapshot: knot_mcp::AgentsSnapshotFn = {
                        let catalog = catalog.clone();
@@ -98,7 +112,7 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                    };
                    let hook_handler = catalog.clone();
                    let mut supervisor =
-                       knot_mcp::Supervisor::new(settings.mcp_server_port,
+                       knot_mcp::Supervisor::new(startup.mcp_server_port,
                                                  catalog as Arc<dyn ToolCatalog>,
                                                  agents_snapshot).with_hook_handler(hook_handler);
                    // A packaged `Knot.app` has no stderr anyone reads, so
@@ -317,7 +331,6 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
 struct WorkspaceManagerWindow {
     store:    Arc<Mutex<knot_agents::AgentStore>>,
     messages: Arc<Mutex<knot_messaging::MessageStore>>,
-    settings: knot_core::Settings,
     /// Dropped with the window, which is what stops the MCP server when
     /// the last window closes.
     mcp_stop: tokio::sync::oneshot::Sender<()>,
@@ -377,21 +390,11 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
         let settings_window = Rc::clone(&settings_window);
         let store = Arc::clone(&store);
         cx.on_action(move |_: &OpenSettings, cx| {
-              // Reload from disk rather than reusing
-              // a clone
-              // captured at bootstrap: reopening the
-              // window
-              // with a stale snapshot would both
-              // show old
-              // values and overwrite a since-saved
-              // change
-              // the moment anything in the reopened
-              // window
-              // persists.
-              let settings = knot_core::Settings::load().unwrap_or_else(|_| {
-                                                            knot_core::Settings::platform_default()
-                                                        });
-              open_settings_window(&settings_window, settings, Arc::clone(&store), cx);
+              // No reload here any more. This read from disk because
+              // reopening the window with a snapshot captured at bootstrap
+              // would show old values and overwrite a since-saved change -
+              // and the window has no snapshot now.
+              open_settings_window(&settings_window, Arc::clone(&store), cx);
           });
     }
 }
@@ -406,17 +409,12 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
 /// Reopening the manager after it has been closed passes no `mcp_stop`; see
 /// [`open_workspace_manager`].
 fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
-                           messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                           settings: knot_core::Settings, cx: &mut App) {
+                           messages: Arc<Mutex<knot_messaging::MessageStore>>, cx: &mut App) {
     {
         let store = Arc::clone(&store);
         let messages = Arc::clone(&messages);
-        let settings = settings.clone();
         cx.on_action(move |_: &OpenCommandCenter, cx| {
-              CommandCenterWindow::open(Arc::clone(&store),
-                                        Arc::clone(&messages),
-                                        settings.clone(),
-                                        cx);
+              CommandCenterWindow::open(Arc::clone(&store), Arc::clone(&messages), cx);
           });
     }
     cx.on_action(move |_: &OpenWorkspaces, cx| {
@@ -424,7 +422,7 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
               crate::window_registry::WindowKey::WorkspaceManager,
               cx,
               |cx| {
-                  open_manager_window(Arc::clone(&store), Arc::clone(&messages), settings.clone(), None, cx)
+                  open_manager_window(Arc::clone(&store), Arc::clone(&messages), None, cx)
               },
           );
       });
@@ -441,14 +439,12 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
 fn open_workspace_manager(parts: WorkspaceManagerWindow, cx: &mut App) {
     let WorkspaceManagerWindow { store,
                                  messages,
-                                 settings,
                                  mcp_stop, } = parts;
     crate::window_registry::activate_or_open(crate::window_registry::WindowKey::WorkspaceManager,
                                              cx,
                                              move |cx| {
                                                  open_manager_window(store,
                                                                      messages,
-                                                                     settings,
                                                                      Some(mcp_stop),
                                                                      cx)
                                              });
@@ -457,7 +453,6 @@ fn open_workspace_manager(parts: WorkspaceManagerWindow, cx: &mut App) {
 /// The manager window itself, reporting its handle.
 fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
                        messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                       settings: knot_core::Settings,
                        mcp_stop: Option<tokio::sync::oneshot::Sender<()>>, cx: &mut App)
                        -> Option<gpui_kit::AnyWindowHandle> {
     let options = manager_window_options(cx);
@@ -483,7 +478,6 @@ fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                   });
                                  WorkspaceManager { store,
                                                     messages,
-                                                    settings,
                                                     name_input,
                                                     workspace_dialog_id: None,
                                                     error: None,
@@ -510,7 +504,12 @@ pub(crate) fn run() {
         eprintln!("failed to install default personas: {err}");
     }
     quit_on_terminal_signals();
-    let store = Arc::new(Mutex::new(build_agent_store(&settings)));
+    // The one settings surface for the process, built before anything that
+    // reads it. The MCP server thread starts below and outlives every window,
+    // so it has to be the same surface the windows get rather than a second
+    // one built from a clone.
+    let settings = knot_core::SharedSettings::new(settings);
+    let store = Arc::new(Mutex::new(build_agent_store(&settings.read())));
     let notifier = Arc::new(QueuedNotifier::new());
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
@@ -536,21 +535,27 @@ pub(crate) fn run() {
                                // application menu from the process name.
                                app_support::set_process_name(&knot_core::l10n::t("app.name"));
                                gpui_kit::init(cx);
+                               // Before every other global and before the
+                               // first window: they read settings, and a
+                               // window that opened without the surface
+                               // installed would be holding nothing to
+                               // read. See `settings_global`.
+                               crate::settings_global::install_handle(settings.clone(), cx);
                                // Before the first window: a stored Light or
                                // Dark has to be in the first frame, not
                                // arrive as a repaint after one.
                                cx.set_global(crate::appearance::AppearancePreference(
-                                   settings.appearance_mode,
+                                   settings.read().appearance_mode,
                                ));
                                crate::appearance::apply(None, cx);
-                               apply_visual_identity(&settings, cx);
+                               apply_visual_identity(&settings.read(), cx);
 
                                // Before `on_action(quit)`: the guard reads
                                // the store through this global, and a quit
                                // arriving without it would be waved
                                // through unguarded.
                                cx.set_global(quit_guard::QuitGuard::new(Arc::clone(&store)));
-                               install_actions_and_keys(&settings, Arc::clone(&store), cx);
+                               install_actions_and_keys(&settings.read(), Arc::clone(&store), cx);
                                // The Agents menu starts with nothing
                                // selected, and so disabled; a workspace
                                // window claims it once one is.
@@ -566,7 +571,6 @@ pub(crate) fn run() {
                                crate::window_registry::WindowRegistry::install(cx);
                                register_window_actions(Arc::clone(&store),
                                                        Arc::clone(&messages),
-                                                       settings.clone(),
                                                        cx);
                                set_app_menus(&AgentMenuSnapshot::default(), cx);
 
@@ -588,8 +592,6 @@ pub(crate) fn run() {
                                                                                    Arc::clone(&store),
                                                                                messages:
                                                                                    Arc::clone(&messages),
-                                                                               settings:
-                                                                                   settings.clone(),
                                                                                mcp_stop },
                                                       cx);
                                // macOS launches a non-bundled binary without

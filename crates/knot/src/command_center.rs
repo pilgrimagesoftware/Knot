@@ -35,7 +35,6 @@ use crate::workspace_window::WorkspaceWindow;
 pub(crate) struct CommandCenterWindow {
     store:          Arc<Mutex<knot_agents::AgentStore>>,
     messages:       Arc<Mutex<knot_messaging::MessageStore>>,
-    settings:       knot_core::Settings,
     dashboard_sort: dashboard::DashboardSort,
     /// Diff stats per agent card. This window shows every workspace's
     /// agents, so it is the worst place to run `git` where the card is
@@ -45,8 +44,7 @@ pub(crate) struct CommandCenterWindow {
 
 impl CommandCenterWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
-                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                       settings: knot_core::Settings, cx: &mut App) {
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>, cx: &mut App) {
         // One Command Center: it shows every workspace, so a second copy shows
         // exactly what the first does (`openspec/specs/window-lifecycle`).
         crate::window_registry::activate_or_open(
@@ -63,7 +61,6 @@ impl CommandCenterWindow {
                   let view =
                       cx.new(|_| CommandCenterWindow { store,
                                                        messages,
-                                                       settings,
                                                        dashboard_sort:
                                                            dashboard::DashboardSort::default(),
                                                        diff_stats: DiffStatsCache::default() });
@@ -143,7 +140,6 @@ impl CommandCenterWindow {
                       };
                       WorkspaceWindow::open_with_selection(Arc::clone(&view.store),
                                                            Arc::clone(&view.messages),
-                                                           view.settings.clone(),
                                                            workspace_id,
                                                            Some(id),
                                                            cx);
@@ -165,7 +161,6 @@ impl CommandCenterWindow {
             entity.update(app, |view, cx| {
                       WorkspaceWindow::open(Arc::clone(&view.store),
                                             Arc::clone(&view.messages),
-                                            view.settings.clone(),
                                             workspace_id,
                                             cx);
                   });
@@ -188,17 +183,14 @@ impl CommandCenterWindow {
                 let (folder, insert_after) = view.add_agent_prefill(workspace_id);
                 let store = Arc::clone(&view.store);
                 let messages = Arc::clone(&view.messages);
-                let settings = view.settings.clone();
                 let on_created = move |id: Uuid, _window: &mut Window, cx: &mut App| {
                     WorkspaceWindow::open_with_selection(Arc::clone(&store),
                                                          Arc::clone(&messages),
-                                                         settings.clone(),
                                                          workspace_id,
                                                          Some(id),
                                                          cx);
                 };
                 open_agent_editor(Arc::clone(&view.store),
-                                  view.settings.clone(),
                                   AgentEditorRequest { workspace_id,
                                                        prefill:
                                                            AgentPrefill { folder,
