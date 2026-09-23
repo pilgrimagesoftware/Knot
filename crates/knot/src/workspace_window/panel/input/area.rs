@@ -63,10 +63,13 @@ impl WorkspaceWindow {
                     style.bg(app.theme().accent)
                 })
                 .on_drop(cx.listener(move |view, paths: &gpui_kit::ExternalPaths, _, cx| {
-                               view.panel_pending_context
-                                   .entry(id)
-                                   .or_default()
-                                   .extend(paths.paths().iter().cloned());
+                               for path in paths.paths() {
+                                   view.panel_pending_context
+                                       .entry(id)
+                                       .or_default()
+                                       .push(path.clone());
+                                   view.queue_attachment_reference(id, path.clone());
+                               }
                                view.restyle_panel_attachments(id, Palette::of(cx), cx);
                                cx.notify();
                            }))

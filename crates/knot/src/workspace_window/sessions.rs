@@ -296,6 +296,7 @@ impl WorkspaceWindow {
         self.panel_pending_context.remove(&id);
         self.panel_composer_styling.remove(&id);
         self.forget_panel_mentions(id);
+        self.panel_pending_attachments.remove(&id);
         self.panel_input_expanded.remove(&id);
         self.panel_lookups.remove(&id);
         self.forget_process_section(id);

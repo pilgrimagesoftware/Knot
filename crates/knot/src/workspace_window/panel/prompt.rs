@@ -138,10 +138,13 @@ impl WorkspaceWindow {
               };
               cx.update(|app| {
                     this.update(app, |view, cx| {
-                            view.panel_pending_context
-                                .entry(id)
-                                .or_default()
-                                .extend(paths);
+                            for path in paths {
+                                view.panel_pending_context
+                                    .entry(id)
+                                    .or_default()
+                                    .push(path.clone());
+                                view.queue_attachment_reference(id, path);
+                            }
                             view.restyle_panel_attachments(id, Palette::of(cx), cx);
                             cx.notify();
                         });
@@ -181,7 +184,11 @@ impl WorkspaceWindow {
             };
             let path = std::env::temp_dir().join(format!("knot-paste-{}.{extension}", image.id));
             if std::fs::write(&path, &image.bytes).is_ok() {
-                self.panel_pending_context.entry(id).or_default().push(path);
+                self.panel_pending_context
+                    .entry(id)
+                    .or_default()
+                    .push(path.clone());
+                self.queue_attachment_reference(id, path);
                 attached = true;
             }
         }
@@ -192,18 +199,35 @@ impl WorkspaceWindow {
     }
 
     /// Removes one attached path from `id`'s pending context by index.
+    /// Deletes the chip rather than the row: the deletion reports as an
+    /// ordinary edit, and the reconciliation that follows every edit is
+    /// what drops the row. One direction, so the strip and the buffer
+    /// cannot disagree about which of them was right.
+    ///
+    /// The row is removed directly only when there is no chip to delete -
+    /// a buffer that never received one, which is what an attachment
+    /// dismissed before its deferred insertion ran looks like.
     pub(in crate::workspace_window) fn remove_panel_context(&mut self, id: Uuid, index: usize,
-                                                            cx: &mut App) {
-        let removed = match self.panel_pending_context.get_mut(&id) {
-            Some(paths) if index < paths.len() => {
-                paths.remove(index);
-                true
-            }
-            _ => false,
+                                                            window: &mut Window, cx: &mut App) {
+        let Some(path) = self.panel_pending_context
+                             .get(&id)
+                             .and_then(|paths| paths.get(index))
+                             .cloned()
+        else {
+            return;
         };
-        if removed {
-            self.restyle_panel_attachments(id, Palette::of(cx), cx);
+        if self.remove_attachment_reference(id, &path, window, cx) {
+            return;
         }
+        if let Some(paths) = self.panel_pending_context.get_mut(&id)
+           && index < paths.len()
+        {
+            paths.remove(index);
+        }
+        if let Some(queued) = self.panel_pending_attachments.get_mut(&id) {
+            queued.retain(|waiting| waiting != &path);
+        }
+        self.restyle_panel_attachments(id, Palette::of(cx), cx);
     }
 
     /// Toggles `id`'s input area between its default and expanded
@@ -271,38 +295,47 @@ impl WorkspaceWindow {
         let max_rows = panel_input_max_rows(self.panel_input_expanded.contains(&id));
         let input = new_panel_input(shift_to_send, max_rows, window, cx);
         let palette = Palette::of(cx);
-        let subscription = cx.subscribe_in(&input,
-                                           window,
-                                           move |view: &mut Self, input, event, window, cx| {
-                                               match event {
-                                                   InputEvent::PressEnter { shift, .. }
-                                                       if sends_on(shift_to_send, *shift) =>
-                                                   {
-                                                       view.send_panel_prompt(id, window, cx);
-                                                   }
-                                                   // Every way text arrives reports
-                                                   // here - typing, paste, undo, redo,
-                                                   // cut, a drag of text and the
-                                                   // lookup's own insertion - so one
-                                                   // arm restyles for all of them.
-                                                   InputEvent::Change => {
-                                                       let palette = Palette::of(cx);
-                                                       view.restyle_panel_composer(id, palette, cx);
-                                                       cx.notify();
-                                                   }
-                                                   // Focus leaving the input closes the
-                                                   // slash lookup, per its dismissal rules
-                                                   // - a popup left open behind another
-                                                   // pane is exactly what the shared
-                                                   // dismissal path exists to prevent.
-                                                   InputEvent::Blur => {
-                                                       let input = input.clone();
-                                                       view.dismiss_panel_lookup(id, &input, cx);
-                                                       cx.notify();
-                                                   }
-                                                   _ => {}
-                                               }
-                                           });
+        let subscription =
+            cx.subscribe_in(&input,
+                            window,
+                            move |view: &mut Self, input, event, window, cx| {
+                                match event {
+                                    InputEvent::PressEnter { shift, .. }
+                                        if sends_on(shift_to_send, *shift) =>
+                                    {
+                                        view.send_panel_prompt(id, window, cx);
+                                    }
+                                    // Every way text arrives reports
+                                    // here - typing, paste, undo, redo,
+                                    // cut, a drag of text and the
+                                    // lookup's own insertion - so one
+                                    // arm restyles for all of them.
+                                    InputEvent::Change => {
+                                        let palette = Palette::of(cx);
+                                        // The buffer decides: a chip
+                                        // this edit removed detaches
+                                        // its row, and the restyle
+                                        // below then draws the table
+                                        // that is left.
+                                        if view.reconcile_panel_attachments(id, cx) {
+                                            view.restyle_panel_attachments(id, palette, cx);
+                                        }
+                                        view.restyle_panel_composer(id, palette, cx);
+                                        cx.notify();
+                                    }
+                                    // Focus leaving the input closes the
+                                    // slash lookup, per its dismissal rules
+                                    // - a popup left open behind another
+                                    // pane is exactly what the shared
+                                    // dismissal path exists to prevent.
+                                    InputEvent::Blur => {
+                                        let input = input.clone();
+                                        view.dismiss_panel_lookup(id, &input, cx);
+                                        cx.notify();
+                                    }
+                                    _ => {}
+                                }
+                            });
         self.panel_prompt_inputs.insert(id, input.clone());
         self.panel_prompt_input_subscriptions
             .insert(id, subscription);

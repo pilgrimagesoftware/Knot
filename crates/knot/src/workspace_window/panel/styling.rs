@@ -20,20 +20,17 @@ use uuid::Uuid;
 use crate::composer_style::ComposerStyling;
 use crate::composer_style::Palette;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::panel::attachments::attachment_reference;
 
 impl WorkspaceWindow {
-    /// The attachment references for `id`, as the scanner wants them.
-    ///
-    /// Today an attachment's reference in the buffer is its path, which is
-    /// what `send_panel_prompt` already appends to the prompt. Task group
-    /// 7 gives it a shape of its own; this is the one place that has to
-    /// change when it does.
+    /// The attachment references for `id`, as the scanner wants them -
+    /// the text each chip occupies in the buffer.
     fn panel_attachment_refs(&self, id: Uuid) -> Vec<String> {
         self.panel_pending_context
             .get(&id)
             .map(|paths| {
                 paths.iter()
-                     .map(|path| path.to_string_lossy().into_owned())
+                     .map(|path| attachment_reference(path))
                      .collect()
             })
             .unwrap_or_default()

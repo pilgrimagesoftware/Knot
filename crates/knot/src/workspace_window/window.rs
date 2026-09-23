@@ -162,6 +162,11 @@ pub(crate) struct WorkspaceWindow {
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    /// References waiting to be written into a composer. Attaching
+    /// context can complete without a window - the add-context control
+    /// finishes after its picker closes - and editing a buffer needs one,
+    /// so the insertion is deferred to the next frame that has it.
+    pub(super) panel_pending_attachments:        BTreeMap<Uuid, Vec<PathBuf>>,
     /// Each Panel-mode agent's file listing for the `@` lookup: how far
     /// along it is, what it found, and the watch following its folder.
     /// Built on the agent's first `@`, since an agent nobody mentions a

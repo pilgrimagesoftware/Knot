@@ -8,11 +8,13 @@
 //! - [`prompt`] moves text from the composer to the agent.
 //! - [`styling`] keeps the composer's styled runs in step with it.
 //! - [`mentions`] lists the agent's files for the `@` lookup.
+//! - [`attachments`] keeps a chip in the buffer in step with its row.
 //!
 //! Every item here is an inherent method on
 //! [`super::WorkspaceWindow`]; the modules carve the impl up by concern,
 //! not by type.
 
+mod attachments;
 pub(super) mod input;
 pub(crate) mod lookup;
 pub(crate) mod mentions;

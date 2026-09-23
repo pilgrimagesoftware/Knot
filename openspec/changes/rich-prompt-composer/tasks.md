@@ -49,10 +49,10 @@
 
 ## 7. Attachment chips
 
-- [ ] 7.1 Insert a styled reference token at the caret when context arrives by add-context control, Finder drop or pasted image, alongside its existing `pending_context` row; verify all three paths produce both presences, and that attaching into an empty buffer leaves the caret after the token
-- [ ] 7.2 Reconcile buffer to table after every edit, buffer-decides: a deleted token detaches its row; verify deleting a reference drops it from the strip and from what is sent
-- [ ] 7.3 Remove a token as a programmatic edit when its strip entry is dismissed, flowing through the same reconciliation; verify removing the strip entry clears the reference from the buffer
-- [ ] 7.4 Style attachment references as chips, distinct from prose and from a typed `@` mention; verify against `panel-rich-input`'s chip scenarios in a debug build
+- [x] 7.1 Insert a styled reference token at the caret when context arrives by add-context control, Finder drop or pasted image, alongside its existing `pending_context` row; verify all three paths produce both presences, and that attaching into an empty buffer leaves the caret after the token
+- [x] 7.2 Reconcile buffer to table after every edit, buffer-decides: a deleted token detaches its row; verify deleting a reference drops it from the strip and from what is sent
+- [x] 7.3 Remove a token as a programmatic edit when its strip entry is dismissed, flowing through the same reconciliation; verify removing the strip entry clears the reference from the buffer
+- [x] 7.4 Style attachment references as chips, distinct from prose and from a typed `@` mention; verify against `panel-rich-input`'s chip scenarios in a debug build
 
 ## 8. Close out
 

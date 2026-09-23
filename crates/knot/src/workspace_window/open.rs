@@ -149,6 +149,7 @@ impl WorkspaceWindow {
                     panel_pending_context: BTreeMap::new(),
                     panel_composer_styling: BTreeMap::new(),
                     panel_mentions: BTreeMap::new(),
+                    panel_pending_attachments: BTreeMap::new(),
                     panel_input_expanded: BTreeSet::new(),
                     panel_lookups: BTreeMap::new(),
                     process_sections: BTreeMap::new(),

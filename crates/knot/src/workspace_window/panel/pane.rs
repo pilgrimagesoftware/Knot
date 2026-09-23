@@ -233,6 +233,13 @@ impl WorkspaceWindow {
                                                          cx: &mut Context<Self>)
                                                          -> gpui_kit::AnyElement {
         self.ensure_panel_session(id);
+        // The first place after an attachment arrives with a window to
+        // edit the buffer with. Nothing else in the frame depends on the
+        // insertion, so doing it here rather than threading a window back
+        // through three arrival paths costs one frame and no correctness.
+        if self.insert_queued_attachments(id, window, cx) {
+            self.restyle_panel_attachments(id, crate::composer_style::Palette::of(cx), cx);
+        }
         let Some(slot) = self.panel_sessions.get(&id)
         else {
             return div().into_any_element();

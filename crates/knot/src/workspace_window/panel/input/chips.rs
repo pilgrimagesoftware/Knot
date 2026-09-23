@@ -50,8 +50,11 @@ impl WorkspaceWindow {
                                     .icon(IconName::CircleX)
                                     .ghost()
                                     .xsmall()
-                                    .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
-                                        view.remove_panel_context(id, index, cx);
+                                    .on_click(cx.listener(move |view,
+                                                          _: &ClickEvent,
+                                                          window,
+                                                          cx| {
+                                        view.remove_panel_context(id, index, window, cx);
                                         cx.notify();
                                     })),
                             )
