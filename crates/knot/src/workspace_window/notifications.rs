@@ -1,6 +1,9 @@
-//! Desktop notifications for agents that need the user's attention.
+//! Desktop notifications: agents that need the user's attention, and the
+//! MCP server that supervision could not keep up.
 //!
-//! Contract: `openspec/specs/desktop-notifications/spec.md`.
+//! Contract: `openspec/specs/desktop-notifications/spec.md`, and the
+//! `desktop-notifications` delta of
+//! `openspec/changes/supervise-mcp-server/` for the server's.
 //!
 //! The MCP tool catalog pushes `(agent id, message)` onto the shared
 //! awaiting-input queue whenever an agent's hook or ACP session reports
@@ -18,9 +21,38 @@ use uuid::Uuid;
 
 use crate::app_state::{notification_body, should_notify, should_show_awaiting_notice};
 use crate::app_support::AwaitingInput;
+use crate::mcp_status::{MCP_FAILURE_NOTIFICATION_TAG, McpServerStatus, should_notify_mcp_failure};
 use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceWindow {
+    /// Announces that supervision could not keep the MCP server up.
+    ///
+    /// Unlike every other notification here this one names no agent: it is
+    /// about the server every agent reaches Knot through, so a dead server
+    /// is noticed without opening settings.
+    ///
+    /// The marker is taken atomically, which is what makes this safe to run
+    /// from every open window: the first window to poll gets it and the
+    /// rest find the slot empty, so one episode raises exactly one
+    /// notification however many windows are open. With no window open the
+    /// marker waits in the slot.
+    pub(in crate::workspace_window) fn raise_mcp_failure_notification(&mut self,
+                                                                      cx: &mut Context<Self>) {
+        if !cx.has_global::<McpServerStatus>() {
+            return;
+        }
+        let claimed = cx.global::<McpServerStatus>().claim_failure();
+        if !should_notify_mcp_failure(self.settings.desktop_notifications_enabled, claimed) {
+            return;
+        }
+        cx.show_system_notification(SystemNotification {
+              tag:     MCP_FAILURE_NOTIFICATION_TAG.into(),
+              title:   knot_core::l10n::t("mcp_server.failure_title").into(),
+              body:    knot_core::l10n::t("mcp_server.failure_body").into(),
+              actions: Vec::new(),
+          });
+    }
+
     /// Drains the awaiting-input queue and raises a notification for each
     /// entry this workspace owns.
     ///

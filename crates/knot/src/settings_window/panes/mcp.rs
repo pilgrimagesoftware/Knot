@@ -10,10 +10,48 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::div;
 use gpui_kit::px;
+use knot_mcp::ServerState;
 
 use crate::settings_window::SettingsWindow;
 
 impl SettingsWindow {
+    /// The status row's text for `state`.
+    ///
+    /// One catalog entry per state, substituted through `t_with`, so each
+    /// reads as a sentence a translator wrote rather than as fragments
+    /// assembled here - and so a state's text can only mention what that
+    /// state carries. A running server has no attempt count and a retrying
+    /// one has no address, which is the point of the payloads living in the
+    /// variants.
+    pub(crate) fn mcp_state_text(state: &ServerState) -> String {
+        match state {
+            ServerState::Disabled => knot_core::l10n::t("settings.mcp.status_disabled"),
+            ServerState::Starting => knot_core::l10n::t("settings.mcp.status_starting"),
+            ServerState::Running { addr } => knot_core::l10n::t_with("settings.mcp.status_running",
+                                                                     &[("address",
+                                                                        &addr.to_string())]),
+            ServerState::Retrying { attempt, error, .. } => {
+                knot_core::l10n::t_with("settings.mcp.status_retrying",
+                                        &[("attempt", &attempt.to_string()), ("error", error)])
+            }
+            ServerState::Stopped => knot_core::l10n::t("settings.mcp.status_stopped"),
+        }
+    }
+
+    /// Whether the status row needs redrawing, remembering `current` when
+    /// it does.
+    ///
+    /// The poll that calls this runs whether or not anything changed, and a
+    /// `cx.notify()` per tick would repaint the settings window twice a
+    /// second for the whole time it is open.
+    pub(crate) fn mcp_state_changed(last: &mut ServerState, current: ServerState) -> bool {
+        if *last == current {
+            return false;
+        }
+        *last = current;
+        true
+    }
+
     /// Delegated so the URL shown here - and the `mcp add` command built
     /// from it below, which users copy verbatim - is the same one Knot
     /// hands its own agents over ACP. It was built separately and without
@@ -112,6 +150,16 @@ impl SettingsWindow {
                                     }
                                 }),
                             ),
+                    ))
+                    // Read-only, and offering no control of its own: the
+                    // toggle above turns the server off, and recovery from a
+                    // failure is automatic.
+                    .child(Self::text_row(
+                        knot_core::l10n::t("settings.mcp.status"),
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(Self::mcp_state_text(&self.last_mcp_state)),
                     )),
             )
             .child(
