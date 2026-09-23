@@ -11,7 +11,7 @@ impl AgentStore {
     pub fn create(&mut self, folder: impl Into<String>, opts: CreateOptions) -> Uuid {
         let folder = folder.into();
         let name = opts.name
-                       .unwrap_or_else(|| super::helpers::last_path_component(&folder));
+                       .unwrap_or_else(|| super::helpers::name_for_folder(&folder));
         let agent_type = opts.agent_type.unwrap_or_else(|| "claude".to_string());
         let agent = Agent { id: Uuid::new_v4(),
                             name,
