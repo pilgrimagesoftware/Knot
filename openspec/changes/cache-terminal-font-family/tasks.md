@@ -37,5 +37,5 @@
 - [x] 4.1 Run `make fmt` then `make` and verify the whole gate passes
       (fmt-check, size-check, clippy with `-D warnings`, workspace tests,
       build)
-- [ ] 4.2 Launch the app, open a shell agent's terminal and type a line, and
+- [x] 4.2 Launch the app, open a shell agent's terminal and type a line, and
       verify the echo keeps up with typing
