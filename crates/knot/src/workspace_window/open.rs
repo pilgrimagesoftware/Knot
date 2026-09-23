@@ -149,6 +149,7 @@ impl WorkspaceWindow {
                     process_generation: 0,
                     process_sampled_at: None,
                     process_sampling: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    process_failures: Arc::new(Mutex::new(Vec::new())),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     error: None,

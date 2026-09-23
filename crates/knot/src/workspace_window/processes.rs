@@ -40,14 +40,12 @@ impl WorkspaceWindow {
     /// not for the twenty-nine ticks a second that find nothing.
     pub(super) fn process_sampling_tick(&mut self) -> bool {
         let landed = self.drain_published_processes();
+        let refused = self.drain_process_failures();
         self.claim_process_sample();
-        landed
+        landed || refused
     }
 
     /// This agent's section, or `None` if it has never been opened.
-    // UNWIRED(#337): read and driven by the section's own rendering, which
-    // lands next.
-    #[allow(dead_code)]
     pub(super) fn process_section(&self, agent_id: Uuid) -> Option<&ProcessSection> {
         self.process_sections.get(&agent_id)
     }
@@ -56,9 +54,6 @@ impl WorkspaceWindow {
     ///
     /// Expanding is what starts the sampler: the next poll tick sees a
     /// non-empty observed set. Collapsing is what stops it.
-    // UNWIRED(#337): called by the section header's click handler, which
-    // lands next.
-    #[allow(dead_code)]
     pub(super) fn toggle_process_section(&mut self, agent_id: Uuid) -> bool {
         let expanded = self.process_sections.entry(agent_id).or_default().toggle();
 

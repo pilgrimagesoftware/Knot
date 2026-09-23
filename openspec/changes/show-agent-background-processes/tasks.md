@@ -57,38 +57,38 @@
 
 ## 4. Pane section UI
 
-- [ ] 4.1 Add the localization keys for the section label, count, column and classification
+- [x] 4.1 Add the localization keys for the section label, count, column and classification
       labels, row actions, terminate confirmation, empty states, and failure notices to
       `crates/knot-core/locales/en.yml`; verify the l10n key tests resolve each key (touch
       `knot-core` first so the catalog is not read from a stale build artifact).
-- [ ] 4.2 Build the collapsed section header showing the label and the background count (unknown
+- [x] 4.2 Build the collapsed section header showing the label and the background count (unknown
       before the first sample); verify a test asserts the three states — unknown, zero, positive.
-- [ ] 4.3 Build the expanded row list: background rows before foreground, longest-running first,
+- [x] 4.3 Build the expanded row list: background rows before foreground, longest-running first,
       each row showing single-line truncating command, runtime, PID, and classification; verify
       tests cover the ordering and that a long command renders one line with the trailing fields
       still present.
-- [ ] 4.4 Render the empty and failure states — not running, nothing spawned, sample failed while
+- [x] 4.4 Render the empty and failure states — not running, nothing spawned, sample failed while
       keeping the last successful list, and silent recovery; verify a test drives all four.
-- [ ] 4.5 Mount the section in both the terminal view and the ACP panel pane; verify a test
+- [x] 4.5 Mount the section in both the terminal view and the ACP panel pane; verify a test
       asserts the section is present in each.
 
 ## 5. Row actions
 
-- [ ] 5.1 Wire the terminate action: confirmation dialog naming the command, cancel changing
+- [x] 5.1 Wire the terminate action: confirmation dialog naming the command, cancel changing
       nothing, confirm running the `knot-processes` termination sequence on a blocking task, the
       row marked terminating until the next sample; verify tests cover confirm, cancel, and
       already-exited.
-- [ ] 5.2 Wire copy-PID and copy-command to the system clipboard, copying the untruncated command
+- [x] 5.2 Wire copy-PID and copy-command to the system clipboard, copying the untruncated command
       line; verify a test asserts the copied command has no ellipsis.
-- [ ] 5.3 Wire the process-viewer action through `open_in` to open Activity Monitor on macOS, and
+- [x] 5.3 Wire the process-viewer action through `open_in` to open Activity Monitor on macOS, and
       omit the action where no process viewer is known; verify a test asserts the action's
       presence on macOS and its absence otherwise.
-- [ ] 5.4 Surface a refused signal as a localized failure with the row left in place; verify a
+- [x] 5.4 Surface a refused signal as a localized failure with the row left in place; verify a
       test asserts the failure text resolves by key and the row survives.
 
 ## 6. Verification and close-out
 
-- [ ] 6.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
+- [x] 6.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
       `build` all pass on the workspace.
 - [ ] 6.2 Manually verify against a live agent: start a shell agent, launch a background server
       from it, confirm it appears as background with a plausible runtime, confirm a foreground

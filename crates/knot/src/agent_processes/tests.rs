@@ -255,8 +255,16 @@ fn an_agent_with_no_section_at_all_is_not_observed() {
 /// invisible at runtime - the app stays correct and merely runs `ps` at
 /// keystroke rate, which is exactly how `git diff --numstat` reached the
 /// render path three times.
+///
+/// It is the *blocking entry points* that are barred, not the crate:
+/// `render/processes_pane` rightly names `DescendantProcess` and `Activity`
+/// to draw a row from the snapshot it was handed.
 #[test]
-fn no_render_module_reaches_for_the_process_table() {
+fn no_render_module_calls_a_blocking_process_entry_point() {
+    const BLOCKING_CALLS: &[&str] = &["knot_processes::sample",
+                                      "knot_processes::terminate",
+                                      "sample_roots("];
+
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let render_paths = ["workspace_window/render", "panel_view", "terminal_view.rs"];
 
@@ -264,8 +272,10 @@ fn no_render_module_reaches_for_the_process_table() {
     for path in render_paths {
         visit_rust_files(&src.join(path), &mut |file| {
             let text = std::fs::read_to_string(file).expect("read a render source");
-            if text.contains("knot_processes") {
-                offenders.push(file.display().to_string());
+            for call in BLOCKING_CALLS {
+                if text.contains(call) {
+                    offenders.push(format!("{}: {call}", file.display()));
+                }
             }
         });
     }

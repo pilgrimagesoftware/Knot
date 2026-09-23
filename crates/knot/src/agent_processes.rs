@@ -49,10 +49,6 @@ pub(crate) struct ProcessSection {
     terminating: BTreeSet<u32>,
 }
 
-// UNWIRED(#337): the accessors are the section's render-side surface, which
-// lands with the section itself; the writers below are already called from
-// the sampler.
-#[allow(dead_code)]
 impl ProcessSection {
     pub(crate) fn is_expanded(&self) -> bool {
         self.expanded
@@ -89,6 +85,12 @@ impl ProcessSection {
 
     pub(crate) fn mark_terminating(&mut self, pid: u32) {
         self.terminating.insert(pid);
+    }
+
+    /// Drops the mark without waiting for a sample - what a refused signal
+    /// does, since no sample will ever remove a process that is still there.
+    pub(crate) fn clear_terminating(&mut self, pid: u32) {
+        self.terminating.remove(&pid);
     }
 
     /// Records a completed sample, clearing any failure notice.

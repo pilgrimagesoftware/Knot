@@ -190,6 +190,10 @@ pub(crate) struct WorkspaceWindow {
     /// twice. The same discipline `RefreshCache::claim_refresh` applies to
     /// `git diff`.
     pub(super) process_sampling:                 Arc<std::sync::atomic::AtomicBool>,
+    /// Terminations that were refused, queued by the blocking task and
+    /// drained by the poll - the same off-main-thread hand-off
+    /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
+    pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
