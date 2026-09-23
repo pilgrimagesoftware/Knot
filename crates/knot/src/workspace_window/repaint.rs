@@ -79,7 +79,7 @@ impl WorkspaceWindow {
         // in an unselected pane is the case this feature exists for.
         let pull_requests_recorded = self.drain_pull_requests();
         let prompts_completed = self.drain_prompt_results();
-        self.sync_panel_agent_states();
+        let panel_states_moved = self.sync_panel_agent_states();
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
         let spinner_dirty = self.spinner_repaint_due();
@@ -88,6 +88,7 @@ impl WorkspaceWindow {
         // `workspace_window::processes`.
         let processes_sampled = self.process_sampling_tick();
         if grid_dirty
+           || panel_states_moved
            || panel_dirty
            || spinner_dirty
            || activated
@@ -155,8 +156,17 @@ impl WorkspaceWindow {
     }
 
     /// Writes each ready panel session's lifecycle back to the store, so the
-    /// sidebar and dashboard show what the ACP session is actually doing.
-    fn sync_panel_agent_states(&mut self) {
+    /// sidebar and dashboard show what the ACP session is actually doing,
+    /// and says whether any of them moved.
+    ///
+    /// Reporting it matters because this is the only thing that notices an
+    /// *unselected* agent's turn ending: `panel_needs_repaint` consults the
+    /// selected slot alone, by design - you cannot see an unselected
+    /// panel - but the sidebar's state dot for that agent is on screen. Until
+    /// this was polled, the transition reached the store and stopped there,
+    /// and the dot caught up whenever something unrelated repainted the
+    /// window.
+    fn sync_panel_agent_states(&mut self) -> bool {
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
@@ -179,12 +189,15 @@ impl WorkspaceWindow {
                                    Some((*id, agent_state))
                                })
                                .collect::<Vec<_>>();
+        let mut moved = false;
         {
             let mut store = self.store.lock();
             for (id, state) in panel_states {
+                moved |= store.agent(id).is_some_and(|agent| agent.state != state);
                 store.set_state(id, state);
             }
         }
+        moved
     }
 
     /// Sends the next queued prompt to every agent that has one, and says
