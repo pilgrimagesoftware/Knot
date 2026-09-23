@@ -7,6 +7,8 @@
 //! `LIST_OVERDRAW`, fixed-height rows, and a viewport smaller than the
 //! content - so a failure here is about the predicate, not about markdown.
 
+use std::sync::Arc;
+
 use gpui_kit::AppContext;
 use gpui_kit::Bounds;
 use gpui_kit::Context;
@@ -23,12 +25,15 @@ use gpui_kit::VisualTestContext;
 use gpui_kit::Window;
 use gpui_kit::WindowBounds;
 use gpui_kit::WindowOptions;
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Root;
 use gpui_kit::div;
 use gpui_kit::point;
 use gpui_kit::px;
 use gpui_kit::size;
+use parking_lot::Mutex;
 
+use crate::panel_state::PanelState;
 use crate::panel_view;
 
 /// Every row the same height, so what the assertions mean is arithmetic
@@ -83,7 +88,7 @@ fn probe(cx: &mut TestAppContext, rows: usize)
 }
 
 /// Redraws, so the list lays out from whatever scroll position was just set.
-fn redraw(probe_cx: &mut VisualTestContext, probe: &Entity<ListProbe>) {
+fn redraw<P: Render>(probe_cx: &mut VisualTestContext, probe: &Entity<P>) {
     probe_cx.update(|_window, cx| probe.update(cx, |_, cx| cx.notify()));
     probe_cx.run_until_parked();
 }
@@ -170,4 +175,132 @@ fn an_empty_conversation_offers_no_jump(cx: &mut TestAppContext) {
     redraw(&mut probe_cx, &probe);
 
     assert!(!panel_view::scrolled_away_from_tail(&list, 0));
+}
+
+// ---------------------------------------------------------------------------
+// The production path
+// ---------------------------------------------------------------------------
+//
+// Everything above drives a list of blank fixed-height rows, which is what
+// makes the arithmetic legible but also what makes it a model. These drive
+// the real thing - a `PanelState` of real messages, reconciled by the real
+// `sync_row_count`, laid out by the real `render_panel` - so that a row
+// model whose heights come out differently than the probe's cannot pass the
+// tests above and still fail in the app.
+
+/// The panel as `workspace_window::panel::pane` builds it, minus the parts
+/// that need a session: real state, real rows, real reconciliation.
+struct PanelProbe {
+    state: Arc<Mutex<PanelState>>,
+    list:  ListState,
+    known: usize,
+}
+
+impl Render for PanelProbe {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        {
+            let state = self.state.lock();
+            self.known = panel_view::sync_row_count(&self.list, self.known, &state);
+        }
+        let theme = cx.theme();
+        let style = panel_view::PanelStyle { permission_risk:    panel_view::RiskLevel::Neutral,
+                                             markdown_font_size: px(14.),
+                                             mono_font_family:   theme.mono_font_family.clone(),
+                                             ui_font_family:     theme.font_family.clone(),
+                                             title_font_family:  theme.font_family.clone(),
+                                             danger_color:       theme.danger,
+                                             info_color:         theme.info,
+                                             border_color:       theme.border,
+                                             card_color:         theme.secondary,
+                                             prompt_color:       theme.primary,
+                                             prompt_foreground:  theme.primary_foreground,
+                                             compact_tool_calls: false, };
+        div().size_full()
+             .child(panel_view::render_panel(Arc::clone(&self.state),
+                                             self.list.clone(),
+                                             &style,
+                                             panel_view::PanelCallbacks::new(|_| {},
+                                                                             || {},
+                                                                             |_| {},
+                                                                             |_| {},
+                                                                             || {})))
+    }
+}
+
+/// A drawn window holding a conversation of `messages` user turns.
+fn panel_probe(cx: &mut TestAppContext, messages: usize)
+               -> (VisualTestContext, Entity<PanelProbe>, Arc<Mutex<PanelState>>, ListState) {
+    let mut state = PanelState::new();
+    for n in 0..messages {
+        state.push_user_message(format!("Message {n}: a line of conversation in the panel."));
+    }
+    // `push_user_message` opens a turn, which adds a trailing working row
+    // and would make the row count disagree with `messages`.
+    state.turn_active = false;
+    let state = Arc::new(Mutex::new(state));
+    let list = ListState::new(0, ListAlignment::Top, px(panel_view::LIST_OVERDRAW));
+    let mut probe = None;
+    let window = {
+        let probe = &mut probe;
+        let state = Arc::clone(&state);
+        let list = list.clone();
+        cx.update(|cx| {
+              gpui_kit::init(cx);
+              let bounds = Bounds { origin: point(px(0.), px(0.)),
+                                    size:   size(px(600.), px(VIEWPORT_HEIGHT)), };
+              cx.open_window(WindowOptions { window_bounds: Some(WindowBounds::Windowed(bounds)),
+                                             ..WindowOptions::default() },
+                             |window, cx| {
+                                 let view = cx.new(|_| PanelProbe { state,
+                                                                    list,
+                                                                    known: 0 });
+                                 *probe = Some(view.clone());
+                                 cx.new(|cx| Root::new(view, window, cx))
+                             })
+                .expect("the panel probe window should open")
+          })
+    };
+    let probe_cx = VisualTestContext::from_window(window.into(), cx);
+    probe_cx.run_until_parked();
+    (probe_cx, probe.expect("the probe was built"), state, list)
+}
+
+/// The reported bug, end to end on the real row model: the user reads back
+/// through a real conversation, the agent appends a real message, and the
+/// way back has to stay offered.
+#[gpui_kit::test]
+fn a_real_conversation_keeps_the_jump_offered_as_messages_arrive(cx: &mut TestAppContext) {
+    let (mut probe_cx, probe, state, list) = panel_probe(cx, ROW_COUNT);
+
+    list.scroll_to(ListOffset { item_ix:        0,
+                                offset_in_item: px(0.), });
+    redraw(&mut probe_cx, &probe);
+    let rows = list.item_count();
+    assert!(panel_view::scrolled_away_from_tail(&list, rows),
+            "40 real messages do not fit a 400px pane, so the jump is owed");
+
+    state.lock()
+         .push_user_message("One more, arriving while the user reads further up.".to_string());
+    state.lock().turn_active = false;
+    redraw(&mut probe_cx, &probe);
+
+    assert_eq!(list.item_count(),
+               rows + 1,
+               "the appended message should have been spliced in");
+    assert!(panel_view::scrolled_away_from_tail(&list, list.item_count()),
+            "this is the reported defect: the control vanished exactly here");
+}
+
+/// The other half, so the test above cannot be satisfied by always
+/// answering yes: a real conversation parked at its newest message offers
+/// nothing.
+#[gpui_kit::test]
+fn a_real_conversation_at_its_newest_message_offers_no_jump(cx: &mut TestAppContext) {
+    let (mut probe_cx, probe, _state, list) = panel_probe(cx, ROW_COUNT);
+
+    list.scroll_to_end();
+    redraw(&mut probe_cx, &probe);
+
+    assert!(!panel_view::scrolled_away_from_tail(&list, list.item_count()),
+            "parked at the newest message, there is nowhere to jump to");
 }
