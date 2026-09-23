@@ -3839,6 +3839,7 @@ dependencies = [
 name = "knot-core"
 version = "1.14.0"
 dependencies = [
+ "arc-swap",
  "directories",
  "plist",
  "rust-i18n",

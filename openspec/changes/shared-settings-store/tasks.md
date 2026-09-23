@@ -2,19 +2,19 @@
 
 ## 1. The shared handle
 
-- [ ] 1.1 Promote `arc-swap` to a direct `[workspace.dependencies]` entry at the
+- [x] 1.1 Promote `arc-swap` to a direct `[workspace.dependencies]` entry at the
       version already resolved in `Cargo.lock`, add it to `knot-core`, and
       verify `cargo build --workspace` succeeds with no new lockfile churn.
-- [ ] 1.2 Add a shared settings handle to `knot-core` wrapping
+- [x] 1.2 Add a shared settings handle to `knot-core` wrapping
       `ArcSwap<Settings>`: a read returning `Arc<Settings>`, and a
       read-modify-swap write that applies a closure to a clone of the current
       value and installs it. Verify with a test that a write is visible to a
       handle read afterwards and invisible to an `Arc` taken before it.
-- [ ] 1.3 Make the write a compare-and-retry (`rcu`-style) rather than a bare
+- [x] 1.3 Make the write a compare-and-retry (`rcu`-style) rather than a bare
       store, so two writers cannot drop each other's change. Verify with a
       test that interleaves two writes of different fields and asserts both
       survive.
-- [ ] 1.4 Register the handle as a GPUI global in `knot`, alongside
+- [x] 1.4 Register the handle as a GPUI global in `knot`, alongside
       `WindowRegistry` and `QuitGuard`, seeded from the `Settings::load()` that
       `app_bootstrap` already performs. Verify the app builds and starts with
       nothing yet reading the global.

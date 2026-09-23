@@ -536,6 +536,12 @@ pub(crate) fn run() {
                                // application menu from the process name.
                                app_support::set_process_name(&knot_core::l10n::t("app.name"));
                                gpui_kit::init(cx);
+                               // Before every other global and before the
+                               // first window: they read settings, and a
+                               // window that opened without the surface
+                               // installed would be holding nothing to
+                               // read. See `settings_global`.
+                               crate::settings_global::install(settings.clone(), cx);
                                // Before the first window: a stored Light or
                                // Dark has to be in the first frame, not
                                // arrive as a repaint after one.
