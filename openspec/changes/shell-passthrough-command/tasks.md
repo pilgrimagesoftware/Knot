@@ -2,35 +2,35 @@
 
 ## 1. Shell runner in `knot-processes`
 
-- [ ] 1.1 Add `SHELL_OUTPUT_LIMIT` and `SHELL_TIMEOUT` to
+- [x] 1.1 Add `SHELL_OUTPUT_LIMIT` and `SHELL_TIMEOUT` to
       `crates/knot-processes/src/consts.rs` beside `DEFAULT_TIMEOUT`, with a
       comment saying why the shell timeout is not `DEFAULT_TIMEOUT`; verify
       `make lint` passes with no unused-constant warning once 1.3 uses them.
-- [ ] 1.2 Add `ShellStatus` (`Running`, `Exited { code }`, `Signalled`,
+- [x] 1.2 Add `ShellStatus` (`Running`, `Exited { code }`, `Signalled`,
       `Cancelled`, `TimedOut`, `FailedToStart { message }`) and `ShellRunState`
       (stdout buffer, stderr buffer, per-stream truncation flags, status) in a
       new `crates/knot-processes/src/shell/state.rs`; verify unit tests cover
       appending past `SHELL_OUTPUT_LIMIT` — the buffer stops at the limit,
       keeps the head, and sets the truncated flag.
-- [ ] 1.3 Implement `spawn` in `crates/knot-processes/src/shell/run.rs`:
+- [x] 1.3 Implement `spawn` in `crates/knot-processes/src/shell/run.rs`:
       `$SHELL -lc <command>` falling back to `/bin/sh -c`, cwd from the caller,
       stdin closed, both pipes drained on worker threads into `ShellRunState`,
       child placed in its own process group; verify a test running `echo hi`
       in a temp dir reports `Exited { code: 0 }` with `hi` on stdout, and one
       running `pwd` reports that temp dir.
-- [ ] 1.4 Implement the poll loop's timeout kill and a `cancel()` that signals
+- [x] 1.4 Implement the poll loop's timeout kill and a `cancel()` that signals
       the process group; verify tests that a command sleeping past a short
       injected timeout ends `TimedOut`, that `cancel()` ends it `Cancelled`,
       and that in both cases output captured before termination survives.
-- [ ] 1.5 Expose a `ShellRun` handle carrying `Arc<Mutex<ShellRunState>>`, an
+- [x] 1.5 Expose a `ShellRun` handle carrying `Arc<Mutex<ShellRunState>>`, an
       `Arc<AtomicBool>` dirty flag set on every append, and a clearing
       `take_dirty()`; verify a test that appends set the flag and
       `take_dirty()` clears it exactly once.
-- [ ] 1.6 Add `ShellError` variants to `crates/knot-processes/src/error.rs` for
+- [x] 1.6 Add `ShellError` variants to `crates/knot-processes/src/error.rs` for
       a shell that cannot be launched, re-exported through the crate `Result`;
       verify spawning with a bogus shell path yields `FailedToStart` with the
       OS message rather than a panic.
-- [ ] 1.7 Declare the `shell` module in `crates/knot-processes/src/lib.rs` with
+- [x] 1.7 Declare the `shell` module in `crates/knot-processes/src/lib.rs` with
       re-exports only — no implementation in a `mod.rs`; verify `make
       size-check` and `make test` pass for the crate.
 
