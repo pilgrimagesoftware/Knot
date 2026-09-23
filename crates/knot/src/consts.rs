@@ -110,6 +110,13 @@ pub(crate) const PULL_REQUEST_ROW_TINT: f32 = 0.10;
 /// against and the colour does the identifying.
 pub(crate) const PULL_REQUEST_ROW_BORDER_TINT: f32 = 0.55;
 
+/// How wide the workspace name dialog is, in pixels.
+///
+/// Narrower than the dialog host's 448px default: the dialog holds one
+/// single-line name field, and a box twice as wide as its contents reads as
+/// an empty one.
+pub(crate) const WORKSPACE_DIALOG_WIDTH: f32 = 360.;
+
 /// The colour a workspace gets when it has none, or when the one it has
 /// stored will not parse.
 pub(crate) const COLOR_WORKSPACE_DEFAULT: u32 = 0x1B4FB2;

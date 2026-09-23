@@ -301,6 +301,8 @@ workspace_manager:
   rename: "Rename workspace"
   delete: "Delete workspace"
   delete_title: "Delete Workspace?"
+  delete_body: "Delete \"%{name}\" and its agents?"
+  this_workspace: "this workspace"
   new_title: "New Workspace"
   rename_title: "Rename Workspace"
   save: "Save"
