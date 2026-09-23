@@ -74,12 +74,12 @@
 
 - [x] 7.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
       `build` all pass on the workspace.
-- [ ] 7.2 Manually verify with a packaged build — `make package` and `Knot.app` — that
+- [x] 7.2 Manually verify with a packaged build — `make package` and `Knot.app` — that
       `~/Library/Logs/Knot/` holds the log, that connecting an agent produces request and response
       entries, and that a tool call's argument values do not appear in the file.
-- [ ] 7.3 Manually verify the heartbeat: leave the app idle past two intervals and confirm two
+- [x] 7.3 Manually verify the heartbeat: leave the app idle past two intervals and confirm two
       heartbeat lines with zero requests, then make several tool calls and confirm the next
       heartbeat reports that count and the one after it reports zero.
-- [ ] 7.4 Manually verify rotation by lowering the cap in a scratch build, driving enough traffic
+- [x] 7.4 Manually verify rotation by lowering the cap in a scratch build, driving enough traffic
       to roll several times, and confirming the retained file count and that no entry is lost
       across a roll.
