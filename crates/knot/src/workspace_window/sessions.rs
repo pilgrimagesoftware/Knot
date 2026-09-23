@@ -23,6 +23,7 @@ use crate::app_state::apply_terminal_status;
 use crate::panel_session;
 use crate::panel_state;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::pane_focus::FocusTarget;
 use crate::workspace_window::runs_a_terminal_process;
 
 impl WorkspaceWindow {
@@ -287,8 +288,11 @@ impl WorkspaceWindow {
         self.forget_awaiting_notification(id);
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
-        if self.focused_composer == Some(id) {
-            self.focused_composer = None;
+        // Whichever target it named: the agent is gone, so a later frame
+        // must read the next selection as a transition rather than as the
+        // same answer it already stored.
+        if self.focused_pane.map(FocusTarget::agent) == Some(id) {
+            self.focused_pane = None;
         }
         self.panel_prompt_input_subscriptions.remove(&id);
         self.panel_prompt_queues.remove(&id);

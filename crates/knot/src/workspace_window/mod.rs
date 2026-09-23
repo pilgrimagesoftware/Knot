@@ -8,12 +8,12 @@
 mod agent_row;
 mod agents;
 mod chrome;
-pub(crate) mod composer_focus;
 mod creation;
 mod git_panel;
 mod menus;
 mod notifications;
 mod open;
+pub(crate) mod pane_focus;
 pub(crate) mod panel;
 mod process_actions;
 mod processes;
