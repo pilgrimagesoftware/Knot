@@ -16,19 +16,8 @@ mod appearance;
 mod broadcast_sheet;
 mod command_center;
 mod commit_window;
-// UNWIRED(#396): the composer's scanner. It decides where the styled runs
-// are; the decoration collections that ask it are the next step of the
-// rich-prompt-composer change, and nothing outside its own tests calls it
-// until they land. The allow comes off in the same commit they do.
-//
-// Its tests are therefore not coverage of anything the user can reach yet,
-// which `composer_scan/tests/mod.rs` says too.
-//
-// `unused_imports` rides along because the module's re-exports are its
-// intended surface, and an unused re-export is the same absent caller the
-// `dead_code` allow is about.
-#[allow(dead_code, unused_imports)]
 mod composer_scan;
+mod composer_style;
 mod consts;
 mod controls;
 mod dashboard;

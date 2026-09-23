@@ -22,6 +22,7 @@ use gpui_kit::component::input::EditorState;
 use gpui_kit::component::input::InputEvent;
 use uuid::Uuid;
 
+use crate::composer_style::Palette;
 use crate::panel_session;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::prompt_queue;
@@ -141,6 +142,7 @@ impl WorkspaceWindow {
                                 .entry(id)
                                 .or_default()
                                 .extend(paths);
+                            view.restyle_panel_attachments(id, Palette::of(cx), cx);
                             cx.notify();
                         });
                 });
@@ -183,15 +185,24 @@ impl WorkspaceWindow {
                 attached = true;
             }
         }
+        if attached {
+            self.restyle_panel_attachments(id, Palette::of(cx), cx);
+        }
         attached
     }
 
     /// Removes one attached path from `id`'s pending context by index.
-    pub(in crate::workspace_window) fn remove_panel_context(&mut self, id: Uuid, index: usize) {
-        if let Some(paths) = self.panel_pending_context.get_mut(&id)
-           && index < paths.len()
-        {
-            paths.remove(index);
+    pub(in crate::workspace_window) fn remove_panel_context(&mut self, id: Uuid, index: usize,
+                                                            cx: &mut App) {
+        let removed = match self.panel_pending_context.get_mut(&id) {
+            Some(paths) if index < paths.len() => {
+                paths.remove(index);
+                true
+            }
+            _ => false,
+        };
+        if removed {
+            self.restyle_panel_attachments(id, Palette::of(cx), cx);
         }
     }
 
@@ -259,6 +270,7 @@ impl WorkspaceWindow {
         let shift_to_send = self.settings.agent_panel_shift_enter_sends;
         let max_rows = panel_input_max_rows(self.panel_input_expanded.contains(&id));
         let input = new_panel_input(shift_to_send, max_rows, window, cx);
+        let palette = Palette::of(cx);
         let subscription = cx.subscribe_in(&input,
                                            window,
                                            move |view: &mut Self, input, event, window, cx| {
@@ -267,6 +279,16 @@ impl WorkspaceWindow {
                                                        if sends_on(shift_to_send, *shift) =>
                                                    {
                                                        view.send_panel_prompt(id, window, cx);
+                                                   }
+                                                   // Every way text arrives reports
+                                                   // here - typing, paste, undo, redo,
+                                                   // cut, a drag of text and the
+                                                   // lookup's own insertion - so one
+                                                   // arm restyles for all of them.
+                                                   InputEvent::Change => {
+                                                       let palette = Palette::of(cx);
+                                                       view.restyle_panel_composer(id, palette, cx);
+                                                       cx.notify();
                                                    }
                                                    // Focus leaving the input closes the
                                                    // slash lookup, per its dismissal rules
@@ -284,6 +306,10 @@ impl WorkspaceWindow {
         self.panel_prompt_inputs.insert(id, input.clone());
         self.panel_prompt_input_subscriptions
             .insert(id, subscription);
+        // After the entity is in the map, since the styling reads it back
+        // out: a draft restored into a fresh composer is styled here, with
+        // no edit to trigger it.
+        self.ensure_panel_styling(id, palette, cx);
         input
     }
 

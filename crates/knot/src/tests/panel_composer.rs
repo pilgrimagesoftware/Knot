@@ -34,6 +34,9 @@ use gpui_kit::component::Root;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::div;
 
+use crate::composer_scan::Construct;
+use crate::composer_style::ComposerStyling;
+use crate::composer_style::Palette;
 use crate::workspace_window::panel::prompt::PANEL_INPUT_ROWS_COLLAPSED;
 use crate::workspace_window::panel::prompt::PANEL_INPUT_ROWS_EXPANDED;
 use crate::workspace_window::panel::prompt::PanelInput;
@@ -273,4 +276,146 @@ fn a_long_line_is_not_turned_into_a_horizontal_scroll(cx: &mut TestAppContext) {
     assert_eq!(value(&mut cx, &input),
                long,
                "wrapping is presentation: the buffer holds one line however it is drawn");
+}
+
+/// The styling for a composer holding `text`, and the composer itself.
+///
+/// Built the way the window builds it: the text is in the buffer *before*
+/// the styling exists, which is the shape a restored draft arrives in.
+fn styled(cx: &mut TestAppContext, text: &str)
+          -> (VisualTestContext, Entity<PanelInputState>, ComposerStyling) {
+    let (mut cx, input, _) = composer(cx, false);
+    let text = text.to_string();
+    input.update_in(&mut cx, |state, window, cx| {
+             state.set_value(text, window, cx)
+         });
+    cx.run_until_parked();
+    let styling = cx.update(|_, cx| {
+                        let palette = Palette::of(cx);
+                        ComposerStyling::new(&input, &[], palette, cx)
+                    });
+    (cx, input, styling)
+}
+
+/// Which constructs the styling currently paints.
+fn constructs(styling: &ComposerStyling) -> Vec<Construct> {
+    let mut found: Vec<Construct> = styling.spans().iter().map(|span| span.construct).collect();
+    found.sort_unstable();
+    found.dedup();
+    found
+}
+
+/// `panel-rich-input`: "A restored draft is styled" - without the user
+/// editing it, which is what makes this a test about arrival rather than
+/// about change.
+#[gpui_kit::test]
+fn a_restored_draft_is_styled_on_arrival(cx: &mut TestAppContext) {
+    let (_cx, _input, styling) = styled(cx, "# Plan\n\nSend `make lint` and **fix** it.");
+
+    assert_eq!(constructs(&styling),
+               vec![Construct::Strong, Construct::InlineCode, Construct::Heading],
+               "every construct in the restored text should be styled with no edit to trigger it");
+}
+
+/// `panel-rich-input`: "Styling survives every way the composer changes".
+///
+/// Typing, a multi-line paste and a cut are all one path - the buffer
+/// changed - so what this checks is that the path is actually taken and
+/// lands on the same answer a fresh scan would.
+#[gpui_kit::test]
+fn styling_follows_the_buffer_however_it_changes(cx: &mut TestAppContext) {
+    let (mut cx, input, mut styling) = styled(cx, "plain prose");
+    assert!(constructs(&styling).is_empty(),
+            "the fixture starts unstyled");
+
+    // Typed.
+    cx.simulate_keystrokes("space * a *");
+    cx.run_until_parked();
+    let changed = cx.update(|_, cx| styling.on_change(&input, &[], cx));
+    assert!(changed,
+            "typing changed the buffer, so it has to have restyled");
+    assert_eq!(constructs(&styling), vec![Construct::Emphasis]);
+
+    // Pasted, as a whole document arriving at once.
+    input.update_in(&mut cx, |state, window, cx| {
+             state.set_value("## Title\n\n- one\n\n```\ncode\n```".to_string(),
+                             window,
+                             cx);
+         });
+    cx.run_until_parked();
+    cx.update(|_, cx| styling.on_change(&input, &[], cx));
+    assert_eq!(constructs(&styling),
+               vec![Construct::CodeFence,
+                    Construct::Heading,
+                    Construct::ListMarker],
+               "a pasted document is styled as though it had been typed");
+
+    // Cut back to nothing.
+    input.update_in(&mut cx, |state, window, cx| {
+             state.set_value(String::new(), window, cx);
+         });
+    cx.run_until_parked();
+    cx.update(|_, cx| styling.on_change(&input, &[], cx));
+    assert!(constructs(&styling).is_empty(),
+            "an emptied buffer keeps no spans from what used to be in it");
+}
+
+/// A buffer that did not change must not cost a rescan - this is the
+/// guard on the composer re-rendering per keystroke.
+#[gpui_kit::test]
+fn an_unchanged_buffer_is_not_restyled(cx: &mut TestAppContext) {
+    let (mut cx, input, mut styling) = styled(cx, "**unchanged**");
+
+    let changed = cx.update(|_, cx| styling.on_change(&input, &[], cx));
+
+    assert!(!changed,
+            "nothing changed, so nothing should have been repainted");
+}
+
+/// `panel-rich-input`: "Styling never changes the text".
+///
+/// The strongest form available without a live agent: the buffer is
+/// compared byte for byte across a full styling pass, markers included.
+/// That the *agent* receives it unchanged follows from `send_panel_prompt`
+/// reading this same value, and is walked through by hand in a debug
+/// build.
+#[gpui_kit::test]
+fn styling_leaves_the_buffer_byte_identical(cx: &mut TestAppContext) {
+    let original = "# Heading\n\n**ship it** with `code`, a [link](a.md) and /review @lib.rs";
+    let (mut cx, input, mut styling) = styled(cx, original);
+
+    assert!(!constructs(&styling).is_empty(),
+            "the fixture has to be styled, or this is vacuous");
+
+    cx.update(|_, cx| styling.on_change(&input, &[], cx));
+    let after = value(&mut cx, &input);
+
+    assert_eq!(after, original,
+               "styling is presentation: not one marker character may be added, removed or moved");
+}
+
+/// An appearance switch repaints without touching the spans, which is what
+/// lets it hang off the frame GPUI already draws.
+#[gpui_kit::test]
+fn an_appearance_switch_repaints_without_rescanning(cx: &mut TestAppContext) {
+    let (mut cx, _input, mut styling) = styled(cx, "**ship it**");
+    let before = styling.spans().to_vec();
+
+    let same = cx.update(|_, cx| {
+                     let palette = Palette::of(cx);
+                     styling.on_palette(palette, cx)
+                 });
+    assert!(!same, "the same palette is not a repaint");
+
+    let flipped = cx.update(|_, cx| {
+                        let mut palette = Palette::of(cx);
+                        palette.is_dark = !palette.is_dark;
+                        palette.foreground = gpui_kit::hsla(0.5, 0.5, 0.5, 1.);
+                        styling.on_palette(palette, cx)
+                    });
+
+    assert!(flipped, "a different appearance has to repaint");
+    assert_eq!(styling.spans(),
+               before,
+               "the spans do not depend on the theme, so a repaint must not have moved them");
 }

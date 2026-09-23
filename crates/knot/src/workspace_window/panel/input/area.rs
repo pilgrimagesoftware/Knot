@@ -17,6 +17,7 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use uuid::Uuid;
 
+use crate::composer_style::Palette;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::panel::prompt::PanelInputState;
 use crate::workspace_window::prompt_queue::QueuedPanelPrompt;
@@ -39,6 +40,12 @@ impl WorkspaceWindow {
         if !turn_active {
             self.panel_stopping.remove(&id);
         }
+        // An appearance switch re-renders without editing, so this frame
+        // is the only place a theme change can reach the styling. It
+        // compares a palette and returns unless the appearance actually
+        // flipped - spans do not depend on the theme, so this repaints and
+        // never rescans.
+        self.repaint_panel_styling_for_theme(id, Palette::of(cx), cx);
         // Built before the element chain below, which borrows `self`
         // immutably: the lookup's registry is memoized per agent, so
         // producing the popup needs `&mut self`.
@@ -60,6 +67,7 @@ impl WorkspaceWindow {
                                    .entry(id)
                                    .or_default()
                                    .extend(paths.paths().iter().cloned());
+                               view.restyle_panel_attachments(id, Palette::of(cx), cx);
                                cx.notify();
                            }))
                 .children(Self::render_panel_context_chips(id, pending_context, cx))

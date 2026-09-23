@@ -30,11 +30,11 @@
 
 ## 5. Painting the styling
 
-- [ ] 5.1 Build the three decoration collections — attachment chips, tokens, markdown, created in that order for precedence — from `cx.theme()` at build time; verify each treatment is visually distinct in a debug build
-- [ ] 5.2 Drive a rebuild from `InputEvent::Change` through the dirty-region scanner; verify typing, pasting, undo, redo, cut and drag-of-text each leave every range styled as though the text had been typed
-- [ ] 5.3 Style the composer on arrival of text it did not receive by keystroke — a restored draft and a lookup insertion; verify a restored markdown draft is styled with no edit
-- [ ] 5.4 Verify no treatment relies on hue alone: each also carries weight, slant or a background, and every one stays legible in both system appearances; check a light/dark switch restyles with no edit
-- [ ] 5.5 Verify the buffer is untouched by styling — send a prompt containing markdown and assert the agent receives it byte-identical, and assert copying a styled token yields its raw characters
+- [x] 5.1 Build the three decoration collections — attachment chips, tokens, markdown, created in that order for precedence — from `cx.theme()` at build time; verify each treatment is visually distinct in a debug build
+- [x] 5.2 Drive a rebuild from `InputEvent::Change` through the dirty-region scanner; verify typing, pasting, undo, redo, cut and drag-of-text each leave every range styled as though the text had been typed
+- [x] 5.3 Style the composer on arrival of text it did not receive by keystroke — a restored draft and a lookup insertion; verify a restored markdown draft is styled with no edit
+- [x] 5.4 Verify no treatment relies on hue alone: each also carries weight, slant or a background, and every one stays legible in both system appearances; check a light/dark switch restyles with no edit
+- [x] 5.5 Verify the buffer is untouched by styling — send a prompt containing markdown and assert the agent receives it byte-identical, and assert copying a styled token yields its raw characters
 
 ## 6. `@` file mentions
 

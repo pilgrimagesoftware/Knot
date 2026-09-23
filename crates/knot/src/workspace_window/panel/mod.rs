@@ -6,6 +6,7 @@
 //! - [`input`] draws the composer.
 //! - [`lookup`] completes slash commands and skills inside the composer.
 //! - [`prompt`] moves text from the composer to the agent.
+//! - [`styling`] keeps the composer's styled runs in step with it.
 //!
 //! Every item here is an inherent method on
 //! [`super::WorkspaceWindow`]; the modules carve the impl up by concern,
@@ -16,3 +17,4 @@ pub(crate) mod lookup;
 mod pane;
 pub(crate) mod prompt;
 mod session;
+mod styling;

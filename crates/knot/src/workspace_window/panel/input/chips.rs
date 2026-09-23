@@ -51,7 +51,7 @@ impl WorkspaceWindow {
                                     .ghost()
                                     .xsmall()
                                     .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
-                                        view.remove_panel_context(id, index);
+                                        view.remove_panel_context(id, index, cx);
                                         cx.notify();
                                     })),
                             )

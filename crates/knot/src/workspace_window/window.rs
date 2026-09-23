@@ -24,6 +24,7 @@ use uuid::Uuid;
 use super::panel;
 use super::prompt_queue::QueuedPanelPrompt;
 use super::view_mode::WorkspaceViewMode;
+use crate::composer_style::ComposerStyling;
 use crate::dashboard;
 use crate::panel_session;
 use crate::panel_state;
@@ -161,6 +162,11 @@ pub(crate) struct WorkspaceWindow {
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    /// Each Panel-mode composer's styled runs: its three decoration
+    /// collections, the buffer they describe and the palette they were
+    /// painted from. Created with the composer entity, so a restored draft
+    /// arrives styled; see `panel::styling`.
+    pub(super) panel_composer_styling:           BTreeMap<Uuid, ComposerStyling>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     pub(super) panel_input_expanded:             BTreeSet<Uuid>,
