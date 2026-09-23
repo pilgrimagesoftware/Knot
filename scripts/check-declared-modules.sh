@@ -9,6 +9,12 @@
 # in that file - the worst shape a regression can take, because it looks like
 # success.
 #
+# `cargo clippy --all-targets` passes too, and for the same reason: clippy sees
+# only what the crate graph reaches. So an undeclared file also accumulates
+# dead code, unused imports and lint violations invisibly, and the bill arrives
+# as a wall of errors for whoever finally declares it. A dropped test count is
+# the gentler half of this.
+#
 # The moment this happens is a merge. Two branches that each add a test module
 # insert into the same sorted run of `mod` lines in the same declaring file,
 # git reports a conflict rather than merging them, and resolving it by keeping
@@ -71,9 +77,18 @@ while IFS= read -r file; do
     fi
 
     checked=$((checked + 1))
-    # `mod foo;`, `pub mod foo;`, `pub(crate) mod foo;`, `#[cfg(test)] mod foo;`
-    # on one line - all of which the workspace uses.
-    if ! grep -qE "(^|[[:space:]])mod[[:space:]]+${base}[[:space:]]*;" "$owner"; then
+    # Line comments are stripped first, because `// mod foo;` otherwise
+    # satisfies the grep - and a declaration commented out during debugging and
+    # never restored is one of the ways a module goes quiet in the first place.
+    # (A `mod` inside a /* block comment */ would still slip through. Not worth
+    # parsing Rust for; the workspace has none.)
+    #
+    # The pattern deliberately allows any prefix, which covers every form in
+    # the tree: bare `mod foo;` (281), `pub mod foo;` (52), `pub(crate) mod
+    # foo;` (10) and `pub(super) mod foo;` (9), plus `#[cfg(test)] mod foo;`
+    # on one line.
+    if ! sed 's,//.*,,' "$owner" \
+        | grep -qE "(^|[[:space:]])mod[[:space:]]+${base}[[:space:]]*;"; then
         printf '%s: not declared in %s\n' "$file" "$owner" >&2
         missing=$((missing + 1))
     fi
