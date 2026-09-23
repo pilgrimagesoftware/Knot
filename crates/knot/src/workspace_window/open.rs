@@ -109,6 +109,10 @@ impl WorkspaceWindow {
                     git_panel_width: BTreeMap::new(),
                     git_action_error: BTreeMap::new(),
                     pending_git_actions: BTreeMap::new(),
+                    pending_git_commits: BTreeMap::new(),
+                    git_diff_lists: BTreeMap::new(),
+                    git_diff_row_counts: BTreeMap::new(),
+                    git_panel_resize: BTreeMap::new(),
                     pull_request_states:
                         crate::pull_request_state::PullRequestStateCache::default(),
                     forge_status: crate::pull_request_state::ForgeStatus::default(),

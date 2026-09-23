@@ -14,6 +14,7 @@ mod app_state;
 mod app_support;
 mod broadcast_sheet;
 mod command_center;
+mod commit_window;
 mod consts;
 mod controls;
 mod dashboard;

@@ -123,7 +123,16 @@ impl WorkspaceWindow {
         }
     }
 
-    pub(super) fn git_panel_width(&self, id: Uuid) -> f32 {
+    /// One agent's folder, copied out so the store lock is not held across
+    /// the element tree that follows.
+    pub(in crate::workspace_window) fn agent_folder(&self, id: Uuid) -> Option<String> {
+        self.store
+            .lock()
+            .agent(id)
+            .map(|agent| agent.folder.clone())
+    }
+
+    pub(in crate::workspace_window) fn git_panel_width(&self, id: Uuid) -> f32 {
         self.git_panel_width
             .get(&id)
             .copied()

@@ -9,6 +9,10 @@
 //! Contract: `openspec/specs/git-panel-ui/spec.md`.
 
 pub(super) mod actions;
+mod commit;
+mod confirm;
+mod diff_pane;
 mod reads;
+mod render;
 mod view;
 mod watch;

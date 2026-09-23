@@ -62,6 +62,11 @@ pub(crate) const GIT_PANEL_MAX_WIDTH: f32 = 800.;
 /// hundred thousand lines should not be held in memory per selected row.
 pub(crate) const GIT_DIFF_MAX_LINES: usize = 20_000;
 
+/// How much space above and below the diff viewport the list measures, so
+/// scrolling a diff does not pop lines in at the edges. The conversation
+/// panel's own overdraw, for the same reason.
+pub(crate) const GIT_DIFF_LIST_OVERDRAW: f32 = 400.;
+
 /// How stale a pull request's fetched state may get before the Pull Requests
 /// view asks for it again.
 ///

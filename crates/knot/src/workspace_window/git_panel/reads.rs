@@ -64,6 +64,9 @@ impl WorkspaceWindow {
         self.git_diffs.retain(|key| key.agent != id);
         self.git_selection.remove(&id);
         self.git_action_error.remove(&id);
+        self.git_panel_width.remove(&id);
+        self.git_panel_resize.remove(&id);
+        self.forget_git_diff_list(id);
     }
 
     /// Invalidates what the panel knows about `id` after the panel itself

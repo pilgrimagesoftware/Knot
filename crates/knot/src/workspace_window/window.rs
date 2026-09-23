@@ -239,6 +239,23 @@ pub(crate) struct WorkspaceWindow {
     /// Drained by `drain_git_actions`, which is what invalidates the caches
     /// and resumes the watch - the blocking task has no GPUI context.
     pub(super) pending_git_actions: BTreeMap<Uuid, super::git_panel::actions::GitActionSlot>,
+    /// Commits in flight, per agent. Tracked here as well as in the commit
+    /// window: the window shows the outcome, but the tree behind it is what
+    /// has to be re-read, and the window cannot reach these caches.
+    pub(super) pending_git_commits: BTreeMap<Uuid, crate::commit_window::CommitOutcome>,
+    /// One virtualized diff list per agent with an open panel. One per agent
+    /// rather than per selected file: only one diff is on screen at a time,
+    /// so a second entry would be a leak rather than a cache.
+    pub(super) git_diff_lists:                   BTreeMap<Uuid, ListState>,
+    /// The row count each `git_diff_lists` entry was last reconciled to, so a
+    /// selection change splices rather than keeping measured heights against
+    /// different content.
+    pub(super) git_diff_row_counts:              BTreeMap<Uuid, usize>,
+    /// The divider between an agent's content and its git panel, one per
+    /// agent with an open panel. Held here rather than keyed inside the
+    /// element tree for the reason `sidebar_resize` is: the width is read
+    /// outside the group too, to seed the panel's own size.
+    pub(super) git_panel_resize:                 BTreeMap<Uuid, Entity<ResizableState>>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can

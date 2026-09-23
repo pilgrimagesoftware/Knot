@@ -2,7 +2,9 @@
 //! selected agent's header strip and the pane below it (terminal, panel,
 //! markdown viewer, or the dashboard).
 
+use gpui_kit::AppContext;
 use gpui_kit::Context;
+use gpui_kit::Entity;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
@@ -11,9 +13,13 @@ use gpui_kit::Window;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::component::resizable::h_resizable;
+use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::div;
 use gpui_kit::px;
 
+use crate::consts;
 use crate::terminal_view;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::terminal_cell_size;
@@ -76,17 +82,28 @@ impl WorkspaceWindow {
                                             // input area's
                                             // control row and Send button below
                                             // the window edge.
-                                            v_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    // The pane goes in a `flex_1().min_h_0()` box of its own
-                    // because the processes section is its sibling below:
-                    // every pane inside styles itself `size_full`, which
-                    // would otherwise overflow this column by exactly the
-                    // section's height.
-                    .child(v_flex().flex_1().min_h_0().w_full().child(
-                        self.selected_agent
+                                            v_flex().flex_1()
+                                                    .min_h_0()
+                                                    .w_full()
+                                                    // The pane goes in a `flex_1().min_h_0()` box
+                                                    // of its own
+                                                    // because the processes section is its sibling
+                                                    // below:
+                                                    // every pane inside styles itself `size_full`,
+                                                    // which
+                                                    // would otherwise overflow this column by
+                                                    // exactly the
+                                                    // section's height.
+                                                    // The pane is built first and handed to
+                                                    // `with_git_panel`, which puts the git panel
+                                                    // beside it
+                                                    // when that panel is open. Two statements
+                                                    // rather than
+                                                    // one expression: both borrow `self` mutably,
+                                                    // so they
+                                                    // cannot be nested in a single call.
+                                                    .child({
+                                                        let pane = self.selected_agent
                                     .and_then(|id| {
                                         let (is_panel_mode, markdown_file, diagram, stopped) = {
                                             let store = self.store.lock();
@@ -272,14 +289,73 @@ impl WorkspaceWindow {
                                                     }),
                                             )
                                             .into_any_element()
-                                    }),
-                            ))
-                            // Below whichever session pane is showing, so the
-                            // terminal and panel views get the section from
-                            // one place rather than two that can drift.
-                            .children(self.processes_section(cx))
-                            .into_any_element()
+                                    });
+                                                        let pane =
+                                                            self.with_git_panel(pane, window, cx);
+                                                        v_flex().flex_1()
+                                                                .min_h_0()
+                                                                .w_full()
+                                                                .child(pane)
+                                                    })
+                                                    // Below whichever session pane is showing, so
+                                                    // the
+                                                    // terminal and panel views get the section from
+                                                    // one place rather than two that can drift.
+                                                    .children(self.processes_section(cx))
+                                                    .into_any_element()
                                         }))
                 .into_any_element()
+    }
+
+    /// The selected agent's pane with its git panel beside it, when that
+    /// panel is open.
+    ///
+    /// Beside rather than over: the Swift panel is a sibling in an `HStack`,
+    /// so the content narrows rather than being occluded, and the agent stays
+    /// visible while its work is reviewed - which is the point of reviewing
+    /// it here rather than in another window.
+    pub(super) fn with_git_panel(&mut self, pane: gpui_kit::AnyElement, window: &mut Window,
+                                 cx: &mut Context<Self>)
+                                 -> gpui_kit::AnyElement {
+        let Some(id) = self.selected_agent
+        else {
+            return pane;
+        };
+        let Some(folder) = self.agent_folder(id)
+        else {
+            return pane;
+        };
+        let Some(panel) = self.git_panel_pane(id, &folder, window, cx)
+        else {
+            return pane;
+        };
+
+        // A resizable group rather than a hand-rolled drag handle: the
+        // sidebar divider already works this way, and the group carries the
+        // clamp, so the panel cannot be dragged past the spec's bounds.
+        let state = self.git_panel_resize
+                        .entry(id)
+                        .or_insert_with(|| cx.new(|_| ResizableState::default()))
+                        .clone();
+        let width = self.git_panel_width(id);
+
+        h_resizable("git-panel-split").with_state(&state)
+            .on_resize(cx.listener(move |view, state: &Entity<ResizableState>, _window, cx| {
+                          let Some(width) = state.read(cx).sizes().last().copied()
+                          else {
+                              return;
+                          };
+                          view.set_git_panel_width(id, f32::from(width), cx);
+                      }))
+            .child(resizable_panel().child(v_flex().flex_1().min_w_0().h_full().child(pane)))
+            .child(resizable_panel().size(px(width))
+                                    .size_range(px(consts::GIT_PANEL_MIN_WIDTH)
+                                                ..px(consts::GIT_PANEL_MAX_WIDTH))
+                                    // A sized panel beside a flexible one has
+                                    // to opt out of growing, or it takes the
+                                    // slack back on the frame after a drag.
+                                    .flex_none()
+                                    .child(panel))
+            .into_any_element()
     }
 }

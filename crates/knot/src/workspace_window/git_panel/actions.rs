@@ -62,7 +62,8 @@ impl WorkspaceWindow {
     }
 
     /// Opens or closes `id`'s panel, starting or stopping its watch with it.
-    pub(super) fn toggle_git_panel(&mut self, id: Uuid, folder: &str, cx: &mut Context<Self>) {
+    pub(in crate::workspace_window) fn toggle_git_panel(&mut self, id: Uuid, folder: &str,
+                                                        cx: &mut Context<Self>) {
         if self.git_panel_open.remove(&id) {
             self.stop_git_watch(id);
             self.forget_git_state(id);
@@ -102,7 +103,8 @@ impl WorkspaceWindow {
         cx.notify();
     }
 
-    pub(super) fn set_git_panel_width(&mut self, id: Uuid, width: f32, cx: &mut Context<Self>) {
+    pub(in crate::workspace_window) fn set_git_panel_width(&mut self, id: Uuid, width: f32,
+                                                           cx: &mut Context<Self>) {
         let clamped = width.clamp(crate::consts::GIT_PANEL_MIN_WIDTH,
                                   crate::consts::GIT_PANEL_MAX_WIDTH);
         self.git_panel_width.insert(id, clamped);
@@ -151,7 +153,7 @@ impl WorkspaceWindow {
     /// task has no GPUI context, so it cannot touch the caches or redraw.
     /// Returns whether anything landed, which is what tells the poll to
     /// notify.
-    pub(super) fn drain_git_actions(&mut self) -> bool {
+    pub(in crate::workspace_window) fn drain_git_actions(&mut self) -> bool {
         let finished: Vec<(Uuid, Result<(), String>)> =
             self.pending_git_actions
                 .iter()
@@ -185,11 +187,15 @@ impl WorkspaceWindow {
     /// The message is trimmed of surrounding whitespace only: internal blank
     /// lines carry the subject-then-body convention and must survive.
     pub(super) fn commit_git_panel(&mut self, id: Uuid, folder: &str, message: &str,
-                                   outcome: Arc<Mutex<Option<Result<(), String>>>>) {
+                                   outcome: crate::commit_window::CommitOutcome) {
         let message = message.trim().to_string();
         let folder = folder.to_string();
 
         self.pause_git_watch(id);
+        // Tracked here as well as in the window: the window closing is what
+        // the *user* sees, but the tree behind it still has to be re-read,
+        // and the window cannot reach the panel's caches.
+        self.pending_git_commits.insert(id, Arc::clone(&outcome));
 
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn_blocking(move || {
@@ -197,6 +203,31 @@ impl WorkspaceWindow {
                                                               .map_err(|error| error.to_string());
                         *outcome.lock() = Some(result);
                     });
+    }
+
+    /// Drains any finished commit, invalidating the panel behind the window
+    /// and resuming its watch. Returns whether anything landed.
+    ///
+    /// A failed commit invalidates nothing - the tree is as it was, and the
+    /// window is still open showing why.
+    pub(in crate::workspace_window) fn drain_git_commits(&mut self) -> bool {
+        let finished: Vec<(Uuid, bool)> =
+            self.pending_git_commits
+                .iter()
+                .filter_map(|(id, slot)| slot.lock().as_ref().map(|result| (*id, result.is_ok())))
+                .collect();
+
+        for (id, succeeded) in &finished {
+            self.pending_git_commits.remove(id);
+            if *succeeded {
+                self.finish_commit(*id);
+            }
+            else {
+                self.resume_git_watch(*id);
+            }
+        }
+
+        !finished.is_empty()
     }
 }
 

@@ -30,7 +30,7 @@ impl WorkspaceWindow {
         let flag = Arc::clone(&dirty);
         let watch = Arc::new(Watch::new(folder,
                                         knot_watch::consts::GIT_STATUS_DEBOUNCE,
-                                        |path| is_relevant(path),
+                                        is_relevant,
                                         move || flag.store(true, Ordering::SeqCst)));
 
         let _runtime_guard = self.runtime.enter();
@@ -77,7 +77,7 @@ impl WorkspaceWindow {
     /// The callback runs on a tokio task with no GPUI context, so it only
     /// flips a flag; acting on it is the poll's job - the same hand-off
     /// `clipboard_writes` and `exited_sessions` use.
-    pub(super) fn drain_git_watches(&mut self) -> bool {
+    pub(in crate::workspace_window) fn drain_git_watches(&mut self) -> bool {
         let fired: Vec<Uuid> = self.git_watch_dirty
                                    .iter()
                                    .filter(|(_, flag)| flag.swap(false, Ordering::SeqCst))
@@ -94,7 +94,7 @@ impl WorkspaceWindow {
 
     /// Whether any panel has a read that has landed since this was last
     /// asked, for the repaint poll's dirty check.
-    pub(super) fn git_panel_needs_repaint(&self) -> bool {
+    pub(in crate::workspace_window) fn git_panel_needs_repaint(&self) -> bool {
         let status_changed = self.git_status.take_changed();
         let diff_changed = self.git_diffs.take_changed();
         status_changed || diff_changed
