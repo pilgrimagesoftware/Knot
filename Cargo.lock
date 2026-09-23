@@ -3863,8 +3863,10 @@ dependencies = [
 name = "knot-forge"
 version = "1.14.0"
 dependencies = [
+ "knot-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.20",
 ]
 

@@ -5,8 +5,6 @@
 //! Contract: `openspec/specs/agent-launch-command/spec.md`'s "ACP launch
 //! path" requirement, design decision 2.
 
-use crate::consts::ADAPTER_PATH_FALLBACK_DIRS;
-
 /// The command to run once, on the user's behalf, to make an adapter's
 /// binary available when it isn't found on `PATH` - see design.md
 /// decision 6. Only declared for adapters with a package-manager install
@@ -98,44 +96,25 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
 }
 
 /// The `PATH` adapter subprocesses and their install commands are spawned
-/// with: the process's own `PATH` first (so a shell-launched app keeps its
-/// exact ordering), then the standard install locations from
-/// `consts::ADAPTER_PATH_FALLBACK_DIRS` (`~`-expanded against `HOME`), each
-/// entry appearing once. A Finder-launched GUI process gains the locations
-/// launchd's `/usr/bin:/bin:/usr/sbin:/sbin` omits, so a registered adapter
-/// installed in one of them launches instead of failing with "No such file
-/// or directory".
+/// with: [`knot_core::exec_path::search_path`], which is the process's own
+/// `PATH` followed by the standard install locations. A Finder-launched GUI
+/// process gains the locations launchd's `/usr/bin:/bin:/usr/sbin:/sbin`
+/// omits, so a registered adapter installed in one of them launches instead
+/// of failing with "No such file or directory".
+///
+/// Thin wrapper rather than a re-export: this crate's callers ask for "the
+/// path an adapter runs under", and the answer happening to be the shared
+/// one is not something they should have to know.
+#[must_use]
 pub fn adapter_path() -> String {
-    adapter_path_for(&std::env::var("PATH").unwrap_or_default(),
-                     &std::env::var("HOME").unwrap_or_default())
+    knot_core::exec_path::search_path()
 }
 
 /// Pure form of [`adapter_path`] for tests and callers already holding the
-/// values. `process_path` entries win the ordering; `~`-prefixed fallbacks
-/// are expanded against `home` (kept literal when `home` is empty, matching
-/// how the child would see an unset `HOME`); an entry already named is not
-/// duplicated.
+/// values.
+#[must_use]
 pub fn adapter_path_for(process_path: &str, home: &str) -> String {
-    let fallbacks: Vec<String> =
-        ADAPTER_PATH_FALLBACK_DIRS.iter()
-                                  .map(|dir| match dir.strip_prefix('~') {
-                                      Some(suffix) if !home.is_empty() => format!("{home}{suffix}"),
-                                      _ => (*dir).to_string(),
-                                  })
-                                  .collect();
-
-    let mut merged: Vec<&str> = Vec::new();
-    for entry in process_path.split(':')
-                             .chain(fallbacks.iter().map(String::as_str))
-    {
-        if entry.is_empty() {
-            continue;
-        }
-        if !merged.contains(&entry) {
-            merged.push(entry);
-        }
-    }
-    merged.join(":")
+    knot_core::exec_path::search_path_for(process_path, home)
 }
 
 #[cfg(test)]
@@ -206,55 +185,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn adapter_path_process_entries_come_first() {
-        let path = adapter_path_for("/usr/local/bin:/usr/bin", "/Users/tester");
-        let entries: Vec<&str> = path.split(':').collect();
-        assert_eq!(&entries[..2],
-                   &["/usr/local/bin", "/usr/bin"],
-                   "the process's own PATH entries must keep their order and come first");
-        assert!(entries.contains(&"/opt/homebrew/bin"));
-        assert!(entries.contains(&"/Users/tester/.cargo/bin"));
-    }
-
-    #[test]
-    fn adapter_path_dedups_a_fallback_already_on_the_process_path() {
-        let path = adapter_path_for("/opt/homebrew/bin:/usr/bin:/bin", "/Users/tester");
-        let entries: Vec<&str> = path.split(':').collect();
-        assert_eq!(entries.iter()
-                          .filter(|e| **e == "/opt/homebrew/bin")
-                          .count(),
-                   1,
-                   "a fallback already named by the process PATH must not be appended again");
-        assert_eq!(entries[0], "/opt/homebrew/bin",
-                   "and it keeps the process PATH's ordering (first, in this case)");
-    }
-
-    #[test]
-    fn adapter_path_expands_tilde_fallbacks_against_home() {
-        let path = adapter_path_for("", "/Users/tester");
-        let entries: Vec<&str> = path.split(':').collect();
-        for expected in ["/Users/tester/.cargo/bin",
-                         "/Users/tester/.local/bin",
-                         "/Users/tester/.npm-global/bin"]
-        {
-            assert!(entries.contains(&expected), "missing {expected} in {path}");
-        }
-        assert!(!entries.iter().any(|e| e.starts_with('~')),
-                "no literal `~` entry may survive into the merged PATH");
-    }
-
-    #[test]
-    fn adapter_path_keeps_literal_tilde_when_home_is_empty() {
-        let path = adapter_path_for("", "");
-        assert!(path.split(':').any(|e| e == "~/.cargo/bin"),
-                "an empty HOME keeps the fallback literal rather than mangling it");
-    }
-
+    /// The merging itself is `knot_core::exec_path`'s, and tested there.
+    /// This is the capability's own guarantee: the path an adapter is
+    /// spawned under names the standard install locations even when the app
+    /// was launched from Finder.
     #[test]
     fn adapter_path_covers_the_launchd_gui_path() {
-        // The PATH a Finder-launched macOS app actually sees - the bug
-        // scenario this change exists for.
         let path = adapter_path_for("/usr/bin:/bin:/usr/sbin:/sbin", "/Users/tester");
         for expected in ["/opt/homebrew/bin",
                          "/usr/local/bin",
