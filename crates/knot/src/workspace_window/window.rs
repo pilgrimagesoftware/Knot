@@ -162,6 +162,11 @@ pub(crate) struct WorkspaceWindow {
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
     pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    /// Each Panel-mode agent's file listing for the `@` lookup: how far
+    /// along it is, what it found, and the watch following its folder.
+    /// Built on the agent's first `@`, since an agent nobody mentions a
+    /// file to should not cost a walk - see `panel::mentions`.
+    pub(super) panel_mentions:                   BTreeMap<Uuid, panel::mentions::PanelMentions>,
     /// Each Panel-mode composer's styled runs: its three decoration
     /// collections, the buffer they describe and the palette they were
     /// painted from. Created with the composer entity, so a restored draft

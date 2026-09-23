@@ -33,7 +33,8 @@ pub(crate) fn matching(entries: &[LookupEntry], filter: &str) -> Vec<LookupMatch
                    score(&entry.token, filter).map(|(score, matched)| {
                                                   (score,
                                                    LookupMatch { entry: entry.clone(),
-                                                                 matched })
+                                                                 matched,
+                                                                 is_status: false })
                                               })
                })
                .collect();

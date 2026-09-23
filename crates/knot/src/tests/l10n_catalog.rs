@@ -49,7 +49,10 @@ fn queued_message_control_labels_resolve() {
                 "panel.edit_queued",
                 "panel.replace_composer_title",
                 "panel.replace_composer_body",
-                "panel.retry_connect"]
+                "panel.retry_connect",
+                "panel.lookup_hint",
+                "panel.mentions_gathering",
+                "panel.mentions_capped"]
     {
         assert_ne!(knot_core::l10n::t(key),
                    key,

@@ -2,6 +2,7 @@
 //! that merely contains the character.
 
 use crate::composer_scan::Construct;
+use crate::composer_scan::escape_token;
 use crate::composer_scan::scan;
 use crate::composer_scan::tests::found;
 use crate::composer_scan::tests::slices;
@@ -99,4 +100,47 @@ fn an_attachment_reference_is_found_wherever_it_sits() {
     assert_eq!(slices(text, &spans, Construct::Attachment),
                vec!["@shot.png", "@shot.png"],
                "the same file attached twice is two chips, not one");
+}
+
+/// A path with a space stays one token, because the space is escaped.
+/// Without this the composer styles `@my` and the lookup completes over a
+/// fragment, which is the same defect seen from two directions.
+#[test]
+fn an_escaped_space_does_not_end_a_token() {
+    assert_eq!(found(r"@my\ notes/today.md here", Construct::Mention),
+               vec![r"@my\ notes/today.md"],
+               "the escaped space is inside the token; the unescaped one ends it");
+}
+
+#[test]
+fn an_unescaped_space_still_ends_a_token() {
+    assert_eq!(found("@notes.md and more", Construct::Mention),
+               vec!["@notes.md"]);
+}
+
+/// Escaping and scanning are one rule read in two directions, so what the
+/// insertion writes has to be what the scanner reads back as a token.
+#[test]
+fn what_escaping_writes_the_scanner_reads_as_one_token() {
+    for path in ["plain.rs",
+                 "my notes/today.md",
+                 "two  spaces.md",
+                 r"back\slash.rs",
+                 "trailing space .md"]
+    {
+        let buffer = format!("see @{} end", escape_token(path));
+        let found = found(&buffer, Construct::Mention);
+
+        assert_eq!(found.len(), 1, "{path:?} produced {found:?}");
+        assert_eq!(found[0],
+                   format!("@{}", escape_token(path)),
+                   "the whole escaped path has to be the token");
+    }
+}
+
+#[test]
+fn escaping_leaves_an_ordinary_path_alone() {
+    assert_eq!(escape_token("crates/knot-git/src/lib.rs"),
+               "crates/knot-git/src/lib.rs",
+               "a path with nothing to protect must not grow backslashes");
 }

@@ -19,11 +19,6 @@
 
 mod builtin;
 mod entry;
-// UNWIRED(#396): the `@` lookup's file source. The popup that asks it -
-// its cache, its watch refresh and the trigger dispatch that opens it -
-// is the rest of task group 6; until that lands only its own tests call
-// this. The allow comes off with the wiring.
-#[allow(dead_code)]
 mod files;
 mod fuzzy;
 mod registry;
@@ -36,6 +31,8 @@ mod tests;
 pub(crate) use entry::LookupEntry;
 pub(crate) use entry::LookupMatch;
 pub(crate) use entry::LookupSource;
+pub(crate) use files::FolderFiles;
 pub(crate) use registry::LookupRegistry;
 pub(crate) use token::ActiveToken;
+pub(crate) use token::Trigger;
 pub(crate) use token::active_token;

@@ -16,6 +16,7 @@ use gpui_kit::WindowOptions;
 use gpui_kit::component::Root;
 use gpui_kit::{Context, Entity, IntoElement, Render, Window, div};
 
+use crate::panel_commands::Trigger;
 use crate::panel_commands::active_token;
 use crate::workspace_window::panel::lookup::replace_lookup_token;
 use crate::workspace_window::panel::prompt::PanelInputState;
@@ -69,7 +70,14 @@ fn inserting_replaces_the_token_in_place(cx: &mut TestAppContext) {
                       let state = input.read(cx);
                       active_token(&state.value(), state.cursor()).expect("an active token")
                   });
-    cx.update(|window, cx| replace_lookup_token(&input, token.range.clone(), "send", window, cx));
+    cx.update(|window, cx| {
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Slash,
+                               "send",
+                               window,
+                               cx)
+      });
 
     let (value, cursor) = cx.update(|_, cx| {
                                 let state = input.read(cx);
@@ -90,7 +98,12 @@ fn inserting_over_a_lone_token_leaves_only_the_token(cx: &mut TestAppContext) {
                       active_token(&state.value(), state.cursor()).expect("an active token")
                   });
     cx.update(|window, cx| {
-          replace_lookup_token(&input, token.range.clone(), "worktree", window, cx)
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Slash,
+                               "worktree",
+                               window,
+                               cx)
       });
 
     let value = cx.update(|_, cx| input.read(cx).value().to_string());
@@ -106,8 +119,119 @@ fn inserting_leaves_the_rest_of_the_buffer_untouched(cx: &mut TestAppContext) {
                       let state = input.read(cx);
                       active_token(&state.value(), state.cursor()).expect("an active token")
                   });
-    cx.update(|window, cx| replace_lookup_token(&input, token.range.clone(), "check", window, cx));
+    cx.update(|window, cx| {
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Slash,
+                               "check",
+                               window,
+                               cx)
+      });
 
     let value = cx.update(|_, cx| input.read(cx).value().to_string());
     assert_eq!(value, "first line\n/check");
+}
+
+/// `panel-file-mentions`' own example, and task 6.8's check: the typed
+/// token is replaced and the words around it survive.
+#[gpui_kit::test]
+fn inserting_a_mention_replaces_only_the_typed_token(cx: &mut TestAppContext) {
+    let (mut cx, input) = prompt(cx, "look at @knotg", 14);
+
+    let token = cx.update(|_, cx| {
+                      let state = input.read(cx);
+                      active_token(&state.value(), state.cursor()).expect("an active token")
+                  });
+    assert_eq!(token.trigger, Trigger::Mention);
+
+    cx.update(|window, cx| {
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Mention,
+                               "crates/knot-git/src/lib.rs",
+                               window,
+                               cx)
+      });
+
+    let value = cx.update(|_, cx| input.read(cx).value().to_string());
+    assert_eq!(value, "look at @crates/knot-git/src/lib.rs");
+}
+
+/// A mention is text and nothing else. Inserting one attaches no context
+/// and reads no file - an image's path in the prompt is a path, not an
+/// attachment, which is what keeps `@` from being a second paperclip.
+#[gpui_kit::test]
+fn inserting_an_image_path_attaches_nothing(cx: &mut TestAppContext) {
+    let (mut cx, input) = prompt(cx, "@shot", 5);
+
+    let token = cx.update(|_, cx| {
+                      let state = input.read(cx);
+                      active_token(&state.value(), state.cursor()).expect("an active token")
+                  });
+    cx.update(|window, cx| {
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Mention,
+                               "images/screenshot.png",
+                               window,
+                               cx)
+      });
+
+    let value = cx.update(|_, cx| input.read(cx).value().to_string());
+    assert_eq!(value, "@images/screenshot.png",
+               "the buffer gained a path; nothing read the file and nothing attached it");
+}
+
+/// A path with a space is inserted escaped, so it stays one token.
+#[gpui_kit::test]
+fn inserting_a_path_with_a_space_keeps_it_one_token(cx: &mut TestAppContext) {
+    let (mut cx, input) = prompt(cx, "@my", 3);
+
+    let token = cx.update(|_, cx| {
+                      let state = input.read(cx);
+                      active_token(&state.value(), state.cursor()).expect("an active token")
+                  });
+    cx.update(|window, cx| {
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Mention,
+                               "my notes/today.md",
+                               window,
+                               cx)
+      });
+
+    let value = cx.update(|_, cx| input.read(cx).value().to_string());
+    assert_eq!(value, r"@my\ notes/today.md");
+
+    let reparsed = cx.update(|_, cx| {
+                         let state = input.read(cx);
+                         active_token(&state.value(), state.value().len())
+                     });
+    assert_eq!(reparsed.map(|token| token.range),
+               Some(0..value.len()),
+               "the inserted mention has to read back as one token, or the composer styles half \
+                of it");
+}
+
+/// A slash command is not escaped: it has no whitespace to protect, and
+/// backslashes in the buffer would only make it harder to read.
+#[gpui_kit::test]
+fn inserting_a_command_does_not_escape_it(cx: &mut TestAppContext) {
+    let (mut cx, input) = prompt(cx, "/rev", 4);
+
+    let token = cx.update(|_, cx| {
+                      let state = input.read(cx);
+                      active_token(&state.value(), state.cursor()).expect("an active token")
+                  });
+    cx.update(|window, cx| {
+          replace_lookup_token(&input,
+                               token.range.clone(),
+                               Trigger::Slash,
+                               "review",
+                               window,
+                               cx)
+      });
+
+    assert_eq!(cx.update(|_, cx| input.read(cx).value().to_string()),
+               "/review");
 }

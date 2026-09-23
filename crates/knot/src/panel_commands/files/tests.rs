@@ -121,7 +121,7 @@ fn a_plain_folder_is_walked_with_the_exclusion_set() {
 fn a_missing_folder_yields_nothing_without_failing() {
     let files = FolderFiles::enumerate(Path::new("/no/such/folder/anywhere"));
 
-    assert_eq!(files.len(), 0);
+    assert!(files.entries().is_empty());
     assert!(!files.overflowed(),
             "nothing found is not the same as too much found");
 }

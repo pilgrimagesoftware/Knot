@@ -34,16 +34,29 @@ impl LookupEntry {
 /// surprising to explain about a contiguous hit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LookupMatch {
-    pub(crate) entry:   LookupEntry,
+    pub(crate) entry:     LookupEntry,
     /// Byte offsets into `entry.token`, ascending.
-    pub(crate) matched: Vec<usize>,
+    pub(crate) matched:   Vec<usize>,
+    /// Whether this row reports what the lookup is doing rather than
+    /// offering something to insert - gathering a folder, or a folder too
+    /// large to list in full. A status row is never insertable, so Enter
+    /// and a click on one leave the buffer alone.
+    pub(crate) is_status: bool,
 }
 
 impl LookupMatch {
     /// A match with nothing marked.
     pub(crate) fn plain(entry: LookupEntry) -> Self {
         Self { entry,
-               matched: Vec::new() }
+               matched: Vec::new(),
+               is_status: false }
+    }
+
+    /// A row that reports the lookup's own state instead of an entry.
+    pub(crate) fn status(message: impl Into<String>) -> Self {
+        Self { entry:     LookupEntry::new(message, String::new()),
+               matched:   Vec::new(),
+               is_status: true, }
     }
 }
 

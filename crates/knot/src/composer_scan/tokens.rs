@@ -64,10 +64,48 @@ fn at_word_boundary(line: &str, offset: usize) -> bool {
                   .is_none_or(char::is_whitespace)
 }
 
-/// The buffer offset one past the token that starts at `offset` in `line`.
+/// The buffer offset one past the token that starts at `offset` in
+/// `line`.
+///
+/// A token ends at the first **unescaped** whitespace. A path containing a
+/// space is a real path, and a mention of one has to stay one token or the
+/// composer styles half of it and the lookup completes over a fragment -
+/// so `\\ ` is a space *in* the token rather than the end of it. See
+/// [`escape_token`] for the other half of the rule.
 fn token_end(line: &str, offset: usize, start: usize) -> usize {
     let after_trigger = offset + 1;
     let rest = &line[after_trigger..];
-    let length = rest.find(char::is_whitespace).unwrap_or(rest.len());
-    start + after_trigger + length
+
+    let mut escaped = false;
+    for (index, character) in rest.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+        if character.is_whitespace() {
+            return start + after_trigger + index;
+        }
+    }
+    start + after_trigger + rest.len()
+}
+
+/// `text` with the characters that would end a token escaped, so
+/// inserting it produces one token.
+///
+/// The inverse of [`token_end`]'s rule, and the reason they live beside
+/// each other: an escape the scanner does not understand splits the token
+/// it was meant to hold together.
+pub(crate) fn escape_token(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        if character == '\\' || character.is_whitespace() {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
 }

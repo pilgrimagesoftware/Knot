@@ -74,6 +74,8 @@ panel:
   retry_connect: "Try again"
   context_usage: "Context usage"
   lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  mentions_gathering: "Listing files…"
+  mentions_capped: "This folder is too large to list in full — showing what was found"
   command:
     broadcast: "Send a message to every other agent in the workspace"
     check: "Check messages sent to this agent"

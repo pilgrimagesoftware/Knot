@@ -31,3 +31,4 @@ pub(crate) use scan::Span;
 pub(crate) use scan::rescan;
 pub(crate) use scan::scan;
 pub(crate) use scan::tokens_on_line;
+pub(crate) use tokens::escape_token;

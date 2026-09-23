@@ -97,11 +97,6 @@ impl FolderFiles {
     pub(crate) fn overflowed(&self) -> bool {
         self.overflow
     }
-
-    /// How many paths are on offer.
-    pub(crate) fn len(&self) -> usize {
-        self.paths.len()
-    }
 }
 
 impl LookupSource for FolderFiles {
