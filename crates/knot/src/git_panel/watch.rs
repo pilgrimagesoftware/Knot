@@ -144,29 +144,40 @@ mod tests {
         assert!(relevant("/repo/.github/workflows/ci.yml"));
     }
 
-    /// How long to wait for the count to stop moving.
-    ///
-    /// Must exceed the debounce, or `settle` returns zero before the
-    /// callback it is waiting for has had a chance to fire - which reads as
-    /// "the watch is broken" rather than "the test asked too early".
-    fn quiet_window() -> Duration {
+    /// How long to keep watching after the expected callback arrives, to
+    /// catch a second one. Comfortably past the debounce, since a burst that
+    /// failed to collapse would fire again within one.
+    fn hold_window() -> Duration {
         knot_watch::consts::GIT_STATUS_DEBOUNCE + Duration::from_millis(500)
     }
 
-    /// Polls `count` until it stops moving for `quiet`, bounded overall so a
-    /// watch that never settles fails fast rather than hanging. The shape
-    /// `knot-watch`'s own burst test uses.
-    async fn settle(count: &AtomicUsize, quiet: Duration) -> usize {
-        timeout(Duration::from_secs(20), async {
-            loop {
-                let before = count.load(Ordering::SeqCst);
-                tokio::time::sleep(quiet).await;
-                if count.load(Ordering::SeqCst) == before {
-                    return before;
-                }
+    /// Waits for `count` to reach `expected`, then holds to see whether it
+    /// goes further. Returns the count after the hold.
+    ///
+    /// Two phases rather than "sleep, then look", deliberately. A fixed
+    /// sample schedule is a trap on a loaded machine: these agents share one
+    /// box and it runs at a load average several times its core count, so a
+    /// 1s debounce can take well over a second of wall clock to fire. A test
+    /// that samples on a timer then reports what it saw blames the watch for
+    /// its own impatience - which is exactly what an earlier version of this
+    /// helper did with a window shorter than the debounce.
+    ///
+    /// So phase one waits for the value with a generous budget and does not
+    /// care how long it takes, and phase two is what actually asserts the
+    /// collapse: having reached one callback, it must not become two.
+    async fn reaches_then_holds(count: &AtomicUsize, expected: usize, hold: Duration) -> usize {
+        timeout(Duration::from_secs(60), async {
+            while count.load(Ordering::SeqCst) < expected {
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
         }).await
-          .expect("the watch did not go quiet within 20s")
+          .unwrap_or_else(|_| {
+              panic!("the watch never reached {expected} callbacks within 60s (saw {})",
+                     count.load(Ordering::SeqCst))
+          });
+
+        tokio::time::sleep(hold).await;
+        count.load(Ordering::SeqCst)
     }
 
     /// A working tree with a `.git` directory, so the predicate has both
@@ -203,7 +214,7 @@ mod tests {
             fs::write(dir.path().join(format!("file{i}.rs")), "changed").unwrap();
         }
 
-        let fired = settle(&count, quiet_window()).await;
+        let fired = reaches_then_holds(&count, 1, hold_window()).await;
         watch.stop();
 
         assert_eq!(fired, 1,
@@ -233,9 +244,13 @@ mod tests {
         fs::write(dir.path().join(".git/COMMIT_EDITMSG"), "wip").unwrap();
         fs::write(dir.path().join(".DS_Store"), "junk").unwrap();
 
-        // Past the debounce with room to spare: anything that was going to
-        // fire has had its chance.
-        tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE + Duration::from_millis(800)).await;
+        // Absence cannot be waited for the way a value can, so this is a
+        // bounded-confidence check: several debounces' worth of room, and if
+        // load delays a spurious callback past it the test passes when it
+        // should not. That direction is the safe one - it cannot fail
+        // spuriously, only under-report - and the two positive tests above
+        // prove the predicate is not simply rejecting everything.
+        tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE * 4).await;
         watch.stop();
 
         assert_eq!(count.load(Ordering::SeqCst),
@@ -262,7 +277,7 @@ mod tests {
 
         fs::write(dir.path().join(".git/index"), "staged").unwrap();
 
-        let fired = settle(&count, quiet_window()).await;
+        let fired = reaches_then_holds(&count, 1, hold_window()).await;
         watch.stop();
 
         assert_eq!(fired, 1, "staging changes the index, which is a refresh");
