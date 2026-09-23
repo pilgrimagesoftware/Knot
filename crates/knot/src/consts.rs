@@ -32,6 +32,36 @@ pub(crate) const REPAINT_POLL_INTERVAL: Duration = Duration::from_millis(33);
 /// repaints - see `workspace_window::sessions`.
 pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 
+/// How stale the git panel's working-tree status may get before the next
+/// render asks for a fresh one.
+///
+/// Shorter than a diff stat's, because the panel is what the user acts
+/// through: a stage they just made must appear promptly, and the watch that
+/// would otherwise tell us is paused for exactly that window.
+pub(crate) const GIT_STATUS_MAX_AGE: Duration = Duration::from_millis(500);
+
+/// How stale a shown file diff may get before it is read again.
+///
+/// Long, because a diff is re-read when the selection changes or the status
+/// is invalidated, not on a clock - this is a backstop against a diff that
+/// somehow outlives both, not the mechanism that keeps it fresh.
+pub(crate) const GIT_DIFF_MAX_AGE: Duration = Duration::from_secs(30);
+
+/// The git panel's width when it opens, and the bounds a drag may take it to.
+///
+/// Carried from the Swift panel, which clamped the same way. Not persisted:
+/// a reopened panel starts at the default again.
+pub(crate) const GIT_PANEL_DEFAULT_WIDTH: f32 = 500.;
+pub(crate) const GIT_PANEL_MIN_WIDTH: f32 = 350.;
+pub(crate) const GIT_PANEL_MAX_WIDTH: f32 = 800.;
+
+/// The most diff lines the panel will hold and draw for one file.
+///
+/// Drawing is virtualized, so this is not what bounds the frame - it bounds
+/// what `parse_diff` materializes into the cache. A generated file of several
+/// hundred thousand lines should not be held in memory per selected row.
+pub(crate) const GIT_DIFF_MAX_LINES: usize = 20_000;
+
 /// How stale a pull request's fetched state may get before the Pull Requests
 /// view asks for it again.
 ///

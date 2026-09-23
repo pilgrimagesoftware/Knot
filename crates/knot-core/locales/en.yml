@@ -427,3 +427,54 @@ processes:
   empty_not_running: "This agent is not running, so nothing descends from it."
   empty_none: "This agent has not started anything that is still running."
   sample_failed: "The process list could not be read: %{reason}"
+
+git_panel:
+  title: "Git Status"
+  refresh: "Refresh"
+  close: "Close panel"
+  # States. A folder that is not a repository is a different answer from a
+  # clean working tree, which is why it has its own line.
+  loading: "Loading…"
+  clean: "Working tree clean"
+  not_a_repository: "This folder is not a git repository."
+  status_failed: "The repository status could not be read: %{reason}"
+  action_failed: "That change could not be made: %{reason}"
+  error:
+    path_not_utf8: "That path is not valid UTF-8, so git cannot be asked about it."
+  # Branch header.
+  ahead: "%{count} ahead"
+  behind: "%{count} behind"
+  detached_head: "Detached HEAD"
+  # Sections, each with its own count line so the number stays beside the
+  # translator's noun rather than being concatenated at the call site.
+  section:
+    staged: "Staged Changes"
+    unstaged: "Changes"
+    untracked: "Untracked"
+    conflicted: "Conflicts"
+  section_count: "%{count}"
+  # Row and bulk actions.
+  stage: "Stage"
+  unstage: "Unstage"
+  discard: "Discard"
+  stage_all: "Stage All"
+  unstage_all: "Unstage All"
+  discard_title: "Discard changes to %{path}?"
+  discard_body: "The changes to %{path} are thrown away. Nothing can bring them back."
+  discard_confirm: "Discard"
+  # Diff pane.
+  select_a_file: "Select a file to view its diff"
+  additions: "+%{count}"
+  deletions: "-%{count}"
+  binary_file: "Binary file"
+  no_changes: "No changes"
+  diff_failed: "That diff could not be read: %{reason}"
+  diff_truncated: "This diff is too large to show in full; the first %{count} lines are shown."
+  # Commit.
+  commit: "Commit"
+  commit_title: "Commit staged changes"
+  commit_placeholder: "Commit message"
+  commit_hint: "The first line is the subject. Leave a blank line before the body."
+  commit_cancel: "Cancel"
+  commit_failed: "The commit failed: %{reason}"
+  committing: "Committing…"

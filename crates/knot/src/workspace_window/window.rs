@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use gpui_kit::AnyWindowHandle;
 use gpui_kit::Entity;
@@ -203,6 +204,41 @@ pub(crate) struct WorkspaceWindow {
     /// drained by the poll - the same off-main-thread hand-off
     /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
     pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
+    /// Agents whose git panel is open. Per-agent rather than a
+    /// `WorkspaceViewMode`: the panel is scoped to one agent's folder and
+    /// leaves that agent's content visible, so it is not a window mode.
+    pub(super) git_panel_open:                   BTreeSet<Uuid>,
+    /// Last known working-tree status per agent with an open panel,
+    /// refreshed off the render path - see `refresh_git_status`.
+    pub(super) git_status:                       crate::git_panel::state::GitStatusCache,
+    /// Last known diff per selected row, keyed by `(agent, path, staged)`.
+    ///
+    /// The key is what removes the Swift race: a reply for a row the user
+    /// has clicked away from lands in its own entry, and a render reads only
+    /// the current selection's, so a late reply cannot overwrite the shown
+    /// diff.
+    pub(super) git_diffs:                        crate::git_panel::state::GitDiffCache,
+    /// Which row each open panel is showing a diff for.
+    pub(super) git_selection:                    BTreeMap<Uuid, crate::git_panel::state::Selection>,
+    /// One working-tree watch per open panel. `Arc` because the watch's
+    /// callback outlives the frame that started it.
+    pub(super) git_watches:                      BTreeMap<Uuid, Arc<knot_watch::Watch>>,
+    /// Set by a watch callback, which runs on a tokio task with no GPUI
+    /// context and so cannot touch the caches or notify. The repaint poll
+    /// reads it, forgets the agent's status and redraws - the same
+    /// off-main-thread hand-off `clipboard_writes` uses.
+    pub(super) git_watch_dirty:                  BTreeMap<Uuid, Arc<AtomicBool>>,
+    /// The panel's width per agent, in pixels. View state, not persisted:
+    /// a reopened panel starts at the default again.
+    pub(super) git_panel_width:                  BTreeMap<Uuid, f32>,
+    /// The last git operation that failed, per agent, so the panel can say
+    /// so. Cleared by the next successful operation.
+    pub(super) git_action_error:                 BTreeMap<Uuid, String>,
+    /// Staging operations in flight, per agent. `None` inside the slot means
+    /// still running, so the poll can tell that from a finished success.
+    /// Drained by `drain_git_actions`, which is what invalidates the caches
+    /// and resumes the watch - the blocking task has no GPUI context.
+    pub(super) pending_git_actions: BTreeMap<Uuid, super::git_panel::actions::GitActionSlot>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
