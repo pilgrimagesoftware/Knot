@@ -49,7 +49,18 @@ impl SettingsWindow {
                                        settings_window.clone(),
                                        |view, mode, _, cx| {
                                            view.settings.appearance_mode = *mode;
+                                           // Writes, then hands the new
+                                           // preferences to open workspace
+                                           // windows (#238).
                                            view.persist(cx);
+                                           // Still needed alongside it: the
+                                           // broadcast refreshes workspace
+                                           // windows' settings snapshots,
+                                           // and the theme is an app-wide
+                                           // global that no snapshot owns.
+                                           // Persisting alone is what made
+                                           // this picker inert.
+                                           crate::appearance::set(*mode, cx);
                                        }),
                     ))
                     .child(Self::hint(

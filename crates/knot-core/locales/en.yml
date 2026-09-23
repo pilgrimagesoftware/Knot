@@ -111,7 +111,7 @@ settings:
     appearance: "Appearance"
   general:
     appearance: "Appearance"
-    appearance_hint: "Derives color scheme from terminal background color."
+    appearance_hint: "Light and Dark override the system setting; Auto and System follow it."
     startup: "Startup"
     restore_agents: "Restore agents on launch"
     restore_conversation: "Restore last conversation"
