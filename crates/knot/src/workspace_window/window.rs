@@ -22,6 +22,7 @@ use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use super::pane_focus::FocusTarget;
 use super::panel;
 use super::prompt_queue::QueuedPanelPrompt;
 use super::terminal_font::TerminalFont;
@@ -131,16 +132,21 @@ pub(crate) struct WorkspaceWindow {
     /// Which spinner frame the working indicators were last repainted on -
     /// see `spinner_repaint_due`.
     pub(super) last_spinner_frame:               u128,
-    /// The agent whose composer this window last *focused*, or `None` when
-    /// the last frame showed no composer at all - see `prepare_frame`.
+    /// What this window last *focused* - an agent's composer or its terminal
+    /// surface - or `None` when the last frame showed neither; see
+    /// `prepare_frame`.
     ///
     /// It records what focus was taken for, not where focus is now. Those
     /// differ the moment the user clicks anything else, and that is the
-    /// point: the frame compares this against the composer it is about to
+    /// point: the frame compares this against the target it is about to
     /// show, so focus is taken once on the transition into an agent and
     /// never pulled back while the user is working elsewhere in the window.
     /// Reading where focus actually is would undo that.
-    pub(super) focused_composer:                 Option<Uuid>,
+    ///
+    /// One latch over both targets rather than one each, so switching
+    /// between agents of different modes is a transition for the one being
+    /// switched to - see `pane_focus`.
+    pub(super) focused_pane:                     Option<FocusTarget>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse

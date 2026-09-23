@@ -39,6 +39,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::div;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::px;
+use uuid::Uuid;
 
 use crate::app_bootstrap::PanelOpenPermissionSelector;
 use crate::app_bootstrap::PanelPermissionAllow;
@@ -50,7 +51,7 @@ use crate::workspace_window::SidebarMenuTargets;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::agent_row::AgentRow;
-use crate::workspace_window::composer_focus;
+use crate::workspace_window::pane_focus;
 use crate::workspace_window::panel::input::PERMISSION_SELECTOR_ID;
 use crate::workspace_window::sidebar_background_context_menu;
 use crate::workspace_window::sidebar_is_compact;
@@ -149,56 +150,70 @@ impl WorkspaceWindow {
             self.refresh_dashboard_diff_stats();
         }
 
-        self.focus_showing_composer(is_dashboard, window, cx);
+        self.focus_showing_pane(is_dashboard, window, cx);
 
         // See `root_focus`: without this the Agents menu's items are never
         // on the dispatch path macOS validates them against. Done here
         // rather than beside the element it focuses, because the agent rows
         // built below borrow `cx` until the tree is assembled.
         //
-        // After `focus_showing_composer`, which may have taken focus for a
-        // composer already - and then this does nothing, correctly: the menu
-        // handlers are declared on the root element and the composer is its
-        // descendant, the same relationship the terminal pane has.
+        // After `focus_showing_pane`, which may have taken focus for a
+        // composer or a terminal surface already - and then this does
+        // nothing, correctly: the menu handlers are declared on the root
+        // element and both panes are its descendants.
+        //
+        // That ordering is also why the terminal's target is gated on a live
+        // grid. Focus taken over the "Starting terminal…" placeholder lands
+        // on a handle no element tracks, so this line moves focus to the
+        // root on the same frame - with the latch already stored, and
+        // nothing left to retry.
         if window.focused(cx).is_none() {
             window.focus(&self.root_focus.clone(), cx);
         }
     }
 
-    /// Gives the selected agent's prompt input keyboard focus on the frame
-    /// its conversation first appears on, per `acp-panel-ui`'s "Selecting a
-    /// Panel-mode agent focuses its prompt input".
+    /// Gives the selected agent's input keyboard focus on the frame its pane
+    /// first appears on - its prompt input per `acp-panel-ui`'s "Selecting a
+    /// Panel-mode agent focuses its prompt input", or its terminal surface
+    /// per `terminal-input`'s "Selecting a Terminal-mode agent focuses its
+    /// terminal surface".
     ///
-    /// The comparison is against the composer the frame is about to *show*,
+    /// The comparison is against the target the frame is about to *show*,
     /// not against where focus actually is. That is what keeps focus from
-    /// being pulled back: once this has focused an agent's composer, no
-    /// later frame showing the same agent compares differently, however many
-    /// times the window redraws or wherever the user has since clicked.
-    fn focus_showing_composer(&mut self, is_takeover: bool, window: &mut Window,
-                              cx: &mut Context<Self>) {
+    /// being pulled back: once this has focused an agent's input, no later
+    /// frame showing the same agent compares differently, however many times
+    /// the window redraws or wherever the user has since clicked.
+    fn focus_showing_pane(&mut self, is_takeover: bool, window: &mut Window,
+                          cx: &mut Context<Self>) {
+        // Read before the store lock below rather than inside it: the
+        // session's own mutex has no ordering relationship with the store's,
+        // and this is not the place to invent one.
+        let has_live_grid = self.selected_agent
+                                .is_some_and(|id| self.session_has_grid(id));
         let selected = self.selected_agent.and_then(|id| {
                                               let store = self.store.lock();
                                               let agent = store.agent(id)?;
-                                              Some(composer_focus::SelectedAgentFacts {
+                                              Some(pane_focus::SelectedAgentFacts {
                         id,
                         is_panel_mode: agent.view_mode == knot_core::ViewMode::Panel,
                         has_markdown: agent.markdown_file.is_some(),
                         has_diagram: agent.mermaid_source.is_some(),
                         is_activated: agent.activated,
+                        has_live_grid,
                     })
                                           });
-        let showing = composer_focus::showing_composer(is_takeover, selected.as_ref());
+        let showing = pane_focus::focus_target(is_takeover, selected.as_ref());
 
         // Stored whether or not focus is taken below, so a frame skipped for
         // an open dialog is not replayed as a transition once it closes -
         // the dialog's own scenario is that focus stays with the dialog, and
         // by then the selection is no longer news.
-        let changed = showing != self.focused_composer;
-        self.focused_composer = showing;
+        let changed = showing != self.focused_pane;
+        self.focused_pane = showing;
         if !changed {
             return;
         }
-        let Some(id) = showing
+        let Some(target) = showing
         else {
             return;
         };
@@ -206,12 +221,31 @@ impl WorkspaceWindow {
         // dialog layer is a child of the element tracking it - so no
         // containment check can tell a dialog apart from this window's own
         // panes. Asking whether one is open is the only guard that works;
-        // `tests/composer_focus.rs` is what establishes that.
+        // `tests/pane_focus.rs` is what establishes that.
         if window.has_active_dialog(cx) {
             return;
         }
-        let input = self.panel_prompt_input(id, window, cx);
-        input.update(cx, |state, cx| state.focus(window, cx));
+        match target {
+            pane_focus::FocusTarget::Composer(id) => {
+                let input = self.panel_prompt_input(id, window, cx);
+                input.update(cx, |state, cx| state.focus(window, cx));
+            }
+            // One handle for every agent, not one each: only the selected
+            // agent's pane is rendered, and a terminal keeps no per-agent
+            // caret state the way a composer keeps its draft.
+            pane_focus::FocusTarget::Terminal(_) => {
+                window.focus(&self.terminal_focus.clone(), cx);
+            }
+        }
+    }
+
+    /// Whether `id`'s session has produced a grid, which is what decides
+    /// between the terminal surface and the "Starting terminal…"
+    /// placeholder in `render/content.rs`.
+    fn session_has_grid(&self, id: Uuid) -> bool {
+        self.sessions
+            .get(&id)
+            .is_some_and(|session| session.lock().grid().is_some())
     }
 
     /// The sidebar's own title bar, which owns the traffic lights.

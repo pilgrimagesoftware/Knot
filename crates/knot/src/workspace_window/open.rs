@@ -137,7 +137,7 @@ impl WorkspaceWindow {
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     last_spinner_frame: 0,
-                    focused_composer: None,
+                    focused_pane: None,
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
