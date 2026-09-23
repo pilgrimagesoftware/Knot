@@ -180,6 +180,24 @@ mod tests {
         count.load(Ordering::SeqCst)
     }
 
+    /// Starts the watch and discards whatever the platform reports from the
+    /// setup writes, so the assertion window opens on an empty counter.
+    ///
+    /// `work_tree()` creates `.git/refs/heads` before the watch exists, and
+    /// anything under `refs/` is relevant. FSEvents can deliver an event from
+    /// just before its stream was started, so a test that begins counting the
+    /// instant it calls `start` counts one callback it never caused -
+    /// intermittently, and only on macOS. That was #390: a Markdown-only pull
+    /// request failed the churn test with a count of exactly 1.
+    ///
+    /// Two debounces of room rather than one, because the drain has to
+    /// outlast a coalesced setup event that arrives at the end of the first.
+    async fn start_and_drain_setup_events(watch: &knot_watch::Watch, count: &AtomicUsize) {
+        watch.start().unwrap();
+        tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE * 2).await;
+        count.store(0, Ordering::SeqCst);
+    }
+
     /// A working tree with a `.git` directory, so the predicate has both
     /// kinds of path to judge.
     fn work_tree() -> tempfile::TempDir {
@@ -208,7 +226,7 @@ mod tests {
                                            move || {
                                                counted.fetch_add(1, Ordering::SeqCst);
                                            });
-        watch.start().unwrap();
+        start_and_drain_setup_events(&watch, &count).await;
 
         for i in 0..50 {
             fs::write(dir.path().join(format!("file{i}.rs")), "changed").unwrap();
@@ -236,7 +254,7 @@ mod tests {
                                            move || {
                                                counted.fetch_add(1, Ordering::SeqCst);
                                            });
-        watch.start().unwrap();
+        start_and_drain_setup_events(&watch, &count).await;
 
         for i in 0..20 {
             fs::write(dir.path().join(format!(".git/objects/obj{i}")), "x").unwrap();
@@ -247,9 +265,13 @@ mod tests {
         // Absence cannot be waited for the way a value can, so this is a
         // bounded-confidence check: several debounces' worth of room, and if
         // load delays a spurious callback past it the test passes when it
-        // should not. That direction is the safe one - it cannot fail
-        // spuriously, only under-report - and the two positive tests above
-        // prove the predicate is not simply rejecting everything.
+        // should not. Under-reporting is the safe direction, and the two
+        // positive tests above prove the predicate is not simply rejecting
+        // everything.
+        //
+        // It can still fail spuriously in one direction, which the drain now
+        // closes: an event from before the watch started counts against a
+        // test that demands zero. See `start_and_drain_setup_events`.
         tokio::time::sleep(knot_watch::consts::GIT_STATUS_DEBOUNCE * 4).await;
         watch.stop();
 
@@ -273,7 +295,7 @@ mod tests {
                                            move || {
                                                counted.fetch_add(1, Ordering::SeqCst);
                                            });
-        watch.start().unwrap();
+        start_and_drain_setup_events(&watch, &count).await;
 
         fs::write(dir.path().join(".git/index"), "staged").unwrap();
 
