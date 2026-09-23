@@ -42,9 +42,9 @@
 
 ## 6. The roster says which types can report
 
-- [ ] 6.1 Add a `SubagentReporting` column to `AgentTypeInfo` as a closed enum — `None`, `ToolCalls`, `Hooks`, `Either` — with a `can_report(view_mode)` resolving it against the agent's view mode; verify a `ToolCalls` type resolves to reporting in Panel mode and not in Terminal mode
-- [ ] 6.2 Populate it: Claude as `ToolCalls` (not `Either` — the hook emitter is a plugin outside this repo, per design.md), every other type and `shell` as `None`; verify a Terminal-mode Claude agent resolves to unavailable rather than to "dispatched none"
-- [ ] 6.3 Extend the roster's existing completeness test to cover the new column; verify the test fails when a row's value is removed
+- [x] 6.1 Add a `SubagentReporting` column to `AgentTypeInfo` as a closed enum — `None`, `ToolCalls`, `Hooks`, `Either` — with a `can_report(view_mode)` resolving it against the agent's view mode; verify a `ToolCalls` type resolves to reporting in Panel mode and not in Terminal mode
+- [x] 6.2 Populate it: Claude as `ToolCalls` (not `Either` — the hook emitter is a plugin outside this repo, per design.md), every other type and `shell` as `None`; verify a Terminal-mode Claude agent resolves to unavailable rather than to "dispatched none"
+- [x] 6.3 Extend the roster's existing completeness test to cover the new column; verify the test fails when a row's value is removed
 
 ## 7. Splitting the pane before the second row kind lands
 
