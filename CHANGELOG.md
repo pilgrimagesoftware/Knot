@@ -1,4 +1,42 @@
 
+## 1.16.0 - 2026-09-23
+
+### Added
+- Build the panel composer on Editor, not Textarea
+- Add the composer scanner
+- Paint the composer's styled runs
+- Match and enumerate files for @ mentions
+- Complete @ file mentions in the composer
+- Give an attachment a place in the prompt
+- Share the settings surface copy-on-write
+- Add a streaming, cancellable shell runner
+- Run a shell command from the panel with a ! prefix
+- Add the typed MCP server inventory
+- Run and read an agent's MCP listing
+- Record each agent type's MCP list and handover commands
+- Schedule MCP probes and land their results on a frame
+- Draw the MCP servers section in a Panel agent's pane
+- Hand the user their agent's own MCP flow
+- Pair the MCP and processes sections as an accordion
+- Add the typed subagent record
+
+
+### Changed
+- Split the panel composer by concern
+- The settings window edits the shared surface
+- The workspace window reads the shared surface
+- The last snapshots read the shared surface
+
+
+### Fixed
+- Resolve the terminal font family once per configured name
+- Focus the terminal surface when a shell agent is selected
+- Drop recorded pull requests whose agent is gone
+- Imports write the current settings, not a caller's copy
+- Read a listing that a CLI writes to stderr
+
+
+
 ## 1.15.0 - 2026-09-23
 
 ### Added
