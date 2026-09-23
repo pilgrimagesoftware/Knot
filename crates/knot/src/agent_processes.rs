@@ -17,6 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use knot_processes::{DescendantProcess, ProcessTable};
 use parking_lot::Mutex;
@@ -124,6 +125,44 @@ pub(crate) struct Published {
 
 /// The slot a window's sampling task publishes into.
 pub(crate) type PublishSlot = Arc<Mutex<Published>>;
+
+/// The flag that says a sampling pass is already running.
+pub(crate) type SamplingFlag = Arc<AtomicBool>;
+
+/// A claim on the sampler, released when it drops.
+///
+/// The flag exists so a pass this slow is not asked for twice while the first
+/// is still running. It used to be lowered by a `store(false)` statement at
+/// the end of the sampling closure, which meant *any* unwind skipped it: the
+/// flag stayed raised, [`claim`](Self::claim) refused every later pass, and
+/// the section stopped updating for the life of the window with nothing shown
+/// to say so. Unbounded, unlike a `RefreshCache` key, which at least expires.
+///
+/// Releasing on `Drop` makes the reset unconditional by construction rather
+/// than by the closure reaching its last line - the same property that makes
+/// `refresh_cache`'s claim-then-hand-to-`spawn_blocking` safe.
+#[derive(Debug)]
+pub(crate) struct SamplingClaim(SamplingFlag);
+
+impl SamplingClaim {
+    /// Claims the sampler, or `None` when a pass is already running.
+    ///
+    /// `compare_exchange` rather than a `load` then a `store`: the two-step
+    /// form left a window between the check and the mark. Nothing exploits it
+    /// today - claims are made from the render thread alone - but a claim that
+    /// cannot be raced is one less thing to have to know.
+    pub(crate) fn claim(flag: &SamplingFlag) -> Option<Self> {
+        flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+            .then(|| Self(Arc::clone(flag)))
+    }
+}
+
+impl Drop for SamplingClaim {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
 
 /// Walks one already-read table for every observed root.
 ///

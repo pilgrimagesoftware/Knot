@@ -12,7 +12,6 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use knot_core::ViewMode;
@@ -126,39 +125,41 @@ impl WorkspaceWindow {
             return;
         }
 
-        if self.process_sampling.load(Ordering::Acquire) {
-            return;
-        }
-
         let due = self.process_sampled_at
                       .is_none_or(|at| at.elapsed() >= knot_processes::consts::SAMPLE_INTERVAL);
         if !due {
             return;
         }
 
-        // Marked before the spawn, as `claim_refresh` does: work this slow
-        // must not be asked for twice while the first is still running.
+        // Claimed before the spawn, as `claim_refresh` does: work this slow
+        // must not be asked for twice while the first is still running. The
+        // claim releases on drop, so an unwind inside the task frees the
+        // sampler rather than wedging it for the life of the window.
+        let Some(claim) = agent_processes::SamplingClaim::claim(&self.process_sampling)
+        else {
+            return;
+        };
+
         self.process_sampled_at = Some(Instant::now());
-        self.process_sampling.store(true, Ordering::Release);
 
         let slot = Arc::clone(&self.process_publish);
-        let running = Arc::clone(&self.process_sampling);
         // `spawn_blocking`, not `spawn`: `knot_processes::sample` runs `ps`
         // and blocks until it has drained its output.
         self.runtime.spawn_blocking(move || {
+                        // Moved in, so the task owns the claim and dropping it
+                        // here is what releases the sampler - on the ordinary
+                        // path and on a panic alike.
+                        let _claim = claim;
                         let outcome = agent_processes::sample_roots(&roots, knot_processes::sample);
-                        {
-                            let mut published = slot.lock();
-                            published.generation += 1;
-                            match outcome {
-                                Ok(descendants) => {
-                                    published.descendants = descendants;
-                                    published.failure = None;
-                                }
-                                Err(error) => published.failure = Some(error.to_string()),
+                        let mut published = slot.lock();
+                        published.generation += 1;
+                        match outcome {
+                            Ok(descendants) => {
+                                published.descendants = descendants;
+                                published.failure = None;
                             }
+                            Err(error) => published.failure = Some(error.to_string()),
                         }
-                        running.store(false, Ordering::Release);
                     });
     }
 
