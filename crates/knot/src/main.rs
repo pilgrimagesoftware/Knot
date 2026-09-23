@@ -18,6 +18,7 @@ mod consts;
 mod controls;
 mod dashboard;
 mod diff_stats;
+mod external_tools;
 mod import_window;
 mod macos;
 mod markdown_view;
@@ -42,5 +43,8 @@ mod workspace_manager;
 mod workspace_window;
 
 fn main() {
+    // Before anything builds a git runner: a Finder-launched app's PATH
+    // names none of the places git may actually live.
+    external_tools::configure();
     app_bootstrap::run();
 }
