@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use gpui_kit::ClickEvent;
 use gpui_kit::ClipboardItem;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ListOffset;
 use gpui_kit::ListState;
@@ -30,6 +31,14 @@ use crate::panel_view::callbacks::PanelCallbacks;
 use crate::panel_view::style::ERROR_COLOR;
 use crate::panel_view::style::PanelStyle;
 use crate::panel_view::tool_call::render_tool_call_card;
+
+/// The hover group that reveals a prompt's copy control.
+///
+/// `group_hover` binds to the nearest ancestor carrying the name and each
+/// prompt builds its own group, so one constant gives per-message behaviour -
+/// keying it by index would allocate per message on the render path and
+/// suggest the name is an identity when it is a lookup.
+const PROMPT_HOVER_GROUP: &str = "panel-prompt";
 
 /// One message's render inputs, grouped so `render_message` keeps a short
 /// parameter list as the panel gains styling.
@@ -60,32 +69,52 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                 .w_full()
                 .min_w_0()
                 .justify_end()
-                .gap_1()
+                // The hover group is this shrink-wrapped cluster, not the
+                // full-width row: a group on the row would reveal the control
+                // from the empty space left of a short prompt, which
+                // acp-panel-ui's "empty space beside a prompt reveals nothing"
+                // rules out. The button being inside the group is also what
+                // keeps it shown once the pointer reaches it.
                 .child(
-                    Button::new(("panel-copy-prompt", index as u64))
-                        .icon(IconName::Copy)
-                        .tooltip(knot_core::l10n::t("panel.copy_prompt"))
-                        .ghost()
-                        .small()
-                        .on_click(move |_: &ClickEvent, window, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
-                            window.push_notification(
-                                Notification::info(knot_core::l10n::t("panel.copied_prompt")),
-                                cx,
-                            );
-                        }),
-                )
-                .child(
-                    div()
-                        .max_w(relative(0.85))
+                    h_flex()
                         .min_w_0()
-                        .text_sm()
-                        .text_color(style.prompt_foreground)
-                        .px_3()
-                        .py_1p5()
-                        .rounded_md()
-                        .bg(style.prompt_color)
-                        .child(text.clone()),
+                        .gap_1()
+                        .group(PROMPT_HOVER_GROUP)
+                        .child(
+                            Button::new(("panel-copy-prompt", index as u64))
+                                .icon(IconName::Copy)
+                                .tooltip(knot_core::l10n::t("panel.copy_prompt"))
+                                .ghost()
+                                .small()
+                                // `Visibility::Hidden` keeps the button in the
+                                // layout, so revealing it cannot reflow the
+                                // conversation as the pointer travels down it.
+                                .invisible()
+                                .group_hover(PROMPT_HOVER_GROUP, |style| style.visible())
+                                .on_click(move |_: &ClickEvent, window, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        copy_text.clone(),
+                                    ));
+                                    window.push_notification(
+                                        Notification::info(knot_core::l10n::t(
+                                            "panel.copied_prompt",
+                                        )),
+                                        cx,
+                                    );
+                                }),
+                        )
+                        .child(
+                            div()
+                                .max_w(relative(0.85))
+                                .min_w_0()
+                                .text_sm()
+                                .text_color(style.prompt_foreground)
+                                .px_3()
+                                .py_1p5()
+                                .rounded_md()
+                                .bg(style.prompt_color)
+                                .child(text.clone()),
+                        ),
                 )
                 .into_any_element()
         }

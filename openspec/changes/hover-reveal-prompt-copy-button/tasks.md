@@ -2,12 +2,12 @@
 
 ## 1. The hover group
 
-- [ ] 1.1 In `crates/knot/src/panel_view/message.rs`, wrap the copy button and
+- [x] 1.1 In `crates/knot/src/panel_view/message.rs`, wrap the copy button and
       the prompt bubble in a shrink-wrapped `h_flex()` inside the existing
       full-width `justify_end()` row, and give that inner row `.group(..)` with a
       module-level `&'static str` constant; verify with `make build` and by
       confirming a prompt still renders right-aligned with the button beside it
-- [ ] 1.2 Make the button `.invisible()` with
+- [x] 1.2 Make the button `.invisible()` with
       `.group_hover(GROUP, |style| style.visible())`, with a comment saying
       `Visibility::Hidden` keeps the button in the layout so revealing it cannot
       reflow the conversation; verify with `make lint` and by hovering a prompt
@@ -32,11 +32,11 @@
 
 ## 3. Check nothing else moved
 
-- [ ] 3.1 Confirm the code block copy control is still drawn without a hover,
+- [x] 3.1 Confirm the code block copy control is still drawn without a hover,
       per `acp-panel-ui`'s "The control does not wait for a hover" — the two
       controls are deliberately different and this change must not have touched
       the other one
-- [ ] 3.2 Confirm the response action bar is unchanged
+- [x] 3.2 Confirm the response action bar is unchanged
 - [ ] 3.3 Scroll a long conversation with the pointer held still over the list
       and confirm no control is left stuck shown on a row that scrolled past it
 - [ ] 3.4 Run `make` and confirm the whole gate passes — `fmt-check`,
