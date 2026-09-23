@@ -76,15 +76,6 @@ pub(super) fn empty_state(is_running: bool, processes: Option<&[DescendantProces
     }
 }
 
-/// The collapsed header's count, or the unknown marker before the first
-/// sample lands.
-pub(super) fn count_text(background: Option<usize>) -> String {
-    match background {
-        Some(count) => knot_core::l10n::t_with("processes.count", &[("count", &count.to_string())]),
-        None => knot_core::l10n::t("processes.count_unknown"),
-    }
-}
-
 pub(super) fn activity_text(activity: Activity) -> String {
     knot_core::l10n::t(match activity {
                            Activity::Background => "processes.background",
@@ -199,22 +190,27 @@ impl WorkspaceWindow {
 
         let expanded = self.process_section(agent_id)
                            .is_some_and(crate::agent_processes::ProcessSection::is_expanded);
-        let count = self.process_section(agent_id)
-                        .and_then(crate::agent_processes::ProcessSection::background_count);
+        let is_running = self.agent_session_root(agent_id).is_some();
+        let summary = super::processes_summary::summary_text(
+            is_running,
+            expanded,
+            self.process_section(agent_id)
+                .and_then(crate::agent_processes::ProcessSection::processes),
+        );
 
         Some(v_flex().w_full()
                      .flex_shrink_0()
                      .border_t_1()
                      .border_color(cx.theme().border)
                      .bg(cx.theme().background)
-                     .child(self.processes_header(agent_id, expanded, count, cx))
+                     .child(self.processes_header(agent_id, expanded, summary, cx))
                      .children(expanded.then(|| self.processes_body(agent_id, cx)))
                      .into_any_element())
     }
 
     /// The always-visible header: a disclosure triangle, the label, and the
-    /// background count.
-    fn processes_header(&self, agent_id: Uuid, expanded: bool, count: Option<usize>,
+    /// summary - names while collapsed, a count while expanded.
+    fn processes_header(&self, agent_id: Uuid, expanded: bool, summary: String,
                         cx: &mut Context<Self>)
                         -> gpui_kit::AnyElement {
         h_flex().id("processes-header")
@@ -239,9 +235,14 @@ impl WorkspaceWindow {
                 .child(div().text_sm()
                             .font_semibold()
                             .child(knot_core::l10n::t("processes.title")))
-                .child(div().text_sm()
+                // `min_w_0` + truncation: a collapsed header naming several
+                // processes must not widen the pane.
+                .child(div().min_w_0()
+                            .text_sm()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
                             .text_color(cx.theme().muted_foreground)
-                            .child(count_text(count)))
+                            .child(summary))
                 .into_any_element()
     }
 

@@ -374,3 +374,83 @@ fn a_failure_is_named_in_the_summary_line() {
     assert!(failed.len() > quiet.len(),
             "it adds to it: {failed:?} vs {quiet:?}");
 }
+
+// ------------------------------------------------- the prompt's key hints
+
+/// The `debug_bounds` key `Kbd` paints itself under, which is
+/// `Keystroke::unparse` and so spells the platform modifier three ways.
+/// `debug_bounds` wants a `&'static str`, so these are literals rather
+/// than something built from the binding at runtime.
+#[cfg(target_os = "macos")]
+const ALLOW_HINT: &str = "kbd:cmd-shift-a";
+#[cfg(target_os = "windows")]
+const ALLOW_HINT: &str = "kbd:win-shift-a";
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const ALLOW_HINT: &str = "kbd:super-shift-a";
+
+#[cfg(target_os = "macos")]
+const DENY_HINT: &str = "kbd:cmd-shift-d";
+#[cfg(target_os = "windows")]
+const DENY_HINT: &str = "kbd:win-shift-d";
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+const DENY_HINT: &str = "kbd:super-shift-d";
+
+/// Draws the permission prompt into a real window and returns whether each
+/// hint made it into the painted frame.
+///
+/// The prompt is rendered from inside a view rather than handed to
+/// `VisualTestContext::draw`: the decision controls are interactive
+/// elements, and gpui resolves those against the currently rendering view,
+/// so drawing one as a bare element panics before it can paint.
+///
+/// `install_actions_and_keys` is what puts the bindings in the keymap the
+/// prompt reads, over a temporary settings root so the persist it performs
+/// cannot reach the developer's own workspaces and agents.
+fn painted_hints(cx: &mut gpui_kit::TestAppContext) -> (bool, bool) {
+    let dir = tempfile::tempdir().expect("failed to make a temp settings directory");
+    let settings = knot_core::Settings::with_store_root(dir.path());
+    std::mem::forget(dir);
+    let store = std::sync::Arc::new(parking_lot::Mutex::new(knot_agents::AgentStore::new()));
+    cx.update(|cx| {
+          gpui_kit::init(cx);
+          crate::app_bootstrap::install_actions_and_keys(&settings, store, cx);
+      });
+
+    let mut state = PanelState::new();
+    state.pending_permission = Some(permission_request());
+    let request = state.pending_permission.clone().expect("just set above");
+
+    let window = cx.add_window(|_, _| PromptView { state, request });
+    let mut cx = gpui_kit::VisualTestContext::from_window(window.into(), cx);
+    cx.run_until_parked();
+
+    (cx.debug_bounds(ALLOW_HINT).is_some(), cx.debug_bounds(DENY_HINT).is_some())
+}
+
+/// A view whose whole body is the permission prompt.
+struct PromptView {
+    state:   PanelState,
+    request: PermissionRequest,
+}
+
+impl gpui_kit::Render for PromptView {
+    fn render(&mut self, window: &mut gpui_kit::Window, _: &mut gpui_kit::Context<Self>)
+              -> impl gpui_kit::IntoElement {
+        super::render::render_permission_prompt(&self.state,
+                                                &self.request,
+                                                RiskLevel::Neutral,
+                                                std::rc::Rc::new(|_| {}),
+                                                window)
+    }
+}
+
+/// The hint has to survive all the way into the painted frame, not merely
+/// resolve from the keymap: `Kbd` renders nothing for an action it cannot
+/// find, and `children(None)` is silently empty, so every failure between
+/// the binding and the pixel looks like a button that simply has no hint.
+#[gpui_kit::test]
+fn the_prompt_paints_a_key_hint_on_each_decision_button(cx: &mut gpui_kit::TestAppContext) {
+    let (allow, deny) = painted_hints(cx);
+    assert!(allow, "the Allow button painted no {ALLOW_HINT} hint");
+    assert!(deny, "the Deny button painted no {DENY_HINT} hint");
+}

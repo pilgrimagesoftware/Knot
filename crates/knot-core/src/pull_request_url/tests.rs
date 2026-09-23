@@ -229,3 +229,43 @@ fn the_carry_buffer_stays_bounded() {
             "carried {} bytes",
             scanner.carry.len());
 }
+
+/// The scan runs on the thread that parses PTY bytes into cells, so its cost
+/// has to stay linear in the stream rather than merely bounded.
+///
+/// Asserted as work rather than as elapsed time (#369). knot-terminal used to
+/// make this claim by timing a feed with the scan against one without it and
+/// comparing, which measured whatever else the machine was doing and failed
+/// in the suite while passing alone. Bytes handed to the scan are the thing
+/// the claim is actually about, and counting them cannot be descheduled.
+///
+/// [`the_carry_buffer_stays_bounded`] pins the invariant this rests on; this
+/// pins the consequence. They fail together if the carry grows without
+/// bound, and this one alone catches a scan that re-reads its buffer more
+/// than once per chunk.
+#[test]
+fn the_streaming_scan_does_work_linear_in_the_stream() {
+    const CHUNKS: u64 = 2_000;
+    let chunk = b"the quick brown fox jumps over the lazy dog 0123456789 abcdefghijklmnop\r\n";
+
+    BYTES_SCANNED.with(|scanned| scanned.set(0));
+    let mut scanner = PullRequestUrlScanner::new();
+    for _ in 0..CHUNKS {
+        scanner.feed(chunk, HOSTS);
+    }
+    let scanned = BYTES_SCANNED.with(core::cell::Cell::get);
+
+    // One pass over each chunk, plus whatever was carried into it. The carry
+    // is capped, so the ceiling is linear; a quadratic scan blows past it
+    // long before the last chunk.
+    let ceiling = CHUNKS * (chunk.len() + MAX_PULL_REQUEST_URL_LEN) as u64;
+    assert!(scanned <= ceiling,
+            "scanned {scanned} bytes over {CHUNKS} chunks of {} bytes; linear ceiling is {ceiling}",
+            chunk.len());
+
+    // And it did look at the stream - a scan that examined nothing would
+    // satisfy the ceiling while finding nothing either.
+    assert!(scanned >= CHUNKS * chunk.len() as u64,
+            "scanned only {scanned} bytes; the stream alone is {}",
+            CHUNKS * chunk.len() as u64);
+}

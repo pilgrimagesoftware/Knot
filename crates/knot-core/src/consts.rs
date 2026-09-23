@@ -212,3 +212,19 @@ pub const PULL_REQUEST_HOST_GITHUB: &str = "github.com";
 /// 39-byte owner, a 100-byte repository, the scheme, the separators and the
 /// number, rounded up.
 pub const MAX_PULL_REQUEST_URL_LEN: usize = 512;
+
+/// Directories a Finder-launched macOS app won't have on its launchd `PATH`
+/// (the GUI default is `/usr/bin:/bin:/usr/sbin:/sbin`) but the tools Knot
+/// spawns - coding-agent CLIs, their ACP adapters, `gh` - are typically
+/// installed into. `~`-prefixed entries are resolved against `HOME` at call
+/// time: a GUI process keeps `HOME` even though it lost the shell
+/// environment.
+///
+/// One list rather than one per subsystem. Two rosters would disagree
+/// eventually, and the symptom is a tool the app finds for one feature and
+/// reports missing for another.
+pub const EXEC_PATH_FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin",
+                                               "/usr/local/bin",
+                                               "~/.cargo/bin",
+                                               "~/.local/bin",
+                                               "~/.npm-global/bin"];

@@ -57,3 +57,74 @@ fn stdout_comes_back_trimmed() {
 
     assert_eq!(out, "hello");
 }
+
+/// The bug this crate had: a Finder-launched app's `PATH` names no
+/// directory `gh` is ever installed in, so spawning it by bare name failed
+/// and the view reported the tool missing on a machine that has it.
+#[test]
+fn gh_is_located_in_an_install_directory_the_process_path_omits() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let installed = write_executable(dir.path(), "gh");
+
+    let located = super::locate_gh(&dir.path().display().to_string());
+
+    assert_eq!(located, installed,
+               "gh must be located by absolute path, not left to the spawn's own lookup");
+}
+
+#[test]
+fn a_path_holding_no_gh_falls_back_to_the_bare_name() {
+    let dir = tempfile::tempdir().expect("temp dir");
+
+    let located = super::locate_gh(&dir.path().display().to_string());
+
+    assert_eq!(located,
+               std::ffi::OsString::from("gh"),
+               "a machine without gh must still reach the NotFound spawn that reports Missing");
+}
+
+#[test]
+fn the_located_binary_is_what_runs() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    write_script(dir.path(), "gh", "printf 'from the located binary'");
+
+    let runner = GhRunner::new().with_program(super::locate_gh(&dir.path().display().to_string()));
+
+    assert_eq!(runner.run(&["auth", "status"]).unwrap(),
+               "from the located binary");
+}
+
+#[test]
+fn the_child_is_given_the_merged_search_path() {
+    let runner = GhRunner::new().with_program("sh");
+
+    let child_path = runner.run(&["-c", "printf '%s' \"$PATH\""]).unwrap();
+
+    assert_eq!(child_path,
+               runner.search_path().to_string_lossy(),
+               "gh shells out to git and to credential helpers, so it needs the merged path too");
+    assert!(child_path.split(':')
+                      .any(|entry| entry == "/opt/homebrew/bin"),
+            "the merged path must name the standard install locations: {child_path}");
+}
+
+fn write_executable(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    write_script(dir, name, "true")
+}
+
+#[cfg(unix)]
+fn write_script(dir: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = dir.join(name);
+    std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).expect("write");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    path
+}
+
+#[cfg(not(unix))]
+fn write_script(dir: &std::path::Path, name: &str, _body: &str) -> std::path::PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, b"").expect("write");
+    path
+}

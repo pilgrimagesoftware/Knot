@@ -71,7 +71,7 @@ impl SettingsWindow {
                     settings_window.update(app, |view, cx| {
                                        view.settings.source_base_folder =
                                            path.to_string_lossy().into_owned();
-                                       view.persist();
+                                       view.persist(cx);
                                        cx.notify();
                                    });
                 });
@@ -81,7 +81,7 @@ impl SettingsWindow {
 
     fn clear_source_folder(&mut self, cx: &mut Context<Self>) {
         self.settings.source_base_folder.clear();
-        self.persist();
+        self.persist(cx);
         cx.notify();
     }
 
@@ -103,7 +103,7 @@ impl SettingsWindow {
         self.settings
             .agent_options
             .insert(self.selected_agent_type.clone(), value);
-        self.persist();
+        self.persist(cx);
     }
 
     pub(crate) fn render_coding(&self, cx: &mut Context<Self>) -> impl IntoElement {

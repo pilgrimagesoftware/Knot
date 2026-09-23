@@ -57,19 +57,19 @@ impl SettingsWindow {
 
     fn select_ai_provider(&mut self, provider: AiProvider, cx: &mut Context<Self>) {
         self.settings.ai_provider = provider;
-        self.persist();
+        self.persist(cx);
         cx.notify();
     }
 
     fn select_autopilot_action(&mut self, action: AutopilotAction, cx: &mut Context<Self>) {
         self.settings.autopilot_action = action;
-        self.persist();
+        self.persist(cx);
         cx.notify();
     }
 
     pub(crate) fn save_ai_api_key(&mut self, cx: &mut Context<Self>) {
         self.settings.ai_api_key = self.ai_api_key_input.read(cx).value().to_string();
-        self.persist();
+        self.persist(cx);
     }
 
     pub(crate) fn save_autopilot_custom_prompt(&mut self, cx: &mut Context<Self>) {
@@ -77,7 +77,7 @@ impl SettingsWindow {
                                                     .read(cx)
                                                     .value()
                                                     .to_string();
-        self.persist();
+        self.persist(cx);
     }
 
     pub(crate) fn render_autopilot(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -102,9 +102,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.autopilot_enabled = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),

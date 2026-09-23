@@ -25,18 +25,65 @@ use gpui_kit::Rgba;
 /// actually moved.
 pub(crate) const REPAINT_POLL_INTERVAL: Duration = Duration::from_millis(33);
 
-/// Minimum gap between working-indicator repaints.
-///
-/// The spinner advances about five times a second, so repainting at the poll
-/// rate would redraw the same frame five times over.
-pub(crate) const WORKING_INDICATOR_MIN_REPAINT: Duration = Duration::from_millis(120);
-
 /// How stale a cached `git diff --numstat` may get before the next render
 /// asks for a fresh one.
 ///
 /// `git` runs at most this often per agent no matter how often the window
 /// repaints - see `workspace_window::sessions`.
 pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
+
+/// How stale the git panel's working-tree status may get before the next
+/// render asks for a fresh one.
+///
+/// Shorter than a diff stat's, because the panel is what the user acts
+/// through: a stage they just made must appear promptly, and the watch that
+/// would otherwise tell us is paused for exactly that window.
+pub(crate) const GIT_STATUS_MAX_AGE: Duration = Duration::from_millis(500);
+
+/// How stale a shown file diff may get before it is read again.
+///
+/// Long, because a diff is re-read when the selection changes or the status
+/// is invalidated, not on a clock - this is a backstop against a diff that
+/// somehow outlives both, not the mechanism that keeps it fresh.
+pub(crate) const GIT_DIFF_MAX_AGE: Duration = Duration::from_secs(30);
+
+/// The git panel's width when it opens, and the bounds a drag may take it to.
+///
+/// Carried from the Swift panel, which clamped the same way. Not persisted:
+/// a reopened panel starts at the default again.
+pub(crate) const GIT_PANEL_DEFAULT_WIDTH: f32 = 500.;
+pub(crate) const GIT_PANEL_MIN_WIDTH: f32 = 350.;
+pub(crate) const GIT_PANEL_MAX_WIDTH: f32 = 800.;
+
+/// The most diff lines the panel will hold and draw for one file.
+///
+/// Drawing is virtualized, so this is not what bounds the frame - it bounds
+/// what `parse_diff` materializes into the cache. A generated file of several
+/// hundred thousand lines should not be held in memory per selected row.
+pub(crate) const GIT_DIFF_MAX_LINES: usize = 20_000;
+
+/// How much space above and below the diff viewport the list measures, so
+/// scrolling a diff does not pop lines in at the edges. The conversation
+/// panel's own overdraw, for the same reason.
+pub(crate) const GIT_DIFF_LIST_OVERDRAW: f32 = 400.;
+
+/// The height hint every diff row starts with, before it has been measured.
+///
+/// A virtualized list summarises an unmeasured row as zero height and flags
+/// the whole summary unknown, so anything derived from total content height -
+/// a scrollbar thumb above all - is wrong until every row has been drawn.
+/// Seeding a hint fixes that from the first frame, and real heights replace
+/// it as rows render.
+///
+/// The value is the computed line box, not an estimate: `text_xs` is
+/// `rems(0.75)` against the default 16px rem, so 12px; the default
+/// `line_height` is `phi` *relative to the font size*, so 12 x 1.618034 =
+/// 19.416, rounded to 19. A diff row carries horizontal padding only, and no
+/// border, so the line box is the whole row.
+///
+/// One hint works here and would not for a conversation: diff rows are
+/// uniform - one line each, one text size, no wrapping.
+pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 19.;
 
 /// How stale a pull request's fetched state may get before the Pull Requests
 /// view asks for it again.
@@ -46,6 +93,15 @@ pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 /// timescale rather than a keystroke's. A list of twenty rows therefore costs
 /// twenty `gh` runs a minute while it is open, and none while it is not.
 pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
+
+/// How stale the answer to "can state be fetched at all" may be.
+///
+/// The same minute as the rows it gates, and one `gh auth status` against
+/// their twenty `gh pr view`s. Re-asking at all is what makes signing in
+/// take effect while the window stays open; re-asking faster would spend a
+/// subprocess to notice something that only changes when the user goes and
+/// does it.
+pub(crate) const FORGE_PROBE_MAX_AGE: Duration = Duration::from_secs(60);
 
 /// How often the settings window drains the native font panel's selections.
 ///
@@ -109,6 +165,13 @@ pub(crate) const PULL_REQUEST_ROW_TINT: f32 = 0.10;
 /// How much reaches its border, where there is no text to stay legible
 /// against and the colour does the identifying.
 pub(crate) const PULL_REQUEST_ROW_BORDER_TINT: f32 = 0.55;
+
+/// How wide the workspace name dialog is, in pixels.
+///
+/// Narrower than the dialog host's 448px default: the dialog holds one
+/// single-line name field, and a box twice as wide as its contents reads as
+/// an empty one.
+pub(crate) const WORKSPACE_DIALOG_WIDTH: f32 = 360.;
 
 /// The colour a workspace gets when it has none, or when the one it has
 /// stored will not parse.

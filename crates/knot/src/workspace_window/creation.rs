@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use gpui_kit::App;
 use gpui_kit::Context;
+use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
+use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::component::ActiveTheme;
@@ -38,20 +41,41 @@ pub(crate) struct SelectedAgentHeader {
 }
 
 impl WorkspaceWindow {
-    /// Finds the declared config option matching one of `categories`
-    /// (case-insensitive), for bucketing the agent's arbitrary option list
-    /// into the input area's three fixed selector slots.
+    /// Finds the declared config option matching one of `candidates`, for
+    /// bucketing the agent's arbitrary option list into the input area's
+    /// three fixed selector slots.
+    ///
+    /// ACP makes `category` optional - "Categories are for UX purposes only
+    /// and MUST NOT be required for correctness. Clients MUST handle missing
+    /// or unknown categories gracefully"
+    /// (<https://agentclientprotocol.com/protocol/v2/session-config-options>).
+    /// Requiring it hid every selector, and the prompt's risk colour, from
+    /// any compliant agent that left the field off - silently, because each
+    /// caller folds the `None` into its own empty state. See issue #194.
+    ///
+    /// So three passes run in turn: `category`, then `id`, then `name`. A
+    /// later pass runs only when the earlier one found nothing anywhere in
+    /// the list, so a properly categorized option is never outranked by one
+    /// that merely happens to share its id or name.
+    ///
+    /// Matching is exact and case-insensitive, never a substring: `mode` is
+    /// a substring of `model`, so a looser rule would let the permission
+    /// slot claim the model option. Ties fall to whichever option the agent
+    /// listed first, the priority order ACP asks clients to honour.
     pub(crate) fn find_config_option<'a>(options: &'a [knot_acp::ConfigOption],
-                                         categories: &[&str])
+                                         candidates: &[&str])
                                          -> Option<&'a knot_acp::ConfigOption> {
-        options.iter().find(|option| {
-                          option.kind == "select"
-                          && option.category.as_deref().is_some_and(|category| {
-                                                           categories
-                        .iter()
-                        .any(|candidate| candidate.eq_ignore_ascii_case(category))
-                                                       })
-                      })
+        let matches = |field: &str| {
+            candidates.iter()
+                      .any(|candidate| candidate.eq_ignore_ascii_case(field))
+        };
+        // A non-select option cannot populate a picker whichever field
+        // matched it, so the filter sits outside every pass.
+        let selectable = || options.iter().filter(|option| option.kind == "select");
+
+        selectable().find(|option| option.category.as_deref().is_some_and(&matches))
+                    .or_else(|| selectable().find(|option| matches(&option.id)))
+                    .or_else(|| selectable().find(|option| matches(&option.name)))
     }
 
     pub(super) fn open_new_agent_dialog(&mut self, cx: &mut Context<Self>) {
@@ -80,16 +104,39 @@ impl WorkspaceWindow {
         }
     }
 
-    /// The selected agent's diff stat, with only the figures colored -
-    /// additions green, deletions red, the changed-file count blue - and
-    /// the words around them left muted. The count's noun goes through
-    /// `l10n::plural_noun` rather than a local `if count == 1`, so the
-    /// word (and its form) comes from the locale catalog.
-    pub(super) fn render_diff_stats(stats: &knot_git::DiffStats, font_family: String,
-                                    font_size: gpui_kit::Pixels, cx: &Context<Self>)
-                                    -> gpui_kit::AnyElement {
-        app_state::diff_stats_row(stats, cx.theme().muted_foreground).font_family(font_family)
-                                                                     .text_size(font_size)
-                                                                     .into_any_element()
+    /// The same stat row, made the control that opens the git panel.
+    ///
+    /// The entry point is here rather than in the agent row's context menu
+    /// so `agent-list-ui` needs no change for it, and because burying the
+    /// panel behind a right-click hides it from the one place already
+    /// pointing at what it shows.
+    pub(super) fn render_diff_stats_button(stats: &knot_git::DiffStats, font_family: String,
+                                           font_size: gpui_kit::Pixels, cx: &mut Context<Self>)
+                                           -> gpui_kit::AnyElement {
+        let row = app_state::diff_stats_row(stats, cx.theme().muted_foreground);
+
+        gpui_kit::div()
+            .id("agent-git-stats")
+            .cursor_pointer()
+            .rounded(cx.theme().radius)
+            .tooltip({
+                let text = knot_core::l10n::t("git_panel.title");
+                move |window, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
+                }
+            })
+            .on_click(cx.listener(|view, _: &gpui_kit::ClickEvent, _window, cx| {
+                          let Some(id) = view.selected_agent
+                          else {
+                              return;
+                          };
+                          let Some(folder) = view.agent_folder(id)
+                          else {
+                              return;
+                          };
+                          view.toggle_git_panel(id, &folder, cx);
+                      }))
+            .child(row.font_family(font_family).text_size(font_size))
+            .into_any_element()
     }
 }

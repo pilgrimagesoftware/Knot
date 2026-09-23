@@ -83,30 +83,82 @@ fn ordinary_output_notes_nothing() {
 /// has to be cheap relative to VT parsing rather than merely cheap. A
 /// `yes`-style flood is the shape that would show it up.
 ///
-/// Asserted as a ratio rather than a wall-clock bound: an absolute threshold
-/// would be a flaky test on a loaded CI machine, while the ratio between two
-/// runs on the same machine is stable.
+/// Ignored, not deleted, and not part of the gate: this is a wall-clock
+/// comparison and there is no way to make one deterministic. Run it by hand
+/// when changing the scan - `cargo test -p knot-terminal -- --ignored
+/// --nocapture` - and read the printed medians rather than trusting the
+/// assertion alone.
+///
+/// The earlier version of this test compared two timings taken one after the
+/// other and justified it as a ratio being stabler than an absolute bound
+/// (#369). That reasoning does not hold: the two arms are measured at
+/// different moments, so load arriving between them lands on one and not the
+/// other, and the scanning arm ran first and so paid every cold cost -
+/// allocation, page faults, cache warm-up. The bias was systematic and always
+/// against the assertion. In the suite it read `with_scan` at 70.8ms against
+/// a 9.2ms parse and failed; in isolation it read the scanning arm as *faster*
+/// than the parse it contains.
+///
+/// What actually guards the feed is deterministic and lives in knot-core,
+/// where the state is visible. `pull_request_url::tests` asserts both halves
+/// without a clock: `the_carry_buffer_stays_bounded` pins the invariant, and
+/// `the_streaming_scan_does_work_linear_in_the_stream` counts the bytes
+/// handed to the scan and holds them under a linear ceiling. An unbounded
+/// carry is what would make each scan re-read an ever-larger buffer and turn
+/// the feed quadratic; both of those fail if it does, and the second alone
+/// catches a scan that re-reads its buffer more than once per chunk. Counting
+/// work is the honest form of this claim - it is what "does not measurably
+/// slow the feed" means - and it cannot be descheduled.
+///
+/// Both arms are warmed and then interleaved across repetitions, and the
+/// medians compared, so that a deliberate run is not measuring the order the
+/// arms happen to run in.
 #[test]
+#[ignore = "wall-clock comparison; cannot be made deterministic (#369). \
+            The bounded-carry invariant it stood in for is asserted in \
+            knot-core::pull_request_url::tests."]
 fn scanning_does_not_measurably_slow_the_grid_feed() {
     const CHUNKS: usize = 2_000;
+    const REPEATS: usize = 9;
     let chunk = b"the quick brown fox jumps over the lazy dog 0123456789 abcdefghijklmnop\r\n";
 
-    let mut scanning = grid();
-    let started = Instant::now();
-    for _ in 0..CHUNKS {
-        scanning.feed(chunk);
-    }
-    let with_scan = started.elapsed();
-
+    let feed_scanning = || {
+        let mut grid = grid();
+        let started = Instant::now();
+        for _ in 0..CHUNKS {
+            grid.feed(chunk);
+        }
+        started.elapsed()
+    };
     // The same work with the scan skipped, to price the VT parse alone.
-    let mut parsing_only = grid();
-    let started = Instant::now();
-    for _ in 0..CHUNKS {
-        parsing_only.feed_without_scan(chunk);
-    }
-    let without_scan = started.elapsed();
+    let feed_parsing_only = || {
+        let mut grid = grid();
+        let started = Instant::now();
+        for _ in 0..CHUNKS {
+            grid.feed_without_scan(chunk);
+        }
+        started.elapsed()
+    };
 
-    println!("feed with scan: {with_scan:?}; parse alone: {without_scan:?}");
+    // Discarded: the first run of either arm pays allocation and cache
+    // warm-up that has nothing to do with the scan.
+    feed_scanning();
+    feed_parsing_only();
+
+    let mut scanning = Vec::with_capacity(REPEATS);
+    let mut parsing_only = Vec::with_capacity(REPEATS);
+    for _ in 0..REPEATS {
+        // Alternating, so a load spike lands on both arms rather than
+        // whichever one happens to be running at the time.
+        scanning.push(feed_scanning());
+        parsing_only.push(feed_parsing_only());
+    }
+    scanning.sort_unstable();
+    parsing_only.sort_unstable();
+    let with_scan = scanning[REPEATS / 2];
+    let without_scan = parsing_only[REPEATS / 2];
+
+    println!("median of {REPEATS}: feed with scan {with_scan:?}; parse alone {without_scan:?}");
     assert!(with_scan.as_secs_f64() < without_scan.as_secs_f64() * 2.0 + 0.05,
             "scan cost {with_scan:?} against a {without_scan:?} parse");
 }

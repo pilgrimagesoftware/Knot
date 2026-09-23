@@ -4,6 +4,7 @@
 //! `legacy/tests.rs`; everything here is about a store already in the
 //! per-document arrangement.
 
+mod binding;
 mod pull_requests;
 
 use std::fs;

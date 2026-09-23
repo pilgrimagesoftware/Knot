@@ -313,9 +313,17 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                 else {
                     return;
                 };
+                // Numbered off every existing name, not `{name} (copy)`:
+                // the old suffix stacked, so a duplicate of a duplicate read
+                // `Foo (copy) (copy)`.
+                let taken: Vec<String> = store.agents()
+                                              .iter()
+                                              .map(|agent| agent.name.clone())
+                                              .collect();
+                let name =
+                    knot_agents::duplicate_name(&source.name, taken.iter().map(String::as_str));
                 store.create(source.folder.clone(),
-                             knot_agents::CreateOptions { name: Some(format!("{} (copy)",
-                                                                             source.name)),
+                             knot_agents::CreateOptions { name: Some(name),
                                                           avatar: Some(source.avatar.clone()),
                                                           agent_type: Some(source.agent_type
                                                                                  .clone()),

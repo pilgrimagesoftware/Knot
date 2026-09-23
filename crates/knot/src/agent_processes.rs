@@ -17,6 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use knot_processes::{DescendantProcess, ProcessTable};
 use parking_lot::Mutex;
@@ -63,16 +64,6 @@ impl ProcessSection {
     /// The last completed sample, or `None` if none has landed.
     pub(crate) fn processes(&self) -> Option<&[DescendantProcess]> {
         self.snapshot.as_deref()
-    }
-
-    /// How many background descendants the last sample found, or `None`
-    /// before the first one completes.
-    pub(crate) fn background_count(&self) -> Option<usize> {
-        self.snapshot.as_ref().map(|processes| {
-                                  processes.iter()
-                                           .filter(|p| p.activity.is_background())
-                                           .count()
-                              })
     }
 
     pub(crate) fn failure(&self) -> Option<&str> {
@@ -135,6 +126,44 @@ pub(crate) struct Published {
 /// The slot a window's sampling task publishes into.
 pub(crate) type PublishSlot = Arc<Mutex<Published>>;
 
+/// The flag that says a sampling pass is already running.
+pub(crate) type SamplingFlag = Arc<AtomicBool>;
+
+/// A claim on the sampler, released when it drops.
+///
+/// The flag exists so a pass this slow is not asked for twice while the first
+/// is still running. It used to be lowered by a `store(false)` statement at
+/// the end of the sampling closure, which meant *any* unwind skipped it: the
+/// flag stayed raised, [`claim`](Self::claim) refused every later pass, and
+/// the section stopped updating for the life of the window with nothing shown
+/// to say so. Unbounded, unlike a `RefreshCache` key, which at least expires.
+///
+/// Releasing on `Drop` makes the reset unconditional by construction rather
+/// than by the closure reaching its last line - the same property that makes
+/// `refresh_cache`'s claim-then-hand-to-`spawn_blocking` safe.
+#[derive(Debug)]
+pub(crate) struct SamplingClaim(SamplingFlag);
+
+impl SamplingClaim {
+    /// Claims the sampler, or `None` when a pass is already running.
+    ///
+    /// `compare_exchange` rather than a `load` then a `store`: the two-step
+    /// form left a window between the check and the mark. Nothing exploits it
+    /// today - claims are made from the render thread alone - but a claim that
+    /// cannot be raced is one less thing to have to know.
+    pub(crate) fn claim(flag: &SamplingFlag) -> Option<Self> {
+        flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+            .then(|| Self(Arc::clone(flag)))
+    }
+}
+
+impl Drop for SamplingClaim {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 /// Walks one already-read table for every observed root.
 ///
 /// Separate from [`sample_roots`] so the walk can be tested against a built
@@ -173,22 +202,29 @@ pub(crate) struct Showing {
 /// Which agents this window should be sampling, and the root to sample each
 /// from.
 ///
-/// Empty means the sampler has nothing to do and starts nothing. Three of the
-/// spec's four stop triggers are ways for an agent to leave this set: the
-/// section collapses, the agent's session ends so it has no root, or a
-/// takeover view hides the pane the section lives in. The fourth, the window
-/// closing, is the window's tokio runtime being dropped along with it, which
-/// takes any pass still in flight with it.
-pub(crate) fn observed_roots(sections: &BTreeMap<Uuid, ProcessSection>, showing: Showing,
-                             root_of: impl Fn(Uuid) -> Option<u32>)
+/// Being *shown* is the gate, not being expanded. Expansion used to be, and
+/// that was the defect behind the permanent "Counting…": the collapsed header
+/// promised a count drawn from the last sample, while no sample could run
+/// until the user expanded the very section that count was meant to persuade
+/// them to open.
+///
+/// Empty means the sampler has nothing to do and starts nothing. Two of the
+/// spec's stop triggers are ways for an agent to leave this set: its session
+/// ends so it has no root, or a takeover view hides the pane the section
+/// lives in. The third, the window closing, is the window's tokio runtime
+/// being dropped along with it, which takes any pass still in flight too.
+///
+/// At most one entry, because at most one agent's pane is on screen. The cost
+/// of the section is therefore one `ps -A` per interval per window while a
+/// running agent is shown - not per agent, and not per expanded section.
+pub(crate) fn observed_roots(showing: Showing, root_of: impl Fn(Uuid) -> Option<u32>)
                              -> BTreeMap<Uuid, u32> {
     let Some(shown) = showing.agent
     else {
         return BTreeMap::new();
     };
 
-    sections.iter()
-            .filter(|(agent, section)| **agent == shown && section.expanded)
-            .filter_map(|(agent, _)| root_of(*agent).map(|root| (*agent, root)))
-            .collect()
+    root_of(shown).map(|root| (shown, root))
+                  .into_iter()
+                  .collect()
 }

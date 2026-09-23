@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::consts;
+use crate::diff::{FileDiff, parse_diff};
 use crate::error::{GitError, Result};
 use crate::runner::Runner;
 use crate::stats::{DiffStats, parse_numstat, untracked_line_count};
@@ -55,6 +56,35 @@ impl Repository {
         }
 
         Ok(stats)
+    }
+
+    /// One path's diff: `git diff --no-color [--staged] -- <path> [<orig>]`,
+    /// parsed by [`parse_diff`].
+    ///
+    /// `staged` selects index-against-HEAD rather than worktree-against-index.
+    /// They are different diffs for a path that was staged and then modified
+    /// again, which is why the caller chooses.
+    ///
+    /// `orig_path` is a rename's or copy's source, from
+    /// [`FileEntry::orig_path`]. Git detects a rename by comparing both sides,
+    /// so a diff scoped to the destination alone reports a whole new file
+    /// instead - passing the source back is what keeps a rename a rename.
+    ///
+    /// `None` when the path has no change on that side.
+    ///
+    /// [`parse_diff`]: crate::diff::parse_diff
+    /// [`FileEntry::orig_path`]: crate::status::FileEntry::orig_path
+    pub fn file_diff(&self, path: &str, orig_path: Option<&str>, staged: bool)
+                     -> Result<Option<FileDiff>> {
+        let mut argv = consts::DIFF.to_vec();
+        if staged {
+            argv.push(consts::DIFF_STAGED_FLAG);
+        }
+        argv.push(consts::PATHSPEC_SEP);
+        argv.push(path);
+        argv.extend(orig_path);
+
+        Ok(parse_diff(&self.runner.run(&argv)?).into_iter().next())
     }
 
     /// `git add <paths>`. Empty slice is a no-op (no process spawned).

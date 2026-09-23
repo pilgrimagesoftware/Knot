@@ -347,7 +347,7 @@ impl AgentEditor {
                             knot_core::l10n::t("agent_editor.choose_folder"),
                             false,
                         )
-                        .on_click(cx.listener(|editor, _, _, cx| editor.choose_folder(cx))),
+                        .on_click(cx.listener(|editor, _, window, cx| editor.choose_folder(window, cx))),
                     ),
             )
             .into_any_element(),
@@ -382,7 +382,9 @@ impl Render for AgentEditor {
             .child(
                 // Scrolls in place instead of pushing the action row (which
                 // must stay visible) off the bottom of the window - the
-                // folder path row can wrap to more than one line.
+                // folder path row can wrap to more than one line, and the
+                // registry section's fields make the form taller than the
+                // dialog on their own.
                 div()
                     .id("new-agent-content")
                     .flex_1()
@@ -391,9 +393,14 @@ impl Render for AgentEditor {
                         v_flex()
                             .gap_3()
                             .child(Self::dialog_section(cx, identity_rows))
+                            // The folder before the sections that describe
+                            // the agent, not after them: it is the one thing
+                            // the dialog cannot be submitted without, and
+                            // choosing it names a still-unnamed agent. See
+                            // `openspec/specs/agent-editor-ui/spec.md`.
+                            .child(Self::dialog_section(cx, folder_rows))
                             .child(Self::dialog_section(cx, agent_rows))
                             .child(Self::dialog_section(cx, registry_rows))
-                            .child(Self::dialog_section(cx, folder_rows))
                             .children(self.error.as_ref().map(|error| {
                                 div()
                                     .text_sm()

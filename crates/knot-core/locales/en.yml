@@ -32,6 +32,12 @@ sidebar:
 
 agent:
   companion: "Shell companion"
+  # How a duplicated agent is named. The shape is the translator's:
+  # where the number goes relative to the name, and what separates
+  # them, are read back off this entry rather than assumed at the
+  # call site. Numbering, not a "(copy)" suffix, so duplicating a
+  # duplicate extends the series instead of nesting.
+  duplicate_name: "%{name} %{number}"
 
 panel:
   # Failures the panel records into the conversation itself, where the
@@ -105,7 +111,7 @@ settings:
     appearance: "Appearance"
   general:
     appearance: "Appearance"
-    appearance_hint: "Derives color scheme from terminal background color."
+    appearance_hint: "Light and Dark override the system setting; Auto and System follow it."
     startup: "Startup"
     restore_agents: "Restore agents on launch"
     restore_conversation: "Restore last conversation"
@@ -301,6 +307,8 @@ workspace_manager:
   rename: "Rename workspace"
   delete: "Delete workspace"
   delete_title: "Delete Workspace?"
+  delete_body: "Delete \"%{name}\" and its agents?"
+  this_workspace: "this workspace"
   new_title: "New Workspace"
   rename_title: "Rename Workspace"
   save: "Save"
@@ -378,11 +386,23 @@ mcp_server:
 
 processes:
   title: "Processes"
-  # Before the first sample lands there is no count to give. Deliberately
+  # Before the first sample lands there is no summary to give. Deliberately
   # not "0": a section that says nothing is running while it is still
-  # looking is worse than one that admits it does not know yet.
+  # looking is worse than one that admits it does not know yet. Now that the
+  # sampler runs while the section is merely shown, this is a moment rather
+  # than the permanent state it used to be.
   count_unknown: "Counting…"
-  count: "%{count} background"
+  # Nothing running - an idle agent, or one that has stopped.
+  count_none: "None"
+  # Expanded, the rows below are the detail, so the header counts them.
+  count_one: "process"
+  count_many: "processes"
+  # Collapsed, the header names what is running instead of counting it.
+  # Between two names in that list; punctuation is the translator's.
+  summary_separator: ", "
+  # What the listed names did not cover. `%{count}` counts processes, not
+  # names: the question behind a glance at the header is how much is running.
+  summary_more: "%{names} +%{count} more"
   column_command: "Command"
   column_runtime: "Runtime"
   column_pid: "PID"
@@ -407,3 +427,55 @@ processes:
   empty_not_running: "This agent is not running, so nothing descends from it."
   empty_none: "This agent has not started anything that is still running."
   sample_failed: "The process list could not be read: %{reason}"
+
+git_panel:
+  title: "Git Status"
+  refresh: "Refresh"
+  close: "Close panel"
+  # States. A folder that is not a repository is a different answer from a
+  # clean working tree, which is why it has its own line.
+  loading: "Loading…"
+  clean: "Working tree clean"
+  not_a_repository: "This folder is not a git repository."
+  status_failed: "The repository status could not be read: %{reason}"
+  action_failed: "That change could not be made: %{reason}"
+  interrupted: "That operation did not finish. The panel has been left as it was."
+  error:
+    path_not_utf8: "That path is not valid UTF-8, so git cannot be asked about it."
+  # Branch header.
+  ahead: "%{count} ahead"
+  behind: "%{count} behind"
+  detached_head: "Detached HEAD"
+  # Sections, each with its own count line so the number stays beside the
+  # translator's noun rather than being concatenated at the call site.
+  section:
+    staged: "Staged Changes"
+    unstaged: "Changes"
+    untracked: "Untracked"
+    conflicted: "Conflicts"
+  section_count: "%{count}"
+  # Row and bulk actions.
+  stage: "Stage"
+  unstage: "Unstage"
+  discard: "Discard"
+  stage_all: "Stage All"
+  unstage_all: "Unstage All"
+  discard_title: "Discard changes to %{path}?"
+  discard_body: "The changes to %{path} are thrown away. Nothing can bring them back."
+  discard_confirm: "Discard"
+  # Diff pane.
+  select_a_file: "Select a file to view its diff"
+  additions: "+%{count}"
+  deletions: "-%{count}"
+  binary_file: "Binary file"
+  no_changes: "No changes"
+  diff_failed: "That diff could not be read: %{reason}"
+  diff_truncated: "This diff is too large to show in full; the first %{count} lines are shown."
+  # Commit.
+  commit: "Commit"
+  commit_title: "Commit staged changes"
+  commit_placeholder: "Commit message"
+  commit_hint: "The first line is the subject. Leave a blank line before the body."
+  commit_cancel: "Cancel"
+  commit_failed: "The commit failed: %{reason}"
+  committing: "Committing…"

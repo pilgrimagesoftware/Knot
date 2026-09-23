@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::consts::DEFAULT_TIMEOUT;
 use crate::error::{GitError, Result};
+use crate::program::configured;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
@@ -16,16 +17,20 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// the child; the main thread polls for exit and kills on timeout.
 #[derive(Debug, Clone)]
 pub struct Runner {
-    cwd:     PathBuf,
-    timeout: Duration,
-    program: OsString,
+    cwd:         PathBuf,
+    timeout:     Duration,
+    program:     OsString,
+    search_path: Option<OsString>,
 }
 
 impl Runner {
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
-        Self { cwd:     cwd.into(),
-               timeout: DEFAULT_TIMEOUT,
-               program: OsString::from("git"), }
+        let configured = configured();
+
+        Self { cwd:         cwd.into(),
+               timeout:     DEFAULT_TIMEOUT,
+               program:     configured.program,
+               search_path: configured.search_path, }
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -51,12 +56,20 @@ impl Runner {
     pub fn run(&self, args: &[&str]) -> Result<String> {
         let label = display_command(args);
 
-        let mut child = Command::new(&self.program).args(args)
-                                                   .current_dir(&self.cwd)
-                                                   .stdin(Stdio::null())
-                                                   .stdout(Stdio::piped())
-                                                   .stderr(Stdio::piped())
-                                                   .spawn()?;
+        let mut command = Command::new(&self.program);
+        command.args(args).current_dir(&self.cwd);
+        if let Some(search_path) = &self.search_path {
+            // Git's own helpers - credential helpers, hooks, `git-lfs`,
+            // `ssh` - are looked up in the environment it is handed, and a
+            // GUI process's `PATH` names none of the places they install
+            // into.
+            command.env("PATH", search_path);
+        }
+
+        let mut child = command.stdin(Stdio::null())
+                               .stdout(Stdio::piped())
+                               .stderr(Stdio::piped())
+                               .spawn()?;
 
         let mut stdout_pipe = child.stdout.take().expect("stdout piped");
         let mut stderr_pipe = child.stderr.take().expect("stderr piped");
