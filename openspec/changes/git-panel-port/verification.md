@@ -1,7 +1,7 @@
 # Manual verification
 
-Two tasks in `tasks.md` cannot be closed from a headless session: 3.5 and
-10.5. Everything else in this change is covered by automated tests.
+Three tasks in `tasks.md` cannot be closed from a headless session: 3.5, 9.5
+and 10.5. Everything else in this change is covered by automated tests.
 
 This file exists so whoever has a display can close them in a few minutes
 rather than re-deriving what to look at. Each step says what to do, what
@@ -178,6 +178,22 @@ Work down the panel. Each numbered item names the scenario it covers.
 24. Corrupt one: `echo garbage > /tmp/knot-verify-repo/.git/HEAD`. The panel
     shows an error, **not** "Working tree clean" — the Swift app showed the
     latter. → *Failed status is an error*
+
+## Task 9.5 — the dashboard card follows a commit
+
+Step 19 above checks the agent *header*. The dashboard card is a second
+surface reading the same cache, and it is the one that would keep stale
+counts for a full `DIFF_STATS_MAX_AGE` (2s) if the panel failed to
+invalidate.
+
+25. With the panel open and something staged, switch the window to the
+    Dashboard view and note the agent card's `+N -N` figures. Switch back,
+    commit, and return to the Dashboard.
+
+    **Expected:** the card shows the post-commit figures straight away. If it
+    shows the pre-commit counts and corrects itself a second or two later,
+    the panel is not invalidating `diff_stats` and is merely being rescued by
+    the cache ageing out. → *Diff stats follow the panel*
 
 ## Clean up
 

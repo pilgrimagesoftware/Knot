@@ -71,7 +71,7 @@
 - [x] 9.2 Make the agent header's diff stats row open and close the panel for that agent; verify it toggles and that the close control does the same
 - [x] 9.3 Implement the panel's default width of 500 clamped to 350–800 on drag, not persisted; verify the clamp at both ends and that a reopened panel is 500 again
 - [x] 9.4 Forget an agent's cache entries and stop its watch when its panel closes or the agent is removed; verify no entries survive for a removed agent
-- [ ] 9.5 Verify the dashboard card's diff stats update immediately after the panel commits, rather than after `DIFF_STATS_MAX_AGE`
+- [ ] 9.5 Verify the dashboard card's diff stats update immediately after the panel commits, rather than after `DIFF_STATS_MAX_AGE` — **needs a display**; step 25 in `verification.md`
 
 ## 10. Conventions and close-out
 
