@@ -2,6 +2,10 @@ use std::time::Duration;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The binary this crate runs, until the application names another through
+/// [`crate::program::configure`].
+pub const GIT_PROGRAM: &str = "git";
+
 pub const VERSION: &[&str] = &["--version"];
 
 pub const STATUS: &[&str] = &["status", "--porcelain=v2", "--branch"];
