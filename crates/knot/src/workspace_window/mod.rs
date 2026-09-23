@@ -24,6 +24,7 @@ mod render;
 mod repaint;
 mod sessions;
 mod sidebar_layout;
+pub(crate) mod terminal_font;
 mod terminal_input;
 mod title;
 mod view_mode;

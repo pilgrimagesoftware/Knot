@@ -29,6 +29,7 @@ use crate::window_registry::WindowRegistry;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::repaint::spawn_repaint_poll;
+use crate::workspace_window::terminal_font::TerminalFont;
 use crate::workspace_window::workspace_title;
 
 impl WorkspaceWindow {
@@ -131,6 +132,7 @@ impl WorkspaceWindow {
                     sidebar_resize,
                     root_focus: cx.focus_handle(),
                     terminal_focus: cx.focus_handle(),
+                    terminal_font: TerminalFont::default(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     last_spinner_frame: 0,

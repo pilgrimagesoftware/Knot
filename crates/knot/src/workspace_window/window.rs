@@ -24,6 +24,7 @@ use uuid::Uuid;
 
 use super::panel;
 use super::prompt_queue::QueuedPanelPrompt;
+use super::terminal_font::TerminalFont;
 use super::view_mode::WorkspaceViewMode;
 use crate::dashboard;
 use crate::panel_session;
@@ -107,6 +108,10 @@ pub(crate) struct WorkspaceWindow {
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
     pub(super) terminal_focus:                   gpui_kit::FocusHandle,
+    /// The family the terminal draws and measures in, resolved from the
+    /// installed families once per configured name rather than once per
+    /// frame - see `terminal_font`.
+    pub(super) terminal_font:                    TerminalFont,
     /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
     /// `on_grid_event` (which runs on the PTY reader thread) and drained
     /// by a polling loop onto the OS pasteboard via GPUI's main-thread
