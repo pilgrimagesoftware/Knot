@@ -11,23 +11,23 @@
       `.group_hover(GROUP, |style| style.visible())`, with a comment saying
       `Visibility::Hidden` keeps the button in the layout so revealing it cannot
       reflow the conversation; verify with `make lint` and by hovering a prompt
-- [ ] 1.3 Confirm the constant group name scopes per message rather than
+- [x] 1.3 Confirm the constant group name scopes per message rather than
       globally — this is the one API assumption in design.md: open a conversation
       with several prompts, hover one, and check that only that prompt's control
       appears
 
 ## 2. Walk the spec
 
-- [ ] 2.1 Hover a prompt bubble and confirm the control appears; move the pointer
+- [x] 2.1 Hover a prompt bubble and confirm the control appears; move the pointer
       off and confirm it goes, with the bubble unchanged
-- [ ] 2.2 Move the pointer from the bubble onto the revealed control and confirm
+- [x] 2.2 Move the pointer from the bubble onto the revealed control and confirm
       it stays shown and still copies — the case the old wording would have
       broken
-- [ ] 2.3 Rest the pointer in the empty area left of a short prompt, on the same
+- [x] 2.3 Rest the pointer in the empty area left of a short prompt, on the same
       line, and confirm nothing is revealed
-- [ ] 2.4 Move the pointer down a conversation across several prompts and confirm
+- [x] 2.4 Move the pointer down a conversation across several prompts and confirm
       nothing shifts position as controls appear and disappear
-- [ ] 2.5 Confirm copying is unchanged: the tooltip, the clipboard text (prompt
+- [x] 2.5 Confirm copying is unchanged: the tooltip, the clipboard text (prompt
       only, no attachment payload), and the confirmation notification
 
 ## 3. Check nothing else moved
@@ -37,7 +37,7 @@
       controls are deliberately different and this change must not have touched
       the other one
 - [x] 3.2 Confirm the response action bar is unchanged
-- [ ] 3.3 Scroll a long conversation with the pointer held still over the list
+- [x] 3.3 Scroll a long conversation with the pointer held still over the list
       and confirm no control is left stuck shown on a row that scrolled past it
 - [x] 3.4 Run `make` and confirm the whole gate passes — `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build
