@@ -59,7 +59,7 @@
 
 ## 8. Watching
 
-- [ ] 8.1 Implement the work-tree relevance predicate in `git_panel/watch.rs`; verify unit tests cover `.git/index`, `.git/HEAD`, `.git/refs/*` as relevant, `.git/objects` and `.git/COMMIT_EDITMSG` as not, dotfiles as not, and `.gitignore` as relevant
+- [x] 8.1 Implement the work-tree relevance predicate in `git_panel/watch.rs`; verify unit tests cover `.git/index`, `.git/HEAD`, `.git/refs/*` as relevant, `.git/objects` and `.git/COMMIT_EDITMSG` as not, dotfiles as not, and `.gitignore` as relevant
 - [ ] 8.2 Start one `Watch` per open panel inside the tokio runtime (`runtime.enter()` before `start()`) and stop it on close; verify opening a panel does not panic and that closing it leaves no running watch
 - [ ] 8.3 Route the watch callback through an `AtomicBool` read by `repaint_poll_tick`, which forgets the status entry and notifies; verify an external edit to a tracked file refreshes the panel
 - [ ] 8.4 Bracket every panel git operation with `pause` before and a `resume` scheduled after the follow-up status read records; verify staging a file does not produce a second refresh from its own writes

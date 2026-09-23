@@ -3,7 +3,8 @@
 //!
 //! `state` holds what the panel knows and the two caches it knows it through;
 //! `sections` turns a status into drawable rows and answers whether a
-//! selection survived a refresh.
+//! selection survived a refresh; `watch` decides which filesystem changes
+//! under the working tree are worth a refresh at all.
 //!
 //! Contract: `openspec/specs/git-panel-ui/spec.md`. Ported from the Swift
 //! app's `Skwad/Views/Git/`, with the divergences recorded in
@@ -11,6 +12,7 @@
 
 pub(crate) mod sections;
 pub(crate) mod state;
+pub(crate) mod watch;
 
 #[cfg(test)]
 mod tests;
