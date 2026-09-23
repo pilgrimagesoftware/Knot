@@ -64,10 +64,10 @@
 
 ## 6. Resolving the path in the app
 
-- [ ] 6.1 Resolve the log directory in `app_bootstrap::start_mcp_server` — `~/Library/Logs/Knot/`
+- [x] 6.1 Resolve the log directory in `app_bootstrap::start_mcp_server` — `~/Library/Logs/Knot/`
       on macOS, the platform state directory elsewhere — and pass the path to the server; verify a
       unit test asserts the macOS path shape without creating it.
-- [ ] 6.2 Verify the app still starts and serves when the resolved directory cannot be created,
+- [x] 6.2 Verify the app still starts and serves when the resolved directory cannot be created,
       writing to stderr alone.
 
 ## 7. Verification and close-out

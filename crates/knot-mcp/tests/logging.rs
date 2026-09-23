@@ -178,6 +178,41 @@ async fn the_tool_catalog_size_is_logged() {
 }
 
 #[tokio::test]
+async fn an_unwritable_log_path_does_not_stop_the_server() {
+    let root = TempDir::new().expect("temp dir");
+    // A file where the log wants a directory, so nothing can be created
+    // under it. This is the packaged-app case where the Logs directory is
+    // unavailable: the server must not care.
+    let blocker = root.path().join("blocked");
+    std::fs::write(&blocker, "not a directory").expect("blocker");
+
+    let mut server =
+        McpServer::new(0, Arc::new(EchoCatalog), no_agents()).with_log(blocker.join(LOG_FILE_NAME));
+    server.start()
+          .await
+          .expect("the server starts with no usable log");
+    let base = format!("http://{}", server.bound_addr().expect("bound address"));
+
+    let response = reqwest::Client::new().post(format!("{base}/mcp"))
+                                         .json(&json!({
+                                                   "jsonrpc": "2.0",
+                                                   "id": 1,
+                                                   "method": "tools/list",
+                                               }))
+                                         .send()
+                                         .await
+                                         .expect("the request is served");
+    assert_eq!(response.status(), 200);
+    let body: Value = response.json().await.expect("a JSON body");
+    assert_eq!(body["result"]["tools"][0]["name"], "send-message",
+               "requests are served with the same results as when logging works");
+
+    settle(&mut server).await;
+    assert!(!blocker.join(LOG_FILE_NAME).exists(),
+            "and no log was conjured up");
+}
+
+#[tokio::test]
 async fn a_tool_call_records_its_shape_and_not_its_arguments() {
     let (mut server, base, _root, path) = start(Arc::new(EchoCatalog)).await;
     let secret = "the whole prompt the user typed, and /Users/someone/secret.txt";
