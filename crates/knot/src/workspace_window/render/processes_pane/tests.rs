@@ -8,9 +8,7 @@ use knot_core::ViewMode;
 use knot_processes::{Activity, DescendantProcess, ProcessRecord, ProcessTable};
 use uuid::Uuid;
 
-use super::{
-    EmptyState, activity_text, count_text, empty_state, row_fields, runtime_text, section_is_shown,
-};
+use super::{EmptyState, activity_text, empty_state, row_fields, runtime_text, section_is_shown};
 
 fn descendant(pid: u32, command: &str, seconds: u64, activity: Activity) -> DescendantProcess {
     DescendantProcess { pid,
@@ -27,6 +25,10 @@ fn descendant(pid: u32, command: &str, seconds: u64, activity: Activity) -> Desc
 fn every_key_the_section_shows_resolves() {
     for key in ["processes.title",
                 "processes.count_unknown",
+                "processes.count_none",
+                "processes.count_one",
+                "processes.count_many",
+                "processes.summary_separator",
                 "processes.column_command",
                 "processes.column_runtime",
                 "processes.column_pid",
@@ -55,9 +57,11 @@ fn every_key_the_section_shows_resolves() {
 /// reads like a question.
 #[test]
 fn every_sentence_with_a_value_substitutes_it() {
-    let count = count_text(Some(3));
-    assert!(count.contains('3'), "{count}");
-    assert!(!count.contains("%{"), "{count}");
+    let more = knot_core::l10n::t_with("processes.summary_more",
+                                       &[("names", "node, rg"), ("count", "3")]);
+    assert!(more.contains("node, rg"), "{more}");
+    assert!(more.contains('3'), "{more}");
+    assert!(!more.contains("%{"), "{more}");
 
     let body = knot_core::l10n::t_with("processes.terminate_body", &[("command", "npm run dev")]);
     assert!(body.contains("npm run dev"), "{body}");
@@ -70,22 +74,6 @@ fn every_sentence_with_a_value_substitutes_it() {
     let refused = knot_core::l10n::t_with("processes.terminate_failed",
                                           &[("reason", "Operation not permitted")]);
     assert!(refused.contains("Operation not permitted"), "{refused}");
-}
-
-/// The three states of the collapsed header's count. "Unknown" and "zero"
-/// are different answers, and rendering the first as the second is the bug
-/// the spec calls out by name.
-#[test]
-fn the_count_distinguishes_unknown_from_zero() {
-    let unknown = count_text(None);
-    let zero = count_text(Some(0));
-    let positive = count_text(Some(4));
-
-    assert_eq!(unknown, knot_core::l10n::t("processes.count_unknown"));
-    assert_ne!(zero, unknown,
-               "no sample yet is not the same as nothing running");
-    assert!(zero.contains('0'), "{zero}");
-    assert!(positive.contains('4'), "{positive}");
 }
 
 #[test]

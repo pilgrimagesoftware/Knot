@@ -65,16 +65,6 @@ impl ProcessSection {
         self.snapshot.as_deref()
     }
 
-    /// How many background descendants the last sample found, or `None`
-    /// before the first one completes.
-    pub(crate) fn background_count(&self) -> Option<usize> {
-        self.snapshot.as_ref().map(|processes| {
-                                  processes.iter()
-                                           .filter(|p| p.activity.is_background())
-                                           .count()
-                              })
-    }
-
     pub(crate) fn failure(&self) -> Option<&str> {
         self.failure.as_deref()
     }
@@ -173,22 +163,29 @@ pub(crate) struct Showing {
 /// Which agents this window should be sampling, and the root to sample each
 /// from.
 ///
-/// Empty means the sampler has nothing to do and starts nothing. Three of the
-/// spec's four stop triggers are ways for an agent to leave this set: the
-/// section collapses, the agent's session ends so it has no root, or a
-/// takeover view hides the pane the section lives in. The fourth, the window
-/// closing, is the window's tokio runtime being dropped along with it, which
-/// takes any pass still in flight with it.
-pub(crate) fn observed_roots(sections: &BTreeMap<Uuid, ProcessSection>, showing: Showing,
-                             root_of: impl Fn(Uuid) -> Option<u32>)
+/// Being *shown* is the gate, not being expanded. Expansion used to be, and
+/// that was the defect behind the permanent "Counting…": the collapsed header
+/// promised a count drawn from the last sample, while no sample could run
+/// until the user expanded the very section that count was meant to persuade
+/// them to open.
+///
+/// Empty means the sampler has nothing to do and starts nothing. Two of the
+/// spec's stop triggers are ways for an agent to leave this set: its session
+/// ends so it has no root, or a takeover view hides the pane the section
+/// lives in. The third, the window closing, is the window's tokio runtime
+/// being dropped along with it, which takes any pass still in flight too.
+///
+/// At most one entry, because at most one agent's pane is on screen. The cost
+/// of the section is therefore one `ps -A` per interval per window while a
+/// running agent is shown - not per agent, and not per expanded section.
+pub(crate) fn observed_roots(showing: Showing, root_of: impl Fn(Uuid) -> Option<u32>)
                              -> BTreeMap<Uuid, u32> {
     let Some(shown) = showing.agent
     else {
         return BTreeMap::new();
     };
 
-    sections.iter()
-            .filter(|(agent, section)| **agent == shown && section.expanded)
-            .filter_map(|(agent, _)| root_of(*agent).map(|root| (*agent, root)))
-            .collect()
+    root_of(shown).map(|root| (shown, root))
+                  .into_iter()
+                  .collect()
 }
