@@ -10,6 +10,7 @@ mod agents;
 mod chrome;
 mod creation;
 mod git_panel;
+pub(crate) mod mcp_panel;
 mod menus;
 mod notifications;
 mod open;

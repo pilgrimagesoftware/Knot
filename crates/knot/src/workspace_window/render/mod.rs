@@ -59,7 +59,9 @@ use crate::workspace_window::sidebar_is_compact;
 use crate::workspace_window::with_agents_menu_actions;
 use crate::workspace_window::workspace_title;
 
+mod agent_sections;
 mod content;
+pub(super) mod mcp_pane;
 mod overview;
 mod processes_pane;
 mod processes_summary;

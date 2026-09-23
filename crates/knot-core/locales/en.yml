@@ -405,6 +405,81 @@ mcp_server:
   failure_title: "Knot - MCP server"
   failure_body: "The MCP server is not running. Agents cannot reach Knot until it recovers."
 
+# The MCP servers section in a Panel-mode agent's pane. Distinct from
+# `mcp_server` above, which is Knot's own server in the settings window: this
+# is what a *particular agent* can reach, most of which Knot does not control.
+mcp:
+  title: "MCP Servers"
+  # The agent has no live session, so there is nothing to ask and the last
+  # answer - if there was one - is about a process that is gone.
+  summary_not_running: "Not running"
+  # A probe is in flight. Seconds, not a resting state: an MCP health check
+  # crosses the network for every configured server.
+  summary_checking: "Checking…"
+  # The probe could not run or could not be read. Shown in place of the
+  # summary, while any rows an earlier probe found stay below it.
+  summary_failed: "Could not check: %{error}"
+  # Between becoming visible and the first probe starting. A moment.
+  summary_not_checked: "Not checked yet"
+  # Knot has no way to interrogate this agent type. Deliberately not "None":
+  # telling a user their agent has no MCP servers when the truth is that Knot
+  # cannot ask is worse than admitting the gap.
+  cannot_determine_short: "Unknown"
+  summary_cannot_determine: "Cannot determine this agent's MCP servers"
+  # A probe completed and the agent genuinely has none configured.
+  summary_none: "No MCP servers configured"
+  # Every server the probe found is connected.
+  summary_all_connected: "All connected"
+  # Nothing needs attention, but not everything is connected either - some are
+  # disabled, pending approval, or in a state Knot could not read. Claiming
+  # "all connected" here would be the header lying about the one thing it is
+  # for.
+  summary_no_attention: "%{count} servers, none need attention"
+  # Collapsed, the header names what is asking for something.
+  summary_attention: "%{names} need attention"
+  # What the listed names did not cover. `%{count}` counts servers.
+  summary_attention_more: "%{names} +%{count} more need attention"
+  # Between two names in that list; punctuation is the translator's.
+  summary_separator: ", "
+  # Expanded, the rows below are the detail, so the header counts them.
+  count_one: "server"
+  count_many: "servers"
+  # The six states, a closed vocabulary. The middle four are all "not
+  # connected" and mean four different things: two are the user's own choice,
+  # one is a lock, one is a fault.
+  state_connected: "Connected"
+  state_needs_authentication: "Needs authentication"
+  state_pending_approval: "Pending approval"
+  state_disabled: "Disabled"
+  state_failed: "Failed"
+  state_unknown: "Unknown"
+  # Knot's own server, registered in the agent's configuration by hand as well
+  # as injected into its session. One row, and this says why it will outlive
+  # the session Knot controls.
+  also_configured: "Also registered in this agent's own configuration"
+  # The rows are a separate process's view of the same configuration, not the
+  # running session's live connections, so they are stamped rather than
+  # presented as current.
+  taken_at: "Checked %{age} ago"
+  taken_just_now: "Checked just now"
+  # One entry per shape rather than a number glued to a unit here: where the
+  # number sits relative to its unit is the translator's to decide.
+  age_seconds: "%{seconds}s"
+  age_minutes: "%{minutes}m"
+  age_hours: "%{hours}h"
+  # Actions.
+  action_refresh: "Check again"
+  # The delegated action. Knot opens the agent's own flow in a terminal; it
+  # never authenticates anything itself.
+  action_manage: "Fix in %{agent}"
+  # Appended when the agent has no per-server command and the user has to
+  # pick the server in its own UI, so the tooltip says what to type.
+  action_manage_hint: "Fix in %{agent} — then type %{send}"
+  action_copy_target: "Copy address"
+  # The shell companion opened for the handover, named so it is obvious in
+  # the sidebar what it is and that closing it is fine.
+  terminal_name: "MCP"
+
 processes:
   title: "Processes"
   # Before the first sample lands there is no summary to give. Deliberately

@@ -292,9 +292,10 @@ impl WorkspaceWindow {
                                                     })
                                                     // Below whichever session pane is showing, so
                                                     // the
-                                                    // terminal and panel views get the section from
+                                                    // terminal and panel views get the sections
+                                                    // from
                                                     // one place rather than two that can drift.
-                                                    .children(self.processes_section(cx))
+                                                    .children(self.agent_sections_row(cx))
                                                     .into_any_element()
                                         }))
                 .into_any_element()

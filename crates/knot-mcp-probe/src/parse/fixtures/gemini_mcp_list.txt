@@ -1,0 +1,9 @@
+Warning: MCP servers are configured but disabled because this folder is untrusted.
+User-level servers are also suppressed in untrusted folders to prevent accidental side-effects.
+
+Configured MCP servers:
+
+○ tolaria: /opt/homebrew/bin/node /Applications/Tolaria.app/Contents/Resources/mcp-server/index.js (stdio) - Disabled
+○ aws-mcp: uvx mcp-proxy-for-aws@latest https://aws.example.com/mcp --metadata INSTALL_SOURCE=aws-cli (stdio) - Disabled
+● knot: http://127.0.0.1:8767/mcp (http) - Connected
+✗ linear: https://linear.example.com/mcp (http) - Disconnected
