@@ -26,6 +26,40 @@ use crate::workspace_window::WorkspaceWindow;
 /// so the poll can tell "in flight" from "finished successfully".
 pub(in crate::workspace_window) type GitActionSlot = Arc<Mutex<Option<Result<(), String>>>>;
 
+/// Resolves a pending slot even if the work unwinds.
+///
+/// The slot is what the drain waits on, and draining is what resumes the
+/// watch. So a closure that panics before writing its result does not merely
+/// lose the result: the entry never drains, the watch stays paused for the
+/// life of the window, and the panel silently stops following changes made
+/// outside Knot. `spawn_blocking` turns the panic into a `JoinError` nobody
+/// reads, so there is no other signal that it happened.
+///
+/// `Drop` runs on unwind; a store at the end of a closure does not. That is
+/// the whole difference, and it is the same safe-by-construction argument as
+/// the empty claim-to-spawn gap in `reads.rs`, applied to unwinding rather
+/// than to editing.
+struct SlotGuard {
+    slot:    GitActionSlot,
+    outcome: Option<Result<(), String>>,
+}
+
+impl SlotGuard {
+    fn new(slot: GitActionSlot) -> Self {
+        Self { slot,
+               outcome: None }
+    }
+}
+
+impl Drop for SlotGuard {
+    fn drop(&mut self) {
+        let outcome = self.outcome
+                          .take()
+                          .unwrap_or_else(|| Err(knot_core::l10n::t("git_panel.interrupted")));
+        *self.slot.lock() = Some(outcome);
+    }
+}
+
 /// One path-scoped staging operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum GitAction {
@@ -136,10 +170,11 @@ impl WorkspaceWindow {
 
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn_blocking(move || {
+                        let mut guard = SlotGuard::new(reported);
                         let repo = Repository::open(&folder);
                         let borrowed: Vec<&str> = owned.iter().map(String::as_str).collect();
-                        *reported.lock() = Some(action.run(&repo, &borrowed)
-                                                      .map_err(|error| error.to_string()));
+                        guard.outcome = Some(action.run(&repo, &borrowed)
+                                                   .map_err(|error| error.to_string()));
                     });
 
         self.pending_git_actions.insert(id, outcome);
@@ -199,9 +234,10 @@ impl WorkspaceWindow {
 
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn_blocking(move || {
-                        let result = Repository::open(&folder).commit(&message)
-                                                              .map_err(|error| error.to_string());
-                        *outcome.lock() = Some(result);
+                        let mut guard = SlotGuard::new(outcome);
+                        guard.outcome =
+                            Some(Repository::open(&folder).commit(&message)
+                                                          .map_err(|error| error.to_string()));
                     });
     }
 
@@ -239,4 +275,60 @@ fn utf8_paths(paths: &[PathBuf]) -> Option<Vec<String>> {
     paths.iter()
          .map(|p| p.to_str().map(str::to_owned))
          .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use parking_lot::Mutex;
+
+    use super::{GitAction, SlotGuard};
+
+    /// The normal path: the guard passes the outcome through unchanged.
+    #[test]
+    fn a_finished_operation_reports_its_own_outcome() {
+        let slot = Arc::new(Mutex::new(None));
+        {
+            let mut guard = SlotGuard::new(Arc::clone(&slot));
+            guard.outcome = Some(Err("git said no".to_owned()));
+        }
+
+        assert_eq!(*slot.lock(), Some(Err("git said no".to_owned())));
+    }
+
+    /// The reason the guard exists. A slot left `None` never drains, and
+    /// draining is what resumes the watch - so an unwinding closure would
+    /// otherwise leave the panel paused for the life of the window, with
+    /// tokio swallowing the panic into a `JoinError` nobody reads.
+    #[test]
+    fn an_unwinding_operation_still_resolves_its_slot() {
+        let slot: super::GitActionSlot = Arc::new(Mutex::new(None));
+        let held = Arc::clone(&slot);
+
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                                    let _guard = SlotGuard::new(held);
+                                                    panic!("the work blew up before writing its result");
+                                                }));
+
+        assert!(panicked.is_err(), "the panic must still propagate");
+        assert!(slot.lock().is_some(),
+                "an unwound operation must leave a resolved slot, or the drain \
+                 never runs and the watch never resumes");
+        assert!(slot.lock().as_ref().unwrap().is_err(),
+                "and it resolves as a failure, not a silent success");
+    }
+
+    #[test]
+    fn only_discard_is_destructive() {
+        assert!(GitAction::Discard.is_destructive());
+        for action in [GitAction::Stage,
+                       GitAction::Unstage,
+                       GitAction::StageAll,
+                       GitAction::UnstageAll]
+        {
+            assert!(!action.is_destructive(),
+                    "{action:?} is undone by its opposite");
+        }
+    }
 }

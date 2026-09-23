@@ -439,6 +439,7 @@ git_panel:
   not_a_repository: "This folder is not a git repository."
   status_failed: "The repository status could not be read: %{reason}"
   action_failed: "That change could not be made: %{reason}"
+  interrupted: "That operation did not finish. The panel has been left as it was."
   error:
     path_not_utf8: "That path is not valid UTF-8, so git cannot be asked about it."
   # Branch header.
