@@ -78,7 +78,7 @@ impl SettingsWindow {
         let value = self.mcp_port_input.read(cx).value().to_string();
         if let Ok(port) = value.parse::<u16>() {
             self.settings.mcp_server_port = port;
-            self.persist();
+            self.persist(cx);
         }
     }
 
@@ -114,9 +114,9 @@ impl SettingsWindow {
                                 let settings_window = settings_window.clone();
                                 move |checked, _, app| {
                                     let checked = *checked;
-                                    settings_window.update(app, |view, _| {
+                                    settings_window.update(app, |view, cx| {
                                         view.settings.mcp_server_enabled = checked;
-                                        view.persist();
+                                        view.persist(cx);
                                     })
                                 }
                             }),

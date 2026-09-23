@@ -29,6 +29,7 @@ mod pull_request_records;
 mod quit_warning;
 mod settings_font_preview;
 mod settings_labels;
+mod settings_reach_open_windows;
 mod sidebar_menu;
 mod sidebar_width;
 mod single_line;

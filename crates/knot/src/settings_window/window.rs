@@ -161,7 +161,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                         view.settings.terminal_font_size = size;
                                     }
                                 }
-                                                           view.persist();
+                                                           view.persist(cx);
                                                            cx.notify();
                                                        });
                                     });
@@ -239,9 +239,18 @@ pub(crate) struct SettingsWindow {
 }
 
 impl SettingsWindow {
-    pub(super) fn persist(&self) {
+    /// Write the preferences, then hand them to the windows already drawing
+    /// the old values.
+    ///
+    /// The delivery is here rather than at each of the twenty call sites
+    /// because every one of them has the same obligation: a setting that is
+    /// stored and not delivered is the shape of issue #238, and it is not
+    /// visible at the call site that it was missed.
+    pub(super) fn persist(&self, cx: &mut App) {
         if let Err(error) = self.settings.persist_preferences() {
             eprintln!("failed to persist settings: {error}");
+            return;
         }
+        crate::settings_broadcast::preferences_changed(cx);
     }
 }
