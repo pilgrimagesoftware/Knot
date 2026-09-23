@@ -23,11 +23,11 @@
 
 ## 4. Panel state and scheduling
 
-- [ ] 4.1 Add `crates/knot/src/workspace_window/mcp_panel/` with `mod.rs` declaring only, and siblings split by concern (`state`, `probe`, `render`, `actions`); verify `make size-check` and the declared-modules check both pass
-- [ ] 4.2 Model per-agent probe state as `NotProbed | InFlight | Done { at, outcome }` with a changed flag; verify a second request while `InFlight` is dropped rather than queued, and that the dropped request still sees the in-flight result
-- [ ] 4.3 Run the probe on `spawn_blocking`, never on the render path; verify no probe call is reachable from a `render` function, the way `diff_stats.rs` guards the same rule
-- [ ] 4.4 Add the single branch in `repaint_poll_tick` that takes the changed flag and notifies, and verify no other reader calls the clearing read — the breakage named four times in `.claude/rules/rust-structure.md`
-- [ ] 4.5 Gate probing on a running Panel-mode agent whose pane is shown; verify a hidden pane, a stopped agent and a Terminal-mode agent each probe zero times, and that switching a probing agent to Terminal mode abandons the in-flight result rather than reporting it
+- [x] 4.1 Add `crates/knot/src/workspace_window/mcp_panel/` with `mod.rs` declaring only, and siblings split by concern (`state`, `probe`, `render`, `actions`); verify `make size-check` and the declared-modules check both pass
+- [x] 4.2 Model per-agent probe state as `NotProbed | InFlight | Done { at, outcome }` with a changed flag; verify a second request while `InFlight` is dropped rather than queued, and that the dropped request still sees the in-flight result
+- [x] 4.3 Run the probe on `spawn_blocking`, never on the render path; verify no probe call is reachable from a `render` function, the way `diff_stats.rs` guards the same rule
+- [x] 4.4 Add the single branch in `repaint_poll_tick` that takes the changed flag and notifies, and verify no other reader calls the clearing read — the breakage named four times in `.claude/rules/rust-structure.md`
+- [x] 4.5 Gate probing on a running Panel-mode agent whose pane is shown; verify a hidden pane, a stopped agent and a Terminal-mode agent each probe zero times, and that switching a probing agent to Terminal mode abandons the in-flight result rather than reporting it
 
 ## 5. The list the section shows
 

@@ -3771,6 +3771,7 @@ dependencies = [
  "knot-git",
  "knot-history",
  "knot-mcp",
+ "knot-mcp-probe",
  "knot-mcp-tools",
  "knot-messaging",
  "knot-processes",

@@ -297,5 +297,6 @@ impl WorkspaceWindow {
         self.panel_input_expanded.remove(&id);
         self.panel_lookups.remove(&id);
         self.forget_process_section(id);
+        self.forget_mcp_section(id);
     }
 }

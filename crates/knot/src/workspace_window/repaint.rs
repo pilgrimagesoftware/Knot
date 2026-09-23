@@ -102,12 +102,18 @@ impl WorkspaceWindow {
         // processes section is expanded on the shown agent - see
         // `workspace_window::processes`.
         let processes_sampled = self.process_sampling_tick();
+        // Runs an agent's own MCP list command, off any cadence at all: on
+        // first becoming visible, on refresh, and when a delegated terminal
+        // exits. Lands here because `spawn_blocking` has no context to
+        // notify from - see `workspace_window::mcp_panel::probe`.
+        let mcp_probed = self.mcp_probe_tick();
         if grid_dirty
            || panel_states_moved
            || panel_dirty
            || spinner_dirty
            || activated
            || processes_sampled
+           || mcp_probed
            || prompts_completed
            || prompts_sent
            || pull_requests_recorded

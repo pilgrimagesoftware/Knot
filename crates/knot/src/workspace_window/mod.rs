@@ -11,6 +11,7 @@ mod chrome;
 pub(crate) mod composer_focus;
 mod creation;
 mod git_panel;
+pub(crate) mod mcp_panel;
 mod menus;
 mod notifications;
 mod open;
