@@ -56,9 +56,9 @@ pub(crate) fn resolve(requested: &str, available: &[String]) -> SharedString {
 ///
 /// Keyed on the requested name rather than cleared by an invalidation hook:
 /// a hook is a second code path that every future way of changing settings
-/// has to remember to call, which is the failure `settings_refresh` exists to
-/// document. Comparing the name costs one string compare per frame and cannot
-/// be forgotten.
+/// has to remember to call. Comparing the name costs one string compare per
+/// frame and cannot be forgotten - which matters more now that the settings
+/// surface is shared, so a write can land from any window between two frames.
 pub(crate) struct TerminalFont {
     /// The configured name [`Self::resolved`] answers for, or `None` before
     /// the first frame has asked.
@@ -100,7 +100,7 @@ impl WorkspaceWindow {
     /// reader.
     pub(super) fn refresh_terminal_font(&mut self, cx: &App) {
         self.terminal_font
-            .family(&self.settings.terminal_font_name, || {
+            .family(&crate::settings_global::read(cx).terminal_font_name, || {
                 cx.text_system().all_font_names()
             });
     }

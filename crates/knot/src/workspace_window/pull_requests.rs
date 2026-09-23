@@ -13,6 +13,7 @@
 //! selected one: an agent working in an unselected pane is exactly the case
 //! this feature exists for.
 
+use gpui_kit::App;
 use uuid::Uuid;
 
 use super::WorkspaceWindow;
@@ -25,7 +26,7 @@ impl WorkspaceWindow {
     /// Persists only when a record was actually added. A URL scrolling past
     /// for the second time writes nothing, which is what keeps a chatty agent
     /// from rewriting a settings document on every poll.
-    pub(super) fn drain_pull_requests(&mut self) -> bool {
+    pub(super) fn drain_pull_requests(&mut self, cx: &App) -> bool {
         let mut seen: Vec<(Uuid, String)> = Vec::new();
 
         for (id, session) in &self.sessions {
@@ -59,7 +60,7 @@ impl WorkspaceWindow {
             }
         }
         if recorded {
-            self.persist_pull_requests();
+            self.persist_pull_requests(cx);
         }
         recorded
     }
@@ -69,12 +70,14 @@ impl WorkspaceWindow {
     /// The store guard is released before the write, the same as
     /// `persist_agents`: the write is blocking I/O and nothing else should
     /// wait on the store while it runs.
-    pub(super) fn persist_pull_requests(&mut self) {
-        {
+    pub(super) fn persist_pull_requests(&mut self, cx: &App) {
+        let installed = {
             let store = self.store.lock();
-            self.settings.pull_requests = store.pull_requests().to_vec();
-        }
-        if let Err(error) = self.settings.persist_pull_requests() {
+            crate::settings_global::write(cx, |settings| {
+                settings.pull_requests = store.pull_requests().to_vec();
+            })
+        };
+        if let Err(error) = installed.persist_pull_requests() {
             // Not surfaced: the document is written after every change, so
             // the next sighting retries, and a dialog per URL would be worse
             // than the loss it warns about. Logged because a failure here is

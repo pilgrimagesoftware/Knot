@@ -80,7 +80,6 @@ pub(crate) struct WorkspaceWindow {
     /// answered keeps arriving. This is what makes the second one a repeat
     /// rather than news, per `desktop-notifications`' suppression rule.
     pub(super) notified_awaiting:                BTreeMap<Uuid, String>,
-    pub(super) settings:                         knot_core::Settings,
     pub(super) workspace_id:                     Uuid,
     pub(super) selected_agent:                   Option<Uuid>,
     pub(super) sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,

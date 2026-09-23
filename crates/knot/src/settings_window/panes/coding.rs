@@ -69,8 +69,10 @@ impl SettingsWindow {
               };
               cx.update(|app| {
                     settings_window.update(app, |view, cx| {
-                                       view.settings.source_base_folder =
-                                           path.to_string_lossy().into_owned();
+                                       crate::settings_global::write(cx, |settings| {
+                                           settings.source_base_folder =
+                                               path.to_string_lossy().into_owned();
+                                       });
                                        view.persist(cx);
                                        cx.notify();
                                    });
@@ -80,18 +82,17 @@ impl SettingsWindow {
     }
 
     fn clear_source_folder(&mut self, cx: &mut Context<Self>) {
-        self.settings.source_base_folder.clear();
+        crate::settings_global::write(cx, |settings| settings.source_base_folder.clear());
         self.persist(cx);
         cx.notify();
     }
 
     fn select_agent_type(&mut self, agent_type: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_agent_type = agent_type.to_string();
-        let value = self.settings
-                        .agent_options
-                        .get(agent_type)
-                        .cloned()
-                        .unwrap_or_default();
+        let value = crate::settings_global::read(cx).agent_options
+                                                    .get(agent_type)
+                                                    .cloned()
+                                                    .unwrap_or_default();
         cx.update_entity(&self.agent_options_input, |input, input_cx| {
               input.set_value(value, window, input_cx);
           });
@@ -100,15 +101,17 @@ impl SettingsWindow {
 
     pub(crate) fn save_agent_options(&mut self, cx: &mut Context<Self>) {
         let value = self.agent_options_input.read(cx).value().to_string();
-        self.settings
-            .agent_options
-            .insert(self.selected_agent_type.clone(), value);
+        let agent_type = self.selected_agent_type.clone();
+        crate::settings_global::write(cx, |settings| {
+            settings.agent_options
+                    .insert(agent_type.clone(), value.clone());
+        });
         self.persist(cx);
     }
 
     pub(crate) fn render_coding(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let source_base_folder = self.settings.source_base_folder.clone();
+        let source_base_folder = crate::settings_global::read(cx).source_base_folder.clone();
         let folder_label = if source_base_folder.is_empty() {
             "Not configured".to_string()
         }

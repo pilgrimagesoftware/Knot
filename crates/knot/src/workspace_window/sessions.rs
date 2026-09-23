@@ -9,6 +9,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use gpui_kit::App;
 use knot_activity::EventSink;
 use knot_git::Repository;
 use knot_terminal::PtyTransport;
@@ -44,7 +45,7 @@ impl WorkspaceWindow {
     /// `ensure_panel_session` (window open, row click, dashboard card,
     /// repaint poll) inherits it without having to remember, per
     /// `agent-lifecycle`'s "Activation mode" requirement.
-    pub(super) fn ensure_session(&mut self, id: Uuid) {
+    pub(super) fn ensure_session(&mut self, id: Uuid, cx: &App) {
         if self.sessions.contains_key(&id) {
             return;
         }
@@ -65,8 +66,9 @@ impl WorkspaceWindow {
         self.panel_states
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
-        let persona = self.settings.persona(id);
-        let config = SessionConfig { settings: &self.settings,
+        let settings = crate::settings_global::read(cx);
+        let persona = settings.persona(id);
+        let config = SessionConfig { settings: &settings,
                                      agent: &agent,
                                      persona,
                                      plugin_root: None };
@@ -254,14 +256,14 @@ impl WorkspaceWindow {
     /// Only reachable from the `Failed` slot, which owns no handle and no
     /// subprocess - there is nothing to shut down, just the dead slot to
     /// clear so `ensure_panel_session` stops short-circuiting on it.
-    pub(super) fn retry_panel_session(&mut self, id: Uuid) {
+    pub(super) fn retry_panel_session(&mut self, id: Uuid, cx: &App) {
         self.panel_sessions.remove(&id);
         self.panel_phases.remove(&id);
         // The new connection gets a new slot; the old list's scroll handler
         // points at the dead one, so rebuild it.
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
-        self.ensure_panel_session(id);
+        self.ensure_panel_session(id, cx);
     }
 
     /// Tears `id`'s session and every piece of per-agent view state down,

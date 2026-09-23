@@ -6,7 +6,7 @@
 //! [`WorkspaceWindow::persist_agents`] - `AgentStore` only mutates memory,
 //! so a roster change that skips the persist is undone by the next launch.
 
-use gpui_kit::Context;
+use gpui_kit::{App, Context};
 use uuid::Uuid;
 
 use crate::app_support::Activation;
@@ -24,9 +24,9 @@ impl WorkspaceWindow {
     /// removal was undone by the next launch (or by any other window's
     /// persist), which is what "Remove Agent does nothing" looked like.
     /// Every other agent mutation (create, edit) already persists this way.
-    pub(super) fn remove_agent(&mut self, id: Uuid) {
+    pub(super) fn remove_agent(&mut self, id: Uuid, cx: &App) {
         self.remove_agent_unpersisted(id);
-        self.persist_agents();
+        self.persist_agents(cx);
     }
 
     /// The removal itself, without writing settings back out.
@@ -69,8 +69,8 @@ impl WorkspaceWindow {
     pub(crate) fn reveal_agent(&mut self, id: Uuid, cx: &mut Context<Self>) {
         self.select_agent(id);
         self.view_mode = WorkspaceViewMode::Terminal;
-        self.ensure_session(id);
-        self.ensure_panel_session(id);
+        self.ensure_session(id, cx);
+        self.ensure_panel_session(id, cx);
         cx.notify();
     }
 
@@ -118,8 +118,8 @@ impl WorkspaceWindow {
             // A duplicate id (two messages to the same stopped agent before
             // this window polled) costs nothing: both are no-ops once the
             // session exists.
-            self.ensure_session(id);
-            self.ensure_panel_session(id);
+            self.ensure_session(id, cx);
+            self.ensure_panel_session(id, cx);
         }
         true
     }
@@ -141,17 +141,19 @@ impl WorkspaceWindow {
     }
 
     /// Writes the store's current agents and workspaces back to settings.
-    pub(super) fn persist_agents(&mut self) {
+    pub(super) fn persist_agents(&mut self, cx: &App) {
         // Scoped so the store guard is released before the settings file is
         // written: `persist` is blocking I/O, and nothing else should wait on
-        // the roster while it runs.
-        {
+        // the roster while it runs. The `write` sits inside the scope because
+        // it only touches memory.
+        let installed = {
             let store = self.store.lock();
-            self.settings.saved_agents =
-                store.saved_agents(self.settings.restore_conversation_on_launch);
-            self.settings.saved_workspaces = store.saved_workspaces();
-        }
-        if let Err(error) = self.settings.persist_roster() {
+            crate::settings_global::write(cx, |settings| {
+                settings.saved_agents = store.saved_agents(settings.restore_conversation_on_launch);
+                settings.saved_workspaces = store.saved_workspaces();
+            })
+        };
+        if let Err(error) = installed.persist_roster() {
             // Not surfaced in the window: the roster is written after every
             // change, so the next one retries, and a dialog per keystroke
             // would be worse than the loss it warns about. Logged because a
@@ -174,14 +176,16 @@ impl WorkspaceWindow {
     /// The map is read from the store rather than from the snapshot: the
     /// store is shared between windows, so it is what another window's
     /// arrangement has already reached.
-    pub(super) fn persist_workspace_ui(&mut self) {
+    pub(super) fn persist_workspace_ui(&mut self, cx: &App) {
         // Scoped so the store guard is released before the write: the same
         // blocking-I/O rule `persist_agents` follows.
-        {
+        let installed = {
             let store = self.store.lock();
-            self.settings.workspace_ui = store.saved_workspace_ui();
-        }
-        if let Err(error) = self.settings.persist_workspace_ui() {
+            crate::settings_global::write(cx, |settings| {
+                settings.workspace_ui = store.saved_workspace_ui();
+            })
+        };
+        if let Err(error) = installed.persist_workspace_ui() {
             // Not surfaced, for the same reason `persist_agents` does not:
             // this runs on every arrangement change, and what is lost is
             // where a window sits.
@@ -197,7 +201,7 @@ impl WorkspaceWindow {
     /// Restarts every agent in the workspace, per `agent-list-ui`'s "Restart
     /// All" requirement - the row menu's Restart Agent applied once per
     /// agent, with a single persist at the end.
-    pub(super) fn restart_all_agents(&mut self) {
+    pub(super) fn restart_all_agents(&mut self, cx: &App) {
         let ids = self.workspace_agent_ids();
         {
             // One lock for the whole roster rather than one per agent: the
@@ -216,19 +220,19 @@ impl WorkspaceWindow {
         }
         // `restart` clears the persisted session ids; write them out so a
         // relaunch doesn't resume the sessions just dropped.
-        self.persist_agents();
+        self.persist_agents(cx);
     }
 
     /// Removes every agent in the workspace, and every companion those
     /// agents own, per `agent-list-ui`'s "Close All" requirement.
-    pub(super) fn close_all_agents(&mut self) {
+    pub(super) fn close_all_agents(&mut self, cx: &App) {
         for id in self.workspace_agent_ids() {
             // A companion is removed with its owner, so by the time the
             // loop reaches one it may already be gone - removing an id the
             // store no longer holds removes nothing.
             self.remove_agent_unpersisted(id);
         }
-        self.persist_agents();
+        self.persist_agents(cx);
     }
 
     /// Deactivates every running agent in the workspace. An agent that is

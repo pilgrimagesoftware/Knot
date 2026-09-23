@@ -121,7 +121,7 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
                          description,
                          move |app| {
                              targets.window_entity.update(app, |view, cx| {
-                                                      view.restart_all_agents();
+                                                      view.restart_all_agents(cx);
                                                       cx.notify();
                                                   });
                          });
@@ -137,7 +137,7 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
                          description,
                          move |app| {
                              targets.window_entity.update(app, |view, cx| {
-                                                      view.close_all_agents();
+                                                      view.close_all_agents(cx);
                                                       cx.notify();
                                                   });
                          });

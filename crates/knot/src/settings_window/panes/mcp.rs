@@ -77,7 +77,7 @@ impl SettingsWindow {
     pub(crate) fn save_mcp_port(&mut self, cx: &mut Context<Self>) {
         let value = self.mcp_port_input.read(cx).value().to_string();
         if let Ok(port) = value.parse::<u16>() {
-            self.settings.mcp_server_port = port;
+            crate::settings_global::write(cx, |settings| settings.mcp_server_port = port);
             self.persist(cx);
         }
     }
@@ -89,8 +89,8 @@ impl SettingsWindow {
 
     pub(crate) fn render_mcp(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let mcp_server_enabled = self.settings.mcp_server_enabled;
-        let server_url = Self::mcp_server_url(self.settings.mcp_server_port);
+        let mcp_server_enabled = crate::settings_global::read(cx).mcp_server_enabled;
+        let server_url = Self::mcp_server_url(crate::settings_global::read(cx).mcp_server_port);
         let agent_type_label = Self::agent_type_label(&self.mcp_selected_agent_type);
         let install_command = Self::mcp_install_command(&self.mcp_selected_agent_type, &server_url);
 
@@ -115,7 +115,9 @@ impl SettingsWindow {
                                 move |checked, _, app| {
                                     let checked = *checked;
                                     settings_window.update(app, |view, cx| {
-                                        view.settings.mcp_server_enabled = checked;
+                                        crate::settings_global::write(cx, |settings| {
+                                            settings.mcp_server_enabled = checked;
+                                        });
                                         view.persist(cx);
                                     })
                                 }
