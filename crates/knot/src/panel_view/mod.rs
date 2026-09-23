@@ -16,6 +16,7 @@ mod message;
 mod render;
 mod rows;
 mod scroll;
+mod shell_card;
 mod style;
 mod summary_row;
 mod tool_call;

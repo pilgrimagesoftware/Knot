@@ -432,7 +432,31 @@ impl WorkspaceWindow {
         else {
             return;
         };
-        let mut text = input.read(cx).value().trim().to_string();
+        let raw = input.read(cx).value().to_string();
+        // Before the trim, and before anything reaches the session: the
+        // trigger is byte 0 of the *raw* buffer, which is what makes a single
+        // leading space the escape for a prompt that has to begin with a
+        // literal `!`. Trimming first would make ` !hello` executable and
+        // leave the user no way to say it.
+        if let Some(command) = crate::panel_commands::shell_command(&raw) {
+            if !self.run_panel_shell_command(id, command.to_owned(), cx) {
+                return;
+            }
+            cx.update_entity(&input, |state, cx| {
+                  state.set_value("", window, cx);
+              });
+            cx.notify();
+            return;
+        }
+        // `!` with nothing after it is neither a command nor a message. It
+        // has to be refused here too and not only by the send control: the
+        // Enter chord reaches this directly, and a lone `!` would otherwise
+        // trim to a non-empty string and go to the agent as a prompt.
+        if crate::panel_commands::has_shell_trigger(&raw) {
+            return;
+        }
+
+        let mut text = raw.trim().to_string();
         if text.is_empty() {
             return;
         }
@@ -445,6 +469,10 @@ impl WorkspaceWindow {
             text.push_str("\n\nAttached: ");
             text.push_str(&path.to_string_lossy());
         }
+        // Every `!` command run since the last prompt rides along here, in
+        // the order they were submitted - the only path by which a shell
+        // result reaches the agent.
+        text.push_str(&self.take_panel_shell_context(id));
         if !self.deliver_panel_prompt(id, text, PromptOrigin::User) {
             return;
         }

@@ -149,6 +149,12 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Drops one `!` command's pending result, so no later prompt carries it.
+    pub fn discard_shell_result(&self, card_id: uuid::Uuid) {
+        self.state.lock().discard_shell_result(card_id);
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// Opens or closes one compact summary's run of tool calls.
     pub fn toggle_tool_run(&self, head_id: String) {
         self.state.lock().toggle_tool_run(head_id);
@@ -213,6 +219,19 @@ impl PanelRecorder {
         {
             let mut state = self.state.lock();
             state.push_error(text);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
+    /// Puts a `!` command's card in the conversation, per
+    /// `panel-shell-passthrough`.
+    ///
+    /// Unlike `record_user_message` this starts no turn: a shell command is
+    /// the user's own work and the agent is not answering it.
+    pub fn shell_command(&self, card: crate::panel_state::ShellCard) {
+        {
+            let mut state = self.state.lock();
+            state.push_shell_command(card);
         }
         self.dirty.store(true, Ordering::SeqCst);
     }

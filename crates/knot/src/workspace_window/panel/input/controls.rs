@@ -34,7 +34,7 @@ use crate::workspace_window::panel::input::PERMISSION_SELECTOR_ID;
 
 impl WorkspaceWindow {
     /// The control bar under `id`'s composer.
-    pub(super) fn render_panel_control_bar(&self, id: Uuid, expanded: bool,
+    pub(super) fn render_panel_control_bar(&self, id: Uuid, expanded: bool, is_shell: bool,
                                            config_options: &[knot_acp::ConfigOption],
                                            cx: &mut Context<Self>)
                                            -> impl IntoElement + use<> {
@@ -69,7 +69,17 @@ impl WorkspaceWindow {
                                     .text_xs()
                                     .font_family(crate::settings_global::read(cx).title_font_name.clone())
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(Self::panel_prompt_send_hint(shift_to_send)),
+                                    // While the buffer is a command, the
+                                    // hint says so instead of saying how to
+                                    // send: what happens on Enter is the
+                                    // thing the user needs to know before
+                                    // pressing it.
+                                    .child(if is_shell {
+                                        knot_core::l10n::t("panel.shell.marker")
+                                    }
+                                    else {
+                                        Self::panel_prompt_send_hint(shift_to_send).to_string()
+                                    }),
                             ),
                     )
                     .child(

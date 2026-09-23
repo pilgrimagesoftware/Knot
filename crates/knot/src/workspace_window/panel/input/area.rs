@@ -40,6 +40,10 @@ impl WorkspaceWindow {
         if !turn_active {
             self.panel_stopping.remove(&id);
         }
+        // Recomputed per frame from the buffer rather than kept as state,
+        // which is what stops the mark and the control from drifting apart
+        // from what is actually typed.
+        let is_shell = crate::panel_commands::is_shell_command(&input.read(cx).value());
         // An appearance switch re-renders without editing, so this frame
         // is the only place a theme change can reach the styling. It
         // compares a palette and returns unless the appearance actually
@@ -79,7 +83,7 @@ impl WorkspaceWindow {
                 // clip it, and above the caret rather than over the line being
                 // typed.
                 .children(lookup)
-                .child(self.render_panel_entry_row(id, input, blocked, turn_active, cx))
-                .child(self.render_panel_control_bar(id, expanded, config_options, cx))
+                .child(self.render_panel_entry_row(id, input, blocked, turn_active, is_shell, cx))
+                .child(self.render_panel_control_bar(id, expanded, is_shell, config_options, cx))
     }
 }

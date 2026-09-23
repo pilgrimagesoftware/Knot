@@ -3770,6 +3770,7 @@ dependencies = [
  "knot-git",
  "knot-history",
  "knot-mcp",
+ "knot-mcp-probe",
  "knot-mcp-tools",
  "knot-messaging",
  "knot-processes",
@@ -3914,6 +3915,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "knot-mcp-probe"
+version = "1.14.0"
+dependencies = [
+ "knot-core",
+ "tempfile",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "knot-mcp-tools"
 version = "1.15.0"
 dependencies = [
@@ -3952,7 +3962,18 @@ dependencies = [
 name = "knot-processes"
 version = "1.15.0"
 dependencies = [
+ "parking_lot",
+ "tempfile",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "knot-subagents"
+version = "1.15.0"
+dependencies = [
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
 ]
 
 [[package]]

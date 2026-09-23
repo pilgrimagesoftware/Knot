@@ -1,6 +1,7 @@
 //! Unit tests for [`super`].
 
 mod pull_requests;
+mod shell;
 
 use knot_acp::ConfigOption;
 use knot_acp::PermissionRequest;

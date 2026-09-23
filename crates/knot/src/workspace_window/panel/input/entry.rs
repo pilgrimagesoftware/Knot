@@ -34,10 +34,16 @@ impl WorkspaceWindow {
     /// in: both are functions of the buffer and the send-chord setting,
     /// which this row already has in hand.
     pub(super) fn render_panel_entry_row(&self, id: Uuid, input: &Entity<PanelInputState>,
-                                         blocked: bool, turn_active: bool,
+                                         blocked: bool, turn_active: bool, is_shell: bool,
                                          cx: &mut Context<Self>)
                                          -> impl IntoElement + use<> {
-        let can_send = !blocked && !turn_active && !input.read(cx).value().trim().is_empty();
+        // A `!` command runs locally and never touches the session, so none
+        // of the reasons a prompt may not be sent apply to it: not a pending
+        // permission, not a turn in flight.
+        let can_send = {
+            let value = input.read(cx).value();
+            crate::panel_commands::can_send(&value, blocked, turn_active)
+        };
         let send_tooltip = if crate::settings_global::read(cx).agent_panel_shift_enter_sends {
             "Send (Shift+Enter)"
         }
@@ -78,7 +84,7 @@ impl WorkspaceWindow {
                             })
                             .child(PanelInput::new(input).w_full().disabled(blocked)),
                     )
-                    .child(if turn_active {
+                    .children(turn_active.then(|| {
                         Button::new("panel-stop-prompt")
                             .child(div().size(px(10.)).rounded(px(1.)).bg(rgb(0xFFFFFF)))
                             .tooltip(knot_core::l10n::t("panel.stop"))
@@ -89,8 +95,13 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
                                 view.stop_panel_prompt(id, cx);
                             }))
-                            .into_any_element()
-                    } else {
+                    }))
+                    // Shown beside stop rather than instead of it while a `!`
+                    // command is typed during a turn: the command has to be
+                    // runnable and the turn has to stay interruptible, and
+                    // swapping one control for the other would cost whichever
+                    // it replaced.
+                    .children((!turn_active || is_shell).then(|| {
                         Button::new("panel-send-prompt")
                             .icon(gpui_kit::assets::IconName::Send)
                             .tooltip(send_tooltip)
@@ -100,7 +111,6 @@ impl WorkspaceWindow {
                             .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
                                 view.send_panel_prompt(id, window, cx);
                             }))
-                            .into_any_element()
-                    })
+                    }))
     }
 }

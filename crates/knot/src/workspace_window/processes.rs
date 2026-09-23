@@ -60,7 +60,24 @@ impl WorkspaceWindow {
         // collapsed header now names what is running, so clearing is what put
         // it back to "Counting…" for good. Sampling continues while shut, so
         // there is no staleness left to guard against.
-        self.process_sections.entry(agent_id).or_default().toggle()
+        let opened = self.process_sections.entry(agent_id).or_default().toggle();
+
+        // Opening shuts the MCP section beside it: the two share a row while
+        // collapsed and an open one takes the full width, so both open at
+        // once has nowhere to go. Here rather than at the click handler so
+        // every caller gets it.
+        if opened {
+            self.collapse_mcp_section(agent_id);
+        }
+
+        opened
+    }
+
+    /// Shuts this agent's processes section, if it has one.
+    pub(super) fn collapse_process_section(&mut self, agent_id: Uuid) {
+        if let Some(section) = self.process_sections.get_mut(&agent_id) {
+            section.collapse();
+        }
     }
 
     /// Drops everything this agent's section held. Called from session

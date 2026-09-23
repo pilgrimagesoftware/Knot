@@ -303,8 +303,15 @@ impl WorkspaceWindow {
         self.panel_composer_styling.remove(&id);
         self.forget_panel_mentions(id);
         self.panel_pending_attachments.remove(&id);
+        // Keyed by card, not by agent, so this is the one prune that has to
+        // look inside its values. A command outliving the panel it ran in has
+        // nothing left to report to.
+        self.panel_shell_runs
+            .lock()
+            .retain(|_, shell| shell.agent != id);
         self.panel_input_expanded.remove(&id);
         self.panel_lookups.remove(&id);
         self.forget_process_section(id);
+        self.forget_mcp_section(id);
     }
 }

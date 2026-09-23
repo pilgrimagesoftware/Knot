@@ -187,6 +187,17 @@ pub(crate) struct WorkspaceWindow {
     /// painted from. Created with the composer entity, so a restored draft
     /// arrives styled; see `panel::styling`.
     pub(super) panel_composer_styling:           BTreeMap<Uuid, ComposerStyling>,
+    /// Live `!` commands, keyed by the id of the card drawing each one.
+    ///
+    /// Not keyed by agent: a panel may have several commands running at
+    /// once, each finishing on its own. An entry is removed the poll after
+    /// its run settles, by which point the card holds everything the
+    /// conversation needs - see `panel::shell`.
+    ///
+    /// Shared rather than owned outright because the cancel control is a
+    /// render closure with no `Context` to reach the window through - the
+    /// same reason a panel's session slot is an `Arc`.
+    pub(super) panel_shell_runs: Arc<Mutex<BTreeMap<Uuid, panel::shell::PanelShellRun>>>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
     pub(super) panel_input_expanded:             BTreeSet<Uuid>,
@@ -229,6 +240,23 @@ pub(crate) struct WorkspaceWindow {
     /// drained by the poll - the same off-main-thread hand-off
     /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
     pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
+    /// The MCP section's state per agent that has one: whether it is open,
+    /// whether a probe is wanted, the last inventory and the last failure.
+    /// One struct per agent rather than a map per field, so teardown has one
+    /// entry to prune.
+    pub(super) mcp_sections: BTreeMap<Uuid, crate::workspace_window::mcp_panel::state::McpSection>,
+    /// Agents with a probe in flight. The authority for "a probe is
+    /// running": a claim frees this on drop, so an unwind cannot leave a
+    /// header saying "checking" for the life of the window.
+    pub(super) mcp_in_flight: crate::workspace_window::mcp_panel::state::InFlight,
+    /// Where a finished probe reports and the poll drains - the same
+    /// off-main-thread hand-off `process_failures` uses.
+    pub(super) mcp_results: crate::workspace_window::mcp_panel::state::ProbeResults,
+    /// Shell companions opened to hand the user an agent's own MCP flow,
+    /// mapped to the agent whose section opened them. An entry's exit is what
+    /// makes that section re-probe, so it catches up with whatever the user
+    /// did in there.
+    pub(super) mcp_handover_terminals:           BTreeMap<Uuid, Uuid>,
     /// Agents whose git panel is open. Per-agent rather than a
     /// `WorkspaceViewMode`: the panel is scoped to one agent's folder and
     /// leaves that agent's content visible, so it is not a window mode.

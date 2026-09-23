@@ -9,6 +9,7 @@
 //! - [`styling`] keeps the composer's styled runs in step with it.
 //! - [`mentions`] lists the agent's files for the `@` lookup.
 //! - [`attachments`] keeps a chip in the buffer in step with its row.
+//! - [`shell`] runs a `!` command and hands its result to the next prompt.
 //!
 //! Every item here is an inherent method on
 //! [`super::WorkspaceWindow`]; the modules carve the impl up by concern,
@@ -21,4 +22,5 @@ pub(crate) mod mentions;
 mod pane;
 pub(crate) mod prompt;
 mod session;
+pub(super) mod shell;
 mod styling;

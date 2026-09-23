@@ -12,16 +12,20 @@
 //! - [`fuzzy`] is the subsequence matching and score file paths need.
 //! - [`registry`] joins sources into the list one lookup draws on.
 //! - [`token`] finds the token under the caret and which trigger it is.
+//! - [`shell`] recognises the `!` that makes a buffer a shell command
+//!   (`openspec/specs/panel-shell-passthrough/spec.md`).
 //!
-//! Everything here deals in text - a token and a description - so nothing
-//! in this module can execute a command or reach an agent's internals. The
-//! popup completes; the agent interprets.
+//! Everything here deals in text, so nothing in this module can execute a
+//! command or reach an agent's internals. The popup completes and the agent
+//! interprets; `shell` says what a buffer *is*, and the panel decides what to
+//! do about it.
 
 mod builtin;
 mod entry;
 mod files;
 mod fuzzy;
 mod registry;
+mod shell;
 mod skills;
 mod token;
 
@@ -33,6 +37,7 @@ pub(crate) use entry::LookupMatch;
 pub(crate) use entry::LookupSource;
 pub(crate) use files::FolderFiles;
 pub(crate) use registry::LookupRegistry;
+pub(crate) use shell::{can_send, has_shell_trigger, is_shell_command, shell_command};
 pub(crate) use token::ActiveToken;
 pub(crate) use token::Trigger;
 pub(crate) use token::active_token;
