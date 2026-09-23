@@ -12,7 +12,16 @@ fn the_log_directory_is_named_for_the_app() {
         return;
     };
 
-    assert!(path.ends_with(APP_NAME),
+    let last = path.file_name()
+                   .and_then(|name| name.to_str())
+                   .expect("the path ends in a name");
+
+    // Case-insensitively, because the platforms disagree on the spelling and
+    // both are right: macOS gets `Library/Logs/Knot`, while on Linux
+    // `ProjectDirs` follows XDG and lowercases the final component to
+    // `~/.local/state/knot`. What matters is that the directory is this
+    // app's own rather than a shared one.
+    assert!(last.eq_ignore_ascii_case(APP_NAME),
             "the directory is the app's own, not a shared one: {}",
             path.display());
     assert!(path.is_absolute(), "{}", path.display());
