@@ -43,17 +43,17 @@
 
 ## 4. Walk the spec
 
-- [ ] 4.1 Open the dialog to create an agent and confirm the folder is
+- [x] 4.1 Open the dialog to create an agent and confirm the folder is
       presented after the name and avatar and before the agent type, persona,
       activation mode and registry metadata
-- [ ] 4.2 With the name blank, choose a folder and confirm the name field
+- [x] 4.2 With the name blank, choose a folder and confirm the name field
       shows that folder's last component, that it can be edited before
       submitting, and that submitting creates an agent with the edited name
-- [ ] 4.3 Type a name, then choose a folder, and confirm the typed name is
+- [x] 4.3 Type a name, then choose a folder, and confirm the typed name is
       still there; then clear the name and submit, and confirm the dialog
       still refuses an unnamed agent with the message it always used
-- [ ] 4.4 Confirm the dialog is still refused with no folder and with a folder
+- [x] 4.4 Confirm the dialog is still refused with no folder and with a folder
       that is not an existing directory, with the same messages as before -
       this change moves when the name is filled, not what is required
-- [ ] 4.5 Run `make` and confirm the whole gate passes - `fmt-check`,
+- [x] 4.5 Run `make` and confirm the whole gate passes - `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build
