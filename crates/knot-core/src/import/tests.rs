@@ -15,7 +15,9 @@ use super::result::UnreadableReason;
 use super::skwad::SkwadSource;
 use super::subagents::claude::definitions_in;
 use super::{import_definitions, import_workspaces};
-use crate::settings::{Persona, PersonaState, PersonaType, SavedAgent, Settings, Workspace};
+use crate::settings::{
+    Persona, PersonaState, PersonaType, SavedAgent, Settings, SharedSettings, Workspace,
+};
 
 fn definition(name: &str) -> String {
     format!("---\nname: {name}\ndescription: whatever\n---\n\nInstructions for {name}.\n")
@@ -54,10 +56,10 @@ fn a_malformed_definition_among_valid_ones_is_named_and_the_rest_import() {
     write(&fixtures, "three.md", &definition("three"));
     write(&fixtures, "broken.md", "no frontmatter here\n");
     let store_dir = TempDir::new().expect("temp dir");
-    let mut settings = populated_store(&store_dir);
+    let shared = SharedSettings::new(populated_store(&store_dir));
 
     let scan = definitions_in(fixtures.path());
-    let mut result = import_definitions(&mut settings, &scan.definitions).expect("import succeeds");
+    let mut result = import_definitions(&shared, &scan.definitions).expect("import succeeds");
     result.unreadable.extend(scan.unreadable);
 
     assert_eq!(result.added,
@@ -79,8 +81,9 @@ fn both_imports_leave_everything_that_was_already_there_alone() {
     let fixtures = TempDir::new().expect("temp dir");
     write(&fixtures, "one.md", &definition("one"));
     let store_dir = TempDir::new().expect("temp dir");
-    let mut settings = populated_store(&store_dir);
+    let settings = populated_store(&store_dir);
     let before = settings.clone();
+    let shared = SharedSettings::new(settings);
 
     let imported_persona = Persona { id:           Uuid::new_v4(),
                                      name:         "Terse".into(),
@@ -101,11 +104,12 @@ fn both_imports_leave_everything_that_was_already_there_alone() {
                                unreadable:   Vec::new(), };
 
     let scan = definitions_in(fixtures.path());
-    import_definitions(&mut settings, &scan.definitions).expect("persona import succeeds");
-    import_workspaces(&mut settings, &source, &[workspace_id]).expect("workspace import succeeds");
+    import_definitions(&shared, &scan.definitions).expect("persona import succeeds");
+    import_workspaces(&shared, &source, &[workspace_id]).expect("workspace import succeeds");
 
     // Name, contents and ordering: each pre-existing record is still the first
     // of its collection, byte for byte.
+    let settings = shared.read();
     assert_eq!(&settings.personas[..1], &before.personas[..]);
     assert_eq!(&settings.saved_agents[..1], &before.saved_agents[..]);
     assert_eq!(&settings.saved_workspaces[..1],
@@ -122,7 +126,7 @@ fn running_both_imports_twice_changes_nothing_the_second_time() {
     write(&fixtures, "one.md", &definition("one"));
     write(&fixtures, "two.md", &definition("two"));
     let store_dir = TempDir::new().expect("temp dir");
-    let mut settings = populated_store(&store_dir);
+    let shared = SharedSettings::new(populated_store(&store_dir));
 
     let persona = Persona { id:           Uuid::new_v4(),
                             name:         "Terse".into(),
@@ -143,20 +147,21 @@ fn running_both_imports_twice_changes_nothing_the_second_time() {
                                unreadable:   Vec::new(), };
     let scan = definitions_in(fixtures.path());
 
-    import_definitions(&mut settings, &scan.definitions).expect("first persona import");
-    import_workspaces(&mut settings, &source, &[workspace_id]).expect("first workspace import");
-    let after_first = settings.clone();
+    import_definitions(&shared, &scan.definitions).expect("first persona import");
+    import_workspaces(&shared, &source, &[workspace_id]).expect("first workspace import");
+    let after_first = shared.read();
 
     let personas_again =
-        import_definitions(&mut settings, &scan.definitions).expect("second persona import");
+        import_definitions(&shared, &scan.definitions).expect("second persona import");
     let workspaces_again =
-        import_workspaces(&mut settings, &source, &[workspace_id]).expect("second workspace import");
+        import_workspaces(&shared, &source, &[workspace_id]).expect("second workspace import");
 
     assert!(personas_again.added.is_empty(), "no persona added twice");
     assert!(workspaces_again.added.is_empty(),
             "no workspace added twice");
     assert_eq!(personas_again.skipped, ["one", "two"]);
     assert_eq!(workspaces_again.skipped, ["Theirs"]);
+    let settings = shared.read();
     assert_eq!(settings.personas, after_first.personas);
     assert_eq!(settings.saved_agents, after_first.saved_agents);
     assert_eq!(settings.saved_workspaces, after_first.saved_workspaces);
@@ -167,16 +172,16 @@ fn running_both_imports_twice_changes_nothing_the_second_time() {
 #[test]
 fn a_source_that_is_not_installed_contributes_nothing() {
     let store_dir = TempDir::new().expect("temp dir");
-    let mut settings = populated_store(&store_dir);
+    let settings = populated_store(&store_dir);
     let before = settings.clone();
+    let shared = SharedSettings::new(settings);
 
     let scan = definitions_in(&store_dir.path().join("no-such-directory"));
-    let personas = import_definitions(&mut settings, &scan.definitions).expect("no error");
-    let workspaces =
-        import_workspaces(&mut settings, &SkwadSource::default(), &[]).expect("no error");
+    let personas = import_definitions(&shared, &scan.definitions).expect("no error");
+    let workspaces = import_workspaces(&shared, &SkwadSource::default(), &[]).expect("no error");
 
     assert!(scan.is_empty());
     assert!(personas.is_empty());
     assert!(workspaces.is_empty());
-    assert_eq!(settings.personas, before.personas);
+    assert_eq!(shared.read().personas, before.personas);
 }

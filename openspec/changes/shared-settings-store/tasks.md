@@ -21,12 +21,12 @@
 
 ## 2. Move the writers
 
-- [ ] 2.1 Move `knot-core`'s `import/personas.rs` off whole-surface `persist()`
+- [x] 2.1 Move `knot-core`'s `import/personas.rs` off whole-surface `persist()`
       onto the personas document, taking the current value through the handle
       rather than a caller's `&mut Settings`. Verify with a test that changes a
       scalar between opening the import and running it, and asserts the scalar
       survives.
-- [ ] 2.2 Do the same for `import/workspaces.rs`, writing the roster documents
+- [x] 2.2 Do the same for `import/workspaces.rs`, writing the roster documents
       only. Verify with the equivalent test, and that imported workspaces and
       agents still read back.
 - [ ] 2.3 Move `settings_window`'s persist path onto the handle and delete its
@@ -46,7 +46,7 @@
 - [ ] 3.2 Convert `workspace_manager` (`state.rs`) and delete its `settings`
       field. Verify a preference changed while the manager is open is visible
       to it without reopening, which it was not before.
-- [ ] 3.3 Convert `import_window` and delete its `settings` field and its
+- [x] 3.3 Convert `import_window` and delete its `settings` field and its
       `Settings::load()` at open. Verify the spec's "A non-workspace window
       sees the change too" scenario.
 - [ ] 3.4 Convert `command_center` and delete its `settings` field. Verify the
