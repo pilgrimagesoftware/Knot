@@ -61,6 +61,12 @@ impl AgentStore {
     }
 
     /// Record `id`'s layout mode and which agents are active in it.
+    ///
+    /// UNWIRED(#321): nothing sets a layout mode yet - workspace windows show
+    /// one agent, and the split, three- and four-pane layouts are still to be
+    /// ported. The field is persisted and migrated all the same, because an
+    /// installation upgrading from the Swift app already has one stored and
+    /// losing it would be silent.
     pub fn set_workspace_layout(&mut self, id: Uuid, layout_mode: impl Into<String>,
                                 active_agent_ids: Vec<Uuid>) {
         let ui = self.workspace_ui_mut(id);
@@ -75,12 +81,16 @@ impl AgentStore {
     }
 
     /// Record which pane of `id`'s layout has focus.
+    ///
+    /// UNWIRED(#321): there is only one pane until the layouts are ported.
     pub fn set_workspace_focused_pane(&mut self, id: Uuid, index: i32) {
         self.workspace_ui_mut(id).focused_pane_index = index;
     }
 
     /// Record `id`'s split ratios - the secondary one only applies to the
     /// three- and four-pane layouts, hence the `Option`.
+    ///
+    /// UNWIRED(#321): nothing splits a workspace window yet.
     pub fn set_workspace_split_ratios(&mut self, id: Uuid, primary: f64, secondary: Option<f64>) {
         let ui = self.workspace_ui_mut(id);
         ui.split_ratio = primary;
@@ -88,11 +98,17 @@ impl AgentStore {
     }
 
     /// Record whether `id` is showing its dashboard.
+    ///
+    /// UNWIRED(#324): the dashboard is drawn but its visibility is not yet
+    /// something the user toggles and the window remembers.
     pub fn set_workspace_show_dashboard(&mut self, id: Uuid, showing: bool) {
         self.workspace_ui_mut(id).show_dashboard = Some(showing);
     }
 
     /// Record whether `id` is detached into its own window.
+    ///
+    /// Read by the agent row's move-target menu, which excludes detached
+    /// workspaces; nothing sets it outside tests yet.
     pub fn set_workspace_detached(&mut self, id: Uuid, detached: bool) {
         self.workspace_ui_mut(id).is_detached = Some(detached);
     }

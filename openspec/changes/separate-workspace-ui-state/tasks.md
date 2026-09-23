@@ -74,21 +74,32 @@
       through the window's `Settings` snapshot; verify by dragging a window and
       confirming `agents.json` and `workspaces.json` are byte-for-byte unchanged
       while `workspace-ui-state.json` updates
-- [ ] 5.2 Add a note to issue #238 recording that this removed the most frequent
+- [x] 5.2 Add a note to issue #238 recording that this removed the most frequent
       trigger but not the stale snapshot itself, so the bug is now rarer and
       harder to reproduce rather than fixed
 
 ## 6. Walk the spec
 
-- [ ] 6.1 Upgrade in place: run a build with a combined document present,
+- [x] 6.1 Upgrade in place: run a build with a combined document present,
       confirm windows open where they were left, then confirm the workspaces
       document holds only configured fields
-- [ ] 6.2 Delete `workspace-ui-state.json` and start the app; confirm every
+- [x] 6.2 Delete `workspace-ui-state.json` and start the app; confirm every
       workspace loads with its name, color and agents, and windows open with
       default arrangement
-- [ ] 6.3 Delete a workspace, reload, and confirm no UI-state entry survives for
-      it
-- [ ] 6.4 Confirm arrangement still round-trips: move, resize, split and detach a
+- [x] 6.3 Delete a workspace, reload, and confirm no UI-state entry survives for
+      it - covered by test rather than by deleting a real workspace:
+      `removing_a_workspace_drops_its_ui_state` for the teardown path and
+      `an_entry_for_a_workspace_that_is_gone_is_dropped` for the load-time
+      pruning
+- [x] 6.4 Confirm arrangement still round-trips: move, resize, split and detach a
       workspace's window, restart, and check it comes back the same
-- [ ] 6.5 Run `make` and confirm the whole gate passes — `fmt-check`,
+      - Move and resize walked against a release build on a real installation:
+        the UI-state document was written and `workspaces.json` and
+        `agents.json` were byte-for-byte unchanged (md5 `5d4aaba6` and
+        `9ac45ebd` before and after).
+      - Split and detach could NOT be walked: nothing in the Rust app sets a
+        layout mode or detaches a workspace yet, so the setters are marked
+        `UNWIRED(#321)`. Both fields are covered at the document level by the
+        migration and round-trip tests instead.
+- [x] 6.5 Run `make` and confirm the whole gate passes — `fmt-check`,
       `size-check`, `clippy -D warnings`, tests, build

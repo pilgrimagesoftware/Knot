@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::consts::{DEFAULT_AGENT_TYPE, DEFAULT_AVATAR};
+use crate::consts::{
+    DEFAULT_AGENT_TYPE, DEFAULT_AVATAR, WORKSPACE_LAYOUT_DEFAULT, WORKSPACE_SPLIT_RATIO_DEFAULT,
+};
 use crate::settings::capabilities::Capabilities;
 use crate::settings::vocabulary::CostTier;
 
@@ -244,12 +246,21 @@ pub struct Workspace {
 ///
 /// Every field carries its own serde default, so an entry written before a
 /// field existed loads with that field defaulted rather than failing.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+///
+/// [`Default`] is written out rather than derived: `layout_mode` and
+/// `split_ratio` default to `"single"` and `0.5`, which is what every record
+/// written before the split already holds. Deriving would give `""` and
+/// `0.0`, so a workspace with no entry would read as a layout that does not
+/// exist and a divider at the far edge - a change to what the state *means*,
+/// which moving this record is not supposed to make.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkspaceUiState {
+    #[serde(default = "default_workspace_layout")]
     pub layout_mode:           String,
     pub active_agent_ids:      Vec<Uuid>,
     pub focused_pane_index:    i32,
+    #[serde(default = "default_split_ratio")]
     pub split_ratio:           f64,
     pub split_ratio_secondary: Option<f64>,
     pub show_dashboard:        Option<bool>,
@@ -273,6 +284,27 @@ pub struct SavedWindowBounds {
 // ---------------------------------------------------------------------------
 // serde defaults
 // ---------------------------------------------------------------------------
+
+impl Default for WorkspaceUiState {
+    fn default() -> Self {
+        Self { layout_mode:           default_workspace_layout(),
+               active_agent_ids:      Vec::new(),
+               focused_pane_index:    0,
+               split_ratio:           default_split_ratio(),
+               split_ratio_secondary: None,
+               show_dashboard:        None,
+               is_detached:           None,
+               window_bounds:         None, }
+    }
+}
+
+fn default_workspace_layout() -> String {
+    WORKSPACE_LAYOUT_DEFAULT.to_string()
+}
+
+fn default_split_ratio() -> f64 {
+    WORKSPACE_SPLIT_RATIO_DEFAULT
+}
 
 pub(super) fn default_avatar() -> String {
     DEFAULT_AVATAR.to_string()
@@ -567,6 +599,23 @@ mod tests {
         assert!(record.is_same_sighting("https://github.com/a/b/pull/1", agent));
         assert!(!record.is_same_sighting("https://github.com/a/b/pull/2", agent));
         assert!(!record.is_same_sighting("https://github.com/a/b/pull/1", other_agent));
+    }
+
+    /// The defaults are what every record written before the split already
+    /// holds. Deriving `Default` would give `""` and `0.0` instead, which is
+    /// a layout that does not exist and a divider at the far edge - a change
+    /// to what the state means, not just to where it is stored.
+    #[test]
+    fn ui_state_defaults_match_what_existing_records_hold() {
+        let ui = WorkspaceUiState::default();
+
+        assert_eq!(ui.layout_mode, "single");
+        assert_eq!(ui.split_ratio, 0.5);
+
+        // And an entry that names neither reads the same way, rather than
+        // taking serde's zero values.
+        let decoded: WorkspaceUiState = serde_json::from_str("{}").unwrap();
+        assert_eq!(decoded, ui);
     }
 
     /// UI state saved before window frames were remembered must still load -
