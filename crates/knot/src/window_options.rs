@@ -200,6 +200,17 @@ pub(crate) fn broadcast_window_options(cx: &App) -> WindowOptions {
                   cx)
 }
 
+/// The commit window's size. Taller than the broadcast sheet: a commit
+/// message is a subject and a body, and a field too short to show both
+/// encourages the one-line messages the hint argues against.
+pub(crate) fn commit_window_options(cx: &App) -> WindowOptions {
+    let title = knot_core::l10n::t("git_panel.commit_title");
+    os_bar_window(Some(title.into()),
+                  size(px(520.), px(340.)),
+                  Some(size(px(380.), px(260.))),
+                  cx)
+}
+
 /// The About window's fixed size. It is not resizable and not minimizable:
 /// its content neither reflows usefully nor is worth keeping in the Dock, per
 /// `openspec/specs/about-ui`.

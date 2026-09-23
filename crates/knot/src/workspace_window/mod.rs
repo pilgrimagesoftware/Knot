@@ -10,6 +10,7 @@ mod agents;
 mod chrome;
 pub(crate) mod composer_focus;
 mod creation;
+mod git_panel;
 mod menus;
 mod notifications;
 mod open;

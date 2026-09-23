@@ -12,6 +12,10 @@ pub const STATUS: &[&str] = &["status", "--porcelain=v2", "--branch"];
 
 pub const DIFF: &[&str] = &["diff", "--no-color"];
 pub const DIFF_STAGED_FLAG: &str = "--staged";
+/// Separates revisions from paths. Not optional on a path-scoped diff: a path
+/// that also names a branch is otherwise ambiguous, and git resolves it as the
+/// revision.
+pub const PATHSPEC_SEP: &str = "--";
 
 pub const NUMSTAT: &[&str] = &["diff", "--numstat"];
 pub const NUMSTAT_STAGED: &[&str] = &["diff", "--staged", "--numstat"];

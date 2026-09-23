@@ -65,6 +65,35 @@ mod tests {
         assert_eq!(t("panel.context_usage"), "Context usage");
     }
 
+    /// Three-level keys resolve, which the git panel's section titles use.
+    #[test]
+    fn git_panel_keys_resolve() {
+        for key in ["git_panel.title",
+                    "git_panel.clean",
+                    "git_panel.not_a_repository",
+                    "git_panel.select_a_file",
+                    "git_panel.binary_file",
+                    "git_panel.no_changes",
+                    "git_panel.commit",
+                    "git_panel.section.staged",
+                    "git_panel.section.unstaged",
+                    "git_panel.section.untracked",
+                    "git_panel.section.conflicted",
+                    "git_panel.error.path_not_utf8"]
+        {
+            assert_ne!(t(key), key, "{key} did not resolve");
+        }
+    }
+
+    /// Every sentence that embeds a value stays one entry, substituted
+    /// rather than assembled at the call site.
+    #[test]
+    fn git_panel_substitutions_resolve() {
+        assert!(t_with("git_panel.discard_title", &[("path", "src/f.rs")]).contains("src/f.rs"));
+        assert!(t_with("git_panel.status_failed", &[("reason", "boom")]).contains("boom"));
+        assert!(t_with("git_panel.ahead", &[("count", "3")]).contains('3'));
+    }
+
     /// The code-block copy control's pair. Asserted as resolving rather than
     /// as its English copy, per the catalogue-key contract: the renderer that
     /// reads them needs a `Window` and an `App`, so a key missing from the

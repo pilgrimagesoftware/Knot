@@ -88,6 +88,15 @@ impl WorkspaceWindow {
         // nothing running, that could be never.
         let forge_probed = self.forge_status.take_changed();
         let pull_request_states_changed = self.pull_request_states.take_changed();
+        // The git panel's three off-main-thread sources, all draining here
+        // for the same reason: none of them has a GPUI context, so each only
+        // leaves something behind for this tick to act on. A staging
+        // operation reports into a slot, a commit into another, and a
+        // working-tree watch flips a flag.
+        let git_actions_landed = self.drain_git_actions();
+        let git_commits_landed = self.drain_git_commits();
+        let git_watches_fired = self.drain_git_watches();
+        let git_reads_landed = self.git_panel_needs_repaint();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -104,6 +113,10 @@ impl WorkspaceWindow {
            || pull_requests_recorded
            || forge_probed
            || pull_request_states_changed
+           || git_actions_landed
+           || git_commits_landed
+           || git_watches_fired
+           || git_reads_landed
         {
             cx.notify();
         }

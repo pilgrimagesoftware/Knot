@@ -32,6 +32,59 @@ pub(crate) const REPAINT_POLL_INTERVAL: Duration = Duration::from_millis(33);
 /// repaints - see `workspace_window::sessions`.
 pub(crate) const DIFF_STATS_MAX_AGE: Duration = Duration::from_secs(2);
 
+/// How stale the git panel's working-tree status may get before the next
+/// render asks for a fresh one.
+///
+/// Shorter than a diff stat's, because the panel is what the user acts
+/// through: a stage they just made must appear promptly, and the watch that
+/// would otherwise tell us is paused for exactly that window.
+pub(crate) const GIT_STATUS_MAX_AGE: Duration = Duration::from_millis(500);
+
+/// How stale a shown file diff may get before it is read again.
+///
+/// Long, because a diff is re-read when the selection changes or the status
+/// is invalidated, not on a clock - this is a backstop against a diff that
+/// somehow outlives both, not the mechanism that keeps it fresh.
+pub(crate) const GIT_DIFF_MAX_AGE: Duration = Duration::from_secs(30);
+
+/// The git panel's width when it opens, and the bounds a drag may take it to.
+///
+/// Carried from the Swift panel, which clamped the same way. Not persisted:
+/// a reopened panel starts at the default again.
+pub(crate) const GIT_PANEL_DEFAULT_WIDTH: f32 = 500.;
+pub(crate) const GIT_PANEL_MIN_WIDTH: f32 = 350.;
+pub(crate) const GIT_PANEL_MAX_WIDTH: f32 = 800.;
+
+/// The most diff lines the panel will hold and draw for one file.
+///
+/// Drawing is virtualized, so this is not what bounds the frame - it bounds
+/// what `parse_diff` materializes into the cache. A generated file of several
+/// hundred thousand lines should not be held in memory per selected row.
+pub(crate) const GIT_DIFF_MAX_LINES: usize = 20_000;
+
+/// How much space above and below the diff viewport the list measures, so
+/// scrolling a diff does not pop lines in at the edges. The conversation
+/// panel's own overdraw, for the same reason.
+pub(crate) const GIT_DIFF_LIST_OVERDRAW: f32 = 400.;
+
+/// The height hint every diff row starts with, before it has been measured.
+///
+/// A virtualized list summarises an unmeasured row as zero height and flags
+/// the whole summary unknown, so anything derived from total content height -
+/// a scrollbar thumb above all - is wrong until every row has been drawn.
+/// Seeding a hint fixes that from the first frame, and real heights replace
+/// it as rows render.
+///
+/// The value is the computed line box, not an estimate: `text_xs` is
+/// `rems(0.75)` against the default 16px rem, so 12px; the default
+/// `line_height` is `phi` *relative to the font size*, so 12 x 1.618034 =
+/// 19.416, rounded to 19. A diff row carries horizontal padding only, and no
+/// border, so the line box is the whole row.
+///
+/// One hint works here and would not for a conversation: diff rows are
+/// uniform - one line each, one text size, no wrapping.
+pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 19.;
+
 /// How stale a pull request's fetched state may get before the Pull Requests
 /// view asks for it again.
 ///

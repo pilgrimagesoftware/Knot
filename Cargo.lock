@@ -3776,6 +3776,7 @@ dependencies = [
  "knot-processes",
  "knot-tasks",
  "knot-terminal",
+ "knot-watch",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
