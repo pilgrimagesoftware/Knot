@@ -21,12 +21,12 @@
 
 ## 4. The scanner
 
-- [ ] 4.1 Add a composer scanner module — a pure function over `&str` plus the attachment table, returning ranges by construct family, with no GPUI types in its signature; verify unit tests run without a window
-- [ ] 4.2 Implement token recognition for `/` and `@`, including the word-boundary rule; verify `crates/knot/src` and `paul@example.com` yield no token, while a leading `/` and an `@` after a space do, and an unresolvable `/nosuchcommand` still scans as a token
-- [ ] 4.3 Implement markdown recognition — emphasis, strong, inline code, fenced blocks, headings, list markers, block quotes, links — with unclosed constructs falling back to prose; verify `a * b` yields no emphasis and an unclosed fence styles only the lines after it
-- [ ] 4.4 Give fenced blocks one code treatment regardless of info string; verify a `rust` block and a `python` block scan identically
-- [ ] 4.5 Implement dirty-region rescanning: an edit's line widened to the enclosing block construct, widened again while a fence can have opened or closed; verify against a whole-buffer rescan over the edit sequences from `panel-rich-input`'s "survives every way the composer changes" — the two must agree
-- [ ] 4.6 Add a scaling test asserting the work a single-character edit does is bounded by the edited construct, not the buffer length; verify it fails if the scanner is changed to rescan everything
+- [x] 4.1 Add a composer scanner module — a pure function over `&str` plus the attachment table, returning ranges by construct family, with no GPUI types in its signature; verify unit tests run without a window
+- [x] 4.2 Implement token recognition for `/` and `@`, including the word-boundary rule; verify `crates/knot/src` and `paul@example.com` yield no token, while a leading `/` and an `@` after a space do, and an unresolvable `/nosuchcommand` still scans as a token
+- [x] 4.3 Implement markdown recognition — emphasis, strong, inline code, fenced blocks, headings, list markers, block quotes, links — with unclosed constructs falling back to prose; verify `a * b` yields no emphasis and an unclosed fence styles only the lines after it
+- [x] 4.4 Give fenced blocks one code treatment regardless of info string; verify a `rust` block and a `python` block scan identically
+- [x] 4.5 Implement dirty-region rescanning: an edit's line widened to the enclosing block construct, widened again while a fence can have opened or closed; verify against a whole-buffer rescan over the edit sequences from `panel-rich-input`'s "survives every way the composer changes" — the two must agree
+- [x] 4.6 Add a scaling test asserting the work a single-character edit does is bounded by the edited construct, not the buffer length; verify it fails if the scanner is changed to rescan everything
 
 ## 5. Painting the styling
 
