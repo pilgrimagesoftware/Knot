@@ -98,10 +98,22 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                        Arc::new(move || catalog.agents_snapshot())
                    };
                    let hook_handler = catalog.clone();
-                   let supervisor =
+                   let mut supervisor =
                        knot_mcp::Supervisor::new(settings.mcp_server_port,
                                                  catalog as Arc<dyn ToolCatalog>,
                                                  agents_snapshot).with_hook_handler(hook_handler);
+                   // A packaged `Knot.app` has no stderr anyone reads, so
+                   // the file is the only record of what the server did.
+                   // With no resolvable home directory there is nowhere to
+                   // put one, and the server runs as it always has.
+                   //
+                   // Given to the supervisor rather than to a server: it
+                   // builds a fresh one per attempt, and one writer has to
+                   // span every restart for the entries either side of a
+                   // failure to land in the same file.
+                   if let Some(directory) = knot_core::log_dir() {
+                       supervisor = supervisor.with_log(directory.join(knot_mcp::LOG_FILE_NAME));
+                   }
                    // Subscribed before `run`, so no transition is missed -
                    // though a `watch` receiver would read the current value
                    // even if it were not.

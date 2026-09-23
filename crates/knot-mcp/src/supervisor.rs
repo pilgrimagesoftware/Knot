@@ -26,12 +26,13 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use tokio::sync::{oneshot, watch};
-use tokio::task::{AbortHandle, JoinError};
+use tokio::task::{AbortHandle, JoinError, JoinHandle};
 use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::backoff::delay_for;
 use crate::consts;
 use crate::hooks::AgentHookHandler;
+use crate::log::Logger;
 use crate::probe::{ProbeFailures, probe_health};
 use crate::server::{AgentsSnapshotFn, McpServer};
 use crate::state::ServerState;
@@ -93,6 +94,10 @@ pub struct Supervisor {
     /// inside [`Supervisor::run`] and unreachable from outside it. Nothing
     /// in the application reads this.
     serve_abort: Arc<Mutex<Option<AbortHandle>>>,
+    /// The log every server built here writes through, and the writer task
+    /// behind it. Owned at this level so one writer spans every restart.
+    log:         Option<Logger>,
+    log_task:    Option<JoinHandle<()>>,
 }
 
 impl Supervisor {
@@ -110,11 +115,33 @@ impl Supervisor {
                hooks: None,
                tuning: SupervisorTuning::default(),
                state_tx,
-               serve_abort: Arc::new(Mutex::new(None)) }
+               serve_abort: Arc::new(Mutex::new(None)),
+               log: None,
+               log_task: None }
     }
 
     pub fn with_hook_handler(mut self, handler: Arc<dyn AgentHookHandler>) -> Self {
         self.hooks = Some(handler);
+        self
+    }
+
+    /// Writes the supervised server's diagnostics to the log file at `path`.
+    ///
+    /// The writer is started once, here, and every server built from this
+    /// supervisor gets a handle to it. It has to be this way round:
+    /// [`Self::build_server`] makes a fresh server per attempt, so a server
+    /// that started its own writer would leave one per restart, several of
+    /// them appending to the same file with their own byte counters and
+    /// rotating underneath each other. One writer per log is the invariant
+    /// that makes rotation safe without locking.
+    ///
+    /// Restarts therefore append to one continuous file, which is what makes
+    /// the log readable across a failure - the entries either side of a
+    /// restart are the point.
+    pub fn with_log(mut self, path: std::path::PathBuf) -> Self {
+        let (logger, task) = Logger::spawn(path);
+        self.log = Some(logger);
+        self.log_task = Some(task);
         self
     }
 
@@ -263,8 +290,14 @@ impl Supervisor {
         let server = McpServer::new(self.port,
                                     Arc::clone(&self.catalog),
                                     Arc::clone(&self.agents));
-        match &self.hooks {
+        let server = match &self.hooks {
             Some(handler) => server.with_hook_handler(Arc::clone(handler)),
+            None => server,
+        };
+        // A handle to the supervisor's writer, never a new one - see
+        // `with_log`.
+        match &self.log {
+            Some(logger) => server.with_logger(logger.clone()),
             None => server,
         }
     }
