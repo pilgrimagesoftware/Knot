@@ -20,6 +20,14 @@
 
 - [x] 3.1 Run `make` and confirm fmt, size-check, clippy, test and build
       all pass.
-- [ ] 3.2 Trigger a permission prompt against a live ACP agent and confirm
-      the buttons read "Allow ⇧⌘A" and "Deny ⇧⌘D", that pressing each
-      resolves the request, and that clicking still works.
+- [x] 3.2 Assert the hint reaches the painted frame rather than merely
+      resolving from the keymap: render the prompt in a real window and
+      look each keystroke up in `debug_bounds`. Verified by deleting the
+      `children(allow_kbd)` call and confirming the test fails, so it
+      cannot pass for the wrong reason.
+- [ ] 3.3 Still manual, and not done: trigger a prompt against a live ACP
+      agent and confirm the hints read "Allow ⇧⌘A" / "Deny ⇧⌘D" at a
+      glance, that pressing each key resolves the request, and that
+      clicking still works. 3.2 proves the element is painted; it proves
+      nothing about legibility against the primary button fill, and it
+      exercises neither the key dispatch nor the click path end to end.

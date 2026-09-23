@@ -154,10 +154,11 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
 /// against the live keymap rather than a hard-coded string, so a rebinding
 /// moves the hint with it, and an action with nothing bound yields `None` -
 /// which `children` draws as nothing at all, leaving the plain button.
-fn render_permission_prompt(panel_state: &PanelState, request: &PermissionRequest,
-                            permission_risk: RiskLevel,
-                            on_decision: Rc<dyn Fn(PermissionDecision)>, window: &Window)
-                            -> impl IntoElement {
+pub(super) fn render_permission_prompt(panel_state: &PanelState, request: &PermissionRequest,
+                                       permission_risk: RiskLevel,
+                                       on_decision: Rc<dyn Fn(PermissionDecision)>,
+                                       window: &Window)
+                                       -> impl IntoElement {
     let allow = on_decision.clone();
     let deny = on_decision;
     let allow_kbd = Kbd::global_binding_for_action(&PanelPermissionAllow, window);
