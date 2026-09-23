@@ -17,6 +17,8 @@ mod import_window;
 mod l10n_catalog;
 mod layout_model;
 mod markdown_view;
+mod mcp_state_row;
+mod mcp_supervision;
 mod menu_key_equivalents;
 mod notifications;
 mod panel_lookup;

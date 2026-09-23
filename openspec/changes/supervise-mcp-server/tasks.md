@@ -56,42 +56,42 @@
 
 ## 5. Wiring into the app
 
-- [ ] 5.1 Replace the single `server.start().await` in `app_bootstrap::start_mcp_server` with the
+- [x] 5.1 Replace the single `server.start().await` in `app_bootstrap::start_mcp_server` with the
       supervisor, keeping the existing thread, runtime and oneshot stop signal; verify the app
       builds and an existing MCP integration test still reaches the server.
-- [ ] 5.2 Mirror the watched state into an `Arc<Mutex<ServerState>>` the UI reads, and honour the
+- [x] 5.2 Mirror the watched state into an `Arc<Mutex<ServerState>>` the UI reads, and honour the
       disabled case without starting supervision; verify a test asserts a disabled server binds
       nothing and supervises nothing.
-- [ ] 5.3 Push a failure marker into a shared single-slot queue on the transition *into* a
+- [x] 5.3 Push a failure marker into a shared single-slot queue on the transition *into* a
       failing state only; verify unit tests assert one marker per failure episode across several
       retries, and a further marker after a recovery and a second failure.
 
 ## 6. Settings pane state row
 
-- [ ] 6.1 Add the localization keys for each state, the retrying attempt and error text, and the
+- [x] 6.1 Add the localization keys for each state, the retrying attempt and error text, and the
       disabled and stopped text to `crates/knot-core/locales/en.yml`; verify the l10n key tests
       resolve each key (touch `knot-core` first so the catalog is not read from a stale build
       artifact).
-- [ ] 6.2 Render the read-only state row in the MCP settings pane, showing the address when
+- [x] 6.2 Render the read-only state row in the MCP settings pane, showing the address when
       running, the attempt number and last error when retrying, and the bare state otherwise;
       verify tests drive all five states and assert the row shows nothing belonging to another
       state.
-- [ ] 6.3 Add the MCP tab's poll so the row follows a state change while the window stays open,
+- [x] 6.3 Add the MCP tab's poll so the row follows a state change while the window stays open,
       notifying only when the state differs from the one last drawn; verify a test asserts no
       repaint is requested for an unchanged state.
 
 ## 7. Failure notification
 
-- [ ] 7.1 Drain the failure slot from a window's existing repaint poll with an atomic take, and
+- [x] 7.1 Drain the failure slot from a window's existing repaint poll with an atomic take, and
       raise a `SystemNotification` identifying the MCP server; verify a test with two windows
       asserts exactly one raises it.
-- [ ] 7.2 Gate the notification on `desktop_notifications_enabled`, and make its click bring the
+- [x] 7.2 Gate the notification on `desktop_notifications_enabled`, and make its click bring the
       app to the front without attempting an agent selection; verify tests cover the setting off
       (no notification, state row unchanged in its reporting) and the click path.
 
 ## 8. Verification and close-out
 
-- [ ] 8.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
+- [x] 8.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
       `build` all pass on the workspace.
 - [ ] 8.2 Manually verify start retry: hold the configured port with another process, launch
       Knot, confirm the settings row reports retrying with a growing delay, release the port, and

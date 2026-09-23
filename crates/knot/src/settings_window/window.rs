@@ -29,9 +29,8 @@ use super::tab::SettingsTab;
 #[cfg(target_os = "macos")]
 use crate::app_support::native_font_panel;
 use crate::app_support::observe_system_appearance;
-// macOS-only: used solely by the native font-panel poll below.
-#[cfg(target_os = "macos")]
 use crate::consts;
+use crate::mcp_status::McpServerStatus;
 use crate::window_options::settings_window_options;
 
 /// Opens the settings window, or brings it forward if already open.
@@ -74,6 +73,9 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                 .placeholder(knot_core::l10n::t("settings.input.port"))
                 .default_value(settings.mcp_server_port.to_string())
                                        });
+                // The state to open on, so the row is right on the first
+                // frame rather than one poll tick later.
+                let mcp_state = current_mcp_state(cx);
                 let view = cx.new(|cx| {
                                  let agent_options_subscription =
                                      cx.subscribe(&agent_options_input,
@@ -113,6 +115,7 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                   ai_api_key_input,
                                                   autopilot_custom_prompt_input,
                                                   mcp_port_input,
+                                                  last_mcp_state: mcp_state,
                                                   _agent_options_subscription:
                                                       agent_options_subscription,
                                                   _ai_api_key_subscription:
@@ -167,11 +170,50 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                       })
                       .detach();
                 }
+                spawn_mcp_state_poll(view.clone(), cx);
                 cx.new(|cx| Root::new(view, window, cx))
             }) {
         Ok(window) => *handle.borrow_mut() = Some(window.into()),
         Err(error) => eprintln!("failed to open settings window: {error}"),
     }
+}
+
+/// The MCP server's state as the application last mirrored it, or
+/// [`knot_mcp::ServerState::Disabled`] when nothing has reported one -
+/// which is the state of a server configuration has turned off.
+fn current_mcp_state(cx: &App) -> knot_mcp::ServerState {
+    if cx.has_global::<McpServerStatus>() {
+        cx.global::<McpServerStatus>().state()
+    }
+    else {
+        knot_mcp::ServerState::Disabled
+    }
+}
+
+/// Starts the MCP tab's state poll, which runs for the window's lifetime.
+///
+/// The supervisor publishes its state over a channel on its own thread and
+/// GPUI cannot await one, so the row follows a change by re-reading the
+/// mirror. It asks for a repaint only when the state differs from the one
+/// last drawn: a window left open on another tab would otherwise repaint
+/// twice a second for nothing.
+fn spawn_mcp_state_poll(view: Entity<SettingsWindow>, cx: &mut App) {
+    cx.spawn(async move |cx| {
+          loop {
+              cx.background_executor()
+                .timer(consts::MCP_STATE_POLL_INTERVAL)
+                .await;
+              cx.update(|app| {
+                    let state = current_mcp_state(app);
+                    view.update(app, |view, cx| {
+                            if SettingsWindow::mcp_state_changed(&mut view.last_mcp_state, state) {
+                                cx.notify();
+                            }
+                        });
+                });
+          }
+      })
+      .detach();
 }
 
 pub(crate) struct SettingsWindow {
@@ -187,6 +229,9 @@ pub(crate) struct SettingsWindow {
     pub(super) ai_api_key_input: Entity<InputState>,
     pub(super) autopilot_custom_prompt_input: Entity<InputState>,
     pub(super) mcp_port_input: Entity<InputState>,
+    /// The MCP server's state as the MCP tab last drew it. The poll
+    /// compares against this rather than repainting every tick.
+    pub(super) last_mcp_state: knot_mcp::ServerState,
     pub(super) _agent_options_subscription: Subscription,
     pub(super) _ai_api_key_subscription: Subscription,
     pub(super) _autopilot_custom_prompt_subscription: Subscription,
