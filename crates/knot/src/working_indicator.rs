@@ -1,3 +1,21 @@
+//! The dashboard agent card's working indicator: one braille-spinner glyph
+//! standing for five states - Working, Idle, Awaiting input, Error, and not
+//! running at all.
+//!
+//! The agent conversation's turn-in-progress row is **not** a caller, and
+//! its absence is not drift. It used to call [`render`] with the state
+//! pinned to `(Running, true)`, which made four of the five states above
+//! unreachable there and borrowed a mark built to be *distinguished* from
+//! three siblings for a row that has one thing to say. It now draws the
+//! animated app icon instead - `app_support::working_knot_animation` - and
+//! `openspec/specs/working-indicator/spec.md` states the split as a
+//! requirement so it is not reunified later on the assumption it was an
+//! accident.
+//!
+//! [`spinner_frame`] and the repaint poll it feeds therefore exist for the
+//! dashboard alone, which redraws only on events. The panel redraws as it
+//! streams, and the animation schedules its own frames.
+
 use gpui_kit::{Div, ParentElement, Styled, div, hsla, px, rgb};
 
 use crate::consts;

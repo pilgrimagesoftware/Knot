@@ -526,8 +526,11 @@ pub(crate) fn run() {
                            // `Assets` only embeds gpui-component's own curated icon subset; our
                            // settings-window icon buttons (folder-open/pencil/trash/x/plus/copy)
                            // aren't in it, so `Icon::path(...)` silently resolved to nothing and
-                           // rendered invisible. `AllAssets` embeds the complete Lucide catalog.
-                           .with_assets(gpui_kit::assets::AllAssets)
+                           // rendered invisible. `AllAssets` embeds the complete Lucide catalog,
+                           // and `KnotAssets` layers Knot's own assets over it - the panel's
+                           // working animation only decodes as an animation when it arrives
+                           // through this source rather than as raw bytes.
+                           .with_assets(app_support::KnotAssets)
                            .run(move |cx| {
                                // Before `set_app_menus`: AppKit labels the
                                // application menu from the process name.
