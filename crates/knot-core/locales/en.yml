@@ -162,6 +162,12 @@ settings:
     agent: "Agent"
     command: "Command"
     no_setup: "No manual setup needed."
+    status: "Status"
+    status_disabled: "Disabled"
+    status_starting: "Starting…"
+    status_running: "Running on %{address}"
+    status_retrying: "Retrying - attempt %{attempt} failed: %{error}"
+    status_stopped: "Stopped"
   appearance:
     fonts: "Fonts"
     ui: "UI"
@@ -365,3 +371,7 @@ pull_requests:
   forge_missing: "The gh command is not installed, so no status can be read. The list still opens each pull request."
   forge_unauthenticated: "gh is not signed in, so no status can be read. Run gh auth login."
   forge_failed: "Status could not be read: %{reason}"
+
+mcp_server:
+  failure_title: "Knot - MCP server"
+  failure_body: "The MCP server is not running. Agents cannot reach Knot until it recovers."

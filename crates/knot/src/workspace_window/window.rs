@@ -174,6 +174,15 @@ pub(crate) struct WorkspaceWindow {
     /// window before replacing the app-wide menu bar - two open workspace
     /// windows must not fight over whose selection the Agents menu shows.
     pub(super) window_handle:                    AnyWindowHandle,
+    /// The last name written to this window's OS title, so `render` can skip
+    /// a `set_window_title` that would change nothing.
+    ///
+    /// A cache of an *output*, not a copy of the state: the title bar and the
+    /// OS title both come from the store every frame, so if this ever drifts
+    /// the cost is a redundant AppKit call, never a wrong name. That is what
+    /// separates it from the settings snapshot in issue #238, where the copy
+    /// *is* what gets read and written back.
+    pub(super) titled_as:                        String,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
