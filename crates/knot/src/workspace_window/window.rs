@@ -157,6 +157,19 @@ pub(crate) struct WorkspaceWindow {
     /// cancels it).
     pub(super) panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     pub(super) panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    /// One activity tracker per Panel-mode agent whose session has been
+    /// ready at least once, created lazily by `sync_panel_agent_states`.
+    ///
+    /// The tracker, not this window, writes the agent's `AgentState`: its
+    /// `on_status` sink does the store write, the same way the hook route's
+    /// tracker does in `knot-mcp-tools`. The poll reports ACP transitions
+    /// into it and reads nothing back. That is what makes
+    /// `Effect::AwaitingInput` (the desktop notification) and
+    /// `Effect::CheckMessages` (the idle delivery nudge) reachable for a
+    /// Panel-mode agent at all - written straight into the store they never
+    /// fired. See `openspec/specs/activity-detection/spec.md`, "ACP updates
+    /// drive status for Panel-mode agents".
+    pub(super) panel_trackers:                   BTreeMap<Uuid, knot_activity::Tracker>,
     pub(super) panel_stopping:                   BTreeSet<Uuid>,
     pub(super) panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has

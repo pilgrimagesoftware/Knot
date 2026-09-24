@@ -20,6 +20,7 @@ use crate::consts;
 use crate::panel_session;
 use crate::working_indicator;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::panel_activity;
 use crate::workspace_window::prompt_queue;
 
 /// Starts the window's repaint poll, which runs for the window's lifetime.
@@ -83,7 +84,7 @@ impl WorkspaceWindow {
         // in an unselected pane is the case this feature exists for.
         let pull_requests_recorded = self.drain_pull_requests(cx);
         let prompts_completed = self.drain_prompt_results();
-        let panel_states_moved = self.sync_panel_agent_states();
+        let panel_states_moved = self.sync_panel_agent_states(cx);
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
         // A `!` command's output lands on its own drain threads with no
@@ -199,9 +200,9 @@ impl WorkspaceWindow {
         drained
     }
 
-    /// Writes each ready panel session's lifecycle back to the store, so the
-    /// sidebar and dashboard show what the ACP session is actually doing,
-    /// and says whether any of them moved.
+    /// Reports each ready panel session's lifecycle to that agent's activity
+    /// tracker, so the sidebar and dashboard show what the ACP session is
+    /// actually doing, and says whether any of them moved.
     ///
     /// Reporting it matters because this is the only thing that notices an
     /// *unselected* agent's turn ending: `panel_needs_repaint` consults the
@@ -210,7 +211,21 @@ impl WorkspaceWindow {
     /// this was polled, the transition reached the store and stopped there,
     /// and the dot caught up whenever something unrelated repainted the
     /// window.
-    fn sync_panel_agent_states(&mut self) -> bool {
+    ///
+    /// The tracker writes the store, not this function: its `on_status` sink
+    /// does, the same way the hook route's tracker does in `knot-mcp-tools`.
+    /// Writing the store here as well would race the tracker's channel and
+    /// fight any status the tracker later re-derives, so there is exactly one
+    /// writer - and going through it is what makes the awaiting-input
+    /// notification and the idle delivery nudge fire at all (see
+    /// `panel_activity`).
+    ///
+    /// Only agents whose status *differs* from the store's are reported. The
+    /// panel reports a level - a permission request pending for thirty ticks
+    /// reads the same every tick - while the tracker takes edges and emits an
+    /// `AwaitingInput` effect for every `Input` it is handed. Without this
+    /// gate one prompt would raise a notification per poll.
+    fn sync_panel_agent_states(&mut self, cx: &mut gpui_kit::Context<Self>) -> bool {
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
@@ -221,27 +236,29 @@ impl WorkspaceWindow {
                                    };
                                    let state_arc = handle.state();
                                    let state = state_arc.lock();
-                                   let agent_state = if state.pending_permission.is_some() {
-                                       knot_agents::AgentState::Input
-                                   }
-                                   else if state.turn_active {
-                                       knot_agents::AgentState::Running
-                                   }
-                                   else {
-                                       knot_agents::AgentState::Idle
-                                   };
-                                   Some((*id, agent_state))
+                                   Some((*id, panel_activity::acp_status(&state)))
                                })
                                .collect::<Vec<_>>();
-        let mut moved = false;
-        {
-            let mut store = self.store.lock();
-            for (id, state) in panel_states {
-                moved |= store.agent(id).is_some_and(|agent| agent.state != state);
-                store.set_state(id, state);
+        let moved = {
+            let store = self.store.lock();
+            panel_activity::transitions(panel_states, |id| store.agent(id).map(|agent| agent.state))
+        };
+        if moved.is_empty() {
+            return false;
+        }
+        for (id, (state, message)) in moved {
+            if self.ensure_panel_tracker(id, cx)
+               && let Some(tracker) = self.panel_trackers.get(&id)
+            {
+                tracker.apply_acp_status(state, message);
+            }
+            else {
+                // No tracker: degraded rather than frozen. The dot still
+                // moves; the effects it would have carried are lost.
+                self.store.lock().set_state(id, state);
             }
         }
-        moved
+        true
     }
 
     /// Sends the next queued prompt to every agent that has one, and says

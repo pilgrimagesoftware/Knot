@@ -141,6 +141,7 @@ impl WorkspaceWindow {
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_prompt_queues: BTreeMap::new(),
+                    panel_trackers: BTreeMap::new(),
                     panel_stopping: BTreeSet::new(),
                     panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
                     panel_lists: BTreeMap::new(),
