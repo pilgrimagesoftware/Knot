@@ -60,11 +60,25 @@ impl WorkspaceWindow {
         let expanded = self.process_section(agent_id)
                            .is_some_and(crate::agent_processes::ProcessSection::is_expanded);
         let is_running = self.agent_session_root(agent_id).is_some();
+        // `None` when the type cannot report, so the header never claims a
+        // count of zero for a group the body does not draw.
+        let subagents: Option<Vec<Subagent>> =
+            self.agent_reports_subagents(agent_id).then(|| {
+                                                      let now = std::time::Instant::now();
+                                                      let registry = self.subagents.lock();
+                                                      registry.ordered(agent_id, now)
+                                                              .into_iter()
+                                                              .cloned()
+                                                              .collect()
+                                                  });
         let summary = crate::workspace_window::render::processes_summary::summary_text(
-            is_running,
-            expanded,
-            self.process_section(agent_id)
-                .and_then(crate::agent_processes::ProcessSection::processes),
+            &crate::workspace_window::render::processes_summary::Summary {
+                is_running,
+                expanded,
+                processes: self.process_section(agent_id)
+                               .and_then(crate::agent_processes::ProcessSection::processes),
+                subagents: subagents.as_deref(),
+            },
         );
 
         Some(v_flex().w_full()

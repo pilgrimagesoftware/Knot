@@ -62,10 +62,10 @@
 
 ## 9. The header summary
 
-- [ ] 9.1 Extend the collapsed summary to name distinct subagent kinds before distinct process names, deduplicating each; verify three `code-review` subagents name the kind once and that the remainder counts the other two
-- [ ] 9.2 Count subagents and processes separately in the expanded summary; verify two subagents and three descendants read as two and three, not as five
-- [ ] 9.3 Make a stopped agent read as nothing running whatever the registry and the last sample hold; verify an agent that stops while holding both still summarizes as nothing running
-- [ ] 9.4 Keep the unknown marker tied to the first process sample only; verify an agent with a recorded subagent and no completed sample still reads as unknown, and that a subagent list alone is never reported as unknown
+- [x] 9.1 Extend the collapsed summary to name distinct subagent kinds before distinct process names, deduplicating each; verify three `code-review` subagents name the kind once and that the remainder counts the other two
+- [x] 9.2 Count subagents and processes separately in the expanded summary; verify two subagents and three descendants read as two and three, not as five
+- [x] 9.3 Make a stopped agent read as nothing running whatever the registry and the last sample hold; verify an agent that stops while holding both still summarizes as nothing running
+- [x] 9.4 Keep the unknown marker tied to the first process sample only; verify an agent with a recorded subagent and no completed sample still reads as unknown, and that a subagent list alone is never reported as unknown
 
 ## 10. Empty states and localization
 
