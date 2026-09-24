@@ -16,6 +16,7 @@ use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
 use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::component::select::SelectState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
@@ -152,6 +153,22 @@ pub(crate) struct WorkspaceWindow {
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
     pub(super) panel_prompt_inputs: BTreeMap<Uuid, Entity<panel::prompt::PanelInputState>>,
+    /// The model and effort dropdowns' state, one per panel and axis.
+    ///
+    /// `SelectState` holds the search query, the scroll offset and focus, so
+    /// it cannot be rebuilt per render - a state built in the render path
+    /// would lose each keystroke as it was typed. Built and refreshed in
+    /// `prepare_frame`; see `panel::input::config_select`.
+    pub(super) panel_selectors: BTreeMap<panel::input::SelectorKey,
+                                         Entity<SelectState<panel::input::ConfigSelectorDelegate>>>,
+    /// Keeps each dropdown's `SelectEvent` subscription alive. Dropping one
+    /// unsubscribes it, so a selection would persist nothing.
+    pub(super) panel_selector_subscriptions:     BTreeMap<panel::input::SelectorKey, Subscription>,
+    /// What each dropdown was last built from, so an agent re-reporting the
+    /// same options leaves a half-typed search query alone and a changed
+    /// list still replaces what is offered.
+    pub(super) panel_selector_items:
+        BTreeMap<panel::input::SelectorKey, Vec<panel::input::ConfigSelectorItem>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
