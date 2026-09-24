@@ -19,17 +19,6 @@ use crate::shell::status::ShellStatus;
 /// Generous: it bounds a hang, it does not pace the test.
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// A run deadline for a test that needs the command to have *written*
-/// something before the deadline fires.
-///
-/// Seconds rather than milliseconds because it has to cover forking
-/// `/bin/sh`, `sh` parsing its script and the first write reaching the
-/// capture thread - none of which this crate controls, and all of which
-/// stretch on a machine running something else. The test still waits for the
-/// write rather than trusting this number; the margin is what keeps that wait
-/// from being the thing that times out.
-const DEADLINE_WITH_ROOM_TO_START: Duration = Duration::from_secs(2);
-
 fn request(command: &str, cwd: &Path) -> ShellRequest {
     let mut request = ShellRequest::new(command, cwd);
     // Not the runner's `SHELL`: a developer's login shell may print a banner
@@ -161,38 +150,19 @@ fn a_command_still_running_at_the_deadline_times_out() {
     assert!(started.elapsed() < SETTLE_TIMEOUT, "did not abort early");
 }
 
-#[test]
-fn output_written_before_the_deadline_survives_the_timeout() {
-    let dir = tempdir().unwrap();
-    let mut request = request("echo starting; sleep 30", dir.path());
-    request.timeout = DEADLINE_WITH_ROOM_TO_START;
-
-    let run = spawn(request);
-    // Wait for the output rather than assuming the deadline left room for it.
-    // This assertion used to be folded into the timeout test with a 100ms
-    // deadline, which had to cover forking `/bin/sh`, `sh` parsing the script
-    // and `echo` reaching the capture thread. Under CPU contention it did
-    // not: the run timed out with empty stdout and the equality failed
-    // reading "output captured before the deadline survives", which describes
-    // the intent and not the fault. Observing the write first means a failure
-    // here says the child never produced output, which is the actual problem.
-    let deadline = Instant::now() + SETTLE_TIMEOUT;
-    while run.snapshot().stdout.text().trim().is_empty() {
-        assert!(Instant::now() < deadline,
-                "command produced no output within {SETTLE_TIMEOUT:?}");
-        assert!(!run.is_finished(),
-                "run ended before writing anything, so there is no capture to \
-                 keep");
-        std::thread::sleep(Duration::from_millis(5));
-    }
-
-    let state = settled(&run);
-
-    assert_eq!(state.status, ShellStatus::TimedOut);
-    assert_eq!(state.stdout.text().trim(),
-               "starting",
-               "output captured before the deadline survives it");
-}
+// "Output written before a run is terminated survives the termination" has
+// no test on the timeout path, deliberately. Any such test has to observe the
+// write before the deadline fires, and the deadline is running the whole time
+// it waits - so the assertion races process startup no matter how generous the
+// deadline is. Widening it from 100ms to 2s only made the failure rarer, which
+// is worse than not having it: a test that fails once a fortnight teaches
+// people to re-run.
+//
+// The property itself is covered, race-free, by
+// `cancelling_ends_the_command_and_keeps_what_it_wrote` below: it waits for
+// the output with no deadline running, and only then terminates the run. Both
+// paths reach the same `ShellRun::settle` and the same drain threads; only the
+// terminal status differs, and that is what the test above asserts.
 
 #[test]
 fn cancelling_ends_the_command_and_keeps_what_it_wrote() {
