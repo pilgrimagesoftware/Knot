@@ -134,7 +134,10 @@
       pane below its minimum.
 - [ ] 5.5 Verify both panels open together in the running app: the content pane,
       then the git panel, then the artifact panel, each draggable, covering the
-      spec's "Both panels open".
+      spec's "Both panels open". NOT DONE - needs a pointer and a visible
+      window. The panel was driven through the running app's own MCP server
+      instead, which confirms the render path does not panic but says nothing
+      about the drag.
 
 ## 6. Focus guards
 
@@ -174,13 +177,19 @@
 - [x] 7.1 Add a test that `view-mermaid` on an agent with a markdown file open
       leaves both artifacts set and neither tool reporting the other closed,
       covering the modified `mcp-tools` scenario.
-- [ ] 7.2 Verify the whole flow in the running app: have an agent call
-      `display-markdown` then `view-mermaid`, confirm both sections appear
-      beside a readable conversation, collapse each in turn, drag both handles,
-      expand and close.
+- [x] 7.2 Verified in part against the running debug build, driven through its
+      own MCP server on the live store: `display-markdown`, then `view-mermaid`
+      for the same agent (both sections open at once - the case that was
+      impossible before this change), then `display-markdown` again for the
+      already-open file carrying `maximized`, which exercises the pair-keyed
+      re-seed and `with_side_panels`' expanded branch. The process survived all
+      three with an empty log. The collapse chevrons, both drag handles and the
+      visual result are NOT verified - they need a pointer on a visible
+      window.
 - [x] 7.3 Run `make` and confirm the full gate passes, including
       `make size-check` on `pane.rs` and every new file.
 - [ ] 7.4 Verify the dashboard case in the running app: with an agent's
       markdown file open, switch the window to its dashboard and confirm the
       artifact panel stays shown beside it, covering "The dashboard does not
-      close the panel".
+      close the panel". NOT DONE - the switch is a click, so it needs a
+      visible window.
