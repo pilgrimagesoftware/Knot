@@ -247,6 +247,8 @@ fn conversation_with_a_run() -> PanelState {
             title:        String::new(),
             status:       "completed".to_string(),
             content:      Vec::new(),
+            raw_input:    None,
+            meta:         None,
         })
     }
     let mut state = PanelState::new();

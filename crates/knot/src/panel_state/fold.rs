@@ -45,19 +45,25 @@ impl PanelState {
                                            kind,
                                            title,
                                            status,
-                                           content, } => {
+                                           content,
+                                           raw_input,
+                                           meta, } => {
                 self.note_pull_requests_in(&content);
                 self.messages
-                    .push(PanelMessage::ToolCall(ToolCallCard { id: tool_call_id,
-                                                                kind,
-                                                                title,
-                                                                status,
-                                                                content }));
+                    .push(PanelMessage::ToolCall(Box::new(ToolCallCard { id: tool_call_id,
+                                                                         kind,
+                                                                         title,
+                                                                         status,
+                                                                         content,
+                                                                         raw_input,
+                                                                         meta })));
             }
             SessionUpdate::ToolCallUpdate { tool_call_id,
                                             status,
                                             title,
-                                            content, } => {
+                                            content,
+                                            raw_input,
+                                            meta, } => {
                 self.note_pull_requests_in(&content);
                 if let Some(card) = self.tool_call_mut(&tool_call_id) {
                     // Absent fields mean "unchanged", per the ACP spec's
@@ -70,6 +76,18 @@ impl PanelState {
                     }
                     if !content.is_empty() {
                         card.content = content;
+                    }
+                    // Same rule, and the one that matters most here: the
+                    // completion update carries a *narrower* `_meta` than the
+                    // start did - Claude Code's stamps `subagent: true` on the
+                    // start and only `toolName` on the finish. Overwriting
+                    // unconditionally would erase the marker a recognizer
+                    // reads, so an absent field leaves what is already known.
+                    if raw_input.is_some() {
+                        card.raw_input = raw_input;
+                    }
+                    if meta.is_some() {
+                        card.meta = meta;
                     }
                 }
             }

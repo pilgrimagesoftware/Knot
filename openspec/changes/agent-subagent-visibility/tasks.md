@@ -27,9 +27,9 @@
 
 ## 4. ACP carries the raw input it already receives
 
-- [ ] 4.1 Add the raw input and the `_meta` envelope to `SessionUpdate::ToolCallStart` and `ToolCallUpdate` as `Option`s, parsed from the wire in `from_params`; verify a fixture with neither decodes to `None` for both and one with `{}` decodes to an empty object, distinguishably
-- [ ] 4.2 Confirm every existing construction site and match arm still compiles and that no existing `knot-acp` test changes its expectation; verify `cargo test -p knot-acp` passes unchanged
-- [ ] 4.3 Carry the raw input and `_meta` onto `ToolCallCard` through `panel_state/fold.rs`, and verify an update carrying only a status change leaves both intact rather than blanking them
+- [x] 4.1 Add the raw input and the `_meta` envelope to `SessionUpdate::ToolCallStart` and `ToolCallUpdate` as `Option`s, parsed from the wire in `from_params`; verify a fixture with neither decodes to `None` for both and one with `{}` decodes to an empty object, distinguishably
+- [x] 4.2 Confirm every existing construction site and match arm still compiles and that no existing `knot-acp` test changes its expectation; verify `cargo test -p knot-acp` passes unchanged
+- [x] 4.3 Carry the raw input and `_meta` onto `ToolCallCard` through `panel_state/fold.rs`, and verify an update carrying only a status change leaves both intact rather than blanking them
 
 ## 5. The two feeds write the one registry
 

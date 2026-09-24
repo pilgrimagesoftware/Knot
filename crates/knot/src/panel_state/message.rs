@@ -19,7 +19,12 @@ pub(super) fn render_json(output: &Value) -> String {
 pub enum PanelMessage {
     User(String),
     Assistant(String),
-    ToolCall(ToolCallCard),
+    /// Boxed because this variant is far larger than the other three, and a
+    /// long conversation holds thousands of them: an unboxed card made every
+    /// plain text entry in the list cost the card's width. Carrying the two
+    /// identification fields is what pushed it past the point where that
+    /// mattered, but the imbalance predates them.
+    ToolCall(Box<ToolCallCard>),
     /// Something the session could not do: a refused prompt, a send that
     /// never reached the agent. These arrive as a JSON-RPC error response
     /// rather than a session update, so nothing in the event stream
@@ -34,16 +39,26 @@ pub enum PanelMessage {
 /// scenario, the last known state is kept, never dropped.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolCallCard {
-    pub id:      String,
-    pub kind:    String,
-    pub title:   String,
+    pub id:        String,
+    pub kind:      String,
+    pub title:     String,
     /// `pending`, `in_progress`, `completed` or `failed` - defaulted to
     /// `pending` at start rather than left unknown, per the ACP spec.
-    pub status:  String,
+    pub status:    String,
     /// Output blocks as they arrive. A later update's `content` replaces
     /// this wholesale (the spec's updates carry the full current content,
     /// not a delta); an update with no `content` at all leaves it alone.
-    pub content: Vec<ToolCallContent>,
+    pub content:   Vec<ToolCallContent>,
+    /// The call's `rawInput`, verbatim, when the agent sent one.
+    ///
+    /// Not rendered. It is here because `kind` and `title` cannot say what
+    /// tool ran - `kind` is an icon hint, `title` is prose - so this and
+    /// [`Self::meta`] are the only fields a recognizer can read to tell a
+    /// delegation from an ordinary call. See `knot_subagents::recognize`.
+    pub raw_input: Option<Value>,
+    /// The call's `_meta` envelope, verbatim, vendor keys included. Also not
+    /// rendered, and for the same reason.
+    pub meta:      Option<Value>,
 }
 
 impl ToolCallCard {
