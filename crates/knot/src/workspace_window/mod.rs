@@ -16,6 +16,7 @@ mod notifications;
 mod open;
 pub(crate) mod pane_focus;
 pub(crate) mod panel;
+mod panel_activity;
 mod process_actions;
 mod processes;
 pub(crate) mod prompt_queue;
