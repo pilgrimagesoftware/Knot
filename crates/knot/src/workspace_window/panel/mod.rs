@@ -16,7 +16,7 @@
 //! not by type.
 
 mod attachments;
-pub(super) mod input;
+pub(crate) mod input;
 pub(crate) mod lookup;
 pub(crate) mod mentions;
 mod pane;
