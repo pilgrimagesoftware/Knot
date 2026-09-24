@@ -83,6 +83,32 @@ impl AgentStore {
         self.pull_requests.len() != before
     }
 
+    /// Forget every record whose URL is named, whichever agent recorded it,
+    /// returning whether anything went.
+    ///
+    /// The caller decides what has expired; this only carries it out. The
+    /// store knows nothing of merge times, forges or clocks, which is what
+    /// keeps it testable without any of them.
+    ///
+    /// Named by URL rather than by sighting because expiry is a fact about
+    /// the pull request, not about who linked it: if it merged a week ago it
+    /// merged a week ago for every agent that recorded it, and leaving one
+    /// agent's copy behind would list a pull request the rule just said to
+    /// stop listing.
+    ///
+    /// Knot's record only, exactly as [`Self::remove_pull_request`]: nothing
+    /// is closed, deleted or changed on the forge, and the same URL appearing
+    /// in an agent's output again records it again.
+    pub fn forget_pull_requests(&mut self, urls: &[String]) -> bool {
+        if urls.is_empty() {
+            return false;
+        }
+        let before = self.pull_requests.len();
+        self.pull_requests
+            .retain(|record| !urls.contains(&record.url));
+        self.pull_requests.len() != before
+    }
+
     /// One workspace's recorded pull requests, newest first.
     pub fn pull_requests_for_workspace(&self, workspace_id: Uuid) -> Vec<&SavedPullRequest> {
         self.sorted_newest_first(|record| record.workspace_id == workspace_id)

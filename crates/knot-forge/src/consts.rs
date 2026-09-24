@@ -14,7 +14,14 @@ pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// The fields `gh pr view` is asked for. Everything the view renders and
 /// nothing else: asking for less would mean a second call, asking for more
 /// would mean paying for data no row shows.
-pub const PULL_REQUEST_FIELDS: &str = "number,title,state,isDraft,mergeable,statusCheckRollup";
+///
+/// `mergedAt` is the one field here no row renders, and it earns its place
+/// the same way: it is what decides when a merged pull request stops being
+/// listed. Measuring that from when Knot first saw the URL instead would be
+/// measuring the wrong thing - a sighting is not a merge - so the timestamp
+/// has to come from the forge.
+pub const PULL_REQUEST_FIELDS: &str =
+    "number,title,state,isDraft,mergeable,statusCheckRollup,mergedAt";
 
 /// How long to wait before re-asking when GitHub has not yet computed a pull
 /// request's mergeability.

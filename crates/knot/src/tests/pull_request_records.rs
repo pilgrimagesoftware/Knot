@@ -163,3 +163,133 @@ fn records_do_not_outlive_an_agent_missing_from_the_restored_roster() {
     assert!(restored.pull_requests_for_workspace(workspace_id)
                     .is_empty());
 }
+
+// --- Expiry -----------------------------------------------------------------
+
+use std::time::{Duration, SystemTime};
+
+use knot_forge::{CheckRollup, Mergeability, PullRequestState, PullRequestStatus};
+
+use crate::pull_request_state::{PullRequestCounts, counts_for, expired_urls};
+
+const DAY: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// A fetched state, merged at `when` when one is given.
+fn fetched(status: PullRequestStatus, when: Option<SystemTime>) -> Option<PullRequestState> {
+    Some(PullRequestState { number: Some(42),
+                            title: Some("Do the thing".to_string()),
+                            status,
+                            checks: Some(CheckRollup::Passing),
+                            mergeable: Mergeability::Unknown,
+                            merged_at: when.map(Into::into) })
+}
+
+/// The state cache as a refresh would leave it, for the URLs named.
+fn cache(entries: &[(&str, Option<PullRequestState>)])
+         -> std::collections::BTreeMap<String, Option<PullRequestState>> {
+    entries.iter()
+           .map(|(url, state)| ((*url).to_string(), state.clone()))
+           .collect()
+}
+
+/// The whole sequence the view runs: decide what expired, forget it, write the
+/// document. What a relaunch then finds is the point.
+#[test]
+fn a_merged_pull_request_past_the_window_is_gone_after_a_relaunch() {
+    let dir = tempdir().unwrap();
+    let (mut settings, agent_id, workspace_id) = settings_with_agent(dir.path());
+    let mut store = build_agent_store(&settings);
+    store.record_pull_request(agent_id, FIRST);
+    store.record_pull_request(agent_id, SECOND);
+    settings.pull_requests = store.pull_requests().to_vec();
+    settings.persist().expect("persisted");
+
+    let now = SystemTime::now();
+    let urls = store.pull_requests_for_workspace(workspace_id)
+                    .into_iter()
+                    .map(|record| record.url.clone())
+                    .collect::<Vec<_>>();
+    let snapshot = cache(&[(FIRST, fetched(PullRequestStatus::Merged, Some(now - DAY * 2))),
+                           (SECOND, fetched(PullRequestStatus::Open, None))]);
+
+    let expired = expired_urls(&snapshot, &urls, DAY, now);
+    assert_eq!(expired, vec![FIRST.to_string()]);
+    assert!(store.forget_pull_requests(&expired));
+    settings.pull_requests = store.pull_requests().to_vec();
+
+    let reloaded = relaunch(&settings, dir.path());
+    let mut restored = build_agent_store(&reloaded);
+    restored.set_pull_requests(reloaded.pull_requests.clone());
+
+    let listed = restored.pull_requests_for_workspace(workspace_id);
+    assert_eq!(listed.len(), 1, "the open one stays");
+    assert_eq!(listed[0].url, SECOND);
+}
+
+/// The launcher row reads the store crossed with the cache, so dropping the
+/// record is the whole of the update - there is no second count to maintain.
+#[test]
+fn the_launcher_row_loses_the_expired_record() {
+    let dir = tempdir().unwrap();
+    let (settings, agent_id, workspace_id) = settings_with_agent(dir.path());
+    let mut store = build_agent_store(&settings);
+    store.record_pull_request(agent_id, FIRST);
+    store.record_pull_request(agent_id, SECOND);
+
+    let now = SystemTime::now();
+    let snapshot = cache(&[(FIRST, fetched(PullRequestStatus::Merged, Some(now - DAY * 2))),
+                           (SECOND, fetched(PullRequestStatus::Open, None))]);
+    let urls = |store: &knot_agents::AgentStore| {
+        store.pull_requests_for_workspace(workspace_id)
+             .into_iter()
+             .map(|record| record.url.clone())
+             .collect::<Vec<_>>()
+    };
+
+    assert_eq!(counts_for(&snapshot, &urls(&store)),
+               PullRequestCounts { open:    1,
+                                   merged:  1,
+                                   closed:  0,
+                                   pending: 0, });
+
+    let expired = expired_urls(&snapshot, &urls(&store), DAY, now);
+    store.forget_pull_requests(&expired);
+
+    assert_eq!(counts_for(&snapshot, &urls(&store)),
+               PullRequestCounts { open:    1,
+                                   merged:  0,
+                                   closed:  0,
+                                   pending: 0, },
+               "merged and total both down by one");
+}
+
+/// Knot records what it sees, so an expired pull request whose URL appears
+/// again is recorded again - and expires again on the next refresh that
+/// resolves it, because it is still an old merged pull request.
+#[test]
+fn an_expired_pull_request_seen_again_is_recorded_and_expires_again() {
+    let dir = tempdir().unwrap();
+    let (settings, agent_id, workspace_id) = settings_with_agent(dir.path());
+    let mut store = build_agent_store(&settings);
+    store.record_pull_request(agent_id, FIRST);
+
+    let now = SystemTime::now();
+    let snapshot = cache(&[(FIRST, fetched(PullRequestStatus::Merged, Some(now - DAY * 2)))]);
+    let urls = |store: &knot_agents::AgentStore| {
+        store.pull_requests_for_workspace(workspace_id)
+             .into_iter()
+             .map(|record| record.url.clone())
+             .collect::<Vec<_>>()
+    };
+
+    store.forget_pull_requests(&expired_urls(&snapshot, &urls(&store), DAY, now));
+    assert!(urls(&store).is_empty());
+
+    assert!(store.record_pull_request(agent_id, FIRST),
+            "a new sighting records again");
+    assert_eq!(urls(&store), vec![FIRST.to_string()]);
+
+    assert_eq!(expired_urls(&snapshot, &urls(&store), DAY, now),
+               vec![FIRST.to_string()],
+               "and it goes again on the next refresh that resolves it");
+}
