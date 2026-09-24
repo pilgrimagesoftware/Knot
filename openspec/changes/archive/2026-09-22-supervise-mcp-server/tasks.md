@@ -93,14 +93,14 @@
 
 - [x] 8.1 Run the full gate — `make` — and verify `fmt-check`, `size-check`, `lint`, `test` and
       `build` all pass on the workspace.
-- [ ] 8.2 Manually verify start retry: hold the configured port with another process, launch
+- [x] 8.2 Manually verify start retry: hold the configured port with another process, launch
       Knot, confirm the settings row reports retrying with a growing delay, release the port, and
       confirm it reaches running and an agent's MCP tool call succeeds.
-- [ ] 8.3 Manually verify failure while running: with an agent connected, kill the serving task's
+- [x] 8.3 Manually verify failure while running: with an agent connected, kill the serving task's
       listener, confirm the row reports the failure, one notification is raised, the server comes
       back on the same port, and the agent's next tool call succeeds without re-registering.
-- [ ] 8.4 Manually verify the shutdown path: quit Knot while the server is running and confirm no
+- [x] 8.4 Manually verify the shutdown path: quit Knot while the server is running and confirm no
       restart is attempted and the port is released; then disable the server in settings and
       confirm the row reports disabled with nothing bound.
-- [ ] 8.5 Verify the notification path in a packaged build — `make package` and `Knot.app` — since
+- [x] 8.5 Verify the notification path in a packaged build — `make package` and `Knot.app` — since
       `UNUserNotificationCenter` delivers nothing under `cargo run`.
