@@ -30,7 +30,10 @@ use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::context_usage_indicator;
+use crate::workspace_window::panel::input::EFFORT_SELECTOR_ID;
+use crate::workspace_window::panel::input::MODEL_SELECTOR_ID;
 use crate::workspace_window::panel::input::PERMISSION_SELECTOR_ID;
+use crate::workspace_window::panel::input::SEARCHABLE_SELECTORS;
 
 impl WorkspaceWindow {
     /// The control bar under `id`'s composer.
@@ -97,31 +100,19 @@ impl WorkspaceWindow {
                                 ),
                                 cx,
                             ))
-                            .child(self.render_panel_config_selector(
+                            .child(self.render_panel_searchable_selector(
                                 id,
-                                "panel-model-selector",
+                                MODEL_SELECTOR_ID,
                                 "Model",
                                 "This agent doesn't report selectable models",
-                                Self::find_config_option(config_options, &["model"]),
-                                cx,
+                                config_options,
                             ))
-                            .child(self.render_panel_config_selector(
+                            .child(self.render_panel_searchable_selector(
                                 id,
-                                "panel-effort-selector",
+                                EFFORT_SELECTOR_ID,
                                 "Effort",
                                 "This agent doesn't report selectable effort levels",
-                                Self::find_config_option(
-                                    config_options,
-                                    &[
-                                        "effort",
-                                        "reasoning",
-                                        "reasoning_effort",
-                                        "reasoning-effort",
-                                        "thought_level",
-                                        "thought-level",
-                                    ],
-                                ),
-                                cx,
+                                config_options,
                             ))
                             .child(
                                 Button::new("panel-expand-input")
@@ -139,6 +130,35 @@ impl WorkspaceWindow {
                                     })),
                             ),
                     )
+    }
+
+    /// The model and effort slots: the same disabled empty state as the
+    /// permission selector, but a `Select` when the agent did declare the
+    /// axis, so a long model list scrolls and can be searched
+    /// (`acp-panel-ui`'s "Model dropdown scrolls" / "Model dropdown
+    /// searches"). The dropdown's state is built in `prepare_frame`; until
+    /// it is, the axis draws as its empty state rather than as nothing -
+    /// one frame at most, and never a control that vanishes.
+    fn render_panel_searchable_selector(&self, id: Uuid, element_id: &'static str,
+                                        placeholder: &'static str,
+                                        disabled_tooltip: &'static str,
+                                        config_options: &[knot_acp::ConfigOption])
+                                        -> gpui_kit::AnyElement {
+        let categories = SEARCHABLE_SELECTORS.iter()
+                                             .find(|(id, _)| *id == element_id)
+                                             .map(|(_, categories)| *categories)
+                                             .unwrap_or_default();
+        if Self::find_config_option(config_options, categories).is_some()
+           && let Some(select) = self.render_panel_config_select(id, element_id)
+        {
+            return select.into_any_element();
+        }
+        Button::new(element_id).label(placeholder)
+                               .tooltip(disabled_tooltip)
+                               .ghost()
+                               .small()
+                               .disabled(true)
+                               .into_any_element()
     }
 
     /// One of the input area's three selector slots (permission mode,
