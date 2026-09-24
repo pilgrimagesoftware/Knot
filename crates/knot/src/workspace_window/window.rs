@@ -16,6 +16,7 @@ use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
 use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::component::select::SelectState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
@@ -40,61 +41,61 @@ pub(super) type PanelPromptResult = (Uuid, Uuid, Result<(), String>);
 pub(crate) struct WorkspaceWindow {
     /// Last known diff stat per agent, refreshed off the render path - see
     /// `refresh_diff_stats`.
-    pub(super) diff_stats:                       crate::diff_stats::DiffStatsCache,
+    pub(super) diff_stats:                          crate::diff_stats::DiffStatsCache,
     /// Last known state per recorded pull request URL, refreshed off the
     /// render path and only while the Pull Requests view is showing - see
     /// `refresh_pull_request_states`. Never persisted: a merged pull request
     /// shown as open after a restart is worse than a blank.
-    pub(super) pull_request_states:              crate::pull_request_state::PullRequestStateCache,
+    pub(super) pull_request_states: crate::pull_request_state::PullRequestStateCache,
     /// What the last `gh` probe found, and so which single message the Pull
     /// Requests view shows. Probed once per view opening rather than once
     /// per row.
-    pub(super) forge_status:                     crate::pull_request_state::ForgeStatus,
+    pub(super) forge_status:                        crate::pull_request_state::ForgeStatus,
     /// Set when a pull request could not be handed to a browser, so the view
     /// can say so. A click that silently did nothing reads as a broken row.
-    pub(super) pull_request_open_failed:         bool,
+    pub(super) pull_request_open_failed:            bool,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off
     /// `clipboard_writes` uses.
-    pub(super) exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
+    pub(super) exited_sessions:                     Arc<Mutex<Vec<Uuid>>>,
     /// Keeps the window-bounds observer alive for this window's lifetime.
-    pub(super) window_bounds_subscription:       Option<gpui_kit::Subscription>,
+    pub(super) window_bounds_subscription:          Option<gpui_kit::Subscription>,
     /// Which config selector's popover is open, by element id, or `None`
     /// when none is. One shared flag used to back all three: because every
     /// selector's `on_open_change` wrote it and the permission selector
     /// read it, clicking Model or Effort opened the *permission* menu.
-    pub(super) open_config_selector:             Option<&'static str>,
-    pub(super) store:                            Arc<Mutex<knot_agents::AgentStore>>,
+    pub(super) open_config_selector:                Option<&'static str>,
+    pub(super) store:                               Arc<Mutex<knot_agents::AgentStore>>,
     /// Agent-to-agent messages, for the unread badge and the idle-time
     /// delivery nudge (`mcp-messaging`). Shared with the MCP server, which
     /// is what writes to it.
-    pub(super) messages:                         Arc<Mutex<knot_messaging::MessageStore>>,
+    pub(super) messages:                            Arc<Mutex<knot_messaging::MessageStore>>,
     /// The last message each agent has been nudged about, so an unread
     /// inbox produces one prompt rather than one per idle poll.
-    pub(super) nudged_messages:                  BTreeMap<Uuid, Uuid>,
+    pub(super) nudged_messages:                     BTreeMap<Uuid, Uuid>,
     /// The last awaiting-input message each agent was notified about.
     ///
     /// `Effect::AwaitingInput` fires on every status event reporting Input,
     /// not only on the transition into it, so a prompt the user has not
     /// answered keeps arriving. This is what makes the second one a repeat
     /// rather than news, per `desktop-notifications`' suppression rule.
-    pub(super) notified_awaiting:                BTreeMap<Uuid, String>,
-    pub(super) workspace_id:                     Uuid,
-    pub(super) selected_agent:                   Option<Uuid>,
+    pub(super) notified_awaiting:                   BTreeMap<Uuid, String>,
+    pub(super) workspace_id:                        Uuid,
+    pub(super) selected_agent:                      Option<Uuid>,
     pub(super) sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
     pub(super) panel_states: BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
     /// `TerminalSession::spawn_pty` runs `tokio::spawn` for the activity
     /// tracker; the UI thread has no tokio runtime of its own, so enter
     /// this one around each spawn (see `ensure_session`).
-    pub(super) runtime:                          tokio::runtime::Runtime,
+    pub(super) runtime:                             tokio::runtime::Runtime,
     /// Backs the divider between the sidebar and the content column.
     ///
     /// The window owns it rather than letting the group keep its own keyed
     /// state inside the element tree: two things outside the group read the
     /// sidebar's width - the compact predicate and the terminal pane's
     /// geometry - and a window-held entity gives both the same source.
-    pub(super) sidebar_resize:                   Entity<ResizableState>,
+    pub(super) sidebar_resize:                      Entity<ResizableState>,
     /// Focus target for the window's root element.
     ///
     /// Nothing else in this window claims focus until the user clicks a
@@ -105,20 +106,20 @@ pub(crate) struct WorkspaceWindow {
     /// those handlers. Focusing the root element puts them back on the
     /// path, and leaves them there once a pane takes focus, since the root
     /// is that pane's ancestor.
-    pub(super) root_focus:                       gpui_kit::FocusHandle,
+    pub(super) root_focus:                          gpui_kit::FocusHandle,
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
-    pub(super) terminal_focus:                   gpui_kit::FocusHandle,
+    pub(super) terminal_focus:                      gpui_kit::FocusHandle,
     /// The family the terminal draws and measures in, resolved from the
     /// installed families once per configured name rather than once per
     /// frame - see `terminal_font`.
-    pub(super) terminal_font:                    TerminalFont,
+    pub(super) terminal_font:                       TerminalFont,
     /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
     /// `on_grid_event` (which runs on the PTY reader thread) and drained
     /// by a polling loop onto the OS pasteboard via GPUI's main-thread
     /// clipboard API - the same background-thread-to-main-thread hand-off
     /// pattern `SettingsWindow` already uses for the native font panel.
-    pub(super) clipboard_writes:                 Arc<Mutex<Vec<String>>>,
+    pub(super) clipboard_writes:                    Arc<Mutex<Vec<String>>>,
     /// Live ACP connections for Panel-mode agents, keyed by agent id -
     /// independent of `sessions` (the terminal PTYs), per the
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
@@ -127,10 +128,10 @@ pub(crate) struct WorkspaceWindow {
     /// The lifecycle phase each panel session was in the last time the
     /// repaint poll looked, so a slot moving between phases repaints - see
     /// `panel_needs_repaint`.
-    pub(super) panel_phases:                     BTreeMap<Uuid, panel_session::PanelPhase>,
+    pub(super) panel_phases:                        BTreeMap<Uuid, panel_session::PanelPhase>,
     /// Which spinner frame the working indicators were last repainted on -
     /// see `spinner_repaint_due`.
-    pub(super) last_spinner_frame:               u128,
+    pub(super) last_spinner_frame:                  u128,
     /// What this window last *focused* - an agent's composer or its terminal
     /// surface - or `None` when the last frame showed neither; see
     /// `prepare_frame`.
@@ -145,48 +146,66 @@ pub(crate) struct WorkspaceWindow {
     /// One latch over both targets rather than one each, so switching
     /// between agents of different modes is a transition for the one being
     /// switched to - see `pane_focus`.
-    pub(super) focused_pane:                     Option<FocusTarget>,
+    pub(super) focused_pane:                        Option<FocusTarget>,
     /// One prompt-entry input per Panel-mode agent that has been viewed,
     /// created lazily. Not part of `Agent`/persistence - purely UI state.
     /// A `Textarea` (not a single-line `Input`) so the expand/collapse
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
     pub(super) panel_prompt_inputs: BTreeMap<Uuid, Entity<panel::prompt::PanelInputState>>,
+    /// The model and effort dropdowns' state, one per panel and axis.
+    ///
+    /// `SelectState` holds the search query, the scroll offset and focus, so
+    /// it cannot be rebuilt per render - a state built in the render path
+    /// would lose each keystroke as it was typed. Built and refreshed in
+    /// `prepare_frame`; see `panel::input::config_select`.
+    pub(super) panel_config_selectors:
+        BTreeMap<panel::input::SelectorKey,
+                 Entity<SelectState<panel::input::ConfigSelectorDelegate>>>,
+    /// Keeps each dropdown's `SelectEvent` subscription alive. Dropping one
+    /// unsubscribes it, so a selection would persist nothing.
+    pub(super) panel_config_selector_subscriptions:
+        BTreeMap<panel::input::SelectorKey, Subscription>,
+    /// What each dropdown was last built from, so an agent re-reporting the
+    /// same options leaves a half-typed search query alone and a changed
+    /// list still replaces what is offered.
+    pub(super) panel_config_selector_items:
+        BTreeMap<panel::input::SelectorKey, Vec<panel::input::ConfigSelectorItem>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
-    pub(super) panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
-    pub(super) panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
-    pub(super) panel_stopping:                   BTreeSet<Uuid>,
-    pub(super) panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,
+    pub(super) panel_prompt_input_subscriptions:    BTreeMap<Uuid, Subscription>,
+    pub(super) panel_prompt_queues:                 BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    pub(super) panel_stopping:                      BTreeSet<Uuid>,
+    pub(super) panel_prompt_results:                Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has
     /// been viewed, created lazily - the `ListState` backing
     /// `render_panel`'s virtualization, and the target of the response
     /// action bar's scroll-to-user/scroll-to-top controls and the track
     /// toggle's auto-scroll.
-    pub(super) panel_lists:                      BTreeMap<Uuid, ListState>,
+    pub(super) panel_lists:                         BTreeMap<Uuid, ListState>,
     /// The item count each `panel_lists` entry was last reconciled to, so
     /// `render_panel_pane` can `splice` only the rows that actually
     /// changed and leave off-screen rows' measured heights alone.
-    pub(super) panel_list_row_counts:            BTreeMap<Uuid, usize>,
+    pub(super) panel_list_row_counts:               BTreeMap<Uuid, usize>,
     /// Files/images attached via the input area's add-context control,
     /// pending the next send - cleared once the prompt is submitted.
-    pub(super) panel_pending_context:            BTreeMap<Uuid, Vec<PathBuf>>,
+    pub(super) panel_pending_context:               BTreeMap<Uuid, Vec<PathBuf>>,
     /// References waiting to be written into a composer. Attaching
     /// context can complete without a window - the add-context control
     /// finishes after its picker closes - and editing a buffer needs one,
     /// so the insertion is deferred to the next frame that has it.
-    pub(super) panel_pending_attachments:        BTreeMap<Uuid, Vec<PathBuf>>,
+    pub(super) panel_pending_attachments:           BTreeMap<Uuid, Vec<PathBuf>>,
     /// Each Panel-mode agent's file listing for the `@` lookup: how far
     /// along it is, what it found, and the watch following its folder.
     /// Built on the agent's first `@`, since an agent nobody mentions a
     /// file to should not cost a walk - see `panel::mentions`.
-    pub(super) panel_mentions:                   BTreeMap<Uuid, panel::mentions::PanelMentions>,
+    pub(super) panel_mentions:                      BTreeMap<Uuid, panel::mentions::PanelMentions>,
     /// Each Panel-mode composer's styled runs: its three decoration
     /// collections, the buffer they describe and the palette they were
     /// painted from. Created with the composer entity, so a restored draft
     /// arrives styled; see `panel::styling`.
-    pub(super) panel_composer_styling:           BTreeMap<Uuid, ComposerStyling>,
+    pub(super) panel_composer_styling:              BTreeMap<Uuid, ComposerStyling>,
     /// Live `!` commands, keyed by the id of the card drawing each one.
     ///
     /// Not keyed by agent: a panel may have several commands running at
@@ -200,16 +219,16 @@ pub(crate) struct WorkspaceWindow {
     pub(super) panel_shell_runs: Arc<Mutex<BTreeMap<Uuid, panel::shell::PanelShellRun>>>,
     /// Panel-mode agent ids whose input area is expanded to the larger
     /// multi-line editing size; absence means collapsed (the default).
-    pub(super) panel_input_expanded:             BTreeSet<Uuid>,
+    pub(super) panel_input_expanded:                BTreeSet<Uuid>,
     /// The slash lookup's state per Panel-mode agent: the memoized
     /// command/skill registry, which entry is selected, and the token Esc
     /// closed it on. Created on the agent's first lookup, since building it
     /// reads skill roots off disk - see `panel::lookup`.
-    pub(super) panel_lookups:                    BTreeMap<Uuid, panel::lookup::PanelLookup>,
+    pub(super) panel_lookups:                       BTreeMap<Uuid, panel::lookup::PanelLookup>,
     /// This window's handle, so the poll can tell whether it is the active
     /// window before replacing the app-wide menu bar - two open workspace
     /// windows must not fight over whose selection the Agents menu shows.
-    pub(super) window_handle:                    AnyWindowHandle,
+    pub(super) window_handle:                       AnyWindowHandle,
     /// The last name written to this window's OS title, so `render` can skip
     /// a `set_window_title` that would change nothing.
     ///
@@ -218,28 +237,28 @@ pub(crate) struct WorkspaceWindow {
     /// the cost is a redundant AppKit call, never a wrong name. That is what
     /// separates it from the settings snapshot in issue #238, where the copy
     /// *is* what gets read and written back.
-    pub(super) titled_as:                        String,
+    pub(super) titled_as:                           String,
     /// The processes section's state per agent that has one: whether it is
     /// open, the last sample, the last failure, and any termination in
     /// flight. One struct per agent rather than a map per field, so teardown
     /// has one entry to prune.
     pub(super) process_sections: BTreeMap<Uuid, crate::agent_processes::ProcessSection>,
     /// Where the sampling task publishes, and the main thread drains.
-    pub(super) process_publish:                  crate::agent_processes::PublishSlot,
+    pub(super) process_publish:                     crate::agent_processes::PublishSlot,
     /// The generation this window has already drained, so a poll tick that
     /// finds the same pass again is not mistaken for news.
-    pub(super) process_generation:               u64,
+    pub(super) process_generation:                  u64,
     /// When the last sample was asked for, so the poll - which ticks thirty
     /// times a second - runs `ps` on the sampler's cadence instead.
-    pub(super) process_sampled_at:               Option<std::time::Instant>,
+    pub(super) process_sampled_at:                  Option<std::time::Instant>,
     /// Set while a sample is in flight, so a slow `ps` is not asked for
     /// twice. The same discipline `RefreshCache::claim_refresh` applies to
     /// `git diff`.
-    pub(super) process_sampling:                 Arc<std::sync::atomic::AtomicBool>,
+    pub(super) process_sampling:                    Arc<std::sync::atomic::AtomicBool>,
     /// Terminations that were refused, queued by the blocking task and
     /// drained by the poll - the same off-main-thread hand-off
     /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
-    pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
+    pub(super) process_failures:                    Arc<Mutex<Vec<(Uuid, u32, String)>>>,
     /// The MCP section's state per agent that has one: whether it is open,
     /// whether a probe is wanted, the last inventory and the last failure.
     /// One struct per agent rather than a map per field, so teardown has one
@@ -256,37 +275,37 @@ pub(crate) struct WorkspaceWindow {
     /// mapped to the agent whose section opened them. An entry's exit is what
     /// makes that section re-probe, so it catches up with whatever the user
     /// did in there.
-    pub(super) mcp_handover_terminals:           BTreeMap<Uuid, Uuid>,
+    pub(super) mcp_handover_terminals:              BTreeMap<Uuid, Uuid>,
     /// Agents whose git panel is open. Per-agent rather than a
     /// `WorkspaceViewMode`: the panel is scoped to one agent's folder and
     /// leaves that agent's content visible, so it is not a window mode.
-    pub(super) git_panel_open:                   BTreeSet<Uuid>,
+    pub(super) git_panel_open:                      BTreeSet<Uuid>,
     /// Last known working-tree status per agent with an open panel,
     /// refreshed off the render path - see `refresh_git_status`.
-    pub(super) git_status:                       crate::git_panel::state::GitStatusCache,
+    pub(super) git_status:                          crate::git_panel::state::GitStatusCache,
     /// Last known diff per selected row, keyed by `(agent, path, staged)`.
     ///
     /// The key is what removes the Swift race: a reply for a row the user
     /// has clicked away from lands in its own entry, and a render reads only
     /// the current selection's, so a late reply cannot overwrite the shown
     /// diff.
-    pub(super) git_diffs:                        crate::git_panel::state::GitDiffCache,
+    pub(super) git_diffs:                           crate::git_panel::state::GitDiffCache,
     /// Which row each open panel is showing a diff for.
-    pub(super) git_selection:                    BTreeMap<Uuid, crate::git_panel::state::Selection>,
+    pub(super) git_selection: BTreeMap<Uuid, crate::git_panel::state::Selection>,
     /// One working-tree watch per open panel. `Arc` because the watch's
     /// callback outlives the frame that started it.
-    pub(super) git_watches:                      BTreeMap<Uuid, Arc<knot_watch::Watch>>,
+    pub(super) git_watches:                         BTreeMap<Uuid, Arc<knot_watch::Watch>>,
     /// Set by a watch callback, which runs on a tokio task with no GPUI
     /// context and so cannot touch the caches or notify. The repaint poll
     /// reads it, forgets the agent's status and redraws - the same
     /// off-main-thread hand-off `clipboard_writes` uses.
-    pub(super) git_watch_dirty:                  BTreeMap<Uuid, Arc<AtomicBool>>,
+    pub(super) git_watch_dirty:                     BTreeMap<Uuid, Arc<AtomicBool>>,
     /// The panel's width per agent, in pixels. View state, not persisted:
     /// a reopened panel starts at the default again.
-    pub(super) git_panel_width:                  BTreeMap<Uuid, f32>,
+    pub(super) git_panel_width:                     BTreeMap<Uuid, f32>,
     /// The last git operation that failed, per agent, so the panel can say
     /// so. Cleared by the next successful operation.
-    pub(super) git_action_error:                 BTreeMap<Uuid, String>,
+    pub(super) git_action_error:                    BTreeMap<Uuid, String>,
     /// Staging operations in flight, per agent. `None` inside the slot means
     /// still running, so the poll can tell that from a finished success.
     /// Drained by `drain_git_actions`, which is what invalidates the caches
@@ -299,21 +318,21 @@ pub(crate) struct WorkspaceWindow {
     /// One virtualized diff list per agent with an open panel. One per agent
     /// rather than per selected file: only one diff is on screen at a time,
     /// so a second entry would be a leak rather than a cache.
-    pub(super) git_diff_lists:                   BTreeMap<Uuid, ListState>,
+    pub(super) git_diff_lists:                      BTreeMap<Uuid, ListState>,
     /// The row count each `git_diff_lists` entry was last reconciled to, so a
     /// selection change splices rather than keeping measured heights against
     /// different content.
-    pub(super) git_diff_row_counts:              BTreeMap<Uuid, usize>,
+    pub(super) git_diff_row_counts:                 BTreeMap<Uuid, usize>,
     /// The divider between an agent's content and its git panel, one per
     /// agent with an open panel. Held here rather than keyed inside the
     /// element tree for the reason `sidebar_resize` is: the width is read
     /// outside the group too, to seed the panel's own size.
-    pub(super) git_panel_resize:                 BTreeMap<Uuid, Entity<ResizableState>>,
-    pub(super) view_mode:                        WorkspaceViewMode,
-    pub(super) dashboard_sort:                   dashboard::DashboardSort,
+    pub(super) git_panel_resize:                    BTreeMap<Uuid, Entity<ResizableState>>,
+    pub(super) view_mode:                           WorkspaceViewMode,
+    pub(super) dashboard_sort:                      dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
     /// act on - currently only a sidebar width that could not be saved.
-    pub(super) error:                            Option<String>,
+    pub(super) error:                               Option<String>,
 }
 
 impl Drop for WorkspaceWindow {

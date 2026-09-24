@@ -123,6 +123,49 @@ search restores them, (3) confirming a selection reaches
 `remember_session_config`/`set_config_option` side-effects. Plus a
 few-models case asserting no scroll is needed.
 
+### 6. What implementation changed about decisions 1-3
+
+Three details of the kit's API are not what decisions 1-3 assumed, found
+when the code was written against `gpui-component` 0.6.4 (the crate
+`gpui-kit` 0.6.4 re-exports as `gpui_kit::component`):
+
+- **`searchable(true)` is on `SelectState`, not on `Select`.** The state is
+  built `SelectState::new(delegate, selected, window, cx).searchable(true)`;
+  `Select::new(&state)` has no such builder. No behavioural difference.
+- **`Select` has no `trigger()`.** It draws its own trigger, so the
+  `Button` with the risk-tinted label cannot be handed to it. Only the
+  permission selector tints its trigger.
+- **`SelectState`'s open flag is private, with no public setter.** Nothing
+  outside the kit can open the menu programmatically.
+
+That last one decides which selectors move. ⌘⇧P (`PanelOpenPermissionSelector`,
+bound in `app_bootstrap.rs`) opens the *permission* menu by setting
+`open_config_selector`, which only the hand-rolled `Popover` reads. Putting
+the permission selector on `Select` would take that keyboard path away
+silently, and would also cost its trigger tint.
+
+So the swap is narrowed to the two axes that need it and can take it: the
+**model** and **effort** selectors render through `Select`
+(`panel/input/config_select.rs`), and the **permission** selector keeps the
+existing `Popover` path in `controls.rs` unchanged - its list is a handful
+of modes, which is the case the popover was already adequate for. Both new
+spec requirements are about the model dropdown, so nothing in
+`specs/acp-panel-ui/spec.md` changes; what changes is decision 1's "one swap
+fixes all three".
+
+`ConfigSelectorDelegate` is `SearchableVec<ConfigSelectorItem>` rather than a
+hand-written delegate: a plain `Vec` delegate has no `perform_search`
+override and so ignores the query entirely, while `SearchableVec` filters
+through `SearchableListItem::matches`, whose default is the case-insensitive
+substring the spec asks for. The item type is ours; the filtering is the
+kit's.
+
+Refresh (decision 2) is `SelectState::set_items`, not `SearchableListChange`
+- the latter is the vocabulary `on_will_change` receives, not a public
+setter. `ensure_panel_config_selectors` compares the declared values before
+replacing them, so an agent re-reporting the same list does not wipe a
+search query mid-typing.
+
 ## Risks / Trade-offs
 
 - **[First Select adoption] `Select` is new to this crate; builder details
