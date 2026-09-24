@@ -20,6 +20,12 @@ The panel SHALL be gone when the agent has neither, and SHALL appear without any
 further action when either is set — an agent calling `display-markdown` or
 `view-mermaid` on the selected agent SHALL see its artifact on screen.
 
+This SHALL hold whatever the selected agent is doing. An artifact set for an
+agent that is not streaming a turn — a Terminal-mode agent, an idle one, or one
+a different agent named — SHALL appear on the next frame rather than waiting for
+some unrelated event to redraw the window. These tools are called from the MCP
+server, off the thread that draws, so arriving is not the same as being drawn.
+
 Each agent SHALL have its own panel: selecting a different agent SHALL show that
 agent's artifacts, or no panel if it has none. The first agent's artifacts SHALL
 still be there on returning to it.
@@ -33,6 +39,13 @@ a diagram shown while a markdown file was open was stored and never drawn.
 - **WHEN** the selected agent has a markdown file open and is then shown a
   diagram
 - **THEN** the panel shows a markdown section and a mermaid section together
+
+#### Scenario: An artifact for an idle agent still appears
+
+- **WHEN** one agent calls `display-markdown` naming a second, selected agent
+  that is idle and streaming nothing
+- **THEN** that agent's panel appears without waiting for anything else to
+  happen in the window
 
 #### Scenario: A diagram arrives for an agent with a file open
 

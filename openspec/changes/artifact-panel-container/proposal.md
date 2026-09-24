@@ -105,6 +105,11 @@ screen. A side panel removes the condition those exceptions were written for.
   first vertical use in the tree.
 - `knot-core::l10n`: keys for the panel title, the expand and collapse tooltips,
   the close-all tooltip, and the section chevrons.
+- `crates/knot/src/workspace_window/repaint.rs`: a landing for the artifact
+  fields in `repaint_poll_tick`'s chain. The MCP tools write them from another
+  thread with no context to notify from, and nothing in that chain reads them —
+  which today is masked by the calling agent's own streaming, and is not for an
+  agent that is idle.
 - No change to the code in `knot-agents`, the MCP tool handlers, or the settings
   store. Every field this needs is already there; `mcp-tools`' contract changes
   because `maximized` finally does something, not because its handler does.

@@ -102,6 +102,17 @@
 
 ## 5. Wiring into the content area
 
+- [ ] 5.0 Add an artifact-state landing to `repaint_poll_tick`'s `if` chain
+      (`workspace_window/repaint.rs:126-144`): a per-agent snapshot of
+      `markdown_file`, `mermaid_source` and `markdown_maximized` compared
+      against what was last drawn, true when it differs. The MCP tools write
+      the store from another thread with no context to notify from
+      (`knot-mcp-tools/src/panels.rs`), and nothing in the chain reads those
+      fields today. Take the comparison into a local rather than into the `||`
+      chain, so a short-circuit cannot strand it. Verify with a test that an
+      artifact set for an idle, non-streaming agent marks the window for
+      repaint, covering "An artifact for an idle agent still appears".
+
 - [ ] 5.1 Remove the markdown and diagram arms from the pane selection in
       `workspace_window/render/content.rs` so the session pane is chosen for an
       agent with artifacts open; verify the conversation is drawn for an agent

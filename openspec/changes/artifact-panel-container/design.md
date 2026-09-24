@@ -162,6 +162,33 @@ the agent field was the other alternative and is also wrong: the user's toggle
 would then be indistinguishable from an instruction the agent gave, and would be
 written into state the MCP tool owns.
 
+### The artifact fields need their own landing in `repaint_poll_tick`
+
+`display-markdown` and `view-mermaid` are served by the MCP server on another
+thread. `knot-mcp-tools/src/panels.rs` writes the agent store and has no GPUI
+context to notify from, and `repaint_poll_tick`'s `if` chain has no entry for
+the artifact fields — it covers grids, panel state, pull requests, git, mentions
+and shell runs, but nothing reads `markdown_file` or `mermaid_source`.
+
+Today that is masked rather than handled: an agent calling `display-markdown` is
+usually mid-turn, so `panel_dirty` or `panel_states_moved` fires for its own
+streaming and the pane comes with it. The menu path notifies explicitly
+(`menus/agent_row.rs:233`), so it was never the broken one. What is left
+unnotified is exactly the case this change documents as reachable: an artifact
+set for an agent that is not streaming — Terminal-mode, idle, or named by a
+different agent. Nothing redraws the window, so the panel waits for an unrelated
+event.
+
+So this change adds its own landing: a per-agent snapshot of the artifact fields
+compared each tick, returning true when it differs from what was last drawn, in
+the `if` chain beside `git_reads_landed` and `mentions_listed`. The clearing read
+has to be on a path that cannot discard it, per the rule in
+`.claude/rules/rust-structure.md`.
+
+This is pre-existing rather than caused here — but the spec now promises it, and
+`terminal-input`'s delta rests on a Terminal-mode agent being able to hold an
+artifact at all, which is the case with no incidental repaint behind it.
+
 ### Expanded guards taking focus; it is not an input to the latch
 
 `prepare_frame` latches the whole answer, `None` included
