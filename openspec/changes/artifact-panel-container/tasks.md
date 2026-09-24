@@ -178,7 +178,7 @@
       `display-markdown` then `view-mermaid`, confirm both sections appear
       beside a readable conversation, collapse each in turn, drag both handles,
       expand and close.
-- [ ] 7.3 Run `make` and confirm the full gate passes, including
+- [x] 7.3 Run `make` and confirm the full gate passes, including
       `make size-check` on `pane.rs` and every new file.
 - [ ] 7.4 Verify the dashboard case in the running app: with an agent's
       markdown file open, switch the window to its dashboard and confirm the
