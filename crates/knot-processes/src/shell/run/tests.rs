@@ -19,6 +19,17 @@ use crate::shell::status::ShellStatus;
 /// Generous: it bounds a hang, it does not pace the test.
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// A run deadline for a test that needs the command to have *written*
+/// something before the deadline fires.
+///
+/// Seconds rather than milliseconds because it has to cover forking
+/// `/bin/sh`, `sh` parsing its script and the first write reaching the
+/// capture thread - none of which this crate controls, and all of which
+/// stretch on a machine running something else. The test still waits for the
+/// write rather than trusting this number; the margin is what keeps that wait
+/// from being the thing that times out.
+const DEADLINE_WITH_ROOM_TO_START: Duration = Duration::from_secs(2);
+
 fn request(command: &str, cwd: &Path) -> ShellRequest {
     let mut request = ShellRequest::new(command, cwd);
     // Not the runner's `SHELL`: a developer's login shell may print a banner
@@ -138,7 +149,9 @@ fn output_past_the_limit_is_truncated_at_the_head() {
 #[test]
 fn a_command_still_running_at_the_deadline_times_out() {
     let dir = tempdir().unwrap();
-    let mut request = request("echo starting; sleep 30", dir.path());
+    // No output assertion here, so nothing in this test races the deadline:
+    // `sleep 30` is still running at 100ms whatever the machine is doing.
+    let mut request = request("sleep 30", dir.path());
     request.timeout = Duration::from_millis(100);
 
     let started = Instant::now();
@@ -146,9 +159,39 @@ fn a_command_still_running_at_the_deadline_times_out() {
 
     assert_eq!(state.status, ShellStatus::TimedOut);
     assert!(started.elapsed() < SETTLE_TIMEOUT, "did not abort early");
+}
+
+#[test]
+fn output_written_before_the_deadline_survives_the_timeout() {
+    let dir = tempdir().unwrap();
+    let mut request = request("echo starting; sleep 30", dir.path());
+    request.timeout = DEADLINE_WITH_ROOM_TO_START;
+
+    let run = spawn(request);
+    // Wait for the output rather than assuming the deadline left room for it.
+    // This assertion used to be folded into the timeout test with a 100ms
+    // deadline, which had to cover forking `/bin/sh`, `sh` parsing the script
+    // and `echo` reaching the capture thread. Under CPU contention it did
+    // not: the run timed out with empty stdout and the equality failed
+    // reading "output captured before the deadline survives", which describes
+    // the intent and not the fault. Observing the write first means a failure
+    // here says the child never produced output, which is the actual problem.
+    let deadline = Instant::now() + SETTLE_TIMEOUT;
+    while run.snapshot().stdout.text().trim().is_empty() {
+        assert!(Instant::now() < deadline,
+                "command produced no output within {SETTLE_TIMEOUT:?}");
+        assert!(!run.is_finished(),
+                "run ended before writing anything, so there is no capture to \
+                 keep");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    let state = settled(&run);
+
+    assert_eq!(state.status, ShellStatus::TimedOut);
     assert_eq!(state.stdout.text().trim(),
                "starting",
-               "output captured before the deadline survives");
+               "output captured before the deadline survives it");
 }
 
 #[test]
