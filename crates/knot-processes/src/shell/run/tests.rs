@@ -1,9 +1,22 @@
 //! Exercises the runner against real processes.
 //!
-//! Every test here starts a child, so each one waits on something. They wait
-//! on the run's own terminal status rather than on a sleep: a fixed sleep is
+//! Every test here starts a child, so each one waits on something. **No
+//! assertion here may depend on the machine winning a race.** They wait on
+//! the run's own terminal status, never on a wall-clock budget: a budget is
 //! either slower than it needs to be or flaky on a loaded machine, and these
 //! run in CI.
+//!
+//! The property, not the shape. This rule used to say "not on a sleep", and
+//! the defect it was written to prevent arrived anyway through
+//! `request.timeout` - which is a sleep the runner performs on the test's
+//! behalf, and so satisfied the letter of a ban aimed at `thread::sleep`.
+//! Anything the machine has to beat within a deadline counts, whatever it is
+//! called: a timeout, a poll budget, a retry count times an interval. If a
+//! slower machine can fail the assertion, it is the wrong assertion.
+//!
+//! Forking is the contended resource, not arithmetic. A test here is starved
+//! by a `cargo build` far more than by a busy CPU, which is why one of these
+//! reached `develop` looking solid under a saturation loop.
 
 use std::ffi::OsString;
 use std::path::Path;
