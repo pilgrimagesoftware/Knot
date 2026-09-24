@@ -118,16 +118,20 @@
 
 ## 6. Focus guards
 
-- [ ] 6.1 Narrow the guard that withholds composer focus so it tests the
-      panel's expanded flag rather than whether an artifact is open; verify
-      with two tests - a Panel-mode agent with a markdown file open in an
-      unexpanded panel focuses its prompt input, and the same agent with the
-      panel expanded leaves focus where it was - covering both modified
-      `acp-panel-ui` scenarios.
-- [ ] 6.2 Narrow the same guard on the terminal focus path; verify with two
-      tests covering the modified `terminal-input` scenarios "A shell agent
-      with a diagram open is still focused" and "An expanded panel withholds
-      focus".
+- [ ] 6.1 Replace `has_markdown`/`has_diagram` on
+      `pane_focus::SelectedAgentFacts` with the panel's expanded flag, and
+      narrow the `if agent.has_markdown || agent.has_diagram` guard at
+      `workspace_window/pane_focus.rs:88` to test that instead; supply the new
+      fact from `workspace_window/render/mod.rs:195-206`. One guard serves both
+      focus paths, so this is a single edit rather than two. Verify `make build`
+      passes.
+- [ ] 6.2 Update `crates/knot/src/tests/pane_focus.rs` - including
+      `an_open_markdown_file_shows_no_composer` at :216, whose premise this
+      change reverses - and add four cases: a Panel-mode agent with a markdown
+      file open in an unexpanded panel focuses its composer, the same agent
+      expanded leaves focus alone, and the Terminal-mode pair of the same.
+      Verify they cover both modified `acp-panel-ui` scenarios and both
+      modified `terminal-input` scenarios.
 
 ## 7. Integration and gate
 
