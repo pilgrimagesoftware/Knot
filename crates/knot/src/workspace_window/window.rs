@@ -170,6 +170,27 @@ pub(crate) struct WorkspaceWindow {
     /// fired. See `openspec/specs/activity-detection/spec.md`, "ACP updates
     /// drive status for Panel-mode agents".
     pub(super) panel_trackers:                   BTreeMap<Uuid, knot_activity::Tracker>,
+    /// The status last *reported* to each agent's tracker, which is what the
+    /// poll dedupes against.
+    ///
+    /// Not the store: the store is now written by the tracker's sink, a
+    /// channel hop later, so on the next tick it may still hold the previous
+    /// status. Deduping against it would report the same pending permission
+    /// twice and raise two notifications for one prompt. Written here
+    /// synchronously at send time, so the gate's input is a value this
+    /// window owns and nothing off-thread can lag.
+    pub(super) panel_reported_states:            BTreeMap<Uuid, knot_agents::AgentState>,
+    /// Set by every Panel tracker's `on_status` sink once it has written the
+    /// store, and cleared by `repaint_poll_tick` when it reads it.
+    ///
+    /// The sink runs on the tracker's tokio task with no GPUI context, so
+    /// without this the write lands on no frame: the tick that *reports* a
+    /// transition notifies while the store still holds the old status, and
+    /// the tick the write actually arrives on has nothing to report. The dot
+    /// would then catch up only when something unrelated repainted the
+    /// window - the failure `.claude/rules/rust-structure.md` names under
+    /// "Off-thread results must reach a frame".
+    pub(super) panel_status_landed:              Arc<AtomicBool>,
     pub(super) panel_stopping:                   BTreeSet<Uuid>,
     pub(super) panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has

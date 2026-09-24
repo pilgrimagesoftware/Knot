@@ -8,13 +8,15 @@
 //! it is handed `Input`, not only the first. Converting one to the other is
 //! this module's whole job, and the reason
 //! [`WorkspaceWindow::sync_panel_agent_states`] calls the tracker only for
-//! agents whose derived status differs from the one the store holds.
+//! agents whose derived status differs from the one it last reported.
 //!
 //! Routing through the tracker rather than writing the store directly is what
 //! makes the desktop notification and the idle delivery nudge reachable for a
 //! Panel-mode agent: both are tracker effects, and a direct write emits
 //! neither. See `openspec/specs/activity-detection/spec.md`, "ACP updates
 //! drive status for Panel-mode agents".
+
+use std::sync::atomic::Ordering;
 
 use gpui_kit::Context;
 use knot_activity::{EventSink, Tracker, TrackerConfig, tracking_for};
@@ -52,20 +54,23 @@ pub(super) fn acp_status(state: &PanelState) -> (AgentState, Option<String>) {
 pub(super) type AcpStatus = (Uuid, (AgentState, Option<String>));
 
 /// The subset of `derived` that is an actual transition: an agent whose
-/// reported status differs from the one `current` holds for it.
+/// reported status differs from the one `current` last reported for it.
 ///
 /// The level-to-edge conversion, kept as a pure function because the
 /// property worth testing is what happens across *ticks* - the same pending
 /// permission read thirty times reports once - and that is invisible in a
 /// single call to the caller.
 ///
-/// An agent `current` knows nothing about is dropped rather than reported:
-/// it left the store between the session read and this one, so there is
-/// nothing to move.
+/// `current` is the window's own record of what it last handed the tracker,
+/// never the agent store. The store is written by the tracker's sink a
+/// channel hop later, so a tick that read it could see the previous status
+/// and report the same permission request a second time - two notifications
+/// for one prompt. An agent with no record yet is reported: it has never
+/// been handed anything, so every status is a transition.
 pub(super) fn transitions<F>(derived: Vec<AcpStatus>, current: F) -> Vec<AcpStatus>
     where F: Fn(Uuid) -> Option<AgentState> {
     derived.into_iter()
-           .filter(|(id, (state, _))| current(*id).is_some_and(|held| held != *state))
+           .filter(|(id, (state, _))| current(*id) != Some(*state))
            .collect()
 }
 
@@ -105,11 +110,18 @@ impl WorkspaceWindow {
         // the two must not be merged.
         let tracking = tracking_for(&agent_type, knot_core::ViewMode::Panel);
         let store = std::sync::Arc::clone(&self.store);
+        let landed = std::sync::Arc::clone(&self.panel_status_landed);
         let queue = cx.has_global::<AwaitingInput>()
                       .then(|| cx.global::<AwaitingInput>().0.clone());
         let sink = EventSink { on_status:
                                    Some(Box::new(move |event: knot_activity::StatusEvent| {
                                             store.lock().set_state(id, event.status);
+                                            // The write is what the dot draws
+                                            // from, and it happens here, on
+                                            // the tracker's task, with no
+                                            // context to notify from. The
+                                            // flag is how it reaches a frame.
+                                            landed.store(true, Ordering::Release);
                                         })),
                                on_awaiting_input: queue.map(|queue| {
                                                            Box::new(move |message| {

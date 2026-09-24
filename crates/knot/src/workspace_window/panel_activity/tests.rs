@@ -80,6 +80,10 @@ fn the_status_is_a_level_that_repeats_unchanged() {
 // a permission request that stays pending must be reported once, not once per
 // poll - `desktop-notifications`' "A still-pending permission request is not
 // re-notified".
+//
+// `current` is the window's record of what it last reported, never the agent
+// store. The store is written by the tracker's sink a channel hop later, so
+// it lags; the last test here is the one that pins that distinction.
 
 use std::collections::BTreeMap;
 
@@ -92,44 +96,65 @@ fn awaiting(id: Uuid) -> (Uuid, (AgentState, Option<String>)) {
 }
 
 #[test]
-fn a_status_the_store_already_holds_is_not_reported() {
+fn a_status_already_reported_is_not_reported_again() {
     let id = Uuid::new_v4();
-    let held = BTreeMap::from([(id, AgentState::Input)]);
+    let reported = BTreeMap::from([(id, AgentState::Input)]);
 
-    assert!(transitions(vec![awaiting(id)], |id| held.get(&id).copied()).is_empty());
+    assert!(transitions(vec![awaiting(id)], |id| reported.get(&id).copied()).is_empty());
 }
 
 #[test]
 fn a_changed_status_is_reported_with_its_message() {
     let id = Uuid::new_v4();
-    let held = BTreeMap::from([(id, AgentState::Running)]);
+    let reported = BTreeMap::from([(id, AgentState::Running)]);
 
-    assert_eq!(transitions(vec![awaiting(id)], |id| held.get(&id).copied()),
+    assert_eq!(transitions(vec![awaiting(id)], |id| reported.get(&id).copied()),
                vec![awaiting(id)]);
 }
 
 #[test]
 fn one_pending_permission_across_many_ticks_reports_once() {
     let id = Uuid::new_v4();
-    // The store as the tracker's sink leaves it: whatever was last reported.
-    let mut held = BTreeMap::from([(id, AgentState::Running)]);
-    let mut reported = 0;
+    let mut last_reported = BTreeMap::from([(id, AgentState::Running)]);
+    let mut reports = 0;
 
     for _ in 0..30 {
         // Every tick reads the same level from the panel.
-        let moved = transitions(vec![awaiting(id)], |id| held.get(&id).copied());
-        reported += moved.len();
+        let moved = transitions(vec![awaiting(id)], |id| last_reported.get(&id).copied());
+        reports += moved.len();
         for (id, (state, _)) in moved {
-            held.insert(id, state);
+            last_reported.insert(id, state);
         }
     }
 
-    assert_eq!(reported, 1);
+    assert_eq!(reports, 1);
 }
 
 #[test]
-fn an_agent_the_store_has_forgotten_is_dropped() {
-    let held: BTreeMap<Uuid, AgentState> = BTreeMap::new();
+fn a_store_write_that_has_not_landed_does_not_cause_a_second_report() {
+    // The failure this gate exists to prevent. The tracker's sink writes the
+    // store on its own task, so the tick after a report can still see the old
+    // status there. Deduping against the store would report the same pending
+    // permission again and raise a second notification for one prompt;
+    // deduping against what was last reported does not.
+    let id = Uuid::new_v4();
+    let store_still_says = BTreeMap::from([(id, AgentState::Running)]);
+    let last_reported = BTreeMap::from([(id, AgentState::Input)]);
 
-    assert!(transitions(vec![awaiting(Uuid::new_v4())], |id| held.get(&id).copied()).is_empty());
+    assert_eq!(transitions(vec![awaiting(id)], |id| store_still_says.get(&id).copied()).len(),
+               1,
+               "deduping against the lagging store reports twice - the bug");
+    assert!(transitions(vec![awaiting(id)], |id| last_reported.get(&id).copied()).is_empty());
+}
+
+#[test]
+fn an_agent_never_reported_before_is_reported() {
+    // No record means nothing has been handed to its tracker yet, so the
+    // first status it produces is a transition - the tick a panel session
+    // first becomes ready.
+    let none: BTreeMap<Uuid, AgentState> = BTreeMap::new();
+    let id = Uuid::new_v4();
+
+    assert_eq!(transitions(vec![awaiting(id)], |id| none.get(&id).copied()),
+               vec![awaiting(id)]);
 }

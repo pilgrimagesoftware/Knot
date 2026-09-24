@@ -85,6 +85,17 @@ impl WorkspaceWindow {
         let pull_requests_recorded = self.drain_pull_requests(cx);
         let prompts_completed = self.drain_prompt_results();
         let panel_states_moved = self.sync_panel_agent_states(cx);
+        // The other half of that sync. `sync_panel_agent_states` says a
+        // transition was sent to a tracker; this says one the tracker already
+        // wrote to the store has not been drawn yet. They are different
+        // ticks - the send and the landing are a channel apart - so a frame
+        // that notified on the send would draw the status the store held
+        // before it. Taken into a local rather than into the `||` chain for
+        // the reason `shell_runs_moved` is below: `swap` clears as it reads,
+        // and a short-circuit past it would strand the write until the next
+        // transition, which for a settled agent may never come.
+        let panel_status_landed = self.panel_status_landed
+                                      .swap(false, std::sync::atomic::Ordering::AcqRel);
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
         // A `!` command's output lands on its own drain threads with no
@@ -125,6 +136,7 @@ impl WorkspaceWindow {
         let mcp_probed = self.mcp_probe_tick(cx);
         if grid_dirty
            || panel_states_moved
+           || panel_status_landed
            || panel_dirty
            || spinner_dirty
            || activated
@@ -220,11 +232,21 @@ impl WorkspaceWindow {
     /// notification and the idle delivery nudge fire at all (see
     /// `panel_activity`).
     ///
-    /// Only agents whose status *differs* from the store's are reported. The
-    /// panel reports a level - a permission request pending for thirty ticks
-    /// reads the same every tick - while the tracker takes edges and emits an
-    /// `AwaitingInput` effect for every `Input` it is handed. Without this
-    /// gate one prompt would raise a notification per poll.
+    /// Only agents whose status *differs from the one last reported* are
+    /// reported. The panel reports a level - a permission request pending for
+    /// thirty ticks reads the same every tick - while the tracker takes edges
+    /// and emits an `AwaitingInput` effect for every `Input` it is handed.
+    /// Without this gate one prompt would raise a notification per poll.
+    ///
+    /// The gate reads `panel_reported_states`, not the store, because the
+    /// store is now written by the sink a channel hop later: a tick that
+    /// compared against it could still see the previous status and report the
+    /// same prompt twice.
+    ///
+    /// The bool this returns says a transition was *sent*, which is not the
+    /// tick the dot changes on - the write lands later, and announces itself
+    /// through `panel_status_landed`. Both reach the `if` chain, because they
+    /// are two different repaints.
     fn sync_panel_agent_states(&mut self, cx: &mut gpui_kit::Context<Self>) -> bool {
         let panel_states = self.panel_sessions
                                .iter()
@@ -239,10 +261,9 @@ impl WorkspaceWindow {
                                    Some((*id, panel_activity::acp_status(&state)))
                                })
                                .collect::<Vec<_>>();
-        let moved = {
-            let store = self.store.lock();
-            panel_activity::transitions(panel_states, |id| store.agent(id).map(|agent| agent.state))
-        };
+        let moved = panel_activity::transitions(panel_states, |id| {
+            self.panel_reported_states.get(&id).copied()
+        });
         if moved.is_empty() {
             return false;
         }
@@ -254,9 +275,14 @@ impl WorkspaceWindow {
             }
             else {
                 // No tracker: degraded rather than frozen. The dot still
-                // moves; the effects it would have carried are lost.
+                // moves, synchronously; the effects it would have carried are
+                // lost.
                 self.store.lock().set_state(id, state);
             }
+            // After either branch, and before the next tick can read it: the
+            // gate's whole job is to remember what was handed over, whether
+            // or not a tracker took it.
+            self.panel_reported_states.insert(id, state);
         }
         true
     }

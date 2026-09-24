@@ -15,9 +15,10 @@
 ## 3. Routing the poll through the tracker
 
 - [x] 3.1 Extract the derivation as the pure `panel_activity::acp_status(&PanelState) -> (AgentState, Option<String>)`, carrying the pending permission's `tool_call_title` as the attention message; verified by five unit tests over the mapping
-- [x] 3.2 Extract the level-to-edge gate as the pure `panel_activity::transitions`, and call `apply_acp_status` only for agents whose status differs from the store's; verified by `one_pending_permission_across_many_ticks_reports_once`, which drives thirty ticks over one unchanged pending permission and asserts a single report
+- [x] 3.2 Extract the level-to-edge gate as the pure `panel_activity::transitions`, and call `apply_acp_status` only for agents whose status differs from the one last *reported* - held in a new `panel_reported_states` map written synchronously at send time, never the store, which the sink now writes a channel hop later; verified by `one_pending_permission_across_many_ticks_reports_once` and by `a_store_write_that_has_not_landed_does_not_cause_a_second_report`, which asserts the lagging-store comparison reports twice and the reported-state one does not
 - [x] 3.3 Keep the direct `store.set_state` as the fallback branch when no tracker could be spawned, matching `knot-mcp-tools`
-- [x] 3.4 `sync_panel_agent_states` returns true on any tick that reports a transition, so the frame showing the new dot is not skipped; verified by reading the rewritten function, whose `moved` list is exactly the reported transitions
+- [x] 3.4 `sync_panel_agent_states` returns true on any tick that *sends* a transition; verified by reading the rewritten function, whose `moved` list is exactly what was sent
+- [x] 3.5 The sink's store write reaches a frame of its own: `on_status` sets `panel_status_landed`, and `repaint_poll_tick` swaps it into a local that joins the `if` chain. The send and the landing are a channel apart, so a frame that notified only on the send would draw the status the store held before it - the third bullet of "Off-thread results must reach a frame" in `.claude/rules/rust-structure.md`, which names this very function. Into a local, not inline in the `||`, because `swap` clears as it reads
 
 ## 4. Behavior tests against the spec
 

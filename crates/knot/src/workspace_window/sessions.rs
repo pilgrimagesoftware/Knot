@@ -298,6 +298,7 @@ impl WorkspaceWindow {
         self.panel_prompt_queues.remove(&id);
         // Dropping the tracker stops its task; nothing else holds one.
         self.panel_trackers.remove(&id);
+        self.panel_reported_states.remove(&id);
         self.panel_stopping.remove(&id);
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);
