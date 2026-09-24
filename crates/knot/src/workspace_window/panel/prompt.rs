@@ -306,9 +306,15 @@ impl WorkspaceWindow {
     ///
     /// `panel_input_send_chord` is what the composers were last set to, not
     /// a copy of the setting to read from: `set_submit_on_enter` notifies
-    /// unconditionally, and this runs from the render path, so re-applying
-    /// an unchanged value would repaint every frame forever.
-    fn reconcile_panel_send_chord(&mut self, cx: &mut Context<Self>) {
+    /// unconditionally, so re-applying an unchanged value would repaint
+    /// every frame forever.
+    ///
+    /// Called from `prepare_frame`, beside the window's other per-frame
+    /// memos and for the same reason as `refresh_terminal_font`: it runs
+    /// before the tree is built rather than during it, and it costs a
+    /// `bool` compare on every frame that changed nothing.
+    pub(in crate::workspace_window) fn reconcile_panel_send_chord(&mut self,
+                                                                  cx: &mut Context<Self>) {
         let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
         if shift_to_send == self.panel_input_send_chord {
             return;
@@ -328,15 +334,15 @@ impl WorkspaceWindow {
     /// `render_panel_input_area`'s Send button tooltip for the matching
     /// user-facing hint.
     ///
-    /// The setting is read on the way through rather than held: a composer
-    /// lives as long as its agent, and the one already on screen has to
-    /// follow a change made in the settings window just as a composer built
-    /// afterwards does.
+    /// A composer built here is built for the chord the frame already
+    /// settled on, and `panel_input_send_chord` is that value rather than a
+    /// fresh read: `reconcile_panel_send_chord` ran in `prepare_frame`, so
+    /// re-reading the surface here would only be a second chance to
+    /// disagree with the composers already on screen.
     pub(in crate::workspace_window) fn panel_prompt_input(&mut self, id: Uuid,
                                                           window: &mut Window,
                                                           cx: &mut Context<Self>)
                                                           -> Entity<PanelInputState> {
-        self.reconcile_panel_send_chord(cx);
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }

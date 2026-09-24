@@ -47,8 +47,18 @@ use crate::workspace_window::panel::prompt::panel_input_max_rows;
 use crate::workspace_window::panel::prompt::sends_now;
 use crate::workspace_window::panel::prompt::sends_on;
 
-/// The source the guard below reads, relative to the crate root.
+/// The sources the guard below reads, relative to the crate root.
 const PROMPT_SOURCE: &str = "src/workspace_window/panel/prompt.rs";
+const RENDER_SOURCE: &str = "src/workspace_window/render/mod.rs";
+
+/// One of those sources, as text.
+fn source(relative: &str) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
+
+    std::fs::read_to_string(&path).unwrap_or_else(|error| {
+                                      panic!("reading {}: {error}", path.display())
+                                  })
+}
 
 /// A window holding just the composer, plus the `PressEnter` events it
 /// emitted.
@@ -233,19 +243,31 @@ fn the_send_chord_follows_a_setting_changed_after_the_composer_was_built(cx: &mu
 /// defect this pins passed every test in this module.
 #[test]
 fn the_subscription_reads_the_setting_rather_than_capturing_it() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(PROMPT_SOURCE);
-    let prompt = std::fs::read_to_string(&path).unwrap_or_else(|error| {
-                                                   panic!("reading {}: {error}", path.display())
-                                               });
+    let prompt = source(PROMPT_SOURCE);
 
     assert!(prompt.contains("if sends_now(*shift, cx)"),
             "the PressEnter guard must consult the live surface; a captured flag makes the send \
              chord whatever it was when the composer was built");
     assert!(!prompt.contains("sends_on(shift_to_send, *shift)"),
             "the captured-flag form is #429 exactly, and it compiles");
-    assert!(prompt.contains("self.reconcile_panel_send_chord(cx)"),
-            "panel_prompt_input must reconcile before it returns a cached composer, or the chord \
-             the hint calls 'newline' propagates instead of inserting one");
+}
+
+/// The other half of the wiring, and the reason it is not in
+/// `panel_prompt_input`: a composer already on screen has to be brought back
+/// in line, and the place to do it is the frame's own preamble rather than
+/// the tree-building pass it used to sit in.
+#[test]
+fn the_send_chord_is_reconciled_in_the_frames_preamble() {
+    let render = source(RENDER_SOURCE);
+    let prompt = source(PROMPT_SOURCE);
+
+    assert!(render.contains("self.reconcile_panel_send_chord(cx)"),
+            "prepare_frame must reconcile, or an entity built before the change keeps the old \
+             submit_on_enter and the chord the hint calls 'newline' propagates instead of \
+             inserting one");
+    assert!(!prompt.contains("self.reconcile_panel_send_chord(cx)"),
+            "reconciling from panel_prompt_input puts it back on the tree-building pass; \
+             prepare_frame is where the window's per-frame memos live");
 }
 
 /// Ordinary characters are unaffected by either setting - the guard that
