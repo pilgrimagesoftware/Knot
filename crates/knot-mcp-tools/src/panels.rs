@@ -120,6 +120,60 @@ mod tests {
         assert_eq!(agent.mermaid_title.as_deref(), Some("Flow"));
     }
 
+    /// The two tools are independent: showing a diagram does not close the
+    /// file, and showing a file does not drop the diagram. Before the
+    /// artifact panel the UI could only draw one of them, which made this
+    /// easy to assume the other way round.
+    #[test]
+    fn a_diagram_and_a_file_can_be_open_at_once() {
+        let mut store = AgentStore::new();
+        let id = store.create("/tmp/a", CreateOptions::default());
+        let file = std::env::temp_dir().join("knot-artifact-both.md");
+        std::fs::write(&file, "# both").unwrap();
+
+        let shown = display_markdown(&mut store,
+                                     &json!({"agentId": id.to_string(),
+                                             "filePath": file.to_string_lossy()}));
+        let drawn = view_mermaid(&mut store,
+                                 &json!({"agentId": id.to_string(),
+                                         "source": "graph TD; A-->B;"}));
+
+        assert_eq!(shown.is_error, None);
+        assert_eq!(drawn.is_error, None);
+        let agent = store.agent(id).unwrap();
+        assert_eq!(agent.markdown_file.as_deref(),
+                   Some(file.as_path()),
+                   "the diagram must not have closed the file");
+        assert_eq!(agent.mermaid_source.as_deref(), Some("graph TD; A-->B;"));
+
+        let _ = std::fs::remove_file(&file);
+    }
+
+    /// `maximized` is what the artifact panel takes its expanded state from,
+    /// so a call carrying it has to be distinguishable from one that does
+    /// not - on every call, not only the one that opens the panel.
+    #[test]
+    fn maximized_is_recorded_on_every_call_that_carries_it() {
+        let mut store = AgentStore::new();
+        let id = store.create("/tmp/a", CreateOptions::default());
+        let file = std::env::temp_dir().join("knot-artifact-maximized.md");
+        std::fs::write(&file, "# max").unwrap();
+        let path = file.to_string_lossy().to_string();
+
+        display_markdown(&mut store,
+                         &json!({"agentId": id.to_string(), "filePath": path}));
+        assert!(!store.agent(id).unwrap().markdown_maximized);
+
+        display_markdown(&mut store,
+                         &json!({"agentId": id.to_string(), "filePath": path,
+                                 "maximized": true}));
+        assert!(store.agent(id).unwrap().markdown_maximized,
+                "re-showing the open file with maximized has to be recorded, or the panel can \
+                 never be expanded by a second call");
+
+        let _ = std::fs::remove_file(&file);
+    }
+
     #[test]
     fn view_mermaid_missing_agent_errors() {
         let mut store = AgentStore::new();

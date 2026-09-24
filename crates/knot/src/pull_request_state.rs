@@ -12,11 +12,18 @@
 //! restart is worse than a blank, and there is no way to know a remembered
 //! status is still true - so the cache starts empty every launch and the
 //! rows fill in as answers arrive.
+//!
+//! That is also why expiry is decided here rather than from the record. A
+//! record knows when Knot first saw its URL, which says nothing about when the
+//! pull request merged; the merge time arrives with the fetched state, so
+//! [`expired_urls`] reads the cache and the retention window together. After a
+//! restart nothing expires until the answers land again, which is the same
+//! rule as every other thing this cache decides.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use knot_forge::{ForgeAvailability, PullRequestState, PullRequestStatus};
 use parking_lot::Mutex;
@@ -36,6 +43,34 @@ pub(crate) const MAX_AGE: Duration = consts::PULL_REQUEST_STATE_MAX_AGE;
 
 /// How stale the forge availability answer may be before it is asked again.
 pub(crate) const PROBE_MAX_AGE: Duration = consts::FORGE_PROBE_MAX_AGE;
+
+/// How long a merged pull request stays listed after it merged.
+pub(crate) const MERGED_RETENTION: Duration = consts::PULL_REQUEST_MERGED_RETENTION;
+
+/// Which of `urls` have been merged long enough to stop listing.
+///
+/// Every case where the evidence is missing keeps the record, and there are
+/// four of them: the URL is not in the cache (nothing asked yet), its entry is
+/// `None` (the fetch finished and failed), it is merged with no merge time the
+/// forge reported, or it is not merged at all. Knot drops what it has observed
+/// and declines to guess at the rest - a wrongly kept record is a row the user
+/// can remove, a wrongly dropped one is work that silently vanished.
+///
+/// Pure, and takes `now` rather than reading the clock, so the window's edges
+/// are testable without waiting a day at either end. The comparison itself
+/// lives on [`PullRequestState`], where the merge time does.
+pub(crate) fn expired_urls(cache: &BTreeMap<String, Option<PullRequestState>>, urls: &[String],
+                           retention: Duration, now: SystemTime)
+                           -> Vec<String> {
+    urls.iter()
+        .filter(|url| {
+            cache.get(*url)
+                 .and_then(Option::as_ref)
+                 .is_some_and(|state| state.merged_longer_than(retention, now))
+        })
+        .cloned()
+        .collect()
+}
 
 /// How many of a workspace's recorded pull requests are in each state.
 ///

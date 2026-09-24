@@ -110,6 +110,13 @@ impl WorkspaceWindow {
         // nothing running, that could be never.
         let forge_probed = self.forge_status.take_changed();
         let pull_request_states_changed = self.pull_request_states.take_changed();
+        // Expiry runs on the render path, so it needs a frame to run in. A
+        // merged pull request sitting stable across the retention boundary
+        // flags nothing - `record` marks the cache changed only when the
+        // answer differs - so without this the row would wait for something
+        // unrelated to repaint the window, which on an idle workspace is the
+        // "could be never" the two above exist to prevent.
+        let pull_requests_expiring = self.pull_requests_expiring();
         // The git panel's three off-main-thread sources, all draining here
         // for the same reason: none of them has a GPUI context, so each only
         // leaves something behind for this tick to act on. A staging
@@ -124,6 +131,15 @@ impl WorkspaceWindow {
         // without this an `@` lookup would show whatever it had when
         // something unrelated last repainted the window.
         let mentions_listed = self.drain_mention_listings();
+        // `display-markdown` and `view-mermaid` are served on the MCP
+        // server's thread, which has no context to notify from, and nothing
+        // else in this chain reads the fields they write. Until this existed
+        // an artifact reached a frame only when the calling agent's own
+        // streaming happened to repaint the window - so an artifact set for
+        // an idle or Terminal-mode agent waited for something unrelated to
+        // happen. Taken into a local rather than into the `||` chain below,
+        // which short-circuits: the compare-and-store has to run every tick.
+        let artifacts_moved = self.drain_artifact_changes();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -147,11 +163,13 @@ impl WorkspaceWindow {
            || pull_requests_recorded
            || forge_probed
            || pull_request_states_changed
+           || pull_requests_expiring
            || git_actions_landed
            || git_commits_landed
            || git_watches_fired
            || git_reads_landed
            || mentions_listed
+           || artifacts_moved
            || shell_runs_moved
         {
             cx.notify();

@@ -218,15 +218,21 @@ there is a composer to focus.
 
 The expanded condition belongs to this guard and to no other, which is worth
 saying because `prepare_frame` is where per-frame preamble collects and it is
-growing. It already runs `refresh_terminal_font`, `refresh_diff_stats` and
-`refresh_dashboard_diff_stats` before reaching `focus_showing_pane` last; PR
-#431 moves `reconcile_panel_send_chord` in, PR #424 adds the model and effort
-dropdown state, and PR #432 changes `refresh_pull_request_states`. The list is
-not worth enumerating because it keeps growing — the rule is positional. Every
-call before `focus_showing_pane` builds or reconciles state and must keep
-running while the panel is expanded. The guard goes inside
-`focus_showing_pane`, which is already last, so it is naturally downstream of
-all of them.
+growing. It runs `refresh_terminal_font`, `refresh_diff_stats` and
+`refresh_dashboard_diff_stats`, and #424 adds the model and effort dropdown
+state, all before reaching `focus_showing_pane` last.
+
+The rule is positional rather than a list, because the list moves: an earlier
+draft of this paragraph named `reconcile_panel_send_chord` as a neighbour here,
+and #429 then moved it out of `prepare_frame` into `repaint_poll_tick` — for a
+related reason, that `prepare_frame` is the render preamble and so waits for a
+frame nothing schedules. Naming members dates the note; naming the position
+does not.
+
+So: every call `prepare_frame` makes before `focus_showing_pane` builds or
+reconciles state, and none of them may be skipped while the panel is expanded.
+The guard goes inside `focus_showing_pane`, which is already last and so is
+naturally downstream of whatever else lands there.
 
 The dropdown block is the clearest case of why. Skipping it while expanded would
 leave that state absent on the frame the panel collapses, where
