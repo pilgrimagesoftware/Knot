@@ -360,6 +360,25 @@ pub(crate) struct WorkspaceWindow {
     /// element tree for the reason `sidebar_resize` is: the width is read
     /// outside the group too, to seed the panel's own size.
     pub(super) git_panel_resize:                 BTreeMap<Uuid, Entity<ResizableState>>,
+    /// The artifact panel's arrangement per agent: width, the split between
+    /// its two sections, which of them are collapsed, and whether the panel
+    /// is expanded over the content pane.
+    ///
+    /// View state, not persisted, for the reason `git_panel_width` is not -
+    /// and keyed by agent rather than by workspace, which is why
+    /// `WorkspaceUiState` is the wrong home even though it persists the rest
+    /// of the window's arrangement.
+    pub(super) artifact_panel:
+        BTreeMap<Uuid, super::artifact_panel::state::ArtifactPanelArrangement>,
+    /// The divider between an agent's content and its artifact panel, and the
+    /// one between the panel's two sections. Held outside the element tree
+    /// for the reason `git_panel_resize` is.
+    pub(super) artifact_panel_resize:            BTreeMap<Uuid, Entity<ResizableState>>,
+    pub(super) artifact_split_resize:            BTreeMap<Uuid, Entity<ResizableState>>,
+    /// What each agent's artifact fields held when this window last saw them.
+    /// Compared each poll so a `display-markdown` arriving on the MCP
+    /// server's thread reaches a frame.
+    pub(super) artifact_drawn: BTreeMap<Uuid, super::artifact_panel::state::ArtifactSnapshot>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can

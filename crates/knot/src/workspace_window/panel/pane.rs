@@ -21,8 +21,6 @@ use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::StyledExt;
-use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Sizable;
@@ -34,28 +32,24 @@ use gpui_kit::rgb;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::artifact_panel::section::Section;
+use crate::workspace_window::artifact_panel::section::SectionChrome;
 
 impl WorkspaceWindow {
-    /// Renders the markdown pane for `id`, which takes over the content
-    /// area while the agent has a markdown file open.
+    /// The mermaid section: an agent's diagram - a committed task plan, or
+    /// anything else it showed with `view-mermaid`.
     ///
-    /// The `display-markdown` MCP tool and the "Markdown Files" context
-    /// menu item both set that file; until this existed, both wrote state
-    /// no UI ever read, so an agent calling the tool appeared to be
-    /// ignored. Closing the pane clears the file but keeps the history, so
-    /// the menu can bring it back.
-    /// The content pane for an agent's diagram: a committed task plan, or
-    /// anything else an agent showed with `view-mermaid`.
-    ///
-    /// Same chrome as the markdown pane, because it is the same kind of
+    /// Same chrome as the markdown section, because it is the same kind of
     /// thing - something an agent put in front of the user, which the user
-    /// closes when done with it.
+    /// closes when done with it. `chrome` says whether it is drawn with a
+    /// collapse chevron and whether it is currently collapsed; a collapsed
+    /// section is its header and nothing else.
     pub(in crate::workspace_window) fn render_mermaid_pane(&self, id: Uuid, source: &str,
                                                            title: Option<&str>,
+                                                           chrome: SectionChrome,
                                                            cx: &mut Context<Self>)
                                                            -> gpui_kit::AnyElement {
         let heading = title.map(str::to_string)
@@ -69,62 +63,32 @@ impl WorkspaceWindow {
                             .child(knot_core::l10n::t("plan.empty"))
                             .into_any_element()
                                                              });
-        v_flex()
-            .size_full()
-            .child(
-                h_flex()
-                    .w_full()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
+        let header = self.artifact_section_header(id, Section::Mermaid, &heading, chrome, cx);
+        if chrome.collapsed {
+            return v_flex().size_full().child(header).into_any_element();
+        }
+        v_flex().size_full()
+                .child(header)
+                .child(div().id(("mermaid-pane", id.as_u128() as u64))
                             .flex_1()
+                            .min_h_0()
+                            .w_full()
                             .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .font_semibold()
-                            .child(single_line(&heading)),
-                    )
-                    .child(
-                        Button::new("mermaid-pane-close")
-                            .icon(IconName::Close)
-                            .ghost()
-                            .small()
-                            .tooltip("Close")
-                            .on_click(cx.listener(move |view, _, _window, cx| {
-                                {
-                                    let mut store = view.store.lock();
-                                    if let Err(error) = store.clear_mermaid_panel(id) {
-                                        eprintln!("failed to close the diagram panel: \
-                                                   {error}");
-                                    }
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .id(("mermaid-pane", id.as_u128() as u64))
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .min_w_0()
-                    .overflow_scroll()
-                    .p_4()
-                    .child(body),
-            )
-            .into_any_element()
+                            .overflow_scroll()
+                            .p_4()
+                            .child(body))
+                .into_any_element()
     }
 
+    /// The markdown section: the file an agent put in front of the user.
+    ///
+    /// The `display-markdown` MCP tool and the "Markdown Files" context menu
+    /// item both set that file; until this existed, both wrote state no UI
+    /// ever read, so an agent calling the tool appeared to be ignored.
+    /// Closing the section clears the file but keeps the history, so the menu
+    /// can bring it back.
     pub(in crate::workspace_window) fn render_markdown_pane(&self, id: Uuid, file: &Path,
+                                                            chrome: SectionChrome,
                                                             cx: &mut Context<Self>)
                                                             -> gpui_kit::AnyElement {
         let title = file.file_name()
@@ -137,67 +101,30 @@ impl WorkspaceWindow {
         let body = std::fs::read_to_string(file).unwrap_or_else(|error| {
                        format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
                    });
-        v_flex()
-            .size_full()
-            .child(
-                h_flex()
-                    .w_full()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
+        let header = self.artifact_section_header(id, Section::Markdown, &title, chrome, cx);
+        if chrome.collapsed {
+            return v_flex().size_full().child(header).into_any_element();
+        }
+        v_flex().size_full()
+                .child(header)
+                .child(div().id(("markdown-pane", id.as_u128() as u64))
                             .flex_1()
+                            .min_h_0()
+                            .w_full()
                             .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .font_semibold()
-                            .child(single_line(&title)),
-                    )
-                    .child(
-                        Button::new("markdown-pane-close")
-                            .icon(IconName::Close)
-                            .ghost()
-                            .small()
-                            .tooltip(knot_core::l10n::t("panel.close"))
-                            .on_click(cx.listener(move |view, _, _window, cx| {
-                                {
-                                    let mut store = view.store.lock();
-                                    if let Err(error) = store.clear_markdown_panel(id) {
-                                        eprintln!("failed to close the markdown panel: \
-                                                   {error}");
-                                    }
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .id(("markdown-pane", id.as_u128() as u64))
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .min_w_0()
-                    .overflow_y_scroll()
-                    .p_4()
-                    // The same constructor the panel's assistant messages
-                    // use, with the same families and body size: the spec
-                    // requires the two Markdown surfaces to render alike.
-                    .child(crate::markdown_view::markdown_view(
-                        ("markdown-pane-body", id.as_u128() as u64),
-                        body,
-                        cx.theme().font_family.clone(),
-                        crate::settings_global::read(cx).title_font_name.clone().into(),
-                        px(crate::settings_global::read(cx).markdown_font_size as f32),
-                    )),
-            )
+                            .overflow_y_scroll()
+                            .p_4()
+                            // The same constructor the panel's assistant
+                            // messages use, with the same families and body
+                            // size: the spec requires the two Markdown
+                            // surfaces to render alike.
+                            .child(crate::markdown_view::markdown_view(
+                                ("markdown-pane-body", id.as_u128() as u64),
+                                body,
+                                cx.theme().font_family.clone(),
+                                crate::settings_global::read(cx).title_font_name.clone().into(),
+                                px(crate::settings_global::read(cx).markdown_font_size as f32),
+                            )))
             .into_any_element()
     }
 

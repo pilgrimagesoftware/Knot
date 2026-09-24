@@ -94,7 +94,8 @@ impl WorkspaceWindow {
                                                     // exactly the
                                                     // section's height.
                                                     // The pane is built first and handed to
-                                                    // `with_git_panel`, which puts the git panel
+                                                    // `with_side_panels`, which puts the side
+                                                    // panels
                                                     // beside it
                                                     // when that panel is open. Two statements
                                                     // rather than
@@ -104,44 +105,21 @@ impl WorkspaceWindow {
                                                     .child({
                                                         let pane = self.selected_agent
                                     .and_then(|id| {
-                                        let (is_panel_mode, markdown_file, diagram, stopped) = {
+                                        // The markdown file and the diagram
+                                        // are no longer read here. They used
+                                        // to take the content area ahead of
+                                        // either session pane; now they are
+                                        // sections of the artifact panel,
+                                        // which `with_side_panels` puts
+                                        // beside this one.
+                                        let (is_panel_mode, stopped) = {
                                             let store = self.store.lock();
                                             let agent = store.agent(id);
                                             (agent.map(|agent| agent.view_mode)
                                              == Some(knot_core::ViewMode::Panel),
-                                             agent.and_then(|agent| {
-                                                      agent.markdown_file.clone()
-                                                  }),
-                                             agent.and_then(|agent| {
-                                                      agent.mermaid_source.clone().map(|source| {
-                                                          (source, agent.mermaid_title.clone())
-                                                      })
-                                                  }),
                                              agent.filter(|agent| !agent.activated)
                                                   .map(|agent| agent.name.clone()))
                                         };
-                                        // Ahead of both session
-                                        // panes: an open markdown
-                                        // file takes the content
-                                        // area, whichever mode the
-                                        // agent otherwise runs in.
-                                        if let Some(file) = markdown_file {
-                                            return Some(self.render_markdown_pane(id,
-                                                                                  &file,
-                                                                                  cx));
-                                        }
-                                        // Same reasoning as the markdown
-                                        // pane above: something the agent
-                                        // put in front of the user takes
-                                        // the content area until closed.
-                                        if let Some((source, title)) = diagram {
-                                            return Some(self.render_mermaid_pane(
-                                                id,
-                                                &source,
-                                                title.as_deref(),
-                                                cx,
-                                            ));
-                                        }
                                         // Ahead of both session
                                         // panes, which would
                                         // otherwise render empty:
@@ -284,7 +262,7 @@ impl WorkspaceWindow {
                                             .into_any_element()
                                     });
                                                         let pane =
-                                                            self.with_git_panel(pane, window, cx);
+                                                            self.with_side_panels(pane, window, cx);
                                                         v_flex().flex_1()
                                                                 .min_h_0()
                                                                 .w_full()
@@ -301,55 +279,110 @@ impl WorkspaceWindow {
                 .into_any_element()
     }
 
-    /// The selected agent's pane with its git panel beside it, when that
-    /// panel is open.
+    /// The selected agent's pane with whichever side panels are open beside
+    /// it: the git panel, the artifact panel, or both.
     ///
-    /// Beside rather than over: the Swift panel is a sibling in an `HStack`,
+    /// Beside rather than over: the Swift panels are siblings in an `HStack`,
     /// so the content narrows rather than being occluded, and the agent stays
     /// visible while its work is reviewed - which is the point of reviewing
     /// it here rather than in another window.
-    pub(super) fn with_git_panel(&mut self, pane: gpui_kit::AnyElement, window: &mut Window,
-                                 cx: &mut Context<Self>)
-                                 -> gpui_kit::AnyElement {
+    ///
+    /// One resizable group holds all of them rather than one group nested in
+    /// another. One group means one drag model: each handle moves the
+    /// boundary it sits on and the group reconciles the rest. Nesting would
+    /// make the outer drag resize a subtree containing a panel with its own
+    /// fixed width, and that panel would absorb or refuse the change
+    /// depending on which side was dragged.
+    ///
+    /// The exception is an expanded artifact panel, which takes the content
+    /// area outright: no group, no handles, and the content pane is not
+    /// drawn. That is the one state `acp-panel-ui` and `terminal-input`
+    /// withhold focus for.
+    pub(super) fn with_side_panels(&mut self, pane: gpui_kit::AnyElement, window: &mut Window,
+                                   cx: &mut Context<Self>)
+                                   -> gpui_kit::AnyElement {
         let Some(id) = self.selected_agent
         else {
             return pane;
         };
-        let Some(folder) = self.agent_folder(id)
-        else {
+        let snapshot = self.artifact_snapshot(id);
+        let artifact = self.render_artifact_panel(id, &snapshot, cx);
+
+        // Expanded: the panel is the content area. The sidebar and any open
+        // git panel are outside this element and so are unaffected, which is
+        // what `ArtifactPanelView` achieves by giving the terminal area
+        // `width: 0` and `opacity: 0` rather than by removing it.
+        if let Some(panel) = artifact.as_ref()
+                                     .filter(|_| self.artifact_panel_expanded(id))
+        {
+            let _ = panel;
+            return artifact.expect("matched just above");
+        }
+
+        let git = self.agent_folder(id)
+                      .and_then(|folder| self.git_panel_pane(id, &folder, window, cx));
+        if git.is_none() && artifact.is_none() {
             return pane;
-        };
-        let Some(panel) = self.git_panel_pane(id, &folder, window, cx)
-        else {
-            return pane;
-        };
+        }
 
         // A resizable group rather than a hand-rolled drag handle: the
         // sidebar divider already works this way, and the group carries the
-        // clamp, so the panel cannot be dragged past the spec's bounds.
+        // clamp, so a panel cannot be dragged past the spec's bounds.
         let state = self.git_panel_resize
                         .entry(id)
                         .or_insert_with(|| cx.new(|_| ResizableState::default()))
                         .clone();
-        let width = self.git_panel_width(id);
+        let git_width = self.git_panel_width(id);
+        let artifact_width = self.artifact_arrangement(id).width;
+        let has_git = git.is_some();
 
-        h_resizable("git-panel-split").with_state(&state)
+        let group = h_resizable("side-panel-split").with_state(&state)
             .on_resize(cx.listener(move |view, state: &Entity<ResizableState>, _window, cx| {
-                          let Some(width) = state.read(cx).sizes().last().copied()
-                          else {
-                              return;
-                          };
-                          view.set_git_panel_width(id, f32::from(width), cx);
+                          let sizes = state.read(cx).sizes();
+                          // The panels are the trailing entries, in the order
+                          // they were added: git then artifact. Read from the
+                          // end so the content pane's own size is skipped.
+                          let mut trailing = sizes.iter().rev();
+                          if let Some(width) =
+                              trailing.next().filter(|_| view.artifact_panel_open(id))
+                          {
+                              view.set_artifact_panel_width(id, f32::from(*width));
+                          }
+                          if let Some(width) = trailing.next().filter(|_| has_git) {
+                              view.set_git_panel_width(id, f32::from(*width), cx);
+                          }
                       }))
-            .child(resizable_panel().child(v_flex().flex_1().min_w_0().h_full().child(pane)))
-            .child(resizable_panel().size(px(width))
-                                    .size_range(px(consts::GIT_PANEL_MIN_WIDTH)
-                                                ..px(consts::GIT_PANEL_MAX_WIDTH))
-                                    // A sized panel beside a flexible one has
-                                    // to opt out of growing, or it takes the
-                                    // slack back on the frame after a drag.
-                                    .flex_none()
-                                    .child(panel))
-            .into_any_element()
+            // The content pane keeps a floor of its own: two panels at their
+            // own minimum would otherwise leave the conversation nothing on a
+            // narrow window. Expand is the deliberate case and is handled
+            // above, before this group is built.
+            .child(resizable_panel().size_range(px(crate::consts::CONTENT_PANE_MIN_WIDTH)
+                                                ..px(f32::MAX))
+                                    .child(v_flex().flex_1().min_w_0().h_full().child(pane)));
+        let group = if let Some(panel) = git {
+            group.child(resizable_panel().size(px(git_width))
+                                         .size_range(px(consts::GIT_PANEL_MIN_WIDTH)
+                                                     ..px(consts::GIT_PANEL_MAX_WIDTH))
+                                         // A sized panel beside a flexible
+                                         // one has to opt out of growing, or
+                                         // it takes the slack back on the
+                                         // frame after a drag.
+                                         .flex_none()
+                                         .child(panel))
+        }
+        else {
+            group
+        };
+        let group = if let Some(panel) = artifact {
+            group.child(resizable_panel().size(px(artifact_width))
+                                         .size_range(px(consts::ARTIFACT_PANEL_MIN_WIDTH)
+                                                     ..px(consts::ARTIFACT_PANEL_MAX_WIDTH))
+                                         .flex_none()
+                                         .child(panel))
+        }
+        else {
+            group
+        };
+        group.into_any_element()
     }
 }

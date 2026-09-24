@@ -583,3 +583,19 @@ git_panel:
   commit_cancel: "Cancel"
   commit_failed: "The commit failed: %{reason}"
   committing: "Committing…"
+
+# The artifact panel: the side panel holding an agent's markdown file and its
+# diagram at once. Its two sections are drawn by the panes that were ported
+# first; these are the container's own words.
+artifact_panel:
+  title: "Artifacts"
+  # The expand control names the state it moves to, not the one it is in,
+  # which is how every other toggle in the window is worded.
+  expand: "Expand panel"
+  collapse: "Collapse panel"
+  # Distinct from a section's own close: this one takes both.
+  close_all: "Close all"
+  # The chevron on a section header. Present only when both sections are open,
+  # since a lone section has no other to give its height to.
+  collapse_section: "Collapse section"
+  expand_section: "Expand section"

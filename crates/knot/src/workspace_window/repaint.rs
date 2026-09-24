@@ -131,6 +131,15 @@ impl WorkspaceWindow {
         // without this an `@` lookup would show whatever it had when
         // something unrelated last repainted the window.
         let mentions_listed = self.drain_mention_listings();
+        // `display-markdown` and `view-mermaid` are served on the MCP
+        // server's thread, which has no context to notify from, and nothing
+        // else in this chain reads the fields they write. Until this existed
+        // an artifact reached a frame only when the calling agent's own
+        // streaming happened to repaint the window - so an artifact set for
+        // an idle or Terminal-mode agent waited for something unrelated to
+        // happen. Taken into a local rather than into the `||` chain below,
+        // which short-circuits: the compare-and-store has to run every tick.
+        let artifacts_moved = self.drain_artifact_changes();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -160,6 +169,7 @@ impl WorkspaceWindow {
            || git_watches_fired
            || git_reads_landed
            || mentions_listed
+           || artifacts_moved
            || shell_runs_moved
         {
             cx.notify();
