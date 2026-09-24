@@ -28,6 +28,7 @@ mod panel_scroll;
 mod permission_keybindings;
 mod plan_diagram;
 mod pull_request_records;
+mod pull_request_row_clicks;
 mod quit_warning;
 mod settings_font_preview;
 mod settings_global;
