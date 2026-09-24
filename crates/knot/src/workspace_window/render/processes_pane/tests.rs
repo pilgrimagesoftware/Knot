@@ -8,7 +8,10 @@ use knot_core::ViewMode;
 use knot_processes::{Activity, DescendantProcess, ProcessRecord, ProcessTable};
 use uuid::Uuid;
 
-use super::{EmptyState, activity_text, empty_state, row_fields, runtime_text, section_is_shown};
+use super::empty::{EmptyState, empty_state};
+use super::process_row::row_fields;
+use super::section::section_is_shown;
+use super::text::{activity_text, runtime_text};
 
 fn descendant(pid: u32, command: &str, seconds: u64, activity: Activity) -> DescendantProcess {
     DescendantProcess { pid,

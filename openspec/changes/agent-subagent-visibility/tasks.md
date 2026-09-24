@@ -48,8 +48,8 @@
 
 ## 7. Splitting the pane before the second row kind lands
 
-- [ ] 7.1 Split `render/processes_pane.rs` into a `processes_pane/` directory — `mod.rs` declaring only, siblings for the header, the process rows, and the empty states — with no behavior change; verify `make` passes and the existing `processes_pane/tests.rs` is unchanged apart from its module path
-- [ ] 7.2 Verify `make size-check` passes and that `mod.rs` holds no implementation, per the repo's "`mod.rs` declares; it does not implement" rule
+- [x] 7.1 Split `render/processes_pane.rs` into a `processes_pane/` directory — `mod.rs` declaring only, siblings for the header, the process rows, and the empty states — with no behavior change; verify `make` passes and the existing `processes_pane/tests.rs` is unchanged apart from its module path
+- [x] 7.2 Verify `make size-check` passes and that `mod.rs` holds no implementation, per the repo's "`mod.rs` declares; it does not implement" rule
 
 ## 8. The section renders two groups
 
