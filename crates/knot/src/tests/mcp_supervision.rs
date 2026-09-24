@@ -55,7 +55,8 @@ fn a_disabled_server_binds_nothing_and_supervises_nothing() {
                                            Arc::new(knot_messaging::QueuedNotifier::new()),
                                            Arc::new(Mutex::new(knot_messaging::MessageStore::new())),
                                            Arc::new(Mutex::new(Vec::new())),
-                                           Arc::new(Mutex::new(Vec::new())));
+                                           Arc::new(Mutex::new(Vec::new())),
+                                           Arc::default());
 
     // Long enough for a supervisor that was going to start to have bound.
     std::thread::sleep(Duration::from_millis(300));

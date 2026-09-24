@@ -37,6 +37,7 @@ mod quit_guard;
 mod refresh_cache;
 mod settings_broadcast;
 mod settings_window;
+mod subagent_feed;
 mod terminal_view;
 #[cfg(test)]
 mod tests;

@@ -33,12 +33,12 @@
 
 ## 5. The two feeds write the one registry
 
-- [ ] 5.1 Hold the registry as `Arc<Mutex<SubagentRegistry>>` shared by `McpToolCatalog` and the workspace window; verify both read the same instance in a test that writes through one and reads through the other
-- [ ] 5.2 Fold ACP tool calls into the registry from `panel_session.rs`'s apply path, off the main thread, selecting the recognizer by the agent's type; verify a session fed the group 2 fixtures leaves exactly one running record, then one finished one
-- [ ] 5.3 Clear an agent's records on `SessionUpdate::TurnEnd` and on `SessionEvent::Ended`; verify a turn ending empties the agent's list and leaves other agents alone
-- [ ] 5.4 Accept the subagent hook events on the existing status route, keyed on the `hook` field so the activity status is untouched; verify a dispatch posted while the agent is Working leaves it Working and raises no desktop notification
-- [ ] 5.5 Return 400 for a subagent event with no identifier and for a dispatch with no task, and success-with-no-change for a completion naming an unknown identifier; verify all three against the `agent-hooks` delta's scenarios
-- [ ] 5.6 Clear an agent's records when a Claude hook reports the turn ended (status `idle`) and when the agent is deactivated or removed; verify a deactivated agent holds no records
+- [x] 5.1 Hold the registry as `Arc<Mutex<SubagentRegistry>>` shared by `McpToolCatalog` and the workspace window; verify both read the same instance in a test that writes through one and reads through the other
+- [x] 5.2 Fold ACP tool calls into the registry from `panel_session.rs`'s apply path, off the main thread, selecting the recognizer by the agent's type; verify a session fed the group 2 fixtures leaves exactly one running record, then one finished one
+- [x] 5.3 Clear an agent's records on `SessionUpdate::TurnEnd` and on `SessionEvent::Ended`; verify a turn ending empties the agent's list and leaves other agents alone
+- [x] 5.4 Accept the subagent hook events on the existing status route, keyed on the `hook` field so the activity status is untouched; verify a dispatch posted while the agent is Working leaves it Working and raises no desktop notification
+- [x] 5.5 Return 400 for a subagent event with no identifier and for a dispatch with no task, and success-with-no-change for a completion naming an unknown identifier; verify all three against the `agent-hooks` delta's scenarios
+- [x] 5.6 Clear an agent's records when a Claude hook reports the turn ended (status `idle`) and when the agent is deactivated or removed; verify a deactivated agent holds no records
 
 ## 6. The roster says which types can report
 

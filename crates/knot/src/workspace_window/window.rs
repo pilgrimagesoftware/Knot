@@ -124,6 +124,15 @@ pub(crate) struct WorkspaceWindow {
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
     /// here persists across a view-mode toggle, only stopped on restart.
     pub(super) panel_sessions: BTreeMap<Uuid, Arc<Mutex<panel_session::PanelSessionSlot>>>,
+    /// Every agent's subagents - the ones it dispatched itself, as opposed
+    /// to the OS processes `agent_processes` samples.
+    ///
+    /// Shared rather than owned: the ACP feed writes to it from each panel
+    /// session's drain task, and the hook route writes to it from an axum
+    /// worker. Neither has a GPUI context, so both leave a changed flag for
+    /// `repaint_poll_tick` to drain - the same shape `pull_request_states`
+    /// uses, and for the same reason.
+    pub(super) subagents: Arc<Mutex<knot_subagents::registry::SubagentRegistry>>,
     /// The lifecycle phase each panel session was in the last time the
     /// repaint poll looked, so a slot moving between phases repaints - see
     /// `panel_needs_repaint`.

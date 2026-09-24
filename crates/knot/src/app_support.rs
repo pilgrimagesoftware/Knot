@@ -548,3 +548,41 @@ pub(crate) fn set_process_name(name: &str) {
 
 #[cfg(not(target_os = "macos"))]
 pub(crate) fn set_process_name(_name: &str) {}
+
+/// Every agent's subagents, reachable from any window.
+///
+/// A global for the same reason [`AwaitingInput`] is one: every workspace
+/// window needs it, `WorkspaceWindow::open` is already at the crate's
+/// argument ceiling, and the two writers - each panel session's drain task
+/// and the MCP hook route - run off the main thread with no window to be
+/// handed one.
+///
+/// One registry for the process, not one per window. A subagent belongs to
+/// an agent, and an agent belongs to exactly one workspace window, so the
+/// keying already separates them; a registry per window would have to be
+/// found by the hook route from an `agent_id` alone, which is the lookup the
+/// shared map makes unnecessary.
+#[derive(Clone)]
+pub(crate) struct Subagents(pub(crate) SubagentRegistryHandle);
+
+impl gpui_kit::Global for Subagents {}
+
+impl Subagents {
+    /// The process's registry, installing an empty one if nothing has.
+    ///
+    /// The install branch is the test path. `app_bootstrap` sets the global
+    /// explicitly, before any window opens and from the same `Arc` the MCP
+    /// tool catalog was built with, so in a running app this only ever
+    /// reads. A test that opens a window without going through `run` gets an
+    /// empty registry of its own rather than a panic - the same bargain
+    /// `WindowRegistry::install` makes, and the reason both are idempotent.
+    pub(crate) fn handle(cx: &mut App) -> SubagentRegistryHandle {
+        if !cx.has_global::<Self>() {
+            cx.set_global(Self(SubagentRegistryHandle::default()));
+        }
+
+        cx.global::<Self>().0.clone()
+    }
+}
+
+pub(crate) type SubagentRegistryHandle = Arc<Mutex<knot_subagents::registry::SubagentRegistry>>;

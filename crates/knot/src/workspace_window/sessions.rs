@@ -297,5 +297,10 @@ impl WorkspaceWindow {
         self.panel_input_expanded.remove(&id);
         self.panel_lookups.remove(&id);
         self.forget_process_section(id);
+        // The records describe a turn inside a session that has just gone.
+        // Unlike the maps above, this one is shared with the MCP hook route
+        // and outlives the window, so leaving an entry here leaks past the
+        // window's own life rather than merely for it.
+        self.subagents.lock().clear(id);
     }
 }
