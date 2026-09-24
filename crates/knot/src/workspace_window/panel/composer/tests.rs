@@ -34,6 +34,7 @@ use crate::window_registry::WindowRegistry;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::panel::composer::new_panel_input;
 use crate::workspace_window::panel::composer::panel_input_max_rows;
+use crate::workspace_window::panel::composer::sends_now;
 
 /// A store holding one agentless workspace, and that workspace's id. No
 /// agents, so no session or adapter subprocess starts.
@@ -64,6 +65,63 @@ fn window(shift_to_send: bool, dir: &TempDir, cx: &mut gpui_kit::App)
 
     WorkspaceWindow::open(Arc::clone(&store), Arc::clone(&messages), id, cx);
     WindowRegistry::workspace_view(WindowKey::Workspace(id), cx).expect("the window should open")
+}
+
+/// The hint under the prompt box and the predicate the keys go through have
+/// to name the same chord as each other, on one setting.
+///
+/// Written by Knot 4, who raised it reviewing #431; moved here from
+/// `crate::tests::panel_composer` because `panel_prompt_send_hint` is
+/// `pub(in crate::workspace_window)` and this side of the wall can read it
+/// without the helper being widened to suit a test.
+///
+/// They are two separate reads of `agent_panel_shift_enter_sends`:
+/// `render_panel_input_area` hands the surface's value to
+/// [`WorkspaceWindow::panel_prompt_send_hint`], and [`sends_now`] consults
+/// the surface itself when the key arrives. #429 was exactly the state where
+/// one of those had moved and the other had not - the hint said Shift+Enter
+/// and Enter went on sending - so a test that changes the setting and checks
+/// only one side cannot see the defect it is named for. This changes it and
+/// checks both.
+///
+/// The English is never asserted, only that it moves. The copy belongs to
+/// `panel_prompt_send_hint`, and pinning it here would fail on every
+/// rewording without saying anything about the chord.
+#[gpui_kit::test]
+fn the_hint_and_the_send_chord_read_the_same_setting(cx: &mut TestAppContext) {
+    let dir = TempDir::new().expect("a temporary settings root");
+
+    cx.update(|cx| {
+          gpui_kit::init(cx);
+          let mut settings = knot_core::Settings::with_store_root(dir.path());
+          settings.agent_panel_shift_enter_sends = false;
+          settings_global::install(settings, cx);
+
+          let mut hints = Vec::new();
+          for shift_to_send in [false, true] {
+              settings_global::write(cx, |settings| {
+                  settings.agent_panel_shift_enter_sends = shift_to_send
+              });
+
+              // Read the way `render_panel_input_area` reads it. The hint
+              // takes the value rather than fetching it, so the liveness
+              // under test is the caller's, not the helper's.
+              let live = settings_global::read(cx).agent_panel_shift_enter_sends;
+              hints.push(WorkspaceWindow::panel_prompt_send_hint(live));
+
+              assert!(sends_now(shift_to_send, cx),
+                      "the chord the hint calls 'to send' has to send \
+                       (agent_panel_shift_enter_sends={shift_to_send})");
+              assert!(!sends_now(!shift_to_send, cx),
+                      "and the chord it calls 'for a newline' has to not send \
+                       (agent_panel_shift_enter_sends={shift_to_send})");
+          }
+
+          assert_ne!(hints[0], hints[1],
+                     "the hint has to move with the setting; one that does not goes on naming a \
+                      chord the predicate has stopped agreeing with, which is #429 over again \
+                      with the two halves swapped");
+      });
 }
 
 /// The guard, which is the whole reason the field exists. Its failure mode
