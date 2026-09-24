@@ -97,7 +97,8 @@ instance.
 The rule above gets work off the render path. This one is about the answer
 coming back, which is a separate problem and the one that keeps recurring:
 five defects in one day, all of the shape "the code ran, the state was
-correct, and the result never reached the screen".
+correct, and the result never reached the screen" - and more since, including
+one the flag mechanism could not have reported at all.
 
 Work that finishes off the main thread reports itself through a flag -
 `RefreshCache`'s dirty bit, `PanelSessionHandle::take_dirty`, an
@@ -122,6 +123,18 @@ at least once:
   `record()` and the key reads as fresh for the whole `MAX_AGE` with nothing
   behind it - not a missed repaint but a stall, which looks like a slow
   subprocess rather than a bug.
+- **The event that happens while the value is constant.** Every link above is
+  a chain that was broken. This one is a chain that cannot carry the message:
+  `RefreshCache::record` flags the cache changed *only when the value
+  differs*, so a cache that flags on difference cannot signal an event that
+  happens while the value stops changing. Expiring a merged pull request is
+  exactly that event - a merged pull request's fetched answer is constant by
+  the time it matters, so the re-fetches schedule nothing and a row sat past
+  its retention window on a quiet workspace. A terminal state is the same
+  shape and worse, because it stops changing *by construction*: it flags once
+  on arrival and never again. Do not reach for a louder flag - the fix is a
+  predicate of your own in the `if` chain, computing the condition rather than
+  waiting to be told about it.
 
 What to check, in the order the mistakes were actually made:
 
@@ -139,10 +152,54 @@ What to check, in the order the mistakes were actually made:
 4. Between `claim_refresh` and the writer moving into the work there must be
    no early return and no `?`. Hand it to `spawn_blocking` on the next line,
    which is safe by construction rather than by inspection.
+5. Ask what the flag *means* before relying on it. "The value changed" and
+   "the condition now holds" are different propositions, and they come apart
+   whenever the condition is reached by time passing rather than by an answer
+   arriving. If what has to happen is triggered by a clock, a threshold or a
+   value ceasing to move, no landing flag will ever fire for it - it needs its
+   own entry, and that entry must be pure so the `||` may short-circuit past
+   it without stranding anything.
 
 None of these fail a test or a lint. The symptom is an absence, and an
 absence has no output channel - which is why they are worth checking by hand
 when the chain is touched.
+
+## Tests must not depend on the machine winning a race
+
+Two flaky tests reached `develop` in one day, in two crates, and both were
+written against a rule that already forbade them - because the rule named a
+shape and the defect arrived wearing another.
+
+`knot-processes`' shell tests banned fixed sleeps. The flake set
+`request.timeout` to 100ms and then asserted on output, so 100ms had to cover
+forking `/bin/sh`, `sh` parsing the script and `echo` reaching the capture
+thread. That is a sleep the runner performs on the test's behalf, and it
+satisfied the letter of a ban aimed at `thread::sleep`. `knot`'s
+`panel_session` test polled a slot 200 times at 10ms for `Ready` - a
+two-second budget covering a fork, an adapter start and two JSON-RPC round
+trips.
+
+**A rule that names the shape it forbids rather than the property it wants
+will keep being satisfied by things that still break.** The property here:
+no assertion may depend on the machine winning a race, whatever the mechanism
+is called - a timeout, a poll budget, a retry count times an interval. If a
+slower machine can fail the assertion, it is the wrong assertion. Wait on the
+thing itself - a terminal status, a completed write - with no deadline running
+alongside.
+
+Two corollaries that cost time to learn:
+
+- **Forking is the contended resource, not arithmetic.** Both flakes survived
+  a CPU-saturation loop and fired during a `cargo build`, which is a fork
+  storm by another name. A saturation loop is the obvious reproduction and it
+  is the wrong one.
+- **Name the fault, not the intent.** Both failed with a message restating
+  what the test wanted - "output captured before the deadline survives" - which
+  tells a reader nothing about why it did not. An assertion message earns its
+  place by describing the failure.
+
+Per `no-flaky-tests`: make it deterministic or `#[ignore]` it with a written
+reason. Never re-run for green.
 
 ## Locks: `parking_lot`, and a guard that does not outlive its statement
 

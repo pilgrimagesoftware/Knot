@@ -187,8 +187,11 @@ process: `docs/adr/README.md`. `/adr "<title>"` scaffolds a new record from
 - Off-thread results have to reach a frame. A new cache, dirty flag or
   `spawn_blocking` result belongs in `repaint_poll_tick`'s `if` chain, and a
   clearing read (`take_changed`, `take_dirty`) must not be reachable on a path
-  that discards it. Four separate breaks of that chain are named in
-  `.claude/rules/rust-structure.md`; none of them failed a test.
+  that discards it. Five separate breaks of that chain are named in
+  `.claude/rules/rust-structure.md`; none of them failed a test. The fifth is
+  a different shape: a flag that reports "the value changed" cannot report a
+  condition reached by time passing, so expiry and terminal states need a
+  predicate of their own in the chain.
 - No statement-hugging brace style; format with nightly `rustfmt`.
 
 `.claude/rules/rust-structure.md` has the reasoning behind each of these, with
