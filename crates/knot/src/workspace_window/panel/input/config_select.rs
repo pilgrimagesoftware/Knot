@@ -138,10 +138,10 @@ impl WorkspaceWindow {
     /// longer offers. The item list is compared before it is replaced,
     /// which is what keeps an unchanged option from clearing the query the
     /// user is part-way through typing.
-    pub(in crate::workspace_window) fn ensure_panel_config_selectors(&mut self, id: Uuid,
-                                                                     options: &[knot_acp::ConfigOption],
-                                                                     window: &mut Window,
-                                                                     cx: &mut Context<Self>) {
+    pub(in crate::workspace_window) fn ensure_panel_selectors(&mut self, id: Uuid,
+                                                              options: &[knot_acp::ConfigOption],
+                                                              window: &mut Window,
+                                                              cx: &mut Context<Self>) {
         for (element_id, categories) in super::SEARCHABLE_SELECTORS {
             let Some(option) = Self::find_config_option(options, categories)
             else {
@@ -153,15 +153,15 @@ impl WorkspaceWindow {
                                 .as_str()
                                 .unwrap_or_default()
                                 .to_string();
-            if let Some(state) = self.panel_config_selectors.get(&key).cloned() {
-                if self.panel_config_selector_items.get(&key) == Some(&items) {
+            if let Some(state) = self.panel_selectors.get(&key).cloned() {
+                if self.panel_selector_items.get(&key) == Some(&items) {
                     continue;
                 }
                 state.update(cx, |state, cx| {
                          state.set_items(ConfigSelectorDelegate::new(items.clone()), window, cx);
                          state.set_selected_value(&current, window, cx);
                      });
-                self.panel_config_selector_items.insert(key, items);
+                self.panel_selector_items.insert(key, items);
                 continue;
             }
             let state = new_config_select_state(option, window, cx);
@@ -174,10 +174,9 @@ impl WorkspaceWindow {
                       };
                       view.apply_panel_config_selection(id, config_id.clone(), value.clone(), cx);
                   });
-            self.panel_config_selectors.insert(key, state);
-            self.panel_config_selector_subscriptions
-                .insert(key, subscription);
-            self.panel_config_selector_items.insert(key, items);
+            self.panel_selectors.insert(key, state);
+            self.panel_selector_subscriptions.insert(key, subscription);
+            self.panel_selector_items.insert(key, items);
         }
     }
 
@@ -201,13 +200,13 @@ impl WorkspaceWindow {
         }
     }
 
-    /// The dropdown itself, or `None` before `ensure_panel_config_selectors`
+    /// The dropdown itself, or `None` before `ensure_panel_selectors`
     /// has built its state - one frame at most, and an axis the agent never
     /// declared never gets one at all.
     pub(in crate::workspace_window) fn render_panel_config_select(
         &self, id: Uuid, element_id: &'static str)
         -> Option<impl IntoElement + use<>> {
-        let state = self.panel_config_selectors.get(&(id, element_id))?;
+        let state = self.panel_selectors.get(&(id, element_id))?;
         Some(Select::new(state).id(gpui_kit::ElementId::from(format!("{element_id}-{id}")))
                                .small()
                                .appearance(false)
@@ -224,12 +223,11 @@ impl WorkspaceWindow {
     /// by agent id and written from a frame, so an agent that is gone would
     /// otherwise keep its dropdowns - and their subscriptions - for the
     /// window's whole life.
-    pub(in crate::workspace_window) fn forget_panel_config_selectors(&mut self, id: Uuid) {
-        self.panel_config_selectors
+    pub(in crate::workspace_window) fn forget_panel_selectors(&mut self, id: Uuid) {
+        self.panel_selectors.retain(|(agent, _), _| *agent != id);
+        self.panel_selector_subscriptions
             .retain(|(agent, _), _| *agent != id);
-        self.panel_config_selector_subscriptions
-            .retain(|(agent, _), _| *agent != id);
-        self.panel_config_selector_items
+        self.panel_selector_items
             .retain(|(agent, _), _| *agent != id);
     }
 }

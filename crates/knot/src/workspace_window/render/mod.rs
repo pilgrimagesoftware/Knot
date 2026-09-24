@@ -163,7 +163,7 @@ impl WorkspaceWindow {
                                      .get(&id)
                                      .map(|state| state.lock().config_options.clone())
                                      .unwrap_or_default();
-            self.ensure_panel_config_selectors(id, &config_options, window, cx);
+            self.ensure_panel_selectors(id, &config_options, window, cx);
         }
 
         self.focus_showing_pane(is_dashboard, window, cx);

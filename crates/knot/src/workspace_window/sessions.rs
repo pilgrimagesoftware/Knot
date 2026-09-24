@@ -289,8 +289,8 @@ impl WorkspaceWindow {
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
         // Both dropdowns and both of their subscriptions, keyed by agent -
-        // see `forget_panel_config_selectors`.
-        self.forget_panel_config_selectors(id);
+        // see `forget_panel_selectors`.
+        self.forget_panel_selectors(id);
         // Whichever target it named: the agent is gone, so a later frame
         // must read the next selection as a transition rather than as the
         // same answer it already stored.
