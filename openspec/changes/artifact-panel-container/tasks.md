@@ -9,8 +9,8 @@
 - [ ] 1.2 Add the section-height constants to `crates/knot/src/consts.rs`:
       collapsed header height, divider height, default/min/max panel width
       (500/350/800), split clamp (0.15..=0.85), default split 0.5, and the
-      content pane's minimum width, derived from the composer's own minimum with
-      a comment naming the focus requirements that depend on it; verify
+      content pane's minimum width for the unexpanded case, with a comment
+      saying it does not apply while the panel is expanded; verify
       `make build` passes.
 - [ ] 1.3 Implement `layout::section_heights(total, split_ratio,
       markdown_collapsed, mermaid_collapsed) -> (f32, f32)` in `layout.rs`,
@@ -32,16 +32,24 @@
       verify with tests asserting an unset agent reads the defaults and an
       out-of-range write is clamped at both ends.
 - [ ] 2.3 Add `artifact_panel_open(id)` reading `markdown_file` and
-      `mermaid_source` from the store, and seed the expanded flag from
-      `Agent::markdown_maximized` on the frame the panel first opens for an
-      agent; verify with a test that an agent whose file was set with
-      `maximized` reads expanded and one without reads unexpanded.
+      `mermaid_source` from the store, and re-seed the expanded flag from
+      `Agent::markdown_maximized` every time that agent's markdown file changes
+      to a new value - not once on first open, which would strand a later
+      `maximized` call; verify with a test that a file shown without
+      `maximized` followed by one shown with it leaves the panel expanded,
+      covering the `mcp-tools` scenario "A maximized file reaches an
+      already-open panel".
 - [ ] 2.4 Drop every per-agent entry when an agent closes, alongside
       `git_panel_width` in `workspace_window/git_panel/reads.rs`; verify with a
       test that closing a resized agent leaves no entry behind, covering the
       spec's "Closing an agent discards its arrangement".
-- [ ] 2.5 Clear the expanded flag when the last section closes; verify with a
-      test covering "Expanded state does not carry to the next artifact".
+- [ ] 2.5 Clear the expanded flag when the last section closes, and leave it
+      alone when one section closes while the other stays open; verify with
+      tests covering "Expanded state does not carry to the next artifact" and
+      "Closing one section does not collapse the panel".
+- [ ] 2.6 Make the expand control write the window flag only, never
+      `Agent::markdown_maximized`; verify with a test that toggling it leaves
+      the agent's stored panel state untouched.
 
 ## 3. Collapsible section headers
 
@@ -53,11 +61,18 @@
       that section's flag, and render the header alone when collapsed; verify
       with a render test asserting a collapsed section's body element is absent
       and its header present.
+- [ ] 3.2a Keep each section's own close control in its header alongside the
+      chevron, closing only that section's artifact; verify with a test
+      covering "Closing one section leaves the other".
 - [ ] 3.3 Add the localization keys for the panel title, the expand and collapse
       tooltips, the close-all tooltip and the chevron's label to
-      `crates/knot-core/src/l10n/en.yml`, touching `knot-core` afterwards per
-      the stale-artifact hazard; verify with tests asserting each key resolves,
-      never the English copy.
+      `crates/knot-core/src/l10n/en.yml`, and replace the literal
+      `.tooltip("Close")` on the diagram section's close button
+      (`workspace_window/panel/pane.rs:100`) with the `panel.close` key the
+      markdown section already uses; touch `knot-core` afterwards per the
+      stale-artifact hazard. Verify with tests asserting each key resolves,
+      never the English copy, and grep the module for remaining string
+      literals in tooltips.
 
 ## 4. The panel container
 
@@ -92,23 +107,27 @@
       verify by resizing in the running app, expanding, and returning to the
       same width.
 - [ ] 5.4 Give the content panel the minimum width from 1.2 as its `size_range`
-      floor so an expanded panel squeezes it rather than taking the area;
-      verify with a test that the content pane is still laid out at its minimum
-      with the panel expanded, covering "An expanded panel leaves the
-      conversation on screen".
+      floor for the unexpanded case, and collapse it to no width, hidden and
+      not hit-testable while the panel is expanded, leaving the sidebar and any
+      open git panel alone; verify with tests covering "An expanded panel hides
+      the content pane" and that an unexpanded panel cannot drag the content
+      pane below its minimum.
 - [ ] 5.5 Verify both panels open together in the running app: the content pane,
       then the git panel, then the artifact panel, each draggable, covering the
       spec's "Both panels open".
 
 ## 6. Focus guards
 
-- [ ] 6.1 Delete the guard that withholds composer focus when a markdown or
-      diagram pane holds the content area; verify with a test that selecting a
-      Panel-mode agent with a markdown file open focuses its prompt input,
-      covering the modified `acp-panel-ui` scenario.
-- [ ] 6.2 Delete the same guard on the terminal focus path; verify with a test
-      that selecting a Terminal-mode agent with a diagram open focuses its
-      terminal surface, covering the modified `terminal-input` scenario.
+- [ ] 6.1 Narrow the guard that withholds composer focus so it tests the
+      panel's expanded flag rather than whether an artifact is open; verify
+      with two tests - a Panel-mode agent with a markdown file open in an
+      unexpanded panel focuses its prompt input, and the same agent with the
+      panel expanded leaves focus where it was - covering both modified
+      `acp-panel-ui` scenarios.
+- [ ] 6.2 Narrow the same guard on the terminal focus path; verify with two
+      tests covering the modified `terminal-input` scenarios "A shell agent
+      with a diagram open is still focused" and "An expanded panel withholds
+      focus".
 
 ## 7. Integration and gate
 
@@ -121,9 +140,7 @@
       expand and close.
 - [ ] 7.3 Run `make` and confirm the full gate passes, including
       `make size-check` on `pane.rs` and every new file.
-- [ ] 7.4 After archiving, rename `acp-panel-ui`'s scenario "A markdown pane
-      holds the content area" to "A markdown file is open" directly in
-      `openspec/specs/acp-panel-ui/spec.md`; the delta cannot carry the rename
-      because `openspec validate` rejects a MODIFIED requirement that drops or
-      renames a scenario. Verify the promoted spec has no scenario heading that
-      its own outcome contradicts.
+- [ ] 7.4 Verify the dashboard case in the running app: with an agent's
+      markdown file open, switch the window to its dashboard and confirm the
+      artifact panel stays shown beside it, covering "The dashboard does not
+      close the panel".

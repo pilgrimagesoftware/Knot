@@ -29,11 +29,13 @@ deactivated agent whose pane shows the stopped placeholder. Focus SHALL NOT be
 taken from a modal dialog while one is open. Taking focus SHALL NOT raise,
 activate or reorder any window.
 
-An open artifact panel SHALL NOT withhold focus. Under `artifact-panel` the
-panel is a sibling of the content pane rather than a replacement for it, and the
-content pane keeps a minimum width the panel cannot take even when expanded, so
-the terminal surface is on screen alongside a shown markdown file or diagram and
-SHALL be focused as it is for any other selected Terminal-mode agent.
+An open artifact panel SHALL withhold focus only while it is expanded. Under
+`artifact-panel` an expanded panel takes the whole content area and the terminal
+surface is not on screen, which is the case this exception is for. An unexpanded
+panel is a sibling of the content pane, so the terminal surface is on screen
+beside a shown markdown file or diagram and SHALL be focused as it is for any
+other selected Terminal-mode agent. Merely having an artifact open is not the
+condition.
 
 A Terminal-mode agent can hold an artifact by three paths, so this is not a
 vacuous case: any agent may be switched to Terminal view under `acp-panel-ui`'s
@@ -69,9 +71,15 @@ whenever that agent has markdown history.
 
 #### Scenario: A shell agent with a diagram open is still focused
 
-- **WHEN** the user selects a Terminal-mode agent that has a diagram open, so
-  the artifact panel is shown beside its terminal surface
+- **WHEN** the user selects a Terminal-mode agent that has a diagram open in an
+  unexpanded panel, beside its terminal surface
 - **THEN** that agent's terminal surface has keyboard focus
+
+#### Scenario: An expanded panel withholds focus
+
+- **WHEN** the user selects a Terminal-mode agent whose artifact panel is
+  expanded, so the terminal surface is not on screen
+- **THEN** focus is left where it was
 
 #### Scenario: A deactivated agent does not move focus
 

@@ -26,11 +26,12 @@ cases focus SHALL be left where it is. A Terminal-mode agent focuses its
 terminal surface instead, under `terminal-input`'s "Selecting a Terminal-mode
 agent focuses its terminal surface"; no composer is focused for it.
 
-An open artifact panel SHALL NOT withhold focus. Under `artifact-panel` the
-panel is a sibling of the content pane rather than a replacement for it, and the
-content pane keeps a minimum width the panel cannot take even when expanded, so
-the composer is on screen alongside a shown markdown file or diagram and SHALL
-be focused as it is for any other selected Panel-mode agent.
+An open artifact panel SHALL withhold focus only while it is expanded. Under
+`artifact-panel` an expanded panel takes the whole content area and the composer
+is not on screen, which is the case this exception is for. An unexpanded panel
+is a sibling of the content pane, so the composer is on screen beside a shown
+markdown file or diagram and SHALL be focused as it is for any other selected
+Panel-mode agent. Merely having an artifact open is not the condition.
 
 Focus SHALL NOT be taken from a modal dialog while one is open.
 
@@ -87,10 +88,15 @@ placement included where the composer already preserves it.
 
 #### Scenario: A markdown pane holds the content area
 
-- **WHEN** the user selects a Panel-mode agent that has a markdown file open
-- **THEN** the file is shown in the artifact panel beside the conversation
-  rather than holding the content area, and that agent's prompt input has
-  keyboard focus
+- **WHEN** the user selects a Panel-mode agent whose artifact panel is expanded,
+  so the panel holds the content area and the composer is not on screen
+- **THEN** focus is left where it was
+
+#### Scenario: An unexpanded artifact panel does not withhold focus
+
+- **WHEN** the user selects a Panel-mode agent that has a markdown file open in
+  an unexpanded panel, beside its conversation
+- **THEN** that agent's prompt input has keyboard focus
 
 #### Scenario: A deactivated agent is selected
 

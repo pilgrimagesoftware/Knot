@@ -20,16 +20,18 @@ screen. A side panel removes the condition those exceptions were written for.
 - A new artifact panel: a trailing side panel, sibling to the content pane,
   holding the markdown section and the mermaid section. It is shown whenever the
   selected agent has a markdown file or a diagram open, and closes when both are.
-- The two panes stop taking over the content area. The conversation or terminal
-  narrows beside the panel instead of being replaced. **BREAKING** for the two
-  focus requirements that name the takeover as a reason not to focus an input.
+- The two panes stop taking over the content area whenever an artifact is open.
+  The conversation or terminal narrows beside the panel instead, and is replaced
+  only while the user or an agent has expanded the panel. **BREAKING** for the
+  two focus requirements that treat any open markdown or diagram pane as a
+  reason not to focus an input: the exception narrows to the expanded case
+  rather than disappearing.
 - A draggable vertical handle sets panel width, clamped to the same 350–800pt
   range the git panel uses, per agent.
 - A toolbar over both sections carrying the panel's title, an expand toggle that
-  grows the panel against the content pane and back, and a close-all control.
-  Expand squeezes the content pane to a minimum width rather than taking the
-  area, so the conversation stays on screen at every width the panel can reach —
-  which is what lets the two focus requirements below hold.
+  gives the panel the whole content area and back, and a close-all control. Each
+  section also keeps its own close control, and the diagram section's — literal
+  English today — gets localized with the rest.
 - When both sections have content, a draggable horizontal divider between them
   sets the split, clamped to 0.15–0.85, and each section's header gains a
   collapse chevron. A collapsed section shows its header only and yields its
@@ -37,8 +39,10 @@ screen. A side panel removes the condition those exceptions were written for.
 - With only one section active it fills the panel, with no divider and no
   chevron — the single-section case has nothing to split or trade space with.
 - `Agent::markdown_maximized`, written by `display-markdown`'s `maximized`
-  argument and read by nothing since it was ported, becomes the initial value of
-  the panel's expanded state. An agent asking for a maximized file gets one.
+  argument and read by nothing since it was ported, drives the panel's expanded
+  state — re-read each time the agent's markdown file changes, as the Swift
+  reference does it (`ContentView.swift:113-117`). An agent asking for a
+  maximized file gets one, on the first call and on every later one.
 
 ### Deliberately not carried over
 

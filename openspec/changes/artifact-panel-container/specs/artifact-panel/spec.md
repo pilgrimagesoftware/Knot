@@ -63,6 +63,14 @@ When the git panel is also open, both SHALL be shown, with the artifact panel
 outermost — the content pane, then the git panel, then the artifact panel —
 matching the Swift reference's order.
 
+When the window shows its dashboard or its pull requests instead of an agent,
+the panel SHALL stay shown beside them. The dashboard covers the content pane,
+not the whole window, and the selected agent's artifacts are still that agent's;
+closing the panel because the user glanced at the overview would throw away what
+an agent put in front of them. This matches the Swift reference, which keeps the
+artifact panel over a visible dashboard and force-closes only the git panel, and
+only when the window's set of active agents changes.
+
 This diverges from the Rust port before this change, where either pane took the
 whole content area, hiding the conversation and its composer.
 
@@ -81,6 +89,12 @@ whole content area, hiding the conversation and its composer.
 - **WHEN** an agent has the git panel open and then shows a diagram
 - **THEN** the content pane, the git panel and the artifact panel are all shown,
   in that order from the leading edge
+
+#### Scenario: The dashboard does not close the panel
+
+- **WHEN** the selected agent has a markdown file open and the user switches the
+  window to its dashboard
+- **THEN** the artifact panel is still shown beside the dashboard
 
 ### Requirement: The panel's width is set by dragging its edge
 
@@ -130,40 +144,58 @@ Every control in the toolbar SHALL carry a localized tooltip naming what it
 does, and the title and tooltips SHALL be resolved through localization rather
 than carried as literal English.
 
+Each section SHALL carry its own close control in its header, closing that
+section's artifact and leaving the other's alone. This is what close-all does to
+both at once. Every section control SHALL be localized on the same terms as the
+toolbar's: the diagram section's close control is literal English today and SHALL
+NOT stay so.
+
 #### Scenario: Close all closes the panel
 
 - **WHEN** the user activates close-all on a panel with both sections open
 - **THEN** both the markdown file and the diagram are closed and no panel is
   shown
 
-#### Scenario: The toolbar is localized
+#### Scenario: Closing one section leaves the other
 
-- **WHEN** the panel is drawn
-- **THEN** its title and each control's tooltip come from localization keys
+- **WHEN** the user activates the markdown section's own close control on a
+  panel showing both
+- **THEN** the markdown file is closed and the diagram is still shown
 
-### Requirement: The expand control grows the panel against the content pane
+#### Scenario: The panel is localized
 
-The panel SHALL carry an expand control that grows it to take as much of the
-content area as the content pane will yield, and that returns it to its set
-width when activated again. The control SHALL show which of the two states the
-panel is in.
+- **WHEN** the panel is drawn with both sections open
+- **THEN** its title and every control's tooltip, in the toolbar and in both
+  section headers, come from localization keys
 
-An expanded panel SHALL squeeze the content pane, never replace it. The content
-pane SHALL keep a minimum width the panel cannot take, so the conversation or
-terminal surface is on screen at every width the panel can reach. This matches
-the Swift reference, whose expanded panel claims an unbounded width within its
-slot in the row and so narrows its sibling rather than standing in for it.
+### Requirement: The expand control gives the panel the whole content area
 
-The minimum is what `acp-panel-ui` and `terminal-input` rely on when they focus
-an agent's composer or terminal surface with the panel open. An expand that
-could take the whole content area would contradict them, and `maximized` opens
-the panel expanded with no user action — so an agent could otherwise push the
-composer off screen and leave focus on something the user cannot see.
+The panel SHALL carry an expand control that grows it to take the whole content
+area, and that returns it to its set width when activated again. The control
+SHALL show which of the two states the panel is in.
 
-Expanded state SHALL be tracked per agent. The panel SHALL open expanded when
-the artifact was shown with `display-markdown`'s `maximized` argument set, and
-SHALL return to the unexpanded state when the panel closes, so a later artifact
-shown without `maximized` opens at the set width.
+While expanded, the content pane SHALL be collapsed to no width, hidden, and
+SHALL NOT accept clicks or keystrokes; the conversation or terminal surface it
+holds is not on screen. The sidebar and an open git panel SHALL be unaffected —
+the panel takes the content pane's space and nothing else.
+
+Because the content pane is not on screen while expanded, `acp-panel-ui` and
+`terminal-input` SHALL withhold focus for exactly that case, and for no other
+state of this panel. An unexpanded panel leaves the composer or terminal surface
+on screen beside it and SHALL NOT withhold focus.
+
+Expanded state SHALL be tracked per agent. It SHALL be set from
+`display-markdown`'s `maximized` argument each time that agent's markdown file
+changes, not once when the panel first opens: an agent that shows one file
+without `maximized` and then another with it SHALL end up expanded. It SHALL
+return to unexpanded when the panel closes — when the agent has neither an
+artifact left — and SHALL NOT be changed by closing one section while the other
+is still open.
+
+The `maximized` argument SHALL be the only writer of that state other than the
+control itself. Activating the control SHALL change what is on screen and SHALL
+NOT write back into the agent's stored panel state, so a control the user
+toggled cannot be mistaken for an instruction the agent gave.
 
 While expanded the panel's drag handle SHALL have nothing to set and SHALL NOT
 be shown; the width it had SHALL be kept and restored on returning.
@@ -174,14 +206,26 @@ whole window, so expanding one agent's panel expands the next agent's too.
 #### Scenario: Expanding and returning
 
 - **WHEN** the user activates the expand control and then activates it again
-- **THEN** the panel grows until the content pane is at its minimum width, and
-  then returns to the width it had
+- **THEN** the panel takes the whole content area, and then returns to the width
+  it had
 
-#### Scenario: An expanded panel leaves the conversation on screen
+#### Scenario: An expanded panel hides the content pane
 
 - **WHEN** an agent's panel is expanded, by the control or by `maximized`
-- **THEN** the content pane is still shown at its minimum width, with the
-  agent's composer or terminal surface on screen
+- **THEN** the content pane is collapsed to no width and takes no clicks, and
+  the sidebar and any open git panel are still shown
+
+#### Scenario: A later file asks to be maximized
+
+- **WHEN** an agent shows one markdown file without `maximized` and then a
+  second file with it
+- **THEN** the panel is expanded, rather than staying as the first file left it
+
+#### Scenario: Closing one section does not collapse the panel
+
+- **WHEN** an agent's panel is expanded with both sections open and the user
+  closes the markdown section
+- **THEN** the panel is still expanded, showing the diagram
 
 #### Scenario: An agent asks for a maximized file
 
@@ -209,9 +253,11 @@ split so that neither section takes less than 15% or more than 85% of the
 available height. A split the user has not dragged SHALL divide the height
 evenly.
 
-The two sections and the divider together SHALL fill the panel's height exactly,
-at every split: no gap below the lower section and no section clipped by the
-panel's edge.
+The two sections and the divider together SHALL fill the panel's section area
+exactly, at every split: no gap below the lower section and no section clipped
+by the panel's edge. The section area is what the panel has left below its
+toolbar — the toolbar sits above both sections and is not divided by the split,
+so it SHALL NOT be counted in the height the two sections share.
 
 The split SHALL be tracked per agent and SHALL NOT be persisted, on the same
 terms as the panel's width.
