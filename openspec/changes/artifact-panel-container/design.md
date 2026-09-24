@@ -125,6 +125,24 @@ whether the section is collapsed. Moving them would make the diff a move plus a
 change and hide both. `pane.rs` at 506 lines has room for the header arm; the
 container's ~300 lines would not fit and are why it is a new module.
 
+### The content pane's minimum width is load-bearing, not cosmetic
+
+Expand does not take the content area; it drives the panel to the widest size
+the group allows and the content pane stops at its minimum. That minimum is what
+makes the two focus deltas true, because `display-markdown`'s `maximized` opens
+the panel expanded with no user action — an expand that could reach the full
+width would let an agent focus a composer it had just pushed off screen.
+
+So the minimum is a `size_range` on the content panel in the `h_resizable`
+group, enforced by the group rather than checked at focus time. Checking at
+focus time was the alternative and is worse: it puts the condition in the one
+place the spec says no longer has one, and it leaves the composer off screen
+while merely declining to focus it.
+
+Swift arrives at the same arrangement by a different route —
+`ArtifactPanelView.swift:55` gives the expanded panel `maxWidth: .infinity`
+inside the row, which squeezes its sibling rather than replacing it.
+
 ### The removed focus exceptions are a spec change with no code behind them
 
 Both focus requirements excuse the window from taking focus when a markdown or
@@ -148,9 +166,12 @@ is one.
   whose min and max are both the stored width, making it rigid while the git
   panel's handle moves, at the cost of one frame of lag on its own drag.
 - **The content pane can be squeezed to nothing** → Two panels at 350pt each
-  plus a sidebar exceeds a small window. Give the content panel its own minimum
-  in the group so the panels yield rather than the conversation vanishing; the
-  spec does not name a number for this, so pick one in `consts.rs` and say why.
+  plus a sidebar exceeds a small window, and expand drives the artifact panel
+  against that limit deliberately. The content panel's `size_range` minimum is
+  the guard, and the spec now turns on it: `artifact-panel`'s "An expanded panel
+  leaves the conversation on screen" and both focus deltas fail if it is absent
+  or too small to show a composer. Pick the number in `consts.rs` from the
+  composer's own minimum, not from taste.
 - **`pane.rs` grows past 700 lines** → It is at 506. The header arm is tens of
   lines, not hundreds, but if it lands over the limit the split is the two pane
   renderers into `pane/markdown.rs` and `pane/mermaid.rs`, not a raised limit.
@@ -161,6 +182,14 @@ is one.
 
 ## Open Questions
 
-- What minimum the content pane should hold when both side panels are open. It
-  is a constant with a comment, decidable during implementation, and no spec
-  scenario turns on the number.
+None. The content pane's minimum width was open and is now decided above: it is
+what keeps the two focus deltas true, so it is derived from the composer's
+minimum rather than chosen.
+
+One known tooling limitation, recorded so it is not mistaken for an oversight:
+`acp-panel-ui`'s scenario "A markdown pane holds the content area" keeps a
+heading that its own outcome now contradicts. `openspec validate` rejects a
+MODIFIED requirement that drops or renames any scenario the current spec has, so
+the heading cannot be corrected in the delta. Task 7.4 renames it in the main
+spec after archive, which is the same direct-edit path the schema already
+prescribes for a capability's Purpose.

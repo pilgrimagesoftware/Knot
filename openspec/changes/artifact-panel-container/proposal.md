@@ -26,7 +26,10 @@ screen. A side panel removes the condition those exceptions were written for.
 - A draggable vertical handle sets panel width, clamped to the same 350–800pt
   range the git panel uses, per agent.
 - A toolbar over both sections carrying the panel's title, an expand toggle that
-  grows the panel to the full content width and back, and a close-all control.
+  grows the panel against the content pane and back, and a close-all control.
+  Expand squeezes the content pane to a minimum width rather than taking the
+  area, so the conversation stays on screen at every width the panel can reach —
+  which is what lets the two focus requirements below hold.
 - When both sections have content, a draggable horizontal divider between them
   sets the split, clamped to 0.15–0.85, and each section's header gains a
   collapse chevron. A collapsed section shows its header only and yields its

@@ -30,11 +30,18 @@ taken from a modal dialog while one is open. Taking focus SHALL NOT raise,
 activate or reorder any window.
 
 An open artifact panel SHALL NOT withhold focus. Under `artifact-panel` the
-panel is a sibling of the content pane rather than a replacement for it, so the
-terminal surface is on screen alongside a shown markdown file or diagram and
-SHALL be focused as it is for any other selected Terminal-mode agent. This
-replaces the earlier exception for a markdown or diagram pane holding the
-content area, which described a takeover that no longer happens.
+panel is a sibling of the content pane rather than a replacement for it, and the
+content pane keeps a minimum width the panel cannot take even when expanded, so
+the terminal surface is on screen alongside a shown markdown file or diagram and
+SHALL be focused as it is for any other selected Terminal-mode agent.
+
+A Terminal-mode agent can hold an artifact by three paths, so this is not a
+vacuous case: any agent may be switched to Terminal view under `acp-panel-ui`'s
+"View-mode toggle", including one that runs an MCP client of its own; an agent
+may call `display-markdown` or `view-mermaid` naming a different agent, which
+neither tool restricts by view mode or agent type; and the user may show a file
+for any agent from `agent-list-ui`'s "Markdown Files" menu, which is offered
+whenever that agent has markdown history.
 
 #### Scenario: Selecting a shell agent and typing
 

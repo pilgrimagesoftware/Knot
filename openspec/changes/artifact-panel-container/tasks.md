@@ -9,8 +9,9 @@
 - [ ] 1.2 Add the section-height constants to `crates/knot/src/consts.rs`:
       collapsed header height, divider height, default/min/max panel width
       (500/350/800), split clamp (0.15..=0.85), default split 0.5, and the
-      content pane's minimum width with a comment saying why that number;
-      verify `make build` passes.
+      content pane's minimum width, derived from the composer's own minimum with
+      a comment naming the focus requirements that depend on it; verify
+      `make build` passes.
 - [ ] 1.3 Implement `layout::section_heights(total, split_ratio,
       markdown_collapsed, mermaid_collapsed) -> (f32, f32)` in `layout.rs`,
       porting the four cases from `ArtifactPanelView.sectionHeight`; verify with
@@ -90,7 +91,12 @@
       writer from 2.2, and hide the drag handle while the panel is expanded;
       verify by resizing in the running app, expanding, and returning to the
       same width.
-- [ ] 5.4 Verify both panels open together in the running app: the content pane,
+- [ ] 5.4 Give the content panel the minimum width from 1.2 as its `size_range`
+      floor so an expanded panel squeezes it rather than taking the area;
+      verify with a test that the content pane is still laid out at its minimum
+      with the panel expanded, covering "An expanded panel leaves the
+      conversation on screen".
+- [ ] 5.5 Verify both panels open together in the running app: the content pane,
       then the git panel, then the artifact panel, each draggable, covering the
       spec's "Both panels open".
 
@@ -115,3 +121,9 @@
       expand and close.
 - [ ] 7.3 Run `make` and confirm the full gate passes, including
       `make size-check` on `pane.rs` and every new file.
+- [ ] 7.4 After archiving, rename `acp-panel-ui`'s scenario "A markdown pane
+      holds the content area" to "A markdown file is open" directly in
+      `openspec/specs/acp-panel-ui/spec.md`; the delta cannot carry the rename
+      because `openspec validate` rejects a MODIFIED requirement that drops or
+      renames a scenario. Verify the promoted spec has no scenario heading that
+      its own outcome contradicts.

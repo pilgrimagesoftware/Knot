@@ -27,11 +27,10 @@ terminal surface instead, under `terminal-input`'s "Selecting a Terminal-mode
 agent focuses its terminal surface"; no composer is focused for it.
 
 An open artifact panel SHALL NOT withhold focus. Under `artifact-panel` the
-panel is a sibling of the content pane rather than a replacement for it, so the
-composer is on screen alongside a shown markdown file or diagram and SHALL be
-focused as it is for any other selected Panel-mode agent. This replaces the
-earlier exception for a markdown or diagram pane holding the content area, which
-described a takeover that no longer happens.
+panel is a sibling of the content pane rather than a replacement for it, and the
+content pane keeps a minimum width the panel cannot take even when expanded, so
+the composer is on screen alongside a shown markdown file or diagram and SHALL
+be focused as it is for any other selected Panel-mode agent.
 
 Focus SHALL NOT be taken from a modal dialog while one is open.
 

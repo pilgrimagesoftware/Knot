@@ -141,11 +141,24 @@ than carried as literal English.
 - **WHEN** the panel is drawn
 - **THEN** its title and each control's tooltip come from localization keys
 
-### Requirement: The expand control grows the panel to the full content area
+### Requirement: The expand control grows the panel against the content pane
 
-The panel SHALL carry an expand control that grows it to occupy the whole
-content area, and that returns it to its set width when activated again. The
-control SHALL show which of the two states the panel is in.
+The panel SHALL carry an expand control that grows it to take as much of the
+content area as the content pane will yield, and that returns it to its set
+width when activated again. The control SHALL show which of the two states the
+panel is in.
+
+An expanded panel SHALL squeeze the content pane, never replace it. The content
+pane SHALL keep a minimum width the panel cannot take, so the conversation or
+terminal surface is on screen at every width the panel can reach. This matches
+the Swift reference, whose expanded panel claims an unbounded width within its
+slot in the row and so narrows its sibling rather than standing in for it.
+
+The minimum is what `acp-panel-ui` and `terminal-input` rely on when they focus
+an agent's composer or terminal surface with the panel open. An expand that
+could take the whole content area would contradict them, and `maximized` opens
+the panel expanded with no user action — so an agent could otherwise push the
+composer off screen and leave focus on something the user cannot see.
 
 Expanded state SHALL be tracked per agent. The panel SHALL open expanded when
 the artifact was shown with `display-markdown`'s `maximized` argument set, and
@@ -161,7 +174,14 @@ whole window, so expanding one agent's panel expands the next agent's too.
 #### Scenario: Expanding and returning
 
 - **WHEN** the user activates the expand control and then activates it again
-- **THEN** the panel fills the content area and then returns to the width it had
+- **THEN** the panel grows until the content pane is at its minimum width, and
+  then returns to the width it had
+
+#### Scenario: An expanded panel leaves the conversation on screen
+
+- **WHEN** an agent's panel is expanded, by the control or by `maximized`
+- **THEN** the content pane is still shown at its minimum width, with the
+  agent's composer or terminal surface on screen
 
 #### Scenario: An agent asks for a maximized file
 
