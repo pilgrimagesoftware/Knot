@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use knot_acp::{PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent};
+use knot_acp::{
+    ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
+};
 use knot_agent_launch::AdapterConfig;
 use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
 use parking_lot::Mutex;
@@ -286,6 +288,17 @@ impl PanelSessionSlot {
         match self {
             Self::Ready(handle) => handle.process_id(),
             Self::Connecting(_) | Self::Failed(_) => None,
+        }
+    }
+
+    /// The Session Config Options the agent currently declares, which is
+    /// what the panel's control bar draws its selectors from. Empty until
+    /// the slot is `Ready`: nothing has been declared before the session
+    /// opens.
+    pub fn config_options(&self) -> Vec<ConfigOption> {
+        match self {
+            Self::Ready(handle) => handle.state().lock().config_options.clone(),
+            Self::Connecting(_) | Self::Failed(_) => Vec::new(),
         }
     }
 }

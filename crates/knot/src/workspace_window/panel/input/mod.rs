@@ -34,3 +34,6 @@ pub(crate) use config_select::new_config_select_state;
 /// rather than matching on a literal in three places.
 pub(in crate::workspace_window) const PERMISSION_SELECTOR_ID: &str =
     "panel-permission-mode-selector";
+
+#[cfg(test)]
+mod tests;

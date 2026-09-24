@@ -1,4 +1,11 @@
 
+## 1.17.1 - 2026-09-24
+
+### Fixed
+- Build the model and effort dropdowns from the panel session
+
+
+
 ## 1.17.0 - 2026-09-24
 
 ### Added
