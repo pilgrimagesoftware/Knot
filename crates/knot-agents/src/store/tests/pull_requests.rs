@@ -251,3 +251,60 @@ fn installing_records_drops_the_ones_whose_agent_is_gone() {
     assert_eq!(store.pull_requests().len(), 1);
     assert_eq!(store.pull_requests()[0].url, FIRST);
 }
+
+// --- Expiring ---------------------------------------------------------------
+
+/// The common frame. A refresh that found nothing past the window must not
+/// report a change, because the caller writes a file on the strength of it.
+#[test]
+fn forgetting_no_urls_removes_nothing_and_reports_no_change() {
+    let (mut store, agent) = store_with_agent();
+    store.record_pull_request(agent, FIRST);
+
+    assert!(!store.forget_pull_requests(&[]));
+
+    assert_eq!(store.pull_requests().len(), 1);
+}
+
+#[test]
+fn forgetting_a_url_removes_it_and_leaves_the_rest() {
+    let (mut store, agent) = store_with_agent();
+    store.record_pull_request(agent, FIRST);
+    store.record_pull_request(agent, SECOND);
+
+    assert!(store.forget_pull_requests(&[FIRST.to_string()]));
+
+    let records = store.pull_requests();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].url, SECOND);
+}
+
+/// Expiry is a fact about the pull request rather than about who linked it.
+/// Leaving one agent's copy behind would keep listing a pull request the rule
+/// just said to stop listing.
+#[test]
+fn forgetting_a_url_takes_every_agents_copy_of_it() {
+    let (mut store, first_agent) = store_with_agent();
+    let second_agent = store.create("/tmp/widget", CreateOptions::default());
+    store.record_pull_request(first_agent, FIRST);
+    store.record_pull_request(second_agent, FIRST);
+    store.record_pull_request(second_agent, SECOND);
+    assert_eq!(store.pull_requests().len(), 3);
+
+    assert!(store.forget_pull_requests(&[FIRST.to_string()]));
+
+    let records = store.pull_requests();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].url, SECOND);
+    assert_eq!(records[0].agent_id, second_agent);
+}
+
+#[test]
+fn forgetting_an_unrecorded_url_removes_nothing_and_reports_no_change() {
+    let (mut store, agent) = store_with_agent();
+    store.record_pull_request(agent, FIRST);
+
+    assert!(!store.forget_pull_requests(&[SECOND.to_string()]));
+
+    assert_eq!(store.pull_requests().len(), 1);
+}

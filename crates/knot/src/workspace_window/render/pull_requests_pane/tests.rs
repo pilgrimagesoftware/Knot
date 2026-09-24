@@ -12,7 +12,10 @@ fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestS
                        title: Some("Do the thing".to_string()),
                        status,
                        checks,
-                       mergeable: Mergeability::Mergeable }
+                       mergeable: Mergeability::Mergeable,
+                       // No row renders it; these tests are about what a row
+                       // renders.
+                       merged_at: None }
 }
 
 #[test]

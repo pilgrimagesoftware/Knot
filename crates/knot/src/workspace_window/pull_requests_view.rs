@@ -7,6 +7,8 @@
 //!
 //! Recording is `super::pull_requests`; this is the reading half.
 
+use std::time::SystemTime;
+
 use gpui_kit::App;
 use gpui_kit::component::WindowExt;
 use gpui_kit::{Context, Window};
@@ -74,10 +76,14 @@ impl WorkspaceWindow {
     /// claim hands its writer to `spawn_blocking` and a later frame draws the
     /// answer. That includes the availability probe, which is `gh auth
     /// status` and was the one thing here that did run on the frame.
-    pub(super) fn refresh_pull_request_states(&mut self) {
+    pub(super) fn refresh_pull_request_states(&mut self, cx: &App) {
         if self.view_mode != WorkspaceViewMode::PullRequests {
             return;
         }
+        // Before the fetches rather than after: this frame's answers landed
+        // on an earlier one, and a record about to be dropped should not be
+        // re-fetched on the way out.
+        self.expire_merged_pull_requests(cx);
         // One probe before twenty lookups: if `gh` is absent or signed out,
         // every one of them would fail the same way, and the view says so
         // once instead.
@@ -103,6 +109,38 @@ impl WorkspaceWindow {
                             let runner = GhRunner::new();
                             writer.record(knot_forge::pull_request_state_with(&runner, &url).ok());
                         });
+        }
+    }
+
+    /// Drop the records whose pull requests merged longer ago than the
+    /// retention window.
+    ///
+    /// Runs from the refresh cycle, so it is gated on the Pull Requests view
+    /// being open exactly as the fetch it depends on is: expiry is decided
+    /// from fetched state, and fetching off-view is what that gate exists to
+    /// prevent. A record that passes the window while the view is closed is
+    /// therefore dropped when the user next opens it - the only moment a
+    /// stale row costs them anything.
+    ///
+    /// No confirmation, unlike [`Self::confirm_remove_pull_request`]: that
+    /// prompt exists because the user asked for something destructive, and
+    /// prompting for something they did not do is noise.
+    ///
+    /// The early return is what keeps the common frame free. Expiring is at
+    /// most a once-a-day event per record, and only then does this write the
+    /// document - the same shape as recording a new sighting, which also
+    /// persists from a frame when something actually changed.
+    fn expire_merged_pull_requests(&mut self, cx: &App) {
+        let expired = pull_request_state::expired_urls(&self.pull_request_states.snapshot(),
+                                                       &self.workspace_pull_request_urls(),
+                                                       pull_request_state::MERGED_RETENTION,
+                                                       SystemTime::now());
+        if expired.is_empty() {
+            return;
+        }
+        if self.store.lock().forget_pull_requests(&expired) {
+            self.persist_pull_requests(cx);
+            self.prune_pull_request_states();
         }
     }
 

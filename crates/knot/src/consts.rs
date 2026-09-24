@@ -94,6 +94,19 @@ pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 19.;
 /// twenty `gh` runs a minute while it is open, and none while it is not.
 pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
 
+/// How long a merged pull request stays in the list after it merged.
+///
+/// Measured against the merge time the forge reports, not against when Knot
+/// first saw the URL: a sighting says nothing about when the pull request
+/// landed. A day is long enough that work merged this morning is still there
+/// when the user looks after lunch, and short enough that the list is what is
+/// outstanding rather than a lifetime tally.
+///
+/// A constant rather than a setting: a settings row, a persisted field and a
+/// migration are a lot to spend on a number nobody has yet asked to change,
+/// and this forecloses none of them.
+pub(crate) const PULL_REQUEST_MERGED_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
+
 /// How stale the answer to "can state be fetched at all" may be.
 ///
 /// The same minute as the rows it gates, and one `gh auth status` against

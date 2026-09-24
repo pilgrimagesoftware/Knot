@@ -418,8 +418,9 @@ impl Render for WorkspaceWindow {
         let is_takeover = self.view_mode.is_takeover();
 
         self.prepare_frame(is_takeover, window, cx);
-        // Gated on the view inside: nothing is fetched while it is closed.
-        self.refresh_pull_request_states();
+        // Gated on the view inside: nothing is fetched, and nothing expires,
+        // while it is closed.
+        self.refresh_pull_request_states(cx);
         // The one place the compact breakpoint is read. Every surface that
         // changes below it takes this `bool`, so none of them can disagree
         // about where compact begins.
