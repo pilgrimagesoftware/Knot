@@ -189,17 +189,23 @@ The predicate reads the window's live expanded flag rather than
 panel an agent maximized, and it is what is on screen that decides whether
 there is a composer to focus.
 
-The expanded condition belongs to this guard and to no other, even though
-`prepare_frame` is about to hold two tests of a similar-looking fact. The other
-is the dropdown-state block PR #424 adds earlier in the same function, and it
-wants the opposite treatment: it builds the model and effort selector state, and
-skipping it while expanded would leave that state absent on the frame the panel
-collapses, where `render_panel_searchable_selector` falls back to a disabled
-empty-state trigger — so the user would see both selectors drawn greyed-out for
-one frame before they populate. Building it while expanded costs a map lookup
-and a small vector comparison per frame and draws nothing. The distinction is
-whether focus may be *taken* versus whether state *exists*; symmetry between the
-two gates would be a regression, not a tidy-up.
+The expanded condition belongs to this guard and to no other, which is worth
+saying because `prepare_frame` is becoming where per-frame preamble collects.
+It already holds `refresh_terminal_font`; PR #431 moved
+`reconcile_panel_send_chord` in beside it, and PR #424 adds the model and effort
+dropdown state. Every one of those builds or reconciles state, and none of them
+may be skipped while the panel is expanded.
+
+The dropdown block is the clearest case of why. Skipping it while expanded would
+leave that state absent on the frame the panel collapses, where
+`render_panel_searchable_selector` falls back to a disabled empty-state trigger
+— so the user would see both selectors drawn greyed-out for one frame before
+they populate. Building it while expanded costs a map lookup and a small vector
+comparison and draws nothing.
+
+The distinction is whether focus may be *taken* versus whether state *exists*.
+Only the first is a question about what is on screen. Making the neighbouring
+gates symmetrical with this one would be a regression, not a tidy-up.
 
 ### Both focus deltas are one edit, not two
 
