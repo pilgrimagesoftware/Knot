@@ -5,7 +5,8 @@
 //!
 //! Split by concern rather than by size. `section` owns the disclosure, the
 //! header and the body; `process_row` owns one operating-system process;
-//! `chrome` owns what any row kind shares; `empty` and `text` own the copy.
+//! `subagent_row` owns one dispatched subagent; `chrome` owns what any row
+//! kind shares; `empty` and `text` own the copy.
 //! The split came before the section gained a second kind of row, so that
 //! addition lands as a sibling rather than as an append to a file already
 //! over half the line limit.
@@ -17,6 +18,7 @@ pub(super) mod chrome;
 pub(super) mod empty;
 pub(super) mod process_row;
 pub(super) mod section;
+pub(super) mod subagent_row;
 pub(super) mod text;
 
 #[cfg(test)]

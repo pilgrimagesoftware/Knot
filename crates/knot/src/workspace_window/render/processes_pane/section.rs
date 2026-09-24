@@ -15,10 +15,11 @@ use gpui_kit::{
 };
 use knot_core::ViewMode;
 use knot_processes::DescendantProcess;
+use knot_subagents::Subagent;
 use uuid::Uuid;
 
-use super::chrome::BODY_MAX_HEIGHT;
-use super::empty::empty_state;
+use super::chrome::{BODY_MAX_HEIGHT, group_label};
+use super::empty::{EmptyState, empty_state, subagent_empty_state};
 use crate::workspace_window::WorkspaceWindow;
 
 /// Whether the section belongs under the content area right now.
@@ -114,10 +115,63 @@ impl WorkspaceWindow {
                 .into_any_element()
     }
 
-    /// The expanded body: the rows, or the one line saying why there are
-    /// none, with any sample failure reported alongside.
+    /// The expanded body: two labelled groups, subagents before processes.
+    ///
+    /// Adjacent, never nested. A process a subagent runs descends from the
+    /// same session root as everything else the agent runs, so no attribution
+    /// can be established from `ps` - and indenting the second group under
+    /// the first would claim one.
     fn processes_body(&mut self, agent_id: Uuid, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let is_running = self.agent_session_root(agent_id).is_some();
+
+        div().id("processes-body")
+             .w_full()
+             .max_h(px(BODY_MAX_HEIGHT))
+             .overflow_y_scroll()
+             .child(v_flex().w_full()
+                            .children(self.subagents_group(agent_id, is_running, cx))
+                            .child(self.processes_group(agent_id, is_running, cx)))
+             .into_any_element()
+    }
+
+    /// The subagents group, or `None` for an agent whose type cannot report
+    /// them.
+    ///
+    /// Omitted entirely rather than shown empty: "has dispatched none" and
+    /// "Knot cannot tell" are opposite answers, and a group that said the
+    /// first when the second is true would be the section's one real lie.
+    fn subagents_group(&mut self, agent_id: Uuid, is_running: bool, cx: &mut Context<Self>)
+                       -> Option<gpui_kit::AnyElement> {
+        if !self.agent_reports_subagents(agent_id) {
+            return None;
+        }
+
+        // One lock, one clock, one copy - the same bargain the process rows
+        // make with the sampler's snapshot. Holding the guard across the row
+        // building would put a lock the two feeds also write to on the render
+        // path for the length of a frame.
+        let now = std::time::Instant::now();
+        let subagents: Vec<Subagent> = {
+            let registry = self.subagents.lock();
+            registry.ordered(agent_id, now)
+                    .into_iter()
+                    .cloned()
+                    .collect()
+        };
+        let empty = subagent_empty_state(is_running, subagents.len());
+
+        Some(v_flex().w_full()
+                     .child(group_label("processes.group_subagents", cx.theme().muted_foreground))
+                     .children(empty.map(|state| empty_line(state, cx)))
+                     .children(subagents.iter()
+                                        .map(|subagent| self.subagent_row(subagent, now, cx)))
+                     .into_any_element())
+    }
+
+    /// The processes group: the rows, or the one line saying why there are
+    /// none, with any sample failure reported alongside.
+    fn processes_group(&mut self, agent_id: Uuid, is_running: bool, cx: &mut Context<Self>)
+                       -> gpui_kit::AnyElement {
         let section = self.process_section(agent_id);
         let processes: Option<Vec<DescendantProcess>> =
             section.and_then(|section| section.processes().map(<[_]>::to_vec));
@@ -132,31 +186,38 @@ impl WorkspaceWindow {
                                              .collect();
         let empty = empty_state(is_running, processes.as_deref());
 
-        div()
-            .id("processes-body")
-            .w_full()
-            .max_h(px(BODY_MAX_HEIGHT))
-            .overflow_y_scroll()
-            .child(v_flex().w_full().children(failure.map(|reason| {
-                          div().px_5()
-                               .py_1()
-                               .text_xs()
-                               .text_color(cx.theme().danger)
-                               .child(knot_core::l10n::t_with("processes.sample_failed",
-                                                              &[("reason", &reason)]))
-                      }))
-            .children(empty.map(|state| {
-                          div().px_5()
-                               .py_2()
-                               .text_sm()
-                               .text_color(cx.theme().muted_foreground)
-                               .child(state.text())
-                      }))
-            .children(processes.into_iter().flatten().map(|process| {
-                          let is_terminating = terminating.contains(&process.pid);
-                          self.process_row(agent_id, &process, is_terminating, cx)
-                      })))
-            .into_any_element()
+        v_flex().w_full()
+                .child(group_label("processes.group_processes", cx.theme().muted_foreground))
+                .children(failure.map(|reason| {
+                                     div().px_5()
+                                          .py_1()
+                                          .text_xs()
+                                          .text_color(cx.theme().danger)
+                                          .child(knot_core::l10n::t_with("processes.sample_failed",
+                                                                         &[("reason", &reason)]))
+                                 }))
+                .children(empty.map(|state| empty_line(state, cx)))
+                .children(processes.into_iter().flatten().map(|process| {
+                                                             let is_terminating =
+                                                                 terminating.contains(&process.pid);
+                                                             self.process_row(agent_id,
+                                                                              &process,
+                                                                              is_terminating,
+                                                                              cx)
+                                                         }))
+                .into_any_element()
+    }
+
+    /// Whether this agent's type can report subagents in the view mode it is
+    /// running in.
+    fn agent_reports_subagents(&self, agent_id: Uuid) -> bool {
+        let store = self.store.lock();
+        let Some(agent) = store.agent(agent_id)
+        else {
+            return false;
+        };
+
+        knot_core::agent_type::reports_subagents(&agent.agent_type, agent.view_mode)
     }
 
     /// Whether a document the agent opened has taken the content area, in
@@ -170,4 +231,17 @@ impl WorkspaceWindow {
 
         agent.markdown_file.is_some() || agent.mermaid_source.is_some()
     }
+}
+
+/// One group's "why there is nothing here" line.
+///
+/// Shared by both groups so the two read identically - a user comparing them
+/// is comparing the words, not the typography.
+fn empty_line(state: EmptyState, cx: &mut Context<WorkspaceWindow>) -> gpui_kit::AnyElement {
+    div().px_5()
+         .py_2()
+         .text_sm()
+         .text_color(cx.theme().muted_foreground)
+         .child(state.text())
+         .into_any_element()
 }

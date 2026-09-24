@@ -53,12 +53,12 @@
 
 ## 8. The section renders two groups
 
-- [ ] 8.1 Give `ProcessSection` the agent's subagent list beside its process snapshot, read from the registry rather than copied into it; verify collapsing the section discards neither
-- [ ] 8.2 Render the two labelled groups in order — subagents, then processes — with no indentation of one under the other; verify a snapshot test shows both labels and that no subagent row is indented beneath another row
-- [ ] 8.3 Render a subagent row as kind, task, elapsed time and state, with the task on one line truncating to an ellipsis and no process identifier anywhere on the row; verify a 2 KB task renders at a one-line row's height and that the row contains no PID
-- [ ] 8.4 Format a subagent's elapsed time through the existing `processes.runtime_*` keys; verify a four-minute record renders through the minutes shape and that no new duration formatter is introduced
-- [ ] 8.5 Offer a copy-task action on a subagent row and no terminate, process-identifier or process-viewer action; verify the copy places the untruncated task on the clipboard and that no code path can reach `terminate` from a subagent row
-- [ ] 8.6 Omit the subagents group entirely for an agent whose type cannot report; verify a shell agent's expanded section shows the processes group alone and states nothing about subagents
+- [x] 8.1 Give `ProcessSection` the agent's subagent list beside its process snapshot, read from the registry rather than copied into it; verify collapsing the section discards neither
+- [x] 8.2 Render the two labelled groups in order — subagents, then processes — with no indentation of one under the other; verify a snapshot test shows both labels and that no subagent row is indented beneath another row
+- [x] 8.3 Render a subagent row as kind, task, elapsed time and state, with the task on one line truncating to an ellipsis and no process identifier anywhere on the row; verify a 2 KB task renders at a one-line row's height and that the row contains no PID
+- [x] 8.4 Format a subagent's elapsed time through the existing `processes.runtime_*` keys; verify a four-minute record renders through the minutes shape and that no new duration formatter is introduced
+- [x] 8.5 Offer a copy-task action on a subagent row and no terminate, process-identifier or process-viewer action; verify the copy places the untruncated task on the clipboard and that no code path can reach `terminate` from a subagent row
+- [x] 8.6 Omit the subagents group entirely for an agent whose type cannot report; verify a shell agent's expanded section shows the processes group alone and states nothing about subagents
 
 ## 9. The header summary
 
@@ -69,8 +69,8 @@
 
 ## 10. Empty states and localization
 
-- [ ] 10.1 Extend the pane's empty-state vocabulary to cover the subagents group — the agent is not running, or it dispatched none — alongside the existing process cases, as a closed enum with no default arm; verify each of the delta's empty-state scenarios maps to a distinct variant
-- [ ] 10.2 Keep a failed process sample off the subagents group: the process rows keep their last successful sample and their failure notice, the subagent rows carry neither; verify a failed sample leaves the subagent rows unchanged
+- [x] 10.1 Extend the pane's empty-state vocabulary to cover the subagents group — the agent is not running, or it dispatched none — alongside the existing process cases, as a closed enum with no default arm; verify each of the delta's empty-state scenarios maps to a distinct variant
+- [x] 10.2 Keep a failed process sample off the subagents group: the process rows keep their last successful sample and their failure notice, the subagent rows carry neither; verify a failed sample leaves the subagent rows unchanged
 - [ ] 10.3 Add the new keys under `processes.` in `crates/knot-core/locales/en.yml` — group labels, subagent state labels, the subagent counts, the copy-task action and its confirmation, and the two new empty states; verify tests assert the keys resolve and never the English copy, and touch `knot-core` after editing the catalog so the l10n tests do not run against a stale artifact
 - [ ] 10.4 Show a subagent's kind and task verbatim, never through the localization lookup; verify a kind that collides with a localization key renders as the agent reported it
 

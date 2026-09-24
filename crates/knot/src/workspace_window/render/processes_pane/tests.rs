@@ -8,7 +8,7 @@ use knot_core::ViewMode;
 use knot_processes::{Activity, DescendantProcess, ProcessRecord, ProcessTable};
 use uuid::Uuid;
 
-use super::empty::{EmptyState, empty_state};
+use super::empty::{EmptyState, empty_state, subagent_empty_state};
 use super::process_row::row_fields;
 use super::section::section_is_shown;
 use super::text::{activity_text, runtime_text};
@@ -230,4 +230,54 @@ fn record(pid: u32, ppid: u32, command: &str, seconds: u64, group: u32) -> Proce
                     tpgid: group as i32,
                     elapsed: Duration::from_secs(seconds),
                     command: command.to_owned() }
+}
+
+/// The subagents group's empty vocabulary. Deliberately narrower than the
+/// processes group's: subagent records are not sampled, so there is no first
+/// sample to be waiting on and the list is never `Counting`.
+#[test]
+fn a_stopped_agents_subagent_group_says_it_is_not_running() {
+    assert_eq!(subagent_empty_state(false, 0), Some(EmptyState::NotRunning));
+    assert_eq!(subagent_empty_state(false, 3),
+               Some(EmptyState::NotRunning),
+               "a stopped agent reads as stopped whatever its last records held");
+}
+
+#[test]
+fn a_running_agent_that_dispatched_none_says_so() {
+    assert_eq!(subagent_empty_state(true, 0), Some(EmptyState::NoSubagents));
+}
+
+#[test]
+fn a_subagent_group_with_rows_has_no_empty_state() {
+    assert_eq!(subagent_empty_state(true, 1), None);
+}
+
+/// The distinction the capability turns on: "dispatched none" is a sentence
+/// the section says, and "cannot tell" is the group not being drawn at all.
+/// They must not resolve to the same text.
+#[test]
+fn dispatched_none_reads_differently_from_the_processes_empty_case() {
+    assert_ne!(EmptyState::NoSubagents.text(),
+               EmptyState::NothingSpawned.text());
+    assert_ne!(EmptyState::NoSubagents.text(),
+               EmptyState::NotRunning.text());
+}
+
+/// Every empty state resolves through the catalogue rather than rendering
+/// blank - the spec forbids a blank group, and an unresolved key renders as
+/// the key itself, which is how this catches one.
+#[test]
+fn every_empty_state_resolves_to_something_readable() {
+    for state in [EmptyState::NotRunning,
+                  EmptyState::NothingSpawned,
+                  EmptyState::Counting,
+                  EmptyState::NoSubagents]
+    {
+        let text = state.text();
+
+        assert!(!text.is_empty(), "{state:?} rendered blank");
+        assert!(!text.starts_with("processes."),
+                "{state:?} did not resolve: {text}");
+    }
 }
