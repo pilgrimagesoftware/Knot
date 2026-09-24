@@ -78,6 +78,20 @@ pub(crate) fn sends_on(shift_to_send: bool, shift: bool) -> bool {
     shift == shift_to_send
 }
 
+/// [`sends_on`] against the setting *as it stands now*.
+///
+/// The composer entity and its subscription outlive any number of settings
+/// changes - `panel_prompt_input` builds them once per agent and hands the
+/// same pair back on every later call - so the decision has to read the
+/// shared surface when the chord is pressed. Capturing the flag into the
+/// subscription instead is #429: the hint below the prompt box and the Send
+/// button tooltip read live and moved, and the keys kept doing what they did
+/// when the composer was built.
+pub(crate) fn sends_now(shift: bool, cx: &App) -> bool {
+    sends_on(crate::settings_global::read(cx).agent_panel_shift_enter_sends,
+             shift)
+}
+
 /// Builds the composer's state entity: the placeholder, the send chord
 /// implied by `shift_to_send`, and the auto-grow bounds.
 ///
@@ -279,19 +293,54 @@ impl WorkspaceWindow {
         }
     }
 
+    /// Brings every composer this window already built in line with the
+    /// `agent_panel_shift_enter_sends` setting as it stands now.
+    ///
+    /// Only the widget's own `submit_on_enter` needs this. Which chord
+    /// *sends* is [`sends_now`], read when the key is pressed; which chord
+    /// types a newline is a flag inside the entity, set when it was built,
+    /// and an entity built before the setting changed is still holding the
+    /// old one. Left alone, the chord the hint now calls "newline" reaches
+    /// `cx.propagate()` instead of inserting one, and whether the user gets
+    /// their newline is then down to what else happens to handle `Enter`.
+    ///
+    /// `panel_input_send_chord` is what the composers were last set to, not
+    /// a copy of the setting to read from: `set_submit_on_enter` notifies
+    /// unconditionally, and this runs from the render path, so re-applying
+    /// an unchanged value would repaint every frame forever.
+    fn reconcile_panel_send_chord(&mut self, cx: &mut Context<Self>) {
+        let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
+        if shift_to_send == self.panel_input_send_chord {
+            return;
+        }
+        self.panel_input_send_chord = shift_to_send;
+        let inputs: Vec<_> = self.panel_prompt_inputs.values().cloned().collect();
+        for input in inputs {
+            cx.update_entity(&input, |state, cx| {
+                  state.set_submit_on_enter(!shift_to_send, cx);
+              });
+        }
+    }
+
     /// Gets or creates the prompt input entity for `id`'s panel, wired so
     /// `Enter`/`Shift+Enter` submits per `agent_panel_shift_enter_sends`
     /// (the other chord always inserts a newline) - see
     /// `render_panel_input_area`'s Send button tooltip for the matching
     /// user-facing hint.
+    ///
+    /// The setting is read on the way through rather than held: a composer
+    /// lives as long as its agent, and the one already on screen has to
+    /// follow a change made in the settings window just as a composer built
+    /// afterwards does.
     pub(in crate::workspace_window) fn panel_prompt_input(&mut self, id: Uuid,
                                                           window: &mut Window,
                                                           cx: &mut Context<Self>)
                                                           -> Entity<PanelInputState> {
+        self.reconcile_panel_send_chord(cx);
         if let Some(input) = self.panel_prompt_inputs.get(&id) {
             return input.clone();
         }
-        let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
+        let shift_to_send = self.panel_input_send_chord;
         let max_rows = panel_input_max_rows(self.panel_input_expanded.contains(&id));
         let input = new_panel_input(shift_to_send, max_rows, window, cx);
         let palette = Palette::of(cx);
@@ -300,8 +349,9 @@ impl WorkspaceWindow {
                             window,
                             move |view: &mut Self, input, event, window, cx| {
                                 match event {
+                                    // Read, not captured: see [`sends_now`].
                                     InputEvent::PressEnter { shift, .. }
-                                        if sends_on(shift_to_send, *shift) =>
+                                        if sends_now(*shift, cx) =>
                                     {
                                         view.send_panel_prompt(id, window, cx);
                                     }

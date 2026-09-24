@@ -33,6 +33,7 @@ use gpui_kit::WindowOptions;
 use gpui_kit::component::Root;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::div;
+use tempfile::TempDir;
 
 use crate::composer_scan::Construct;
 use crate::composer_style::ComposerStyling;
@@ -43,7 +44,11 @@ use crate::workspace_window::panel::prompt::PanelInput;
 use crate::workspace_window::panel::prompt::PanelInputState;
 use crate::workspace_window::panel::prompt::new_panel_input;
 use crate::workspace_window::panel::prompt::panel_input_max_rows;
+use crate::workspace_window::panel::prompt::sends_now;
 use crate::workspace_window::panel::prompt::sends_on;
+
+/// The source the guard below reads, relative to the crate root.
+const PROMPT_SOURCE: &str = "src/workspace_window/panel/prompt.rs";
 
 /// A window holding just the composer, plus the `PressEnter` events it
 /// emitted.
@@ -162,6 +167,85 @@ fn the_send_chord_follows_the_setting() {
             "Shift+Enter sends when the setting is on");
     assert!(!sends_on(true, false),
             "Enter is the newline when the setting is on");
+}
+
+/// The same predicate against the live surface, which is what the
+/// subscription actually consults (#429).
+///
+/// A composer is built once per agent and then handed back from the cache
+/// for the rest of that agent's life, so anything the subscription captures
+/// is frozen at whatever the setting said the first time that panel was
+/// shown. The hint below the prompt box and the Send button tooltip read the
+/// surface on every frame and moved as soon as the setting changed; the keys
+/// did not, which is the whole of the reported defect.
+///
+/// Rooted at a temporary directory rather than `Settings::default()`:
+/// nothing here persists, but a default carries no store paths, and one
+/// careless `persist` in a later edit would write over the developer's own
+/// workspaces and agents.
+#[gpui_kit::test]
+fn the_send_chord_follows_a_setting_changed_after_the_composer_was_built(cx: &mut TestAppContext) {
+    let dir = TempDir::new().expect("a temporary settings root");
+
+    cx.update(|cx| {
+          gpui_kit::init(cx);
+          let mut settings = knot_core::Settings::with_store_root(dir.path());
+          settings.agent_panel_shift_enter_sends = false;
+          crate::settings_global::install(settings, cx);
+
+          // A composer built while the setting is off - the entity whose
+          // subscription used to fix the chord for the rest of its life.
+          cx.open_window(WindowOptions::default(), |window, cx| {
+                let state = new_panel_input(false, panel_input_max_rows(false), window, cx);
+                cx.new(|cx| {
+                      let subscription =
+                          cx.subscribe(&state, |_: &mut ComposerProbe, _, _: &InputEvent, _| {});
+                      ComposerProbe { input:         state,
+                                      _subscription: subscription, }
+                  })
+            })
+            .expect("the composer window should open");
+
+          assert!(sends_now(false, cx), "Enter sends while the setting is off");
+          assert!(!sends_now(true, cx),
+                  "Shift+Enter is the newline while the setting is off");
+
+          crate::settings_global::write(cx, |settings| {
+              settings.agent_panel_shift_enter_sends = true
+          });
+
+          assert!(sends_now(true, cx),
+                  "Shift+Enter has to send once the setting is on, for the composer that was \
+                   already open as much as for one built afterwards");
+          assert!(!sends_now(false, cx),
+                  "and Enter has to stop sending - otherwise both chords send and the hint is \
+                   telling the truth about neither");
+      });
+}
+
+/// The wiring the test above cannot see: that the subscription reads the
+/// surface instead of a captured flag, and that an entity already built is
+/// brought back in line rather than left holding the old `submit_on_enter`.
+///
+/// A source guard, for the same reason as `mcp_panel::probe::tests`': the
+/// decision happens inside a closure reached only by a real keystroke on a
+/// real panel session, so its absence has no other output channel. The
+/// defect this pins passed every test in this module.
+#[test]
+fn the_subscription_reads_the_setting_rather_than_capturing_it() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(PROMPT_SOURCE);
+    let prompt = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+                                                   panic!("reading {}: {error}", path.display())
+                                               });
+
+    assert!(prompt.contains("if sends_now(*shift, cx)"),
+            "the PressEnter guard must consult the live surface; a captured flag makes the send \
+             chord whatever it was when the composer was built");
+    assert!(!prompt.contains("sends_on(shift_to_send, *shift)"),
+            "the captured-flag form is #429 exactly, and it compiles");
+    assert!(prompt.contains("self.reconcile_panel_send_chord(cx)"),
+            "panel_prompt_input must reconcile before it returns a cached composer, or the chord \
+             the hint calls 'newline' propagates instead of inserting one");
 }
 
 /// Ordinary characters are unaffected by either setting - the guard that

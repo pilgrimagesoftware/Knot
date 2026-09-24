@@ -156,6 +156,14 @@ pub(crate) struct WorkspaceWindow {
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
     pub(super) panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
+    /// The `agent_panel_shift_enter_sends` value every entry in
+    /// `panel_prompt_inputs` was last set to - what those entities are
+    /// holding, not a copy of the setting to read from. The setting is read
+    /// from the shared surface at the point of use; this exists only so
+    /// `reconcile_panel_send_chord` can tell a change from a redraw, since
+    /// re-applying the flag notifies and the reconcile runs from the render
+    /// path.
+    pub(super) panel_input_send_chord:           bool,
     pub(super) panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
     pub(super) panel_stopping:                   BTreeSet<Uuid>,
     pub(super) panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,

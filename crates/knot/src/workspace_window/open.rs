@@ -140,6 +140,12 @@ impl WorkspaceWindow {
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
+                    // No composers yet, so this is vacuously what they are
+                    // all set to. Seeded from the surface rather than from
+                    // `false` so opening a window with the setting already on
+                    // is not read as a change on its first frame.
+                    panel_input_send_chord: crate::settings_global::read(cx)
+                                                                    .agent_panel_shift_enter_sends,
                     panel_prompt_queues: BTreeMap::new(),
                     panel_stopping: BTreeSet::new(),
                     panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
