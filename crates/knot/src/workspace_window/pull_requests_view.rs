@@ -138,7 +138,14 @@ impl WorkspaceWindow {
         if expired.is_empty() {
             return;
         }
-        if self.store.lock().forget_pull_requests(&expired) {
+        // Bound rather than locked in the `if` condition, matching
+        // `remove_pull_request`: `persist_pull_requests` takes the same
+        // non-reentrant lock, so the guard has to be gone before it runs. A
+        // plain `if` would drop it at the end of the condition and an `if let`
+        // would not, which is too fine a distinction to rest a frozen window
+        // on - and nothing here can be unit-tested, since it needs GPUI.
+        let forgotten = self.store.lock().forget_pull_requests(&expired);
+        if forgotten {
             self.persist_pull_requests(cx);
             self.prune_pull_request_states();
         }
