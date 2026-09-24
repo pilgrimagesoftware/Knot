@@ -96,7 +96,7 @@ instance.
 
 The rule above gets work off the render path. This one is about the answer
 coming back, which is a separate problem and the one that keeps recurring:
-five defects in one day, all of the shape "the code ran, the state was
+six defects in one day, all of the shape "the code ran, the state was
 correct, and the result never reached the screen".
 
 Work that finishes off the main thread reports itself through a flag -
@@ -122,6 +122,22 @@ at least once:
   `record()` and the key reads as fresh for the whole `MAX_AGE` with nothing
   behind it - not a missed repaint but a stall, which looks like a slow
   subprocess rather than a bug.
+- **The write that rode on someone else's notify.** `display-markdown` and
+  `view-mermaid` write the agent store from the MCP server's thread, which has
+  no context to notify from, and nothing in the poll's chain read the fields
+  they write. It looked correct for a year because an agent calling the tool
+  is usually mid-turn, so its own streaming repainted the window and the pane
+  arrived with it. The case with no cover is an artifact set for an agent that
+  is *not* streaming - a Terminal-mode agent, an idle one, or one a different
+  agent named by `agentId`.
+
+That last one generalises the rule, so state it plainly: **the hazard does not
+arrive with newly-async code.** A write that was always asynchronous and always
+rode on an incidental repaint has the same defect, and looks fine until the
+masking case stops applying. When auditing, do not ask "what did I just make
+async" - ask "what reads this, and what repaints when it changes". Every
+instance found so far has had a real write, a real reader, and something else's
+notify standing in for the missing one.
 
 What to check, in the order the mistakes were actually made:
 

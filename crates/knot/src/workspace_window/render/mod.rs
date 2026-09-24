@@ -246,8 +246,8 @@ impl WorkspaceWindow {
         // and then take focus on the transition the collapse produces. Same
         // shape as the dialog guard for the same reason.
         //
-        // Every other call in `prepare_frame` runs before `focus_showing_pane`
-        // and builds state; none of them may be skipped while expanded.
+        // Every call `prepare_frame` makes before `focus_showing_pane` builds
+        // or reconciles state; none of them may be skipped while expanded.
         if self.artifact_panel_expanded(target.agent()) {
             return;
         }
