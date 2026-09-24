@@ -117,6 +117,7 @@ impl WorkspaceWindow {
                     artifact_panel: BTreeMap::new(),
                     artifact_panel_resize: BTreeMap::new(),
                     artifact_split_resize: BTreeMap::new(),
+                    artifact_drawn: BTreeMap::new(),
                     pull_request_states:
                         crate::pull_request_state::PullRequestStateCache::default(),
                     forge_status: crate::pull_request_state::ForgeStatus::default(),

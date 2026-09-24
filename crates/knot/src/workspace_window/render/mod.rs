@@ -212,8 +212,6 @@ impl WorkspaceWindow {
                                               Some(pane_focus::SelectedAgentFacts {
                         id,
                         is_panel_mode: agent.view_mode == knot_core::ViewMode::Panel,
-                        has_markdown: agent.markdown_file.is_some(),
-                        has_diagram: agent.mermaid_source.is_some(),
                         is_activated: agent.activated,
                         has_live_grid,
                     })
@@ -239,6 +237,18 @@ impl WorkspaceWindow {
         // panes. Asking whether one is open is the only guard that works;
         // `tests/pane_focus.rs` is what establishes that.
         if window.has_active_dialog(cx) {
+            return;
+        }
+        // After the latch above, never before it: an expanded artifact panel
+        // takes the content area, so there is no composer or terminal surface
+        // on screen to focus - but collapsing it is not a change of
+        // selection, and a guard that fed `focus_target` would latch `None`
+        // and then take focus on the transition the collapse produces. Same
+        // shape as the dialog guard for the same reason.
+        //
+        // Every other call in `prepare_frame` runs before `focus_showing_pane`
+        // and builds state; none of them may be skipped while expanded.
+        if self.artifact_panel_expanded(target.agent()) {
             return;
         }
         match target {

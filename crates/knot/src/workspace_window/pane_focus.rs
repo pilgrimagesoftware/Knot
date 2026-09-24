@@ -10,6 +10,14 @@
 //! step with `render/content.rs`, and a function taking the facts explicitly
 //! is the only version of it that can be tested without a window.
 //!
+//! An open artifact panel is deliberately not a fact here. It is a sibling
+//! of the content pane, so having one changes nothing about which input the
+//! frame shows; only an *expanded* panel does, and that check lives beside
+//! the dialog guard in `prepare_frame` rather than in this function. Putting
+//! it here would latch `None` while expanded and take focus on the
+//! `None -> Composer` transition a collapse produces - on an action that is
+//! not a change of selection.
+//!
 //! One function over both targets rather than two predicates with a latch
 //! each. Selecting a Panel-mode agent and then a Terminal-mode one has to
 //! read as a transition for the terminal, and two independent latches each
@@ -31,11 +39,6 @@ pub(crate) struct SelectedAgentFacts {
     /// The agent runs in Panel mode. Terminal-mode agents draw the terminal
     /// grid, which has no composer.
     pub(crate) is_panel_mode: bool,
-    /// An open markdown file, which takes the content area ahead of either
-    /// session pane.
-    pub(crate) has_markdown:  bool,
-    /// An open diagram, which takes the content area for the same reason.
-    pub(crate) has_diagram:   bool,
     /// A deactivated agent draws the stopped placeholder instead of a pane.
     pub(crate) is_activated:  bool,
     /// The agent's session has produced a grid, so the content pane draws
@@ -85,9 +88,6 @@ pub(crate) fn focus_target(is_takeover: bool, selected: Option<&SelectedAgentFac
         return None;
     }
     let agent = selected?;
-    if agent.has_markdown || agent.has_diagram {
-        return None;
-    }
     if !agent.is_activated {
         return None;
     }

@@ -341,6 +341,10 @@ pub(crate) struct WorkspaceWindow {
     /// for the reason `git_panel_resize` is.
     pub(super) artifact_panel_resize:            BTreeMap<Uuid, Entity<ResizableState>>,
     pub(super) artifact_split_resize:            BTreeMap<Uuid, Entity<ResizableState>>,
+    /// What each agent's artifact fields held when this window last saw them.
+    /// Compared each poll so a `display-markdown` arriving on the MCP
+    /// server's thread reaches a frame.
+    pub(super) artifact_drawn: BTreeMap<Uuid, super::artifact_panel::state::ArtifactSnapshot>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can

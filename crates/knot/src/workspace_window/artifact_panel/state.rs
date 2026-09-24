@@ -141,6 +141,17 @@ impl WorkspaceWindow {
             .is_some_and(|entry| entry.expanded)
     }
 
+    /// Whether `id` has an artifact panel at all - either artifact set.
+    ///
+    /// Read from the store rather than from the arrangement: the arrangement
+    /// exists only once something has been dragged or toggled, and a panel
+    /// the user has not touched still has to be found.
+    pub(in crate::workspace_window) fn artifact_panel_open(&self, id: Uuid) -> bool {
+        let store = self.store.lock();
+        store.agent(id)
+             .is_some_and(|agent| agent.markdown_file.is_some() || agent.mermaid_source.is_some())
+    }
+
     /// Drops every trace of `id`'s panel, with the agent.
     pub(in crate::workspace_window) fn forget_artifact_panel(&mut self, id: Uuid) {
         self.artifact_panel.remove(&id);
@@ -180,3 +191,44 @@ impl WorkspaceWindow {
 
 #[cfg(test)]
 mod tests;
+
+impl WorkspaceWindow {
+    /// Notices an artifact set or cleared since the last tick, for every
+    /// agent this window shows.
+    ///
+    /// Every agent in the store, not just the selected one: an agent may
+    /// name another in `display-markdown`, and the window draws artifact
+    /// marks for rows other than the selected one.
+    pub(in crate::workspace_window) fn drain_artifact_changes(&mut self) -> bool {
+        let seen: Vec<(uuid::Uuid, ArtifactSnapshot)> = {
+            let store = self.store.lock();
+            store.agents()
+                 .iter()
+                 .map(|agent| {
+                     (agent.id,
+                      ArtifactSnapshot { markdown:  agent.markdown_file.clone(),
+                                         maximized: agent.markdown_maximized,
+                                         mermaid:   agent.mermaid_source.clone(), })
+                 })
+                 .collect()
+        };
+        let mut moved = false;
+        for (id, snapshot) in &seen {
+            if self.artifact_drawn.get(id) != Some(snapshot) {
+                self.artifact_drawn.insert(*id, snapshot.clone());
+                moved = true;
+            }
+            // Reconciling here rather than on the render path: taking
+            // `expanded` from a `maximized` call is a state change, and the
+            // render path must not make one.
+            if self.reconcile_artifact_panel(*id, snapshot) {
+                moved = true;
+            }
+        }
+        // An agent that is gone takes its entry with it, so the map cannot
+        // grow for the window's whole life.
+        let live: std::collections::BTreeSet<uuid::Uuid> = seen.iter().map(|(id, _)| *id).collect();
+        self.artifact_drawn.retain(|id, _| live.contains(id));
+        moved
+    }
+}

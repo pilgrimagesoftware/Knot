@@ -17,4 +17,6 @@
 //! discarded with it.
 
 pub(super) mod layout;
+pub(super) mod render;
+pub(super) mod section;
 pub(super) mod state;
