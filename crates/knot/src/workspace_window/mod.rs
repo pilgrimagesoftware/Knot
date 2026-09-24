@@ -8,6 +8,7 @@
 mod agent_row;
 mod agents;
 mod chrome;
+mod construct;
 mod creation;
 mod git_panel;
 pub(crate) mod mcp_panel;

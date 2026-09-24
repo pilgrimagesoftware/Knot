@@ -8,8 +8,6 @@
 //! from other threads, so one timer asks [`super::repaint`]'s predicates
 //! what has moved and notifies when something has.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use gpui_kit::App;
@@ -21,15 +19,13 @@ use uuid::Uuid;
 
 use crate::app_state::agent_selection_for_workspace;
 use crate::app_support::observe_system_appearance;
-use crate::dashboard;
 use crate::window_options::reconciled_workspace_bounds;
 use crate::window_options::workspace_window_options;
 use crate::window_registry::WindowKey;
 use crate::window_registry::WindowRegistry;
-use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::construct::WorkspaceWindowSeed;
 use crate::workspace_window::repaint::spawn_repaint_poll;
-use crate::workspace_window::terminal_font::TerminalFont;
 use crate::workspace_window::workspace_title;
 
 impl WorkspaceWindow {
@@ -97,79 +93,18 @@ impl WorkspaceWindow {
                   let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
                   let view =
                       cx.new(|cx| {
-                            let mut window = WorkspaceWindow {
-                    exited_sessions: Arc::clone(&exited_sessions),
-                    window_bounds_subscription: None,
-                    diff_stats: crate::diff_stats::DiffStatsCache::default(),
-                    git_panel_open: BTreeSet::new(),
-                    git_status: crate::git_panel::state::GitStatusCache::default(),
-                    git_diffs: crate::git_panel::state::GitDiffCache::default(),
-                    git_selection: BTreeMap::new(),
-                    git_watches: BTreeMap::new(),
-                    git_watch_dirty: BTreeMap::new(),
-                    git_panel_width: BTreeMap::new(),
-                    git_action_error: BTreeMap::new(),
-                    pending_git_actions: BTreeMap::new(),
-                    pending_git_commits: BTreeMap::new(),
-                    git_diff_lists: BTreeMap::new(),
-                    git_diff_row_counts: BTreeMap::new(),
-                    git_panel_resize: BTreeMap::new(),
-                    pull_request_states:
-                        crate::pull_request_state::PullRequestStateCache::default(),
-                    forge_status: crate::pull_request_state::ForgeStatus::default(),
-                    pull_request_open_failed: false,
-                    open_config_selector: None,
-                    store,
-                    messages,
-                    nudged_messages: BTreeMap::new(),
-                    notified_awaiting: BTreeMap::new(),
-                    workspace_id,
-                    selected_agent,
-                    sessions: BTreeMap::new(),
-                    panel_states: BTreeMap::new(),
-                    runtime: tokio::runtime::Runtime::new()
-                        .expect("failed to start terminal session runtime"),
-                    sidebar_resize,
-                    root_focus: cx.focus_handle(),
-                    terminal_focus: cx.focus_handle(),
-                    terminal_font: TerminalFont::default(),
-                    clipboard_writes: Arc::clone(&clipboard_writes),
-                    panel_sessions: BTreeMap::new(),
-                    last_spinner_frame: 0,
-                    focused_pane: None,
-                    panel_phases: BTreeMap::new(),
-                    panel_prompt_inputs: BTreeMap::new(),
-                    panel_prompt_input_subscriptions: BTreeMap::new(),
-                    panel_prompt_queues: BTreeMap::new(),
-                    panel_stopping: BTreeSet::new(),
-                    panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
-                    panel_lists: BTreeMap::new(),
-                    panel_list_row_counts: BTreeMap::new(),
-                    window_handle: window.window_handle(),
-                    titled_as: workspace_name.clone(),
-                    panel_pending_context: BTreeMap::new(),
-                    panel_composer_styling: BTreeMap::new(),
-                    panel_mentions: BTreeMap::new(),
-                    panel_pending_attachments: BTreeMap::new(),
-                    panel_shell_runs: Arc::new(Mutex::new(BTreeMap::new())),
-                    panel_input_expanded: BTreeSet::new(),
-                    panel_lookups: BTreeMap::new(),
-                    process_sections: BTreeMap::new(),
-                    process_publish: Arc::new(Mutex::new(
-                        crate::agent_processes::Published::default(),
-                    )),
-                    process_generation: 0,
-                    process_sampled_at: None,
-                    process_sampling: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                    process_failures: Arc::new(Mutex::new(Vec::new())),
-                    mcp_sections: BTreeMap::new(),
-                    mcp_in_flight: Arc::new(Mutex::new(BTreeSet::new())),
-                    mcp_results: Arc::new(Mutex::new(Vec::new())),
-                    mcp_handover_terminals: BTreeMap::new(),
-                    view_mode: WorkspaceViewMode::Terminal,
-                    dashboard_sort: dashboard::DashboardSort::default(),
-                    error: None,
-                };
+                            let mut window = WorkspaceWindow::new(
+                    WorkspaceWindowSeed { store,
+                                          messages,
+                                          workspace_id,
+                                          selected_agent,
+                                          titled_as: workspace_name.clone(),
+                                          sidebar_resize,
+                                          clipboard_writes: Arc::clone(&clipboard_writes),
+                                          exited_sessions: Arc::clone(&exited_sessions), },
+                    window,
+                    cx,
+                );
                             // Matches the Swift reference: every agent in the
                             // workspace starts its session when the workspace
                             // window opens, not
