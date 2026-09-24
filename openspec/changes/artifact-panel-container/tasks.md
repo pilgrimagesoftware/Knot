@@ -134,7 +134,7 @@
       and the two facts stop being read in `render/mod.rs:195-206`. One guard
       serves both focus paths, so this is a single edit. Verify `make build`
       passes.
-- [ ] 6.1a Add the expanded check to `prepare_frame` beside the
+- [ ] 6.1a Add the expanded check inside `focus_showing_pane`, beside the
       `window.has_active_dialog(cx)` guard (`render/mod.rs:227-229`) - after
       `self.focused_pane = showing`, before focus is taken - reading the
       window's live expanded flag, not `Agent::markdown_maximized`. Putting it
@@ -142,11 +142,11 @@
       focus on the `None -> Composer` transition that collapsing produces.
       Verify with a test that a collapse following a click elsewhere leaves
       focus on the clicked control, covering "Collapsing an expanded panel does
-      not pull focus" in both deltas. Add the condition to this guard only -
-      `prepare_frame`'s other preamble calls (`refresh_terminal_font`,
-      `reconcile_panel_send_chord`, the dropdown-state block) build state and
-      must keep running while expanded, or the selectors draw greyed-out for a
-      frame on collapse.
+      not pull focus" in both deltas. Add the condition inside
+      `focus_showing_pane` only, never to a call before it: everything
+      `prepare_frame` runs ahead of that builds or reconciles state and must
+      keep running while expanded, or state absent on the collapse frame draws
+      as an empty-state placeholder.
 - [ ] 6.2 Update `crates/knot/src/tests/pane_focus.rs` - including
       `an_open_markdown_file_shows_no_composer` at :216, whose premise this
       change reverses - and add four cases: a Panel-mode agent with a markdown

@@ -190,11 +190,16 @@ panel an agent maximized, and it is what is on screen that decides whether
 there is a composer to focus.
 
 The expanded condition belongs to this guard and to no other, which is worth
-saying because `prepare_frame` is becoming where per-frame preamble collects.
-It already holds `refresh_terminal_font`; PR #431 moved
-`reconcile_panel_send_chord` in beside it, and PR #424 adds the model and effort
-dropdown state. Every one of those builds or reconciles state, and none of them
-may be skipped while the panel is expanded.
+saying because `prepare_frame` is where per-frame preamble collects and it is
+growing. It already runs `refresh_terminal_font`, `refresh_diff_stats` and
+`refresh_dashboard_diff_stats` before reaching `focus_showing_pane` last; PR
+#431 moves `reconcile_panel_send_chord` in, PR #424 adds the model and effort
+dropdown state, and PR #432 changes `refresh_pull_request_states`. The list is
+not worth enumerating because it keeps growing — the rule is positional. Every
+call before `focus_showing_pane` builds or reconciles state and must keep
+running while the panel is expanded. The guard goes inside
+`focus_showing_pane`, which is already last, so it is naturally downstream of
+all of them.
 
 The dropdown block is the clearest case of why. Skipping it while expanded would
 leave that state absent on the frame the panel collapses, where
