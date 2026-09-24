@@ -186,6 +186,11 @@ Because the content pane is not on screen while expanded, `acp-panel-ui` and
 state of this panel. An unexpanded panel leaves the composer or terminal surface
 on screen beside it and SHALL NOT withhold focus.
 
+Returning the panel to its set width SHALL NOT take focus. Expanding and
+collapsing change what is on screen; they are not a change of selection, and
+focus SHALL stay wherever the user last put it. A user who collapses the panel
+while typing somewhere else in the window SHALL keep typing there.
+
 Expanded state SHALL be tracked per agent, and SHALL be taken from
 `display-markdown`'s `maximized` argument whenever that agent's markdown file or
 that argument differs from the pair the panel last took — not once when the
@@ -236,6 +241,13 @@ state per agent removes both.
 - **WHEN** an agent shows one markdown file without `maximized` and then a
   second file with it
 - **THEN** the panel is expanded, rather than staying as the first file left it
+
+#### Scenario: Collapsing does not steal focus
+
+- **WHEN** the user selects an agent whose panel is expanded, moves focus
+  elsewhere in the window, types, and then returns the panel to its set width
+- **THEN** focus stays where the user put it and the keystrokes continue to go
+  there, with the composer shown but not focused
 
 #### Scenario: Closing one section does not collapse the panel
 

@@ -127,20 +127,32 @@
 
 ## 6. Focus guards
 
-- [ ] 6.1 Replace `has_markdown`/`has_diagram` on
-      `pane_focus::SelectedAgentFacts` with the panel's expanded flag, and
-      narrow the `if agent.has_markdown || agent.has_diagram` guard at
-      `workspace_window/pane_focus.rs:88` to test that instead; supply the new
-      fact from `workspace_window/render/mod.rs:195-206`. One guard serves both
-      focus paths, so this is a single edit rather than two. Verify `make build`
+- [ ] 6.1 Remove `has_markdown` and `has_diagram` from
+      `pane_focus::SelectedAgentFacts` and delete the
+      `if agent.has_markdown || agent.has_diagram` guard at
+      `workspace_window/pane_focus.rs:88` outright - nothing replaces it there,
+      and the two facts stop being read in `render/mod.rs:195-206`. One guard
+      serves both focus paths, so this is a single edit. Verify `make build`
       passes.
+- [ ] 6.1a Add the expanded check to `prepare_frame` beside the
+      `window.has_active_dialog(cx)` guard (`render/mod.rs:227-229`) - after
+      `self.focused_pane = showing`, before focus is taken - reading the
+      window's live expanded flag, not `Agent::markdown_maximized`. Putting it
+      in `focus_target` instead would latch `None` while expanded and take
+      focus on the `None -> Composer` transition that collapsing produces.
+      Verify with a test that a collapse following a click elsewhere leaves
+      focus on the clicked control, covering "Collapsing an expanded panel does
+      not pull focus" in both deltas.
 - [ ] 6.2 Update `crates/knot/src/tests/pane_focus.rs` - including
       `an_open_markdown_file_shows_no_composer` at :216, whose premise this
       change reverses - and add four cases: a Panel-mode agent with a markdown
       file open in an unexpanded panel focuses its composer, the same agent
       expanded leaves focus alone, and the Terminal-mode pair of the same.
       Verify they cover both modified `acp-panel-ui` scenarios and both
-      modified `terminal-input` scenarios.
+      modified `terminal-input` scenarios. Note that the expanded cases can no
+      longer be exercised through `focus_target` alone, since the check moved
+      to `prepare_frame` - they need the window-level test path the dialog
+      guard already uses.
 
 ## 7. Integration and gate
 

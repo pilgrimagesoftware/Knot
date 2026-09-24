@@ -37,6 +37,15 @@ beside a shown markdown file or diagram and SHALL be focused as it is for any
 other selected Terminal-mode agent. Merely having an artifact open is not the
 condition.
 
+Expanding or collapsing the panel SHALL NOT itself take focus. The panel's
+expanded state decides whether focus can be taken for a selection, not whether
+a new selection has happened; a panel returning to its set width makes the
+terminal surface visible again and SHALL leave focus wherever the user last put
+it, under the once-per-selection rule above. The state read SHALL be the panel's
+live expanded state, which the user's own toggle changes, and not the
+`maximized` argument last recorded for the agent — the two differ from the
+moment the user collapses a panel an agent maximized.
+
 A Terminal-mode agent can hold an artifact by three paths, so this is not a
 vacuous case: any agent may be switched to Terminal view under `acp-panel-ui`'s
 "View-mode toggle", including one that runs an MCP client of its own; an agent
@@ -80,6 +89,12 @@ whenever that agent has markdown history.
 - **WHEN** the user selects a Terminal-mode agent whose artifact panel is
   expanded, so the terminal surface is not on screen
 - **THEN** focus is left where it was
+
+#### Scenario: Collapsing an expanded panel does not pull focus
+
+- **WHEN** the user selects a Terminal-mode agent whose panel is expanded,
+  clicks a control elsewhere in the window, and then collapses the panel
+- **THEN** focus stays on the control the user clicked
 
 #### Scenario: A deactivated agent does not move focus
 

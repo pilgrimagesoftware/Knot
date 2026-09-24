@@ -162,14 +162,42 @@ the agent field was the other alternative and is also wrong: the user's toggle
 would then be indistinguishable from an instruction the agent gave, and would be
 written into state the MCP tool owns.
 
-### The removed focus exceptions are a spec change with no code behind them### The removed focus exceptions are a spec change with no code behind them
+### Expanded guards taking focus; it is not an input to the latch
 
-Both focus requirements excuse the window from taking focus when a markdown or
-diagram pane holds the content area. The code that implements that exception
-reads the same agent fields the pane selection reads. Removing the arms from the
-pane selection removes the condition; the focus code needs its corresponding
-guard deleted, not rewritten. Worth stating because it looks like two changes and
-is one.
+`prepare_frame` latches the whole answer, `None` included
+(`render/mod.rs:213-214`: `let changed = showing != self.focused_pane;`). Putting
+the expanded state into `focus_target` would therefore latch `None` while
+expanded and produce a `None -> Composer(id)` transition on collapse — which
+takes focus, from wherever the user had put it, on an action that is not a change
+of selection.
+
+So expanded does not join `focus_target`'s branch order. `focus_target` keeps
+answering what the *selection* implies, and the expanded check sits beside the
+dialog guard in `prepare_frame`, after the latch is stored and before focus is
+taken. That is the pattern the dialog case already uses, and for the same
+reason: the latch has to record that the selection was seen, so that the state
+clearing later is not replayed as news.
+
+Consequence for `SelectedAgentFacts`: `has_markdown` and `has_diagram` come off
+it and nothing replaces them. The expanded flag is window state, which
+`prepare_frame` has in hand, so it never becomes a fact read out of the store.
+That also removes the ordering question against `has_live_grid` — expanded no
+longer participates in the ordering at all.
+
+The predicate reads the window's live expanded flag rather than
+`Agent::markdown_maximized`. The two diverge the moment the user collapses a
+panel an agent maximized, and it is what is on screen that decides whether
+there is a composer to focus.
+
+### Both focus deltas are one edit, not two
+
+`acp-panel-ui` and `terminal-input` each carry the exception, but one guard
+serves both paths — `focus_target` answers for the composer and the terminal
+surface from the same branch chain, which is why it is one function rather than
+two predicates with a latch each (`pane_focus.rs` module doc). Deleting the
+artifact arm and adding the expanded guard above therefore satisfies both
+deltas at once. Worth stating because the two requirements read as two pieces
+of work.
 
 ## Risks / Trade-offs
 

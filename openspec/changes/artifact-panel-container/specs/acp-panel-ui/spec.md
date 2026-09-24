@@ -33,6 +33,15 @@ is a sibling of the content pane, so the composer is on screen beside a shown
 markdown file or diagram and SHALL be focused as it is for any other selected
 Panel-mode agent. Merely having an artifact open is not the condition.
 
+Expanding or collapsing the panel SHALL NOT itself take focus. The panel's
+expanded state decides whether focus can be taken for a selection, not whether
+a new selection has happened; a panel returning to its set width makes the
+composer visible again and SHALL leave focus wherever the user last put it,
+under the once-per-selection rule above. The state read SHALL be the panel's
+live expanded state, which the user's own toggle changes, and not the
+`maximized` argument last recorded for the agent — the two differ from the
+moment the user collapses a panel an agent maximized.
+
 Focus SHALL NOT be taken from a modal dialog while one is open.
 
 Taking focus SHALL NOT raise, activate or reorder any window. It places focus
@@ -97,6 +106,13 @@ placement included where the composer already preserves it.
 - **WHEN** the user selects a Panel-mode agent that has a markdown file open in
   an unexpanded panel, beside its conversation
 - **THEN** that agent's prompt input has keyboard focus
+
+#### Scenario: Collapsing an expanded panel does not pull focus
+
+- **WHEN** the user selects a Panel-mode agent whose panel is expanded, clicks a
+  control elsewhere in the window, and then collapses the panel
+- **THEN** focus stays on the control the user clicked, and the composer is
+  shown without being focused
 
 #### Scenario: A deactivated agent is selected
 
