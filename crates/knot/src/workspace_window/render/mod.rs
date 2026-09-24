@@ -151,6 +151,20 @@ impl WorkspaceWindow {
         if is_dashboard {
             self.refresh_dashboard_diff_stats();
         }
+        // The model and effort dropdowns' state, built here because it
+        // needs a `&mut Window` the render path does not carry and must
+        // outlive the frame that draws it - a state rebuilt per render
+        // loses the search query as it is typed. Cheap on the frames that
+        // change nothing: the declared values are compared before anything
+        // is replaced. The options themselves are cloned out of the panel
+        // state the same way `render_panel_pane` already reads them.
+        if !is_dashboard && let Some(id) = self.selected_agent {
+            let config_options = self.panel_states
+                                     .get(&id)
+                                     .map(|state| state.lock().config_options.clone())
+                                     .unwrap_or_default();
+            self.ensure_panel_selectors(id, &config_options, window, cx);
+        }
 
         self.focus_showing_pane(is_dashboard, window, cx);
 

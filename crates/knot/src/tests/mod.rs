@@ -24,6 +24,7 @@ mod notifications;
 mod pane_focus;
 mod panel_composer;
 mod panel_lookup;
+mod panel_model_picker;
 mod panel_scroll;
 mod permission_keybindings;
 mod plan_diagram;
