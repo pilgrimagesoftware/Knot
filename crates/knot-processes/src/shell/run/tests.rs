@@ -1,9 +1,22 @@
 //! Exercises the runner against real processes.
 //!
-//! Every test here starts a child, so each one waits on something. They wait
-//! on the run's own terminal status rather than on a sleep: a fixed sleep is
+//! Every test here starts a child, so each one waits on something. **No
+//! assertion here may depend on the machine winning a race.** They wait on
+//! the run's own terminal status, never on a wall-clock budget: a budget is
 //! either slower than it needs to be or flaky on a loaded machine, and these
 //! run in CI.
+//!
+//! The property, not the shape. This rule used to say "not on a sleep", and
+//! the defect it was written to prevent arrived anyway through
+//! `request.timeout` - which is a sleep the runner performs on the test's
+//! behalf, and so satisfied the letter of a ban aimed at `thread::sleep`.
+//! Anything the machine has to beat within a deadline counts, whatever it is
+//! called: a timeout, a poll budget, a retry count times an interval. If a
+//! slower machine can fail the assertion, it is the wrong assertion.
+//!
+//! Forking is the contended resource, not arithmetic. A test here is starved
+//! by a `cargo build` far more than by a busy CPU, which is why one of these
+//! reached `develop` looking solid under a saturation loop.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -138,7 +151,9 @@ fn output_past_the_limit_is_truncated_at_the_head() {
 #[test]
 fn a_command_still_running_at_the_deadline_times_out() {
     let dir = tempdir().unwrap();
-    let mut request = request("echo starting; sleep 30", dir.path());
+    // No output assertion here, so nothing in this test races the deadline:
+    // `sleep 30` is still running at 100ms whatever the machine is doing.
+    let mut request = request("sleep 30", dir.path());
     request.timeout = Duration::from_millis(100);
 
     let started = Instant::now();
@@ -146,10 +161,21 @@ fn a_command_still_running_at_the_deadline_times_out() {
 
     assert_eq!(state.status, ShellStatus::TimedOut);
     assert!(started.elapsed() < SETTLE_TIMEOUT, "did not abort early");
-    assert_eq!(state.stdout.text().trim(),
-               "starting",
-               "output captured before the deadline survives");
 }
+
+// "Output written before a run is terminated survives the termination" has
+// no test on the timeout path, deliberately. Any such test has to observe the
+// write before the deadline fires, and the deadline is running the whole time
+// it waits - so the assertion races process startup no matter how generous the
+// deadline is. Widening it from 100ms to 2s only made the failure rarer, which
+// is worse than not having it: a test that fails once a fortnight teaches
+// people to re-run.
+//
+// The property itself is covered, race-free, by
+// `cancelling_ends_the_command_and_keeps_what_it_wrote` below: it waits for
+// the output with no deadline running, and only then terminates the run. Both
+// paths reach the same `ShellRun::settle` and the same drain threads; only the
+// terminal status differs, and that is what the test above asserts.
 
 #[test]
 fn cancelling_ends_the_command_and_keeps_what_it_wrote() {
