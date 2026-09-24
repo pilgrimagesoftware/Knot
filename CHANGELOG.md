@@ -1,4 +1,32 @@
 
+## 1.17.0 - 2026-09-24
+
+### Added
+- Scroll and search the panel model picker
+- Drop merged pull requests from the list after a day
+- Artifact panel layout arithmetic and per-agent arrangement
+- The artifact panel container
+
+
+### Changed
+- Keep the selector fields inside the struct's column
+- Bind the store lock before persisting expired records
+
+
+### Documentation
+- State the timing rule as a property, not a shape
+- Generalize the off-thread rule, and drop a note that dated itself
+
+
+### Fixed
+- Route ACP panel status through the activity tracker
+- Land the tracker's store write on a frame, and dedupe on what was reported
+- Removing a pull request no longer opens it
+- Stop a teammate's request preempting an agent's task
+- Schedule a frame when a pull request passes the window
+
+
+
 ## 1.16.0 - 2026-09-23
 
 ### Added
