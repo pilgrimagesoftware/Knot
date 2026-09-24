@@ -18,7 +18,7 @@
 
 mod attachments;
 pub(crate) mod composer;
-pub(super) mod input;
+pub(crate) mod input;
 pub(crate) mod lookup;
 pub(crate) mod mentions;
 mod pane;

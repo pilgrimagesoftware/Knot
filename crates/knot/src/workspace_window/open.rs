@@ -139,6 +139,9 @@ impl WorkspaceWindow {
                     focused_pane: None,
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
+                    panel_selectors: BTreeMap::new(),
+                    panel_selector_subscriptions: BTreeMap::new(),
+                    panel_selector_items: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     // No composers yet, so this is vacuously what they are
                     // all set to. Seeded from the surface rather than from
