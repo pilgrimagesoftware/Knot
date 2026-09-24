@@ -2,32 +2,32 @@
 
 ## 1. Layout arithmetic
 
-- [ ] 1.1 Create `crates/knot/src/workspace_window/artifact_panel/` with a
+- [x] 1.1 Create `crates/knot/src/workspace_window/artifact_panel/` with a
       `mod.rs` that declares `layout`, `state` and `render` and holds the module
       doc linking back to `openspec/specs/artifact-panel/spec.md`; verify
       `make lint` passes and `mod.rs` holds no implementation.
-- [ ] 1.2 Add the section-height constants to `crates/knot/src/consts.rs`:
+- [x] 1.2 Add the section-height constants to `crates/knot/src/consts.rs`:
       collapsed header height, divider height, default/min/max panel width
       (500/350/800), split clamp (0.15..=0.85), default split 0.5, and the
       content pane's minimum width for the unexpanded case, with a comment
       saying it does not apply while the panel is expanded; verify
       `make build` passes.
-- [ ] 1.3 Implement `layout::section_heights(total, split_ratio,
+- [x] 1.3 Implement `layout::section_heights(total, split_ratio,
       markdown_collapsed, mermaid_collapsed) -> (f32, f32)` in `layout.rs`,
       porting the four cases from `ArtifactPanelView.sectionHeight`; verify with
       tests in `layout/tests.rs` covering both expanded at the default and at
       0.7, each section collapsed alone, and both collapsed.
-- [ ] 1.4 Add the invariant test: for every ratio in 0.15, 0.3, 0.5, 0.7, 0.85
+- [x] 1.4 Add the invariant test: for every ratio in 0.15, 0.3, 0.5, 0.7, 0.85
       the two heights plus the divider height equal the total; verify it passes
       as the Swift suite's `bothExpandedSumToTotal` does.
 
 ## 2. Per-agent panel state
 
-- [ ] 2.1 Add the per-agent maps to `WorkspaceWindow` in
+- [x] 2.1 Add the per-agent maps to `WorkspaceWindow` in
       `workspace_window/window.rs` - panel width, split ratio, markdown and
       mermaid collapse flags, expanded flag - initialized empty at
       `workspace_window/open.rs`; verify `make build` passes.
-- [ ] 2.2 Implement the accessors in `artifact_panel/state.rs`: readers that fall
+- [x] 2.2 Implement the accessors in `artifact_panel/state.rs`: readers that fall
       back to the constants from 1.2 and writers that clamp width and ratio;
       verify with tests asserting an unset agent reads the defaults and an
       out-of-range write is clamped at both ends.
@@ -42,11 +42,11 @@
       Verify with three tests covering the `mcp-tools` scenarios "A maximized
       file reaches an already-open panel" and "Re-showing a file leaves the
       user's panel alone", plus a file change carrying a different argument.
-- [ ] 2.4 Drop every per-agent entry when an agent closes, alongside
+- [x] 2.4 Drop every per-agent entry when an agent closes, alongside
       `git_panel_width` in `workspace_window/git_panel/reads.rs`; verify with a
       test that closing a resized agent leaves no entry behind, covering the
       spec's "Closing an agent discards its arrangement".
-- [ ] 2.5 Clear the expanded flag when the last section closes, and leave it
+- [x] 2.5 Clear the expanded flag when the last section closes, and leave it
       alone when one section closes while the other stays open. Note the trap:
       `clear_markdown_panel` (`knot-agents/src/store/panels.rs:24`) is a third
       writer of `markdown_maximized`, setting it false whenever the markdown
@@ -56,7 +56,7 @@
       state does not carry to the next artifact" and "Closing one section does
       not collapse the panel", the second with an expanded panel whose markdown
       section is closed while a diagram is still open.
-- [ ] 2.6 Make the expand control write the window flag only, never
+- [x] 2.6 Make the expand control write the window flag only, never
       `Agent::markdown_maximized`; verify with a test that toggling it leaves
       the agent's stored panel state untouched.
 

@@ -114,6 +114,9 @@ impl WorkspaceWindow {
                     git_diff_lists: BTreeMap::new(),
                     git_diff_row_counts: BTreeMap::new(),
                     git_panel_resize: BTreeMap::new(),
+                    artifact_panel: BTreeMap::new(),
+                    artifact_panel_resize: BTreeMap::new(),
+                    artifact_split_resize: BTreeMap::new(),
                     pull_request_states:
                         crate::pull_request_state::PullRequestStateCache::default(),
                     forge_status: crate::pull_request_state::ForgeStatus::default(),
