@@ -105,5 +105,9 @@ screen. A side panel removes the condition those exceptions were written for.
   first vertical use in the tree.
 - `knot-core::l10n`: keys for the panel title, the expand and collapse tooltips,
   the close-all tooltip, and the section chevrons.
-- No change to `knot-agents`, the MCP tools, or the settings store. Every field
-  this needs is already there.
+- No change to the code in `knot-agents`, the MCP tool handlers, or the settings
+  store. Every field this needs is already there; `mcp-tools`' contract changes
+  because `maximized` finally does something, not because its handler does.
+- `crates/knot/src/tests/pane_focus.rs`, whose
+  `an_open_markdown_file_shows_no_composer` asserts the behaviour this change
+  reverses.

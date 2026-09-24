@@ -72,7 +72,9 @@ artifact panel over a visible dashboard and force-closes only the git panel, and
 only when the window's set of active agents changes.
 
 This diverges from the Rust port before this change, where either pane took the
-whole content area, hiding the conversation and its composer.
+whole content area whenever it was open, hiding the conversation and its
+composer for as long as the artifact was shown. Here that happens only while the
+panel is expanded, which is a state the user or an agent asks for.
 
 #### Scenario: The conversation stays readable
 
