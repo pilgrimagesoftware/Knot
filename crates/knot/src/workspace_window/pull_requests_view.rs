@@ -112,6 +112,34 @@ impl WorkspaceWindow {
         }
     }
 
+    /// Whether any record has passed the retention window and is waiting for
+    /// a frame to be dropped in.
+    ///
+    /// Read from [`Self::repaint_poll_tick`]'s chain, because expiry happens
+    /// on the render path and an idle window does not render. The states this
+    /// reads land from `spawn_blocking`, and a re-fetch that returns the same
+    /// answer does not flag the cache as changed - so a merged pull request
+    /// sitting stable across the 24-hour boundary produces no repaint of its
+    /// own, and without this the row would wait for something unrelated to
+    /// happen. On a workspace with nothing running, that could be never.
+    ///
+    /// Pure: it clears nothing, so the `||` chain may short-circuit past it
+    /// without stranding anything. The removal itself stays in
+    /// [`Self::expire_merged_pull_requests`], which this only schedules a
+    /// frame for.
+    ///
+    /// Gated on the view before it touches the store, so the common tick -
+    /// the view closed - is one enum comparison.
+    pub(super) fn pull_requests_expiring(&self) -> bool {
+        if self.view_mode != WorkspaceViewMode::PullRequests {
+            return false;
+        }
+        !pull_request_state::expired_urls(&self.pull_request_states.snapshot(),
+                                          &self.workspace_pull_request_urls(),
+                                          pull_request_state::MERGED_RETENTION,
+                                          SystemTime::now()).is_empty()
+    }
+
     /// Drop the records whose pull requests merged longer ago than the
     /// retention window.
     ///

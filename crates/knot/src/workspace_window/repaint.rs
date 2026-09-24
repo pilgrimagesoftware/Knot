@@ -98,6 +98,13 @@ impl WorkspaceWindow {
         // nothing running, that could be never.
         let forge_probed = self.forge_status.take_changed();
         let pull_request_states_changed = self.pull_request_states.take_changed();
+        // Expiry runs on the render path, so it needs a frame to run in. A
+        // merged pull request sitting stable across the retention boundary
+        // flags nothing - `record` marks the cache changed only when the
+        // answer differs - so without this the row would wait for something
+        // unrelated to repaint the window, which on an idle workspace is the
+        // "could be never" the two above exist to prevent.
+        let pull_requests_expiring = self.pull_requests_expiring();
         // The git panel's three off-main-thread sources, all draining here
         // for the same reason: none of them has a GPUI context, so each only
         // leaves something behind for this tick to act on. A staging
@@ -134,6 +141,7 @@ impl WorkspaceWindow {
            || pull_requests_recorded
            || forge_probed
            || pull_request_states_changed
+           || pull_requests_expiring
            || git_actions_landed
            || git_commits_landed
            || git_watches_fired

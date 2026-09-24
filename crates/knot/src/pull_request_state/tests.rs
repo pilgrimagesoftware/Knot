@@ -369,3 +369,28 @@ fn nothing_expires_when_every_record_is_fresh() {
 
     assert!(expired_urls(&cache, &[URL.to_string()], DAY, now).is_empty());
 }
+
+/// Why the repaint chain needs an entry of its own for expiry.
+///
+/// A merged pull request's answer stops changing once it has merged, and
+/// `record` flags the cache as changed only when the value differs. So the
+/// 60-second re-fetches that keep happening while the view is open schedule no
+/// frame, and expiry - which runs on the render path - would have nothing to
+/// run in. `WorkspaceWindow::pull_requests_expiring` is what covers that; this
+/// pins the premise it rests on.
+#[test]
+fn re_recording_an_unchanged_merged_state_does_not_flag_the_cache() {
+    let merged = merged_at(SystemTime::now() - DAY * 2);
+    let mut cache = PullRequestStateCache::default();
+    cache.claim_refresh(URL.to_string(), ALWAYS)
+         .expect("claimed")
+         .record(merged.clone());
+    assert!(cache.take_changed(), "the first answer is a change");
+
+    cache.claim_refresh(URL.to_string(), ALWAYS)
+         .expect("claimed")
+         .record(merged);
+
+    assert!(!cache.take_changed(),
+            "an identical answer schedules no frame - so expiry needs its own chain entry");
+}
