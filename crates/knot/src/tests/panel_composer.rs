@@ -38,26 +38,39 @@ use tempfile::TempDir;
 use crate::composer_scan::Construct;
 use crate::composer_style::ComposerStyling;
 use crate::composer_style::Palette;
+use crate::workspace_window::panel::composer::new_panel_input;
+use crate::workspace_window::panel::composer::panel_input_max_rows;
+use crate::workspace_window::panel::composer::sends_now;
+use crate::workspace_window::panel::composer::sends_on;
 use crate::workspace_window::panel::prompt::PANEL_INPUT_ROWS_COLLAPSED;
 use crate::workspace_window::panel::prompt::PANEL_INPUT_ROWS_EXPANDED;
 use crate::workspace_window::panel::prompt::PanelInput;
 use crate::workspace_window::panel::prompt::PanelInputState;
-use crate::workspace_window::panel::prompt::new_panel_input;
-use crate::workspace_window::panel::prompt::panel_input_max_rows;
-use crate::workspace_window::panel::prompt::sends_now;
-use crate::workspace_window::panel::prompt::sends_on;
 
 /// The sources the guard below reads, relative to the crate root.
-const PROMPT_SOURCE: &str = "src/workspace_window/panel/prompt.rs";
+const COMPOSER_SOURCE: &str = "src/workspace_window/panel/composer.rs";
 const RENDER_SOURCE: &str = "src/workspace_window/render/mod.rs";
+const REPAINT_SOURCE: &str = "src/workspace_window/repaint.rs";
 
-/// One of those sources, as text.
-fn source(relative: &str) -> String {
+/// One of those sources, with every run of whitespace removed.
+///
+/// A guard that quotes a line of Rust is otherwise only as good as
+/// `rustfmt`'s current line breaks: the form it forbids can come back
+/// wrapped differently and the `contains` then passes vacuously. Haystack
+/// and needle both go through this, so the assertions are about the tokens
+/// rather than the layout.
+fn squeezed(relative: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+                                                 panic!("reading {}: {error}", path.display())
+                                             });
 
-    std::fs::read_to_string(&path).unwrap_or_else(|error| {
-                                      panic!("reading {}: {error}", path.display())
-                                  })
+    text.split_whitespace().collect()
+}
+
+/// A needle squeezed the way [`squeezed`] squeezes its haystack.
+fn needle(form: &str) -> String {
+    form.split_whitespace().collect()
 }
 
 /// A window holding just the composer, plus the `PressEnter` events it
@@ -243,31 +256,41 @@ fn the_send_chord_follows_a_setting_changed_after_the_composer_was_built(cx: &mu
 /// defect this pins passed every test in this module.
 #[test]
 fn the_subscription_reads_the_setting_rather_than_capturing_it() {
-    let prompt = source(PROMPT_SOURCE);
+    let composer_src = squeezed(COMPOSER_SOURCE);
 
-    assert!(prompt.contains("if sends_now(*shift, cx)"),
+    assert!(composer_src.contains(&needle("if sends_now(*shift, cx)")),
             "the PressEnter guard must consult the live surface; a captured flag makes the send \
              chord whatever it was when the composer was built");
-    assert!(!prompt.contains("sends_on(shift_to_send, *shift)"),
+    assert!(!composer_src.contains(&needle("sends_on(shift_to_send, *shift)")),
             "the captured-flag form is #429 exactly, and it compiles");
 }
 
-/// The other half of the wiring, and the reason it is not in
-/// `panel_prompt_input`: a composer already on screen has to be brought back
-/// in line, and the place to do it is the frame's own preamble rather than
-/// the tree-building pass it used to sit in.
+/// The other half of the wiring, and the reason it hangs off the poll rather
+/// than off a render.
+///
+/// `settings_global::write` notifies nobody, so a preference change reaches
+/// this window only when something asks - and a render is not something that
+/// is guaranteed to happen. `repaint_poll_tick` notifies only when one of
+/// its flags is true, so on a quiet workspace it can be never, which is the
+/// "could be never" the poll's own `pull_request_states` comment already
+/// describes. Reconciling from a render leaves a window in which `sends_now`
+/// is live and the widget is not, and in that window the chord the hint
+/// calls "newline" neither sends nor inserts one.
 #[test]
-fn the_send_chord_is_reconciled_in_the_frames_preamble() {
-    let render = source(RENDER_SOURCE);
-    let prompt = source(PROMPT_SOURCE);
+fn the_send_chord_is_reconciled_from_the_repaint_poll() {
+    let repaint = squeezed(REPAINT_SOURCE);
+    let render = squeezed(RENDER_SOURCE);
+    let composer_src = squeezed(COMPOSER_SOURCE);
+    let call = needle("self.reconcile_panel_send_chord(cx)");
 
-    assert!(render.contains("self.reconcile_panel_send_chord(cx)"),
-            "prepare_frame must reconcile, or an entity built before the change keeps the old \
-             submit_on_enter and the chord the hint calls 'newline' propagates instead of \
-             inserting one");
-    assert!(!prompt.contains("self.reconcile_panel_send_chord(cx)"),
-            "reconciling from panel_prompt_input puts it back on the tree-building pass; \
-             prepare_frame is where the window's per-frame memos live");
+    assert!(repaint.contains(&call),
+            "repaint_poll_tick must reconcile, or a composer built before the change keeps the \
+             old submit_on_enter until something unrelated happens to redraw the window");
+    assert!(repaint.contains(&needle("|| send_chord_changed")),
+            "and its answer must be in the notify chain, or the frame that would show the \
+             reconciled composer is never asked for");
+    assert!(!render.contains(&call) && !composer_src.contains(&call),
+            "reconciling from a render makes the fix wait for a repaint nothing schedules");
 }
 
 /// Ordinary characters are unaffected by either setting - the guard that

@@ -4,6 +4,7 @@
 //! - [`session`] starts, stops and probes the ACP connection.
 //! - [`pane`] draws the conversation and the panes that replace it.
 //! - [`input`] draws the composer.
+//! - [`composer`] builds the composer entity and owns its send chord.
 //! - [`lookup`] completes slash commands and skills inside the composer.
 //! - [`prompt`] moves text from the composer to the agent.
 //! - [`styling`] keeps the composer's styled runs in step with it.
@@ -16,6 +17,7 @@
 //! not by type.
 
 mod attachments;
+pub(crate) mod composer;
 pub(super) mod input;
 pub(crate) mod lookup;
 pub(crate) mod mentions;

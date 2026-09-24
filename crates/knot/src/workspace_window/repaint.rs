@@ -122,6 +122,15 @@ impl WorkspaceWindow {
         // exits. Lands here because `spawn_blocking` has no context to
         // notify from - see `workspace_window::mcp_panel::probe`.
         let mcp_probed = self.mcp_probe_tick(cx);
+        // The one source here that is not another thread: the writer is the
+        // settings window, on this one. `settings_global::write` mutates the
+        // surface and returns - no notify, no subscription, no generation
+        // counter - so a preference change reaches this window only when
+        // something asks. Every composer already built holds the send chord
+        // as a widget flag, and this tick is the only guarantee that it
+        // stops disagreeing with `sends_now`; hung off a render instead, it
+        // would wait for a repaint nothing schedules.
+        let send_chord_changed = self.reconcile_panel_send_chord(cx);
         if grid_dirty
            || panel_states_moved
            || panel_dirty
@@ -140,6 +149,7 @@ impl WorkspaceWindow {
            || git_reads_landed
            || mentions_listed
            || shell_runs_moved
+           || send_chord_changed
         {
             cx.notify();
         }

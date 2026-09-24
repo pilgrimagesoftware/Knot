@@ -18,10 +18,10 @@ use gpui_kit::{Context, Entity, IntoElement, Render, Window, div};
 
 use crate::panel_commands::Trigger;
 use crate::panel_commands::active_token;
+use crate::workspace_window::panel::composer::new_panel_input;
+use crate::workspace_window::panel::composer::panel_input_max_rows;
 use crate::workspace_window::panel::lookup::replace_lookup_token;
 use crate::workspace_window::panel::prompt::PanelInputState;
-use crate::workspace_window::panel::prompt::new_panel_input;
-use crate::workspace_window::panel::prompt::panel_input_max_rows;
 
 /// A root view with no content: these assertions read the composer's
 /// buffer, not a rendered frame.
