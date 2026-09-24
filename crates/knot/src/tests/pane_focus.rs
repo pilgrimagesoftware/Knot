@@ -121,8 +121,6 @@ fn an_open_dialog_sits_inside_the_root_focus_subtree(cx: &mut TestAppContext) {
 fn panel_agent() -> SelectedAgentFacts {
     SelectedAgentFacts { id:            Uuid::new_v4(),
                          is_panel_mode: true,
-                         has_markdown:  false,
-                         has_diagram:   false,
                          is_activated:  true,
                          has_live_grid: false, }
 }
@@ -212,34 +210,33 @@ fn a_deactivated_shell_agent_shows_nothing() {
     assert_eq!(focus_target(false, Some(&agent)), None);
 }
 
+/// An open artifact is no longer a reason to withhold focus. Under
+/// `artifact-panel` the panel is a sibling of the content pane, so the
+/// composer is on screen beside a shown file or diagram - and whether the
+/// panel is *expanded* is asked in `prepare_frame`, after the latch, not
+/// here. `focus_target` answers only what the selection implies.
+///
+/// This reverses `an_open_markdown_file_shows_no_composer` and
+/// `an_open_diagram_shows_no_composer`, which asserted the takeover these
+/// facts used to encode.
 #[test]
-fn an_open_markdown_file_shows_no_composer() {
-    let agent = SelectedAgentFacts { has_markdown: true,
-                                     ..panel_agent() };
+fn an_open_artifact_no_longer_withholds_the_composer() {
+    let agent = panel_agent();
+
     assert_eq!(focus_target(false, Some(&agent)),
-               None,
-               "the markdown pane takes the content area ahead of the conversation");
+               Some(FocusTarget::Composer(agent.id)),
+               "an artifact panel narrows the conversation rather than replacing it, so the \
+                composer is there to focus");
 }
 
+/// The same for a Terminal-mode agent: an artifact does not hold its surface
+/// off, because the surface is still on screen beside the panel.
 #[test]
-fn an_open_diagram_shows_no_composer() {
-    let agent = SelectedAgentFacts { has_diagram: true,
-                                     ..panel_agent() };
-    assert_eq!(focus_target(false, Some(&agent)),
-               None,
-               "the diagram pane takes the content area for the same reason");
-}
+fn an_open_artifact_no_longer_withholds_the_terminal() {
+    let agent = shell_agent();
 
-/// Both panes take the content area ahead of either session pane, so they
-/// hold the terminal off exactly as they hold the composer off.
-#[test]
-fn a_pane_in_front_of_a_shell_agent_shows_nothing() {
-    let with_markdown = SelectedAgentFacts { has_markdown: true,
-                                             ..shell_agent() };
-    let with_diagram = SelectedAgentFacts { has_diagram: true,
-                                            ..shell_agent() };
-    assert_eq!(focus_target(false, Some(&with_markdown)), None);
-    assert_eq!(focus_target(false, Some(&with_diagram)), None);
+    assert_eq!(focus_target(false, Some(&agent)),
+               Some(FocusTarget::Terminal(agent.id)));
 }
 
 /// Both takeovers - the dashboard and the pull requests view - reach
@@ -265,17 +262,19 @@ fn no_selection_shows_no_composer() {
                 pane resolves it: nothing to draw");
 }
 
-/// A markdown pane closing over the same agent puts the conversation back,
-/// and `design.md` is explicit that this is the same transition as selecting
-/// the agent: the composer is focused again when it returns.
+/// `focus_target` carries no artifact fact at all now, so opening or closing
+/// one cannot produce a transition here. That is the property the fix turns
+/// on: collapsing an expanded panel must not take focus, and a guard fed into
+/// this function would have latched `None` and then fired on the collapse.
 #[test]
-fn closing_a_markdown_pane_shows_the_composer_again() {
+fn an_artifact_opening_or_closing_is_not_a_transition() {
     let agent = panel_agent();
-    let with_markdown = SelectedAgentFacts { has_markdown: true,
-                                             ..panel_agent() };
-    assert_eq!(focus_target(false, Some(&with_markdown)), None);
-    assert_eq!(focus_target(false, Some(&agent)),
-               Some(FocusTarget::Composer(agent.id)),
-               "the same agent's composer is showing again once the pane is closed, which is a \
-                transition and so takes focus");
+
+    let before = focus_target(false, Some(&agent));
+    let after = focus_target(false, Some(&agent));
+
+    assert_eq!(before, after,
+               "the answer depends on the selection alone, so nothing an artifact does can \
+                change it");
+    assert_eq!(before, Some(FocusTarget::Composer(agent.id)));
 }

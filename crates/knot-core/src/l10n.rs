@@ -106,6 +106,19 @@ mod tests {
         }
     }
 
+    /// The session-config dropdown's search copy. Drawn inside a component
+    /// the panel tests drive through a real window, so a key missing from
+    /// the catalogue would otherwise surface only as the raw key in a
+    /// placeholder.
+    #[test]
+    fn config_selector_keys_resolve() {
+        for key in ["panel.selector.search_placeholder",
+                    "panel.selector.no_matches"]
+        {
+            assert_ne!(t(key), key, "{key} should resolve to its localized copy");
+        }
+    }
+
     #[test]
     fn unknown_key_falls_back_to_key_string() {
         assert_eq!(t("does.not.exist"), "does.not.exist");

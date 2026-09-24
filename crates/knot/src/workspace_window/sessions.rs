@@ -288,6 +288,9 @@ impl WorkspaceWindow {
         self.forget_awaiting_notification(id);
         self.panel_states.remove(&id);
         self.panel_prompt_inputs.remove(&id);
+        // Both dropdowns and both of their subscriptions, keyed by agent -
+        // see `forget_panel_selectors`.
+        self.forget_panel_selectors(id);
         // Whichever target it named: the agent is gone, so a later frame
         // must read the next selection as a transition rather than as the
         // same answer it already stored.
@@ -296,6 +299,9 @@ impl WorkspaceWindow {
         }
         self.panel_prompt_input_subscriptions.remove(&id);
         self.panel_prompt_queues.remove(&id);
+        // Dropping the tracker stops its task; nothing else holds one.
+        self.panel_trackers.remove(&id);
+        self.panel_reported_states.remove(&id);
         self.panel_stopping.remove(&id);
         self.panel_lists.remove(&id);
         self.panel_list_row_counts.remove(&id);

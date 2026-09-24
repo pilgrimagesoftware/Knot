@@ -1,6 +1,10 @@
 //! Reading one pull request's current state.
 
+use std::time::{Duration, SystemTime};
+
 use serde::Deserialize;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::consts::{MERGEABILITY_RETRY_DELAY, PULL_REQUEST_FIELDS};
 use crate::error::{ForgeError, Result};
@@ -73,6 +77,46 @@ pub struct PullRequestState {
     /// Whether it could land right now. [`Mergeability::Unknown`] for a
     /// pull request that is not open, where the question does not arise.
     pub mergeable: Mergeability,
+    /// When it merged, for a pull request that did. No row shows this; it is
+    /// what the retention window is measured against when deciding that a
+    /// merged pull request has been merged long enough to stop listing.
+    ///
+    /// `None` for one that has not merged, and equally for one that has
+    /// where the forge did not report a time or reported one that will not
+    /// parse. The three are the same answer to the only question asked of
+    /// this field - is there a merge time to measure - and collapsing them
+    /// keeps the caller from having to distinguish cases that all mean
+    /// "keep the record".
+    pub merged_at: Option<OffsetDateTime>,
+}
+
+impl PullRequestState {
+    /// Whether this pull request merged, and merged longer ago than
+    /// `retention`.
+    ///
+    /// The question the retention window asks, answered where the merge time
+    /// lives rather than at the call site: the caller then needs no date
+    /// library and no opinion about how a forge spells a timestamp.
+    ///
+    /// False whenever the evidence is missing - not merged, or merged with no
+    /// merge time the forge reported or one that would not parse. Knot drops
+    /// what it has observed and declines to guess at the rest.
+    ///
+    /// A merge time ahead of this machine's clock gives a negative span,
+    /// which is not a [`Duration`] and so is not past the window. That falls
+    /// out of the conversion rather than needing a guard.
+    #[must_use]
+    pub fn merged_longer_than(&self, retention: Duration, now: SystemTime) -> bool {
+        if self.status != PullRequestStatus::Merged {
+            return false;
+        }
+        let Some(merged_at) = self.merged_at
+        else {
+            return false;
+        };
+        (OffsetDateTime::from(now) - merged_at).try_into()
+                                               .is_ok_and(|since: Duration| since > retention)
+    }
 }
 
 /// Read the state of the pull request at `url` through the real `gh`.
@@ -123,6 +167,9 @@ struct RawPullRequest {
     mergeable:           Option<String>,
     #[serde(default)]
     status_check_rollup: Option<Vec<RawCheck>>,
+    /// RFC 3339, and absent on a `gh` too old to report it.
+    #[serde(default)]
+    merged_at:           Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,7 +200,24 @@ pub fn parse_pull_request_state(json: &str) -> Result<PullRequestState> {
                           title: raw.title,
                           status,
                           checks,
-                          mergeable: mergeability_from(status, raw.mergeable.as_deref(), checks) })
+                          mergeable: mergeability_from(status, raw.mergeable.as_deref(), checks),
+                          merged_at: merged_at_from(status, raw.merged_at.as_deref()) })
+}
+
+/// The merge time, for a pull request that merged and reported one that
+/// parses.
+///
+/// Gated on the status so a forge that volunteers `mergedAt` on something it
+/// also calls closed cannot produce a state that is both. Status is the field
+/// that cannot be absent; this one follows it.
+fn merged_at_from(status: PullRequestStatus, merged_at: Option<&str>) -> Option<OffsetDateTime> {
+    if status != PullRequestStatus::Merged {
+        return None;
+    }
+    // An unparseable timestamp is dropped rather than raised: it costs a
+    // record that does not expire, where failing the parse would cost the
+    // whole row.
+    merged_at.and_then(|raw| OffsetDateTime::parse(raw, &Rfc3339).ok())
 }
 
 /// Fold GitHub's answer, the check rollup and draft-ness into the one

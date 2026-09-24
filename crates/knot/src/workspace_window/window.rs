@@ -16,6 +16,7 @@ use gpui_kit::Entity;
 use gpui_kit::ListState;
 use gpui_kit::Subscription;
 use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::component::select::SelectState;
 use knot_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
@@ -152,11 +153,61 @@ pub(crate) struct WorkspaceWindow {
     /// control can grow the same entity's visible height without losing
     /// in-progress text, rather than swapping to a second entity.
     pub(super) panel_prompt_inputs: BTreeMap<Uuid, Entity<panel::prompt::PanelInputState>>,
+    /// The model and effort dropdowns' state, one per panel and axis.
+    ///
+    /// `SelectState` holds the search query, the scroll offset and focus, so
+    /// it cannot be rebuilt per render - a state built in the render path
+    /// would lose each keystroke as it was typed. Built and refreshed in
+    /// `prepare_frame`; see `panel::input::config_select`.
+    pub(super) panel_selectors: BTreeMap<panel::input::SelectorKey,
+                                         Entity<SelectState<panel::input::ConfigSelectorDelegate>>>,
+    /// Keeps each dropdown's `SelectEvent` subscription alive. Dropping one
+    /// unsubscribes it, so a selection would persist nothing.
+    pub(super) panel_selector_subscriptions:     BTreeMap<panel::input::SelectorKey, Subscription>,
+    /// What each dropdown was last built from, so an agent re-reporting the
+    /// same options leaves a half-typed search query alone and a changed
+    /// list still replaces what is offered.
+    pub(super) panel_selector_items:
+        BTreeMap<panel::input::SelectorKey, Vec<panel::input::ConfigSelectorItem>>,
     /// Keeps each prompt input's `PressEnter` subscription alive for the
     /// life of the entity it was created for (dropping a `Subscription`
     /// cancels it).
     pub(super) panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     pub(super) panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    /// One activity tracker per Panel-mode agent whose session has been
+    /// ready at least once, created lazily by `sync_panel_agent_states`.
+    ///
+    /// The tracker, not this window, writes the agent's `AgentState`: its
+    /// `on_status` sink does the store write, the same way the hook route's
+    /// tracker does in `knot-mcp-tools`. The poll reports ACP transitions
+    /// into it and reads nothing back. That is what makes
+    /// `Effect::AwaitingInput` (the desktop notification) and
+    /// `Effect::CheckMessages` (the idle delivery nudge) reachable for a
+    /// Panel-mode agent at all - written straight into the store they never
+    /// fired. See `openspec/specs/activity-detection/spec.md`, "ACP updates
+    /// drive status for Panel-mode agents".
+    pub(super) panel_trackers:                   BTreeMap<Uuid, knot_activity::Tracker>,
+    /// The status last *reported* to each agent's tracker, which is what the
+    /// poll dedupes against.
+    ///
+    /// Not the store: the store is now written by the tracker's sink, a
+    /// channel hop later, so on the next tick it may still hold the previous
+    /// status. Deduping against it would report the same pending permission
+    /// twice and raise two notifications for one prompt. Written here
+    /// synchronously at send time, so the gate's input is a value this
+    /// window owns and nothing off-thread can lag.
+    pub(super) panel_reported_states:            BTreeMap<Uuid, knot_agents::AgentState>,
+    /// Set by every Panel tracker's `on_status` sink once it has written the
+    /// store, and cleared by `repaint_poll_tick` when it reads it.
+    ///
+    /// The sink runs on the tracker's tokio task with no GPUI context, so
+    /// without this the write lands on no frame: the tick that *reports* a
+    /// transition notifies while the store still holds the old status, and
+    /// the tick the write actually arrives on has nothing to report. The dot
+    /// would then catch up only when something unrelated repainted the
+    /// window - the failure `.claude/rules/rust-structure.md` names under
+    /// "Off-thread results must reach a frame".
+    pub(super) panel_status_landed:              Arc<AtomicBool>,
     pub(super) panel_stopping:                   BTreeSet<Uuid>,
     pub(super) panel_prompt_results:             Arc<Mutex<Vec<PanelPromptResult>>>,
     /// One virtualized conversation list per Panel-mode agent that has
@@ -309,6 +360,25 @@ pub(crate) struct WorkspaceWindow {
     /// element tree for the reason `sidebar_resize` is: the width is read
     /// outside the group too, to seed the panel's own size.
     pub(super) git_panel_resize:                 BTreeMap<Uuid, Entity<ResizableState>>,
+    /// The artifact panel's arrangement per agent: width, the split between
+    /// its two sections, which of them are collapsed, and whether the panel
+    /// is expanded over the content pane.
+    ///
+    /// View state, not persisted, for the reason `git_panel_width` is not -
+    /// and keyed by agent rather than by workspace, which is why
+    /// `WorkspaceUiState` is the wrong home even though it persists the rest
+    /// of the window's arrangement.
+    pub(super) artifact_panel:
+        BTreeMap<Uuid, super::artifact_panel::state::ArtifactPanelArrangement>,
+    /// The divider between an agent's content and its artifact panel, and the
+    /// one between the panel's two sections. Held outside the element tree
+    /// for the reason `git_panel_resize` is.
+    pub(super) artifact_panel_resize:            BTreeMap<Uuid, Entity<ResizableState>>,
+    pub(super) artifact_split_resize:            BTreeMap<Uuid, Entity<ResizableState>>,
+    /// What each agent's artifact fields held when this window last saw them.
+    /// Compared each poll so a `display-markdown` arriving on the MCP
+    /// server's thread reaches a frame.
+    pub(super) artifact_drawn: BTreeMap<Uuid, super::artifact_panel::state::ArtifactSnapshot>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can

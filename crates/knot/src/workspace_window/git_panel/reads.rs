@@ -95,6 +95,7 @@ impl WorkspaceWindow {
         self.git_panel_width.remove(&id);
         self.git_panel_resize.remove(&id);
         self.forget_git_diff_list(id);
+        self.forget_artifact_panel(id);
     }
 
     /// Invalidates what the panel knows about `id` after the panel itself
