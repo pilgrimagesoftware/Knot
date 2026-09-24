@@ -26,10 +26,33 @@ pub fn registration_user_prompt() -> &'static str {
 /// exists not to be.
 ///
 /// It pushes outward, not inward: an agent already knows who its knot is,
-/// so what it needs telling is to *use* them - hand work to whoever owns
-/// that project, ask before guessing at their code, say what it changed
-/// that others build on. Instructions to keep checking an inbox would
-/// produce busywork instead, and messages reach an agent on their own.
+/// so what it needs telling is to *use* them - hand over work in a folder
+/// that is only a teammate's, ask before guessing at their code, say what
+/// it changed that others build on. Instructions to keep checking an inbox
+/// would produce busywork instead, and messages reach an agent on their
+/// own.
+///
+/// The two duties are ordered on purpose. An earlier version said "Reach
+/// for your knot first and your own effort second" and "take on what a
+/// teammate asks of you", and said nothing about the work already in hand.
+/// Every agent reads the same line, so a request from any one of them
+/// preempted the recipient, whose own task was dropped and never resumed.
+/// At seven agents the preemption was mutual and the knot spent itself
+/// discussing work instead of doing it. Naming the incoming request as
+/// queued work is what stops that.
+///
+/// Handoff is decided by folder, not by project. "If the work belongs to a
+/// teammate's project" is undecidable in the workspace Knot is built for -
+/// one project, many agents - because every agent is in that project, so
+/// both readings are available and the prompt offers nothing to choose
+/// between them. The shared-folder carve-out has to be stated rather than
+/// left to be inferred.
+///
+/// Replying is bounded for the same reason. An agent that has answered a
+/// teammate has no instruction saying the exchange is over, so a question
+/// begets a question; the three shapes the deadlock took - debating the
+/// design, waiting for the knot to agree, waiting to be told to proceed -
+/// are ruled out by name.
 ///
 /// These name the MCP server on purpose. An agent inherits its own
 /// user-level MCP configuration on top of the server Knot hands it, and
@@ -42,8 +65,11 @@ pub fn registration_user_prompt() -> &'static str {
 /// It stays on one line. The shell-agent path types this prompt into a
 /// terminal and then sends Return, so an embedded newline would submit it
 /// half-written.
+///
+/// Contract: `openspec/specs/agent-launch-command/spec.md`, "Knot
+/// instructions given to a launched agent".
 pub fn knot_instructions(agent_id: Uuid) -> String {
-    format!("You are part of a team of agents called a knot. Your knot agent ID: {agent_id}. Reach for your knot first and your own effort second. Check list-agents before you start anything substantial: if the work belongs to a teammate's project, hand it to them with send-message rather than working in their code, and ask them rather than reverse-engineer an answer. Use broadcast-message when you change something others build on, and take on what a teammate asks of you. Knot tools come only from the MCP server named `{MCP_SERVER_NAME}` - set-status, list-agents, register-agent and the rest. Another MCP server may offer tools with those same names; those belong to a different knot that does not know your agent ID, and calling them will fail or silently do nothing. CRITICAL: call set-status before you start anything, whenever you change direction, and when you finish. Your teammates coordinate off your status, so this is not optional.")
+    format!("You are part of a knot, a team of agents. Your knot agent ID: {agent_id}. Finish your current task before a teammate's request: it is queued work, not an interrupt. Check list-agents before anything substantial: a folder you share with a teammate is yours to work in, but hand work in a folder only theirs to them with send-message, and ask them rather than reverse-engineer. Use broadcast-message when you change something others build on. Reply only to answer a question or report you finished - never to debate design, seek consensus or await approval. Knot tools come only from the MCP server named `{MCP_SERVER_NAME}`: set-status, list-agents, register-agent and the rest. Another MCP server may offer the same tool names; those belong to a different knot that does not know your agent ID, and calling them fails or does nothing. CRITICAL: call set-status before you start anything, when you change direction, and when you finish. Teammates coordinate off it; this is not optional.")
 }
 
 /// The combined registration prompt for the deferred (non-inline)
@@ -105,7 +131,9 @@ mod tests {
     fn instructions_name_the_mcp_server_the_tools_come_from() {
         let prompt = knot_instructions(id());
         assert!(prompt.contains(MCP_SERVER_NAME));
-        assert!(prompt.contains("Another MCP server may offer tools with those same names"),
+        assert!(prompt.contains("Another MCP server may offer the same tool names"),
+                "the prompt must say the collision is possible");
+        assert!(prompt.contains("a different knot that does not know your agent ID"),
                 "the prompt must say why the name matters, not just state it");
     }
 
@@ -132,8 +160,46 @@ mod tests {
     #[test]
     fn instructions_tell_an_agent_to_hand_work_to_its_knot() {
         let prompt = knot_instructions(id());
-        assert!(prompt.contains("hand it to them"));
-        assert!(prompt.contains("Reach for your knot first"));
+        assert!(prompt.contains("hand work in a folder only theirs to them with send-message"));
+        assert!(prompt.contains("ask them rather than reverse-engineer"));
+    }
+
+    /// The two duties have to be ordered. Telling every agent to take on
+    /// what a teammate asks, while saying nothing about the work already
+    /// in hand, makes any request a preemption; with seven agents reading
+    /// the same line the preemption is mutual and nobody finishes
+    /// anything.
+    #[test]
+    fn instructions_rank_the_agents_own_task_above_a_request() {
+        let prompt = knot_instructions(id());
+        assert!(prompt.contains("Finish your current task before a teammate's request"));
+        assert!(prompt.contains("queued work, not an interrupt"));
+    }
+
+    /// Handoff is decided by folder, not by project. Knot's own workspace
+    /// is many agents on one project, where "the work belongs to a
+    /// teammate's project" admits both readings - all of it is mine, none
+    /// of it is - so the carve-out has to be stated, not inferred.
+    #[test]
+    fn instructions_decide_handoff_by_folder_with_a_shared_carve_out() {
+        let prompt = knot_instructions(id());
+        assert!(prompt.contains("a folder you share with a teammate is yours to work in"));
+        assert!(!prompt.contains("project"),
+                "a project-ownership test cannot discriminate in a one-project knot");
+    }
+
+    /// An answered message is otherwise an invitation to another one. The
+    /// bound names when to reply and rules out the three shapes the
+    /// deadlock took: debating the design, waiting for the knot to agree,
+    /// and waiting to be told to proceed.
+    #[test]
+    fn instructions_bound_the_reply_loop() {
+        let prompt = knot_instructions(id());
+        assert!(prompt.contains("Reply only to answer a question or report you finished"));
+        for forbidden in ["debate design", "seek consensus", "await approval"] {
+            assert!(prompt.contains(forbidden),
+                    "the prompt never forbids {forbidden}");
+        }
     }
 
     /// The shell-agent path types the prompt into a terminal and then
