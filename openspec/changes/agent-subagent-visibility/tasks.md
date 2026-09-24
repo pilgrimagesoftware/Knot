@@ -71,12 +71,12 @@
 
 - [x] 10.1 Extend the pane's empty-state vocabulary to cover the subagents group — the agent is not running, or it dispatched none — alongside the existing process cases, as a closed enum with no default arm; verify each of the delta's empty-state scenarios maps to a distinct variant
 - [x] 10.2 Keep a failed process sample off the subagents group: the process rows keep their last successful sample and their failure notice, the subagent rows carry neither; verify a failed sample leaves the subagent rows unchanged
-- [ ] 10.3 Add the new keys under `processes.` in `crates/knot-core/locales/en.yml` — group labels, subagent state labels, the subagent counts, the copy-task action and its confirmation, and the two new empty states; verify tests assert the keys resolve and never the English copy, and touch `knot-core` after editing the catalog so the l10n tests do not run against a stale artifact
-- [ ] 10.4 Show a subagent's kind and task verbatim, never through the localization lookup; verify a kind that collides with a localization key renders as the agent reported it
+- [x] 10.3 Add the new keys under `processes.` in `crates/knot-core/locales/en.yml` — group labels, subagent state labels, the subagent counts, the copy-task action and its confirmation, and the two new empty states; verify tests assert the keys resolve and never the English copy, and touch `knot-core` after editing the catalog so the l10n tests do not run against a stale artifact
+- [x] 10.4 Show a subagent's kind and task verbatim, never through the localization lookup; verify a kind that collides with a localization key renders as the agent reported it
 
 ## 11. Reaching a frame, and the gate
 
-- [ ] 11.1 Add the single branch in `repaint_poll_tick` that takes the registry's changed flag and contributes to the `cx.notify()` condition; verify a subagent completing while the agent's pane is shown repaints without any other event, and that no other caller takes the flag
-- [ ] 11.2 Verify no registry read, recognizer call or clock-driven recomputation is reachable from a `render` function, the way `diff_stats.rs` guards the same rule
-- [ ] 11.3 Verify a subagent dispatched while another agent's pane is shown is recorded and appears when that agent's pane is next shown — the spec's scenario that separates recording from sampling
-- [ ] 11.4 Run `make` and verify the whole gate passes: `fmt-check`, `size-check`, `lint` with `-D warnings`, `test` and `build`
+- [x] 11.1 Add the single branch in `repaint_poll_tick` that takes the registry's changed flag and contributes to the `cx.notify()` condition; verify a subagent completing while the agent's pane is shown repaints without any other event, and that no other caller takes the flag
+- [x] 11.2 Verify no recognizer call and no report parsing is reachable from a `render` function, asserted over the sources the way `agent_processes`' own `no_render_module_calls_a_blocking_process_entry_point` does; reading the already-recorded registry from a render is explicitly allowed by the spec ("a render SHALL read only what has already been recorded"), so it is the feed's entry points that are barred, not the registry
+- [x] 11.3 Verify a subagent dispatched while another agent's pane is shown is recorded and appears when that agent's pane is next shown — the spec's scenario that separates recording from sampling
+- [x] 11.4 Run `make` and verify the whole gate passes: `fmt-check`, `size-check`, `lint` with `-D warnings`, `test` and `build`

@@ -102,6 +102,14 @@ impl WorkspaceWindow {
         // processes section is expanded on the shown agent - see
         // `workspace_window::processes`.
         let processes_sampled = self.process_sampling_tick();
+        // Both subagent feeds write off the main thread with no context to
+        // notify from - the ACP drain on a session task, the hook route on an
+        // axum worker - so a dispatch or a completion only reaches the screen
+        // through this. Taken into a local rather than inlined into the `if`
+        // below: `||` short-circuits, and because the read is a consuming
+        // swap a skipped flag would stay set and fire a spurious repaint on
+        // the next tick.
+        let subagents_changed = self.subagents.lock().take_changed();
         if grid_dirty
            || panel_states_moved
            || panel_dirty
@@ -117,6 +125,7 @@ impl WorkspaceWindow {
            || git_commits_landed
            || git_watches_fired
            || git_reads_landed
+           || subagents_changed
         {
             cx.notify();
         }
