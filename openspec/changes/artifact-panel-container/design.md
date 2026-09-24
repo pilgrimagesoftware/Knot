@@ -189,6 +189,18 @@ The predicate reads the window's live expanded flag rather than
 panel an agent maximized, and it is what is on screen that decides whether
 there is a composer to focus.
 
+The expanded condition belongs to this guard and to no other, even though
+`prepare_frame` is about to hold two tests of a similar-looking fact. The other
+is the dropdown-state block PR #424 adds earlier in the same function, and it
+wants the opposite treatment: it builds the model and effort selector state, and
+skipping it while expanded would leave that state absent on the frame the panel
+collapses, where `render_panel_searchable_selector` falls back to a disabled
+empty-state trigger — so the user would see both selectors drawn greyed-out for
+one frame before they populate. Building it while expanded costs a map lookup
+and a small vector comparison per frame and draws nothing. The distinction is
+whether focus may be *taken* versus whether state *exists*; symmetry between the
+two gates would be a regression, not a tidy-up.
+
 ### Both focus deltas are one edit, not two
 
 `acp-panel-ui` and `terminal-input` each carry the exception, but one guard

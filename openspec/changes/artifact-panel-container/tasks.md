@@ -142,7 +142,9 @@
       focus on the `None -> Composer` transition that collapsing produces.
       Verify with a test that a collapse following a click elsewhere leaves
       focus on the clicked control, covering "Collapsing an expanded panel does
-      not pull focus" in both deltas.
+      not pull focus" in both deltas. Add the condition to this guard only - the
+      dropdown-state block earlier in `prepare_frame` must keep running while
+      expanded, or its selectors draw greyed-out for a frame on collapse.
 - [ ] 6.2 Update `crates/knot/src/tests/pane_focus.rs` - including
       `an_open_markdown_file_shows_no_composer` at :216, whose premise this
       change reverses - and add four cases: a Panel-mode agent with a markdown
