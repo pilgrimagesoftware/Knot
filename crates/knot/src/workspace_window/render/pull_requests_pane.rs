@@ -191,6 +191,17 @@ fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWin
                                                                                            cx)
                         })
                         .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
+                                        // Before the removal, not after: gpui
+                                        // fires click handlers in the bubble
+                                        // phase, so without this the same click
+                                        // goes on to the row's own handler and
+                                        // opens the pull request the user was
+                                        // removing. This is the only control in
+                                        // `render/` nested inside a clickable
+                                        // row, which is why nothing else needs
+                                        // it. The dispatch order it relies on
+                                        // is pinned by the row-click tests.
+                                        cx.stop_propagation();
                                         view.confirm_remove_pull_request(agent_id,
                                                                          remove_url.clone(),
                                                                          window,
