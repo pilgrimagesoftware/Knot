@@ -132,12 +132,28 @@ false on load, so it is already session-scoped. It is the *command channel*: wha
 an agent asked for. The window's per-agent expanded flag is the *live state*:
 what is on screen, including what the user toggled.
 
-The edge between them is one-way and event-triggered — the flag is re-seeded
-from the field whenever that agent's markdown file changes to a new value. This
-is exactly the Swift reference's arrangement (`ContentView.swift:113-117` seeds
-`artifactExpanded` from `markdownMaximized` inside
-`.onChange(of: activeAgent?.markdownFilePath)`), and it is what makes a second
-`display-markdown` carrying `maximized` reach an already-open panel.
+The edge between them is one-way, and its trigger is the `(file, maximized)`
+pair rather than the file alone: the window remembers the pair it last seeded
+from and re-seeds when either half differs. Swift triggers on the file alone
+(`ContentView.swift:113-117` seeds `artifactExpanded` from `markdownMaximized`
+inside `.onChange(of: activeAgent?.markdownFilePath)`, which does not fire for
+an equal value), and that has a hole the port should not inherit: re-showing the
+file already open, this time asking for it maximized, changes nothing.
+
+Triggering on every call was the alternative. It closes the same hole but opens
+another — an agent re-showing a file it has just edited, with `maximized`
+omitted as it always was, would collapse a panel the user had expanded by hand.
+It also needs a per-call signal the store does not currently carry, since
+`set_markdown_panel` writes the same value twice for a repeated call. The pair
+comparison needs no new state on the agent record and no new field in the store.
+
+`clear_markdown_panel` is a third writer of `markdown_maximized`
+(`store/panels.rs:24`, setting it false when the markdown file closes) and is a
+trap for this design: a re-seed that fired on the file becoming `None` would
+collapse a panel still showing a diagram. Swift guards it with the `else if
+activeAgent?.mermaidSource == nil` at `ContentView.swift:118`. Here the guard is
+inherent — `None` is not a file, so it is not a pair to seed from — but the
+reset on panel close has to check the diagram itself.
 
 Seeding once when the panel first opens was the alternative and is wrong: an
 agent that shows one file without `maximized` and then another with it would

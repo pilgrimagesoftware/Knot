@@ -14,10 +14,15 @@ most recent first.
 defines: the panel takes the whole content area rather than its set width.
 Omitting it SHALL leave the panel at its set width.
 
-This SHALL apply to every call, not only the one that opens the panel. Each call
-states how that file is to be shown, so a file shown with `maximized` into an
-already-open panel SHALL expand it, and a file shown without into an expanded
-panel SHALL return it to its set width. Before this change the argument was
+This SHALL apply to every call that says something new about the panel, not only
+the one that opens it: a call naming a different file, or the same file with a
+different `maximized`, SHALL take effect. A file shown with `maximized` into an
+already-open panel SHALL expand it, and a file shown without `maximized` into a
+panel an earlier call maximized SHALL return it to its set width.
+
+A call repeating both the file and the argument of the call before it SHALL
+change nothing, so an agent re-showing a file it has just edited SHALL NOT
+collapse a panel the user expanded by hand. Before this change the argument was
 recorded and read by nothing, so an agent that asked for a maximized file got
 the same panel as one that did not.
 
@@ -42,6 +47,13 @@ each in its own section of the panel.
   again for the same agent with it
 - **THEN** the panel is expanded, rather than keeping the state the first call
   left it in
+
+#### Scenario: Re-showing a file leaves the user's panel alone
+
+- **WHEN** `display-markdown` is called without `maximized`, the user expands
+  the panel by hand, and the agent calls it again for the same file with
+  `maximized` still omitted
+- **THEN** the panel is still expanded
 
 #### Scenario: A diagram does not replace a file
 

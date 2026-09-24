@@ -33,20 +33,29 @@
       out-of-range write is clamped at both ends.
 - [ ] 2.3 Add `artifact_panel_open(id)` reading `markdown_file` and
       `mermaid_source` from the store, and re-seed the expanded flag from
-      `Agent::markdown_maximized` every time that agent's markdown file changes
-      to a new value - not once on first open, which would strand a later
-      `maximized` call; verify with a test that a file shown without
-      `maximized` followed by one shown with it leaves the panel expanded,
-      covering the `mcp-tools` scenario "A maximized file reaches an
-      already-open panel".
+      `Agent::markdown_maximized` whenever that agent's
+      `(markdown_file, markdown_maximized)` pair differs from the pair last
+      seeded for it - keyed on the pair, not the file alone, which would
+      strand a re-show of the open file asking to be maximized, and not on
+      every call, which would collapse a hand-expanded panel when an agent
+      re-shows a file it edited.
+      Verify with three tests covering the `mcp-tools` scenarios "A maximized
+      file reaches an already-open panel" and "Re-showing a file leaves the
+      user's panel alone", plus a file change carrying a different argument.
 - [ ] 2.4 Drop every per-agent entry when an agent closes, alongside
       `git_panel_width` in `workspace_window/git_panel/reads.rs`; verify with a
       test that closing a resized agent leaves no entry behind, covering the
       spec's "Closing an agent discards its arrangement".
 - [ ] 2.5 Clear the expanded flag when the last section closes, and leave it
-      alone when one section closes while the other stays open; verify with
-      tests covering "Expanded state does not carry to the next artifact" and
-      "Closing one section does not collapse the panel".
+      alone when one section closes while the other stays open. Note the trap:
+      `clear_markdown_panel` (`knot-agents/src/store/panels.rs:24`) is a third
+      writer of `markdown_maximized`, setting it false whenever the markdown
+      file closes, so the reset must test that no diagram remains rather than
+      following that field - Swift's guard is the `else if mermaidSource ==
+      nil` at `ContentView.swift:118`. Verify with tests covering "Expanded
+      state does not carry to the next artifact" and "Closing one section does
+      not collapse the panel", the second with an expanded panel whose markdown
+      section is closed while a diagram is still open.
 - [ ] 2.6 Make the expand control write the window flag only, never
       `Agent::markdown_maximized`; verify with a test that toggling it leaves
       the agent's stored panel state untouched.

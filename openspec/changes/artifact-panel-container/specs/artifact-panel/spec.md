@@ -184,13 +184,22 @@ Because the content pane is not on screen while expanded, `acp-panel-ui` and
 state of this panel. An unexpanded panel leaves the composer or terminal surface
 on screen beside it and SHALL NOT withhold focus.
 
-Expanded state SHALL be tracked per agent. It SHALL be set from
-`display-markdown`'s `maximized` argument each time that agent's markdown file
-changes, not once when the panel first opens: an agent that shows one file
-without `maximized` and then another with it SHALL end up expanded. It SHALL
-return to unexpanded when the panel closes — when the agent has neither an
-artifact left — and SHALL NOT be changed by closing one section while the other
-is still open.
+Expanded state SHALL be tracked per agent, and SHALL be taken from
+`display-markdown`'s `maximized` argument whenever that agent's markdown file or
+that argument differs from the pair the panel last took — not once when the
+panel first opens.
+
+That trigger is what makes the argument mean something on every call that says
+something new. An agent that shows one file without `maximized` and then another
+with it SHALL end up expanded; so SHALL an agent that re-shows the file already
+open, this time asking for it maximized. An agent that re-shows the same file
+with the same argument SHALL change nothing, so a panel the user expanded by
+hand SHALL survive an agent repeating itself — re-showing a file it has just
+edited is ordinary behaviour and is not an instruction about the panel's size.
+
+Expanded state SHALL return to unexpanded when the panel closes — when the agent
+has neither artifact left — and SHALL NOT be changed by closing one section
+while the other is still open.
 
 The `maximized` argument SHALL be the only writer of that state other than the
 control itself. Activating the control SHALL change what is on screen and SHALL
@@ -200,8 +209,13 @@ toggled cannot be mistaken for an instruction the agent gave.
 While expanded the panel's drag handle SHALL have nothing to set and SHALL NOT
 be shown; the width it had SHALL be kept and restored on returning.
 
-This diverges from the Swift reference, which tracks one expanded flag for the
-whole window, so expanding one agent's panel expands the next agent's too.
+This diverges from the Swift reference only at the edges. Swift holds one
+expanded flag for the whole window, but re-seeds it as the selected agent's
+markdown file changes, so per-agent behaviour emerges for agents that have a
+markdown file. The flag carries over from the previously selected agent in two
+cases it does not cover: when the newly selected agent has no markdown file but
+does have a diagram, and when both agents have the same file open. Tracking the
+state per agent removes both.
 
 #### Scenario: Expanding and returning
 
