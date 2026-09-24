@@ -156,12 +156,14 @@ impl WorkspaceWindow {
         // outlive the frame that draws it - a state rebuilt per render
         // loses the search query as it is typed. Cheap on the frames that
         // change nothing: the declared values are compared before anything
-        // is replaced. The options themselves are cloned out of the panel
-        // state the same way `render_panel_pane` already reads them.
+        // is replaced. The options come from the Panel-mode session's slot,
+        // the same state `render_panel_pane` draws the control bar from -
+        // not `panel_states`, which belongs to Terminal-mode sessions and
+        // never holds a declared option (#451).
         if !is_dashboard && let Some(id) = self.selected_agent {
-            let config_options = self.panel_states
+            let config_options = self.panel_sessions
                                      .get(&id)
-                                     .map(|state| state.lock().config_options.clone())
+                                     .map(|slot| slot.lock().config_options())
                                      .unwrap_or_default();
             self.ensure_panel_selectors(id, &config_options, window, cx);
         }
