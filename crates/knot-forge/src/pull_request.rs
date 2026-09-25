@@ -6,7 +6,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-use crate::consts::{MERGEABILITY_RETRY_DELAY, PULL_REQUEST_FIELDS};
+use crate::consts::{MERGEABILITY_RETRY_DELAY, NOT_FOUND_MARKERS, PULL_REQUEST_FIELDS};
 use crate::error::{ForgeError, Result};
 use crate::runner::{ForgeRunner, GhRunner};
 
@@ -153,8 +153,30 @@ pub fn pull_request_state_with(runner: &impl ForgeRunner, url: &str) -> Result<P
 }
 
 fn fetch(runner: &impl ForgeRunner, url: &str) -> Result<PullRequestState> {
-    let stdout = runner.run(&["pr", "view", url, "--json", PULL_REQUEST_FIELDS])?;
+    let stdout = runner.run(&["pr", "view", url, "--json", PULL_REQUEST_FIELDS])
+                       .map_err(not_found_from)?;
     parse_pull_request_state(&stdout)
+}
+
+/// Reclassify a failed `gh pr view` whose output says the pull request does
+/// not exist as [`ForgeError::NotFound`]; pass every other error through.
+///
+/// The one place the forge's wording is matched, so a caller never has to.
+/// Case-insensitive, like the unauthenticated markers: the capitalisation is
+/// GitHub's, and has no reason to stay put between `gh` versions.
+fn not_found_from(err: ForgeError) -> ForgeError {
+    match err {
+        ForgeError::Command { output, .. } if says_not_found(&output) => {
+            ForgeError::NotFound(output.trim().to_owned())
+        }
+        other => other,
+    }
+}
+
+fn says_not_found(output: &str) -> bool {
+    let lowered = output.to_lowercase();
+    NOT_FOUND_MARKERS.iter()
+                     .any(|marker| lowered.contains(marker))
 }
 
 /// What `gh pr view --json` sends back.

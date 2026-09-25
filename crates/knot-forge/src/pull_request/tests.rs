@@ -233,15 +233,50 @@ fn a_missing_binary_surfaces_as_missing() {
     assert!(err.is_persistent());
 }
 
-/// A pull request that has been deleted, or a URL `gh` cannot resolve, is a
-/// failed fetch - which the spec covers without removing the record.
+/// Both of the forge's "does not exist" answers, verbatim from the live `gh`.
+/// A finished answer rather than a failed fetch, so the row can say so
+/// instead of waiting forever.
 #[test]
-fn a_failed_lookup_surfaces_as_a_command_failure() {
-    let runner = StubRunner::failing("could not resolve to a PullRequest", 1);
+fn a_pull_request_the_forge_cannot_resolve_is_not_found() {
+    for output in ["GraphQL: Could not resolve to a Repository with the name 'acme/gone'. \
+                    (repository)\n",
+                   "GraphQL: Could not resolve to a PullRequest with the number of 99999. \
+                    (repository.pullRequest)\n"]
+    {
+        let runner = StubRunner::failing(output, 1);
+
+        let err = pull_request_state_with(&runner, "https://github.com/acme/gone/pull/99999")
+            .unwrap_err();
+
+        let ForgeError::NotFound(said) = &err
+        else {
+            panic!("{output:?} classified as {err:?}");
+        };
+        assert!(said.contains("Could not resolve"), "{said}");
+        assert!(!err.is_persistent(),
+                "one missing pull request is not the view's problem");
+    }
+}
+
+/// The capitalisation is GitHub's to change.
+#[test]
+fn the_not_found_answer_is_matched_regardless_of_case() {
+    let runner = StubRunner::failing("could not resolve to a pullrequest with the number of 3", 1);
+
+    let err = pull_request_state_with(&runner, "https://github.com/a/b/pull/3").unwrap_err();
+
+    assert!(matches!(err, ForgeError::NotFound(_)), "{err:?}");
+}
+
+/// Any other failure stays a failed fetch, which is retried. Reading a network
+/// error as "does not exist" would stop a real pull request refreshing.
+#[test]
+fn any_other_command_failure_stays_a_command_failure() {
+    let runner = StubRunner::failing("error connecting to api.github.com", 1);
 
     let err = pull_request_state_with(&runner, "https://github.com/a/b/pull/1").unwrap_err();
 
-    assert!(matches!(err, ForgeError::Command { .. }));
+    assert!(matches!(err, ForgeError::Command { .. }), "{err:?}");
     assert!(!err.is_persistent(), "a failed lookup is worth retrying");
 }
 
