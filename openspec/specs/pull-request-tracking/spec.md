@@ -229,10 +229,21 @@ in place of the window's content the way the dashboard view is.
 The list SHALL group rows by the agent that opened them and order them newest
 first within each group, so the most recent work is at the top.
 
+A pull request SHALL be listed once, however many of the workspace's agents
+recorded it. Attribution stays per agent, as "A pull request URL in an agent's
+output is recorded" requires; only the reading collapses. A pull request that
+one agent recorded SHALL be listed in that agent's group. A pull request that
+several agents recorded SHALL be listed in a group headed by all of them, and
+pull requests recorded by the same agents SHALL share that group. Groups headed
+by several agents SHALL come before single-agent groups, so a pull request that
+several agents worked on is not hunted for. A row listed for several agents
+SHALL be ordered by the earliest time any of them first saw it.
+
 A workspace with no recorded pull requests SHALL say so rather than showing an
 empty list.
 
-The launcher row SHALL show how many of the workspace's recorded pull requests
+The launcher row SHALL count each pull request once, however many agents
+recorded it, and SHALL show how many of the workspace's recorded pull requests
 are open, how many are merged and how many are closed, so the state of the
 session's output is readable without opening the view. A draft pull request
 SHALL count as open, matching the forge's own vocabulary, in which draft is a
@@ -297,6 +308,13 @@ being shown.
 - **THEN** the launcher row shows the three by state and counts the fourth as
   pending
 
+#### Scenario: A pull request several agents opened
+
+- **WHEN** two agents in the workspace have both recorded the same pull request
+- **THEN** the list shows it once, in a group headed by both agents, above the
+  single-agent groups
+- **AND** the launcher row counts it once
+
 ### Requirement: A listed pull request opens in the browser
 
 Clicking a row in the Pull Requests view SHALL open that pull request's URL in
@@ -334,3 +352,18 @@ what it sees, and it has seen it again.
 
 - **WHEN** the user removes a row and restarts Knot
 - **THEN** it is still absent
+
+### Requirement: Removing a shared row removes it for every agent
+
+Removing a row listed for several agents SHALL forget the record for every agent
+it is attributed to, so one row on screen is one removal. The row SHALL NOT drop
+back into a remaining agent's group: a row the user removed reappearing under a
+different heading reads as a bug. Removal otherwise follows "The user can remove
+a recorded pull request".
+
+#### Scenario: Removing a shared row
+
+- **WHEN** two agents have recorded the same pull request and the user removes
+  its row
+- **THEN** the row no longer appears under either agent, and the launcher row no
+  longer counts it
