@@ -559,9 +559,34 @@ processes:
   copy_command: "Copy full command"
   copied_command: "Copied the full command"
   open_viewer: "Open Activity Monitor"
+  # The two groups the expanded section lists. Labelled rather than merely
+  # ordered, because a subagent and a process are different kinds of thing
+  # and a row of one must not read as a row of the other.
+  group_subagents: "Subagents"
+  group_processes: "Processes"
+  # A subagent's state. The words are ours; its kind and task are the
+  # agent's own data and are shown verbatim.
+  subagent_running: "Running"
+  subagent_finished: "Finished"
+  subagent_failed: "Failed"
+  # Shown where a subagent row would show its kind and the agent named
+  # none. Deliberately not blank: the row still describes something real.
+  subagent_kind_unstated: "Subagent"
+  # Expanded, the header counts each group separately - two subagents and
+  # three processes is not five of anything.
+  subagent_count_one: "subagent"
+  subagent_count_many: "subagents"
+  copy_task: "Copy full task"
+  copied_task: "Copied the full task"
+  # A failed subagent's reason, where the agent gave one.
+  subagent_failed_reason: "Failed: %{reason}"
   empty_not_running: "This agent is not running, so nothing descends from it."
   empty_none: "This agent has not started anything that is still running."
   sample_failed: "The process list could not be read: %{reason}"
+  # A running agent that can report subagents and has dispatched none.
+  # Distinct from the section simply omitting the group, which is what an
+  # agent Knot cannot ask says.
+  empty_no_subagents: "This agent has not dispatched any subagents."
 
 git_panel:
   title: "Git Status"

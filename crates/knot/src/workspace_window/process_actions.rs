@@ -166,4 +166,17 @@ impl WorkspaceWindow {
             cx,
         );
     }
+
+    /// Copies a subagent's task, untruncated.
+    ///
+    /// The row shows one truncating line; the clipboard gets the whole thing,
+    /// the same bargain [`Self::copy_process_command`] makes with a command.
+    /// This is the only action a subagent row offers - there is no identifier
+    /// to copy and nothing to open one in.
+    pub(super) fn copy_subagent_task(&self, task: String, window: &mut Window,
+                                     cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(task));
+        window.push_notification(Notification::info(knot_core::l10n::t("processes.copied_task")),
+                                 cx);
+    }
 }

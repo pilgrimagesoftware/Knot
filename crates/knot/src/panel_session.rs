@@ -16,6 +16,7 @@ use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
 use parking_lot::Mutex;
 
 use crate::panel_state::PanelState;
+use crate::subagent_feed::SubagentSink;
 
 pub struct PanelSessionHandle {
     session: AcpSession,
@@ -29,7 +30,8 @@ impl PanelSessionHandle {
     /// the session ends. `mcp_url` is Knot's own MCP HTTP server URL, wired
     /// into the session when MCP is enabled.
     pub async fn start(config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>,
-                       mcp_url: Option<&str>, progress: &ConnectProgress)
+                       mcp_url: Option<&str>, progress: &ConnectProgress,
+                       subagents: Option<SubagentSink>)
                        -> AcpResult<Self> {
         let (session, config_options, mut events) =
             AcpSession::start(config, cwd, prior_session_id, mcp_url, progress).await?;
@@ -43,6 +45,15 @@ impl PanelSessionHandle {
         tokio::spawn(async move {
             while let Some(event) = events.recv().await {
                 let ended = matches!(event, SessionEvent::Ended(_));
+                // Before the fold, and by reference, so the event still moves
+                // into `apply` intact. The sink writes to the shared subagent
+                // registry, which carries its own changed flag - it does not
+                // ride this session's dirty bit, because a subagent recorded
+                // for an agent whose pane is not shown still has to be there
+                // when that pane is next drawn.
+                if let Some(sink) = &subagents {
+                    sink.observe(&event);
+                }
                 {
                     let mut state = drain_state.lock();
                     state.apply(event);
@@ -327,6 +338,10 @@ pub struct ConnectRequest<'a> {
     /// defaults in place. See
     /// `openspec/specs/session-setup-persistence/spec.md`.
     pub session_config:      BTreeMap<String, String>,
+    /// Where this agent's delegations are recorded, or `None` when its type
+    /// reports none. Built by the caller, which is the only place that knows
+    /// both the agent's id and the window's registry.
+    pub subagents:           Option<SubagentSink>,
 }
 
 /// Connects `request`'s adapter and drives `slot` through the connection
@@ -338,7 +353,8 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
                                                  request.cwd,
                                                  request.prior_session_id,
                                                  request.mcp_url,
-                                                 progress).await
+                                                 progress,
+                                                 request.subagents).await
     {
         Ok(handle) => handle,
         Err(error) => {
@@ -433,7 +449,8 @@ mod tests {
                                        prior_session_id:    None,
                                        mcp_url:             None,
                                        registration_prompt: Some("register".to_string()),
-                                       session_config:      BTreeMap::new(), };
+                                       session_config:      BTreeMap::new(),
+                                       subagents:           None, };
 
         let watched = Arc::clone(&slot);
         let became_ready = async move {

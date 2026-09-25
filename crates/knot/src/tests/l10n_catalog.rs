@@ -491,3 +491,54 @@ fn window_chrome_labels_resolve() {
             "the width error must say what failed: {error}");
     assert!(!error.contains("%{error}"));
 }
+
+/// Every string the subagents half of the processes section introduces.
+///
+/// Asserted by key, never by copy: a copy edit must not fail a test. What
+/// this catches is a key that is never added to the catalogue, which renders
+/// as the key itself - readable enough to pass a glance in review and wrong
+/// on screen.
+#[test]
+fn subagent_section_labels_resolve() {
+    for key in ["processes.group_subagents",
+                "processes.group_processes",
+                "processes.subagent_running",
+                "processes.subagent_finished",
+                "processes.subagent_failed",
+                "processes.subagent_kind_unstated",
+                "processes.subagent_count_one",
+                "processes.subagent_count_many",
+                "processes.copy_task",
+                "processes.copied_task",
+                "processes.empty_no_subagents"]
+    {
+        let text = knot_core::l10n::t(key);
+
+        assert_ne!(text, key, "{key} is missing from the catalogue");
+        assert!(!text.is_empty(), "{key} resolved to nothing");
+    }
+}
+
+/// The one key here that substitutes a value. A body that lost its
+/// placeholder still resolves and still reads as a sentence, so resolution
+/// alone would not catch it - the value has to survive the substitution.
+#[test]
+fn a_subagent_failure_reason_survives_substitution() {
+    let text = knot_core::l10n::t_with("processes.subagent_failed_reason",
+                                       &[("reason", "ran out of context")]);
+
+    assert!(text.contains("ran out of context"), "{text}");
+    assert!(!text.contains("%{reason}"),
+            "the placeholder was left unsubstituted: {text}");
+}
+
+/// The two groups must not read as the same thing, and neither may collide
+/// with the section's own title.
+#[test]
+fn the_two_group_labels_are_distinguishable() {
+    let subagents = knot_core::l10n::t("processes.group_subagents");
+    let processes = knot_core::l10n::t("processes.group_processes");
+
+    assert_ne!(subagents, processes);
+    assert_ne!(subagents, knot_core::l10n::t("processes.title"));
+}

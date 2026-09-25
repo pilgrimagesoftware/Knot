@@ -178,6 +178,16 @@ pub enum SessionUpdate {
         /// Defaults to `pending` per the spec when the agent omits it.
         status:       String,
         content:      Vec<ToolCallContent>,
+        /// The call's `rawInput`, verbatim, or `None` when the agent sent
+        /// none - distinguishable from an empty object.
+        ///
+        /// `kind` is an icon hint and `title` is prose written for a human,
+        /// so neither says what tool ran. Adapters answer that out of band,
+        /// here and in `meta`, and a client that cannot see the two fields
+        /// cannot recognize a particular call at all.
+        raw_input:    Option<Value>,
+        /// The call's `_meta` envelope, verbatim, vendor keys included.
+        meta:         Option<Value>,
     },
     /// Every field but `tool_call_id` is optional in an update, per the
     /// spec's "only the fields being changed need to be included" - hence
@@ -188,6 +198,12 @@ pub enum SessionUpdate {
         status:       Option<String>,
         title:        Option<String>,
         content:      Vec<ToolCallContent>,
+        /// As on [`SessionUpdate::ToolCallStart`]. `None` means this update
+        /// did not carry one, which a consumer MUST treat as "no change"
+        /// rather than "cleared" - the spec's "only the fields being changed
+        /// need to be included" applies to these as much as to `status`.
+        raw_input:    Option<Value>,
+        meta:         Option<Value>,
     },
     ToolCallResult {
         tool_call_id: String,
@@ -236,12 +252,16 @@ impl SessionUpdate {
                 title: field_str(&update, "title"),
                 status: optional_str(&update, "status").unwrap_or_else(|| "pending".to_string()),
                 content: ToolCallContent::parse_list(update.get("content")),
+                raw_input: update.get("rawInput").cloned(),
+                meta: update.get("_meta").cloned(),
             },
             Some("tool_call_update") => SessionUpdate::ToolCallUpdate {
                 tool_call_id: field_str(&update, "toolCallId"),
                 status: optional_str(&update, "status"),
                 title: optional_str(&update, "title"),
                 content: ToolCallContent::parse_list(update.get("content")),
+                raw_input: update.get("rawInput").cloned(),
+                meta: update.get("_meta").cloned(),
             },
             Some("tool_call_result") => SessionUpdate::ToolCallResult {
                 tool_call_id: field_str(&update, "toolCallId"),
@@ -365,7 +385,9 @@ mod tests {
                                            kind,
                                            title,
                                            status,
-                                           content, } = SessionUpdate::from_params(params)
+                                           content,
+                                           raw_input,
+                                           meta, } = SessionUpdate::from_params(params)
         else {
             panic!("expected a tool-call start");
         };
@@ -374,6 +396,96 @@ mod tests {
         assert_eq!(title, "Reading configuration file");
         assert_eq!(status, "pending");
         assert!(content.is_empty());
+        // An agent that sent neither is distinguishable from one that sent an
+        // empty object - see `raw_input_and_meta_are_absent_not_empty`.
+        assert_eq!(raw_input, None);
+        assert_eq!(meta, None);
+    }
+
+    /// The two fields adapters use to say what a tool actually is, since ACP's
+    /// own `kind` is an icon hint and `title` is prose. Carried verbatim,
+    /// vendor keys and all.
+    #[test]
+    fn a_tool_call_start_carries_raw_input_and_meta() {
+        let params = serde_json::json!({
+            "sessionId": "sess_1",
+            "update": {
+                "sessionUpdate": "tool_call",
+                "toolCallId": "call_001",
+                "title": "Map the callers",
+                "kind": "think",
+                "status": "pending",
+                "rawInput": { "subagent_type": "discovery", "description": "Map the callers" },
+                "_meta": { "claudeCode": { "toolName": "Task", "subagent": true } }
+            }
+        });
+
+        let SessionUpdate::ToolCallStart { raw_input, meta, .. } =
+            SessionUpdate::from_params(params)
+        else {
+            panic!("expected a tool-call start");
+        };
+
+        assert_eq!(raw_input.as_ref()
+                            .and_then(|input| input.get("subagent_type")),
+                   Some(&serde_json::json!("discovery")));
+        assert_eq!(meta.as_ref()
+                       .and_then(|meta| meta.pointer("/claudeCode/subagent")),
+                   Some(&serde_json::json!(true)));
+    }
+
+    /// Absent is not empty. A consumer treats `None` as "the agent said
+    /// nothing", and an empty object as "the agent said there is nothing" -
+    /// only the second is a statement about the call.
+    #[test]
+    fn raw_input_and_meta_are_absent_not_empty() {
+        let params = serde_json::json!({
+            "sessionId": "sess_1",
+            "update": {
+                "sessionUpdate": "tool_call",
+                "toolCallId": "call_001",
+                "title": "t",
+                "kind": "read",
+                "status": "pending",
+                "rawInput": {},
+                "_meta": {}
+            }
+        });
+
+        let SessionUpdate::ToolCallStart { raw_input, meta, .. } =
+            SessionUpdate::from_params(params)
+        else {
+            panic!("expected a tool-call start");
+        };
+
+        assert_eq!(raw_input, Some(serde_json::json!({})));
+        assert_eq!(meta, Some(serde_json::json!({})));
+    }
+
+    /// A partial update carries neither, and the spec's "only the fields being
+    /// changed need to be included" makes that "no change", not "cleared".
+    #[test]
+    fn a_status_only_update_carries_neither_field() {
+        let params = serde_json::json!({
+            "sessionId": "sess_1",
+            "update": {
+                "sessionUpdate": "tool_call_update",
+                "toolCallId": "call_001",
+                "status": "completed"
+            }
+        });
+
+        let SessionUpdate::ToolCallUpdate { status,
+                                            raw_input,
+                                            meta,
+                                            .. } = SessionUpdate::from_params(params)
+        else {
+            panic!("expected a tool-call update");
+        };
+
+        assert_eq!(status.as_deref(), Some("completed"));
+        assert_eq!(raw_input, None);
+        assert_eq!(meta, None);
     }
 
     /// An omitted `kind`/`status` takes the spec's documented defaults

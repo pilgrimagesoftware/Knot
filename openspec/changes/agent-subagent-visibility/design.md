@@ -79,18 +79,82 @@ breakage `.claude/rules/rust-structure.md` names four times — a clearing read
 reachable from a path that discards it — and the task list carries the test
 for it.
 
-### Recognition keys on the tool name in the raw input, not on `kind` or `title`
+### Recognition keys on the adapter's metadata marker, with raw input for the detail
 
-A recognizer takes the raw input JSON and answers with a dispatch, a
-completion, or nothing. Claude Code's delegation carries the subagent kind and
-the task in that object; the tool call's id is the subagent's identity, which
-is what lets the completion find the record.
+**Revised during implementation.** The original decision said the tool name in
+`rawInput` was the only available signal, on the reasoning that ACP's `kind` is
+an icon hint and its `title` is prose. The first half of that holds; the
+conclusion did not survive reading the adapter.
 
-*Alternative — match `kind == "task"` or scan `title`.* Rejected on both
-counts: `kind` is documented as an icon hint and its delegation value is
-adapter-specific, so matching it is matching an icon; `title` is prose the
-adapter writes for humans and may be localized, so matching it is matching a
-translation.
+`@agentclientprotocol/claude-agent-acp` (v0.81.1) stamps every tool call with a
+metadata envelope, and marks a delegation explicitly
+(`dist/acp-agent.js`, `claudeCodeMetaFromToolUse`):
+
+```js
+return {
+    toolName: toolUse.name,
+    ...((toolUse.name === "Agent" || toolUse.name === "Task") && { subagent: true }),
+    ...
+};
+```
+
+So a recognizer keys on `_meta.claudeCode.subagent === true`, falling back to
+`_meta.claudeCode.toolName` being `Task` or `Agent`. That is the adapter's own
+answer to "is this a delegation", written for exactly this purpose — its
+`native-subagents` module uses the same two checks to decide what to intercept.
+`rawInput` then supplies the detail: `subagent_type`, `description`, `prompt`,
+snake_case, verbatim from the model's tool-use input.
+
+Keying on the marker rather than on a tool name inside `rawInput` means the
+recognizer does not have to know that Claude Code's delegation tool is spelled
+`Task` this month and `Agent` last month — the adapter already normalizes both
+to one flag.
+
+*Alternative — match `kind == "task"` or scan `title`.* Still rejected, and now
+with the measurement: a delegation's `kind` is `"think"`, shared with ordinary
+reasoning calls, and its `title` is `input.description || "Task"` — prose, and
+the fallback is a bare English word.
+
+### Channel B, not the adapter's dedicated subagent channel
+
+The same adapter offers a first-class alternative, gated on a capability Knot
+does not advertise (`dist/acp-subagents.d.ts`):
+
+```ts
+{ sessionUpdate: "subagent_spawned", subagentSessionId, name, task,
+  capabilities: { cancel?, close? } }
+{ sessionUpdate: "subagent_state_update", subagentSessionId,
+  state: "completed" | "failed" | "cancelled" | "disconnected" }
+```
+
+Cleaner data, four states instead of two, and a `cancel` capability that would
+make a genuine terminate action possible. Not taken, for two reasons.
+
+It is an unshipped draft. The file says so: *"Temporary typed surface for
+agentclientprotocol/agent-client-protocol#1992. The wire contract is already
+defined by the ACP draft, but the published TypeScript SDK does not contain it
+yet."* Pinning a shipped feature to a protocol revision that has not landed
+buys a nicer shape for an unknown amount of churn.
+
+And advertising the capability changes traffic beyond this change's scope. Once
+a client negotiates it, `NativeSubagentRuntime.route()` suppresses the
+delegation's own tool call and rescopes the subagent's nested tool calls onto a
+synthetic `subagentSessionId` — a child session `acp-panel-ui` does not model.
+Adopting the channel therefore means solving the panel transcript's
+child-session problem first, which is its own change.
+
+**Consequences to hold onto.** Two requirements in this change are correct only
+for the channel being built, and must be revisited with the other one:
+
+- *No terminate action on a subagent row.* True here: the tool-call path offers
+  no cancellation. Not true on the dedicated channel, which advertises one.
+- *`Outcome` is two-valued.* Correct here — a delegation's `tool_call_update`
+  carries `status: "completed" | "failed"` and nothing else. The dedicated
+  channel's four states would need `Cancelled` and `Disconnected` added, and
+  the spec's closed vocabulary widened with them.
+
+Tracked as a follow-up issue rather than an open question, because adopting it
+changes specs rather than filling a gap in this one.
 
 ### Identity is the reporter's, not Knot's
 

@@ -1,0 +1,31 @@
+{
+  "sessionId": "sess_01HQZK3M4N5P6R7S8T9V",
+  "update": {
+    "_meta": {
+      "claudeCode": {
+        "toolName": "Task",
+        "subagent": true
+      }
+    },
+    "toolCallId": "toolu_01A1B2C3D4E5F6G7H8J9K0",
+    "sessionUpdate": "tool_call",
+    "name": "Task",
+    "rawInput": {
+      "subagent_type": "discovery",
+      "description": "Map persist() callers",
+      "prompt": "Find every caller of Settings::persist() under crates/ and report the file and line of each."
+    },
+    "status": "pending",
+    "title": "Map persist() callers",
+    "kind": "think",
+    "content": [
+      {
+        "type": "content",
+        "content": {
+          "type": "text",
+          "text": "Find every caller of Settings::persist() under crates/ and report the file and line of each."
+        }
+      }
+    ]
+  }
+}
