@@ -107,19 +107,27 @@
       (`crates/knot/src/panel_view/style.rs:102`) rated Codex's
       `agent-full-access` as `Neutral`, because only "bypass", "yolo" and
       "danger" mapped to `Danger`. Fixed under 4.6.
-- [ ] 4.3 Manual, same session: confirm the permission-mode, model and
+- [x] 4.3 Manual, same session: confirm the permission-mode, model and
       effort selectors are populated rather than showing their empty
       states, and that the inline permission prompt's border takes the
       risk colour of the active mode instead of staying neutral.
-- [ ] 4.4 Manual, same session - carried in from the archived
+
+      Confirmed by the user on 2026-09-25 in a dev build of this branch,
+      against Claude and Codex sessions. The one miss - Codex's full-access
+      mode staying neutral - was fixed under 4.6 and rechecked.
+- [x] 4.4 Manual, same session - carried in from the archived
       `permission-prompt-keybinding-hints` change, task 3.3, which was
       never done: confirm the prompt's decision buttons read
       "Allow ⇧⌘A" / "Deny ⇧⌘D" legibly against the primary button fill,
       that pressing each key resolves the request, and that clicking
       still works.
-- [ ] 4.5 Close issue #194 only once 4.2-4.4 are recorded. Its "Done
+
+      Confirmed by the user on 2026-09-25, same session, with the
+      Keyboard settings at their defaults.
+- [x] 4.5 Close issue #194 only once 4.2-4.4 are recorded. Its "Done
       when" asks for the feature to be established as reachable, not
-      merely for the code to be changed.
+      merely for the code to be changed. 4.2-4.4 are recorded above; the
+      PR carrying them closes the issue.
 - [x] 4.6 Rate Codex's `agent-full-access` as `Danger`, confirmed neutral
       in the running app during 4.3. `permission_risk_level` folds `-` and
       `_` to spaces and matches "full access", so the id and the display
