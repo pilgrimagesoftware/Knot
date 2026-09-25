@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use gpui_kit::base::{Disableable, StyledExt, h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Root;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Escape, InputEvent, Textarea, TextareaState};
 use gpui_kit::{
@@ -105,15 +106,14 @@ pub(crate) fn open_commit_window(on_commit: impl Fn(String, CommitOutcome, &mut 
                                  + 'static,
                                  cx: &mut App) {
     let options = commit_window_options(cx);
-    let _ =
-        cx.open_window(options, move |window, cx| {
-              let message = cx.new(|cx| {
-                                  TextareaState::new(window, cx)
+    let _ = cx.open_window(options, move |window, cx| {
+                  let message = cx.new(|cx| {
+                                      TextareaState::new(window, cx)
                         .placeholder(knot_core::l10n::t("git_panel.commit_placeholder"))
                         .auto_grow(4, 16)
-                              });
-              cx.new(|cx| {
-                    let subscription =
+                                  });
+                  let view = cx.new(|cx| {
+                                   let subscription =
                         cx.subscribe_in(&message,
                                         window,
                                         |view: &mut CommitWindow, _, event, window, cx| {
@@ -134,14 +134,18 @@ pub(crate) fn open_commit_window(on_commit: impl Fn(String, CommitOutcome, &mut 
                                                 _ => {}
                                             }
                                         });
-                    message.update(cx, |state, cx| state.focus(window, cx));
-                    CommitWindow { message,
-                                   on_commit: Box::new(on_commit),
-                                   pending: None,
-                                   error: None,
-                                   _subscription: subscription }
-                })
-          });
+                                   message.update(cx, |state, cx| state.focus(window, cx));
+                                   CommitWindow { message,
+                                                  on_commit: Box::new(on_commit),
+                                                  pending: None,
+                                                  error: None,
+                                                  _subscription: subscription }
+                               });
+                  // `Root` is what gives the window the theme's text colour and
+                  // UI font; without it both fall back to
+                  // GPUI's defaults.
+                  cx.new(|cx| Root::new(view, window, cx))
+              });
 }
 
 impl Render for CommitWindow {

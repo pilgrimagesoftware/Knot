@@ -22,7 +22,8 @@
 - [x] 3.2 Map a failed `Repository::status()` to `GitStatusSnapshot::Failed` and a non-repository folder to `NotARepository`; verify the panel shows an error rather than a clean tree for a folder whose `.git` has been made unreadable
 - [x] 3.3 Implement the diff read keyed by `DiffKey`, claimed only for the current selection; verify selecting a file shows its diff and that selecting a second file before the first arrives never shows the first
 - [x] 3.4 Wire both caches' `take_changed()` into `repaint_poll_tick`'s dirty predicates and verify the panel redraws when a refresh lands without any unconditional `cx.notify()`
-- [ ] 3.5 Verify no git command runs from a render: type continuously into the commit message field with a status and diff loaded and confirm no `git` process is spawned — **needs a display**; exact steps in `verification.md`
+- [x] 3.5 Verify no git command runs from a render: type continuously into the commit message field with a status and diff loaded and confirm no `git` process is spawned — **needs a display**; exact steps in `verification.md`
+      Verified 2026-09-25: the counting shim logged 43 git calls before ~15 s of typing in the commit window and 43 after.
 
 ## 4. Working tree list
 
@@ -71,7 +72,8 @@
 - [x] 9.2 Make the agent header's diff stats row open and close the panel for that agent; verify it toggles and that the close control does the same
 - [x] 9.3 Implement the panel's default width of 500 clamped to 350–800 on drag, not persisted; verify the clamp at both ends and that a reopened panel is 500 again
 - [x] 9.4 Forget an agent's cache entries and stop its watch when its panel closes or the agent is removed; verify no entries survive for a removed agent
-- [ ] 9.5 Verify the dashboard card's diff stats update immediately after the panel commits, rather than after `DIFF_STATS_MAX_AGE` — **needs a display**; step 25 in `verification.md`
+- [x] 9.5 Verify the dashboard card's diff stats update immediately after the panel commits, rather than after `DIFF_STATS_MAX_AGE` — **needs a display**; step 25 in `verification.md`
+      Verified 2026-09-25 (step 25): the Dashboard card showed the post-commit figures immediately.
 
 ## 10. Conventions and close-out
 
@@ -79,4 +81,5 @@
 - [x] 10.2 Move any new panel constants into `crates/knot/src/consts.rs` with a comment saying what each decides; verify no layout number was moved there and no decision left inline
 - [x] 10.3 Run `make` and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass
 - [x] 10.4 Verify no crate-wide `allow` was added, `mod.rs` files declare only, and no colocated test module pushes a file over 700 lines
-- [ ] 10.5 Run the app against a repository with staged, unstaged, untracked and conflicted files and walk the full loop — review a diff, stage, discard, commit — confirming each spec scenario in `specs/git-panel-ui/spec.md` — **needs a display**; 24 numbered steps, each naming the scenario it discharges, in `verification.md`
+- [x] 10.5 Run the app against a repository with staged, unstaged, untracked and conflicted files and walk the full loop — review a diff, stage, discard, commit — confirming each spec scenario in `specs/git-panel-ui/spec.md` — **needs a display**; 24 numbered steps, each naming the scenario it discharges, in `verification.md`
+      Verified 2026-09-25: steps 1-22 and 24 pass. Step 23 (*Folder is not a repository*) cannot be reached from the app: a folder with no repository draws no diff-stat row in the header, and that row is the only control that opens the panel. Three defects found and fixed on the way: diffs were drawn in the UI font, hunk headers were dropped (#478), and the commit window was not wrapped in `Root`, so its text was black in the dark theme and its buttons used the default font.
