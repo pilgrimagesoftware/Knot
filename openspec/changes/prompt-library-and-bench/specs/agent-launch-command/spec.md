@@ -21,13 +21,12 @@ behind the initialization turn, so it is delivered when that turn ends and
 can be edited or deleted before then like any queued prompt (see
 `queued-message-management`).
 
-On the terminal path - a coding agent shown as a terminal, whose registration
-prompt is typed in once the agent is idle - the startup prompt SHALL be typed
-in at the first idle after the registration prompt was injected, followed by
-Return. Because Return submits, its line breaks - including any a
-variable's value contributed - SHALL be replaced with single spaces on this
-path, after expansion; the ACP path SHALL send the expanded text with its
-line breaks unchanged.
+The expanded text SHALL be sent with its line breaks unchanged.
+
+The startup prompt is delivered only on the ACP path. Every agent that runs
+in a terminal is a `shell`-type agent - a non-shell agent always launches
+through its ACP adapter, with no terminal fallback - and a `shell`-type agent
+carries no startup prompt (see `agent-editor-ui` - Startup prompt control).
 
 The Swift app sends only the registration prompt; the startup prompt is new
 to the Rust port.
@@ -61,9 +60,8 @@ to the Rust port.
 - **WHEN** the user selects Register Agent on an agent with a startup prompt
 - **THEN** only the registration prompt is sent
 
-#### Scenario: Terminal path flattens line breaks
+#### Scenario: Line breaks are kept
 
-- **WHEN** a terminal-view coding agent's startup prompt has two lines and
-  its registration prompt has been injected
-- **THEN** at its next idle the startup prompt is typed in as one line, the
-  two lines joined by a space, followed by Return
+- **WHEN** an agent's startup prompt has two lines
+- **THEN** the turn it is sent as holds both lines, the break between them
+  intact

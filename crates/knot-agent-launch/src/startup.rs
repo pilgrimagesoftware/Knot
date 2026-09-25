@@ -1,6 +1,9 @@
 //! The startup prompt: resolving an agent's [`StartupPrompt`] against the
-//! library, building the [`PromptContext`] its variables expand with, and
-//! the one-line form the terminal path types in.
+//! library, and building the [`PromptContext`] its variables expand with.
+//!
+//! Delivered only through an ACP panel's prompt queue: the only agents that
+//! run in a terminal are `shell`-type agents, and those carry no startup
+//! prompt.
 //!
 //! Contract: `openspec/specs/prompt-library/spec.md` and
 //! `openspec/specs/agent-launch-command/spec.md`, "Startup prompt follows the
@@ -28,21 +31,6 @@ pub fn resolve_startup_prompt(startup: Option<&StartupPrompt>, library: &[Prompt
                                              .map(|prompt| prompt.text.clone()),
         StartupPrompt::Custom(text) => Some(text.clone()),
     }
-}
-
-/// `text` on one line, each line break (and the whitespace around it)
-/// replaced by a single space.
-///
-/// For the terminal path, which types the prompt and then sends Return: an
-/// embedded newline would submit it half-written, the same reason
-/// `knot_instructions` stays on one line. Applied after expansion, so a
-/// multi-line value is flattened too.
-pub fn one_line(text: &str) -> String {
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 /// What an agent contributes to its own [`PromptContext`]; the branch and

@@ -24,5 +24,5 @@ pub use escape::persona_prompt;
 pub use registration::{
     acp_registration_prompt, knot_instructions, registration_prompt, registration_user_prompt,
 };
-pub use startup::{ContextSource, one_line, read_context, resolve_startup_prompt};
+pub use startup::{ContextSource, read_context, resolve_startup_prompt};
 pub use variables::{PromptContext, PromptVariable, UnknownVariable, expand, unknown_variables};

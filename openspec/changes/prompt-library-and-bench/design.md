@@ -7,8 +7,7 @@ See proposal.md - Why. The pieces this change builds on:
 - **Initialization prompt.** `knot_agent_launch::acp_registration_prompt`
   builds the first turn of a fresh ACP session; `panel_session::connect_into`
   records it, publishes the `Ready` slot, then awaits `session.prompt` on it.
-  The terminal path (`knot-activity`) holds a `registration_prompt` and
-  emits `Effect::InjectRegistration` at a qualifying idle.
+  Only `shell`-type agents run in a terminal; see "No terminal delivery".
 - **Prompt queue.** `workspace_window/prompt_queue.rs` holds per-agent
   `QueuedPanelPrompt`s tagged with a `PromptOrigin` (`User`, `InboxNudge`).
   `drain_panel_prompt` delivers the head once the session is `Ready` with no
@@ -108,9 +107,6 @@ render path.
   already runs the connect. That task reads `branch`, expands, and stores
   the result on the session handle before publishing `Ready`. See "ACP
   delivery" for how it reaches the queue.
-- **Startup prompt, terminal.** `knot-terminal` builds the context at launch,
-  already off the UI thread, and passes the flattened expansion to the
-  activity tracker.
 - **Slash insertion.** The lookup captures the token's range and the buffer
   revision, then expands on `spawn_blocking`. The result lands in a
   per-window slot drained from `repaint_poll_tick`'s `if` chain; it is
@@ -163,15 +159,15 @@ bypass the permission gate the pump already honours. Enqueuing only after the
 registration turn resolves: needs a new signal from the runtime task back to
 the window, and the prompt would not be visible while it waits.
 
-### Terminal delivery: a second one-shot in the activity state
+### No terminal delivery
 
-`knot-activity`'s state gains `startup_prompt: Option<String>` beside
-`registration_prompt`, set by `knot-terminal` at launch only when the
-registration prompt is set (a fresh session). After
-`Effect::InjectRegistration` is emitted, the next transition into Idle emits
-`Effect::InjectStartup(text)`, which the terminal types and follows with
-Return. Line breaks are replaced with single spaces when the text is set,
-for the same reason `knot_instructions` stays on one line.
+The proposal first had a terminal path too: a one-shot in `knot-activity`
+typing the prompt at the idle after registration. Implementation showed it
+could never fire. `plan_launch` gives every non-shell type its ACP adapter,
+with no terminal fallback, so only `shell`-type agents run in a terminal -
+and a `shell`-type agent carries no startup prompt. The path, and the
+one-line flattening it needed, were dropped rather than built as unwired
+code.
 
 ### Benching is a store operation that writes first
 
@@ -236,14 +232,10 @@ and startup prompt only.
   every context that needs `branch` is built on a runtime or blocking
   thread, and the slash-insertion result is revision-checked before it is
   applied.
-- [A variable's value breaks the one-line terminal form] → Flattening runs
-  after expansion, so a multi-line value is flattened too.
 - [`now_local` fails and `{{date}}` is a day off near midnight] → Accepted;
   UTC fallback is documented in code.
 - [The queued startup prompt races the registration turn] → `turn_active`
   set before `Ready`; covered by a stalled-adapter test.
-- [A multi-line startup prompt reads differently on the terminal path] →
-  Documented in the spec and the editor caption; the ACP path is unchanged.
 - [Benching loses the conversation] → Confirmation says so; Save to Bench
   remains for copying without closing.
 - [`knot-core` records and settings files near the 700-line limit] → New

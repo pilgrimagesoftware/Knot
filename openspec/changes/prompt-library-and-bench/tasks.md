@@ -16,11 +16,10 @@
 - [x] 2.3 Add `unknown_variables(text)` sharing the scanner; verify it reports `foldr` for `{{foldr}}`, nothing for escaped or known names, and each unknown name once
 - [x] 2.4 Add a context builder that reads `branch` (short `HEAD` hash when detached, empty outside a repository) and `date` (local, UTC fallback), enabling `time`'s `local-offset` feature; verify against a temp repository on a branch, a detached HEAD, and a non-repository folder, with git config isolated
 
-## 3. Resolution and launch (`knot-agent-launch`, `knot-activity`, `knot-terminal`)
+## 3. Resolution (`knot-agent-launch`)
 
-- [x] 3.1 Add `resolve_startup_prompt(&Option<StartupPrompt>, &[Prompt]) -> Option<String>` returning raw text, and a one-line form applied after expansion; verify unit tests for none, a live reference, a dangling reference (`None`), custom text, and line breaks (including ones a value contributed) becoming single spaces
-- [ ] 3.2 Add a `startup_prompt` one-shot to the activity state that fires `Effect::InjectStartup` at the first Idle after `InjectRegistration`; verify it never fires without a prior registration injection and fires exactly once
-- [ ] 3.3 In `knot-terminal`, build the context at launch, expand and flatten, and set the startup prompt only when the registration prompt is set; type it followed by Return on `InjectStartup`; verify with a tracker test that a resumed launch sets neither
+- [x] 3.1 Add `resolve_startup_prompt(&Option<StartupPrompt>, &[Prompt]) -> Option<String>` returning raw text; verify unit tests for none, a live reference, a dangling reference (`None`) and custom text
+- [x] 3.2 Confirm whether the terminal path can deliver a startup prompt; verify against `plan_launch` - it cannot (only `shell` agents run in a terminal and they carry none), so the terminal delivery and its one-line form were removed from the spec and design instead of built
 
 ## 4. ACP delivery (`knot`)
 

@@ -25,9 +25,8 @@ bench dropdown on the New Agent button was never ported.
   startup prompt: either a reference to a library prompt or custom text. It is
   sent on every fresh session (never on resume), as its own turn after the
   initialization prompt's turn, which is unchanged. The agent editor gets a
-  Startup Prompt control beside the persona picker. In the ACP panel it is
-  queued like any other prompt and labelled as a startup prompt; for a
-  terminal-view coding agent it is typed in at the idle after registration.
+  Startup Prompt control beside the persona picker. It is queued in the
+  agent's panel like any other prompt and labelled as a startup prompt.
 - **Bench an agent.** A new Bench Agent row-menu item saves the agent to the
   bench and removes it from the workspace, after a confirmation (its
   conversation is not kept). Save to Bench stays, unchanged, for copying.
@@ -84,7 +83,7 @@ bench dropdown on the New Agent button was never ported.
 - `agent-editor-ui`: new Startup Prompt control, with unknown-variable
   warnings on custom text.
 - `agent-launch-command`: the startup prompt follows the initialization
-  prompt on a fresh session, for both the ACP and the terminal paths.
+  prompt on a fresh session, through the panel's prompt queue.
 - `agent-lifecycle`: bench deployment restores the startup prompt; new
   benching (save and remove) requirement.
 - `agent-list-ui`: Bench Agent row-menu item and its visibility; the New
@@ -105,11 +104,9 @@ bench dropdown on the New Agent button was never ported.
   prompt; a `bench_agent` store operation that removes the agent after the
   bench entry is written.
 - `knot-agent-launch`: resolve a `StartupPrompt` against the library to text,
-  expand variables against a `PromptContext`, and a one-line form for the
-  terminal path. Variable names are a closed enum with `Display`/`FromStr`.
+  and expand variables against a `PromptContext`. Variable names are a closed enum with `Display`/`FromStr`.
 - `knot-git`: the current branch read (already present) is used for
   `{{branch}}`, off the UI thread.
-- `knot-activity`: a startup prompt injected at the idle after registration.
 - `knot`: panel session queues the startup prompt after the registration
   turn; agent editor control; row and background menu entries; the New
   Agent split button and bench popover; Settings Prompts and Bench tabs;

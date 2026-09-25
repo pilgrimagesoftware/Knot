@@ -24,13 +24,6 @@ fn resolution_covers_each_form() {
                Some("mine"));
 }
 
-#[test]
-fn one_line_joins_lines_with_single_spaces() {
-    assert_eq!(one_line("first\nsecond\r\n\n  third  "),
-               "first second third");
-    assert_eq!(one_line("already one line"), "already one line");
-}
-
 fn init_repo(dir: &Path) {
     let run = |args: &[&str]| {
         Runner::new(dir).run(args).unwrap();
