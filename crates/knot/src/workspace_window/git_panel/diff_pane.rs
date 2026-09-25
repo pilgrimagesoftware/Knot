@@ -211,12 +211,18 @@ fn flatten(diff: &FileDiff) -> (Vec<DiffRow>, Option<usize>) {
     let mut rows = Vec::new();
 
     for hunk in &diff.hunks {
-        for line in &hunk.lines {
+        // `parse_diff` keeps the `@@` line on the hunk rather than in its
+        // lines, so the row is made here. It has no line numbers.
+        let header = DiffRow { kind: LineKind::HunkHeader,
+                               text: hunk.header.clone(),
+                               old:  None,
+                               new:  None, };
+        for row in std::iter::once(header).chain(hunk.lines.iter().map(row_of)) {
             if rows.len() >= consts::GIT_DIFF_MAX_LINES {
                 let shown = rows.len();
                 return (rows, Some(shown));
             }
-            rows.push(row_of(line));
+            rows.push(row);
         }
     }
 
@@ -317,9 +323,56 @@ fn empty_pane(text: String, cx: &mut Context<WorkspaceWindow>) -> gpui_kit::AnyE
 
 /// The theme's monospace family - a diff's columns only line up in one.
 fn mono_family(cx: &gpui_kit::App) -> SharedString {
-    cx.theme().font_family.clone()
+    cx.theme().mono_font_family.clone()
 }
 
 fn muted(cx: &gpui_kit::App) -> gpui_kit::Hsla {
     cx.theme().muted_foreground
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::TestAppContext;
+    use gpui_kit::component::Theme;
+    use knot_git::LineKind;
+
+    use super::{flatten, mono_family};
+
+    /// The diff read the theme's UI family, so its columns did not line up.
+    #[gpui_kit::test]
+    fn diff_lines_use_the_monospace_family(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+              gpui_kit::init(cx);
+              // The test theme ships one family for both; the app sets them
+              // apart in `apply_visual_identity`.
+              let theme = cx.global_mut::<Theme>();
+              theme.font_family = "UI".into();
+              theme.mono_font_family = "Mono".into();
+              assert_eq!(mono_family(cx), "Mono");
+          });
+    }
+
+    /// `parse_diff` keeps each `@@` line on its hunk, not in its lines, and
+    /// the pane dropped them.
+    #[test]
+    fn each_hunk_starts_with_its_header_row() {
+        let output = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1,2 @@\n one\n+two\n@@ -9 +10 @@\n-old\n+new\n";
+        let diff = knot_git::diff::parse_diff(output).remove(0);
+
+        let (rows, truncated) = flatten(&diff);
+
+        let kinds: Vec<_> = rows.iter().map(|row| row.kind).collect();
+        assert_eq!(kinds,
+                   [LineKind::HunkHeader,
+                    LineKind::Context,
+                    LineKind::Addition,
+                    LineKind::HunkHeader,
+                    LineKind::Deletion,
+                    LineKind::Addition]);
+        assert_eq!(rows[0].text, "@@ -1 +1,2 @@");
+        assert!(rows.iter()
+                    .filter(|row| row.kind == LineKind::HunkHeader)
+                    .all(|row| row.old.is_none() && row.new.is_none()));
+        assert_eq!(truncated, None);
+    }
 }
