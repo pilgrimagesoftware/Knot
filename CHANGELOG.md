@@ -1,4 +1,42 @@
 
+## 1.18.0 - 2026-09-25
+
+### Added
+- Add configurable navigation keybindings
+- Add a jump-to-bottom keybinding
+- Colour open pull requests by why they can or cannot land
+- Record how each agent type reports subagents
+- Recognize a delegation from either feed
+- Hold every agent's subagents in one registry
+- Carry a tool call's raw input and metadata
+- Wire both subagent feeds into one registry
+- List subagents beside processes in the section
+- Count both kinds in the processes header
+- Get a subagent change onto a frame
+- Report a bug from the Help menu
+- Keep the conversation on restart when restore is on
+
+
+### Changed
+- Split the processes pane by concern
+
+
+### Documentation
+- Retire HANDOFF.md into path-scoped rules
+
+
+### Fixed
+- Pin the Keyboard tab's header and actions, accent held modifiers
+- List a pull request several agents opened once
+- Show a pull request the forge cannot find as not found
+- Show the prompts a loaded conversation replays
+- Colour Codex full-access permission mode as dangerous
+- Open a loaded conversation at its newest message
+- Restore panel conversations on relaunch
+- Read the send chord when Enter arrives, not when the composer is built
+
+
+
 ## 1.17.1 - 2026-09-24
 
 ### Fixed
