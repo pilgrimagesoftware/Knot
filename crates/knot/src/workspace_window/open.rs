@@ -141,6 +141,7 @@ impl WorkspaceWindow {
                         .expect("failed to start terminal session runtime"),
                     sidebar_resize,
                     root_focus: cx.focus_handle(),
+                    key_hints: Default::default(),
                     terminal_focus: cx.focus_handle(),
                     terminal_font: TerminalFont::default(),
                     clipboard_writes: Arc::clone(&clipboard_writes),

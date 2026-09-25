@@ -33,6 +33,7 @@ use crate::app_bootstrap::HideApp;
 use crate::app_bootstrap::HideOthers;
 use crate::app_bootstrap::KnotHelp;
 use crate::app_bootstrap::MinimizeWindow;
+use crate::app_bootstrap::NewAgent;
 use crate::app_bootstrap::NewWorkspace;
 use crate::app_bootstrap::OpenCommandCenter;
 use crate::app_bootstrap::OpenSettings;
@@ -190,5 +191,17 @@ fn the_view_menu_carries_the_navigation_shortcuts(cx: &mut TestAppContext) {
           assert_bound(cx, "ctrl-cmd-down", &JumpToBottom);
           assert_bound(cx, "cmd-alt-2", &SelectAgent2);
           assert_bound(cx, "cmd-3", &SelectWorkspace3);
+      });
+}
+
+/// File > New Agent… carries the Swift reference's ⌘T, and with no workspace
+/// window it has no handler: nothing registers it globally, so macOS draws the
+/// item disabled.
+#[gpui_kit::test]
+fn new_agent_carries_the_reference_shortcut(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert_bound(cx, "cmd-t", &NewAgent);
+          assert!(!cx.is_action_available(&NewAgent));
       });
 }

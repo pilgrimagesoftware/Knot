@@ -184,6 +184,12 @@ actions!(knot_app,
 // such an item takes the key rather than sharing it. The same rule moved Fork
 // Agent off cmd-f.
 
+// File > New Agent… (⌘T, the Swift reference's key). Wired, unlike the items
+// above, but only inside a workspace window: its handler is registered on the
+// window's root element (`WorkspaceWindow::with_shortcut_actions`), so the
+// item is disabled wherever there is no workspace to add an agent to.
+actions!(knot_app, [NewAgent]);
+
 // The Window menu's two openers. Unlike the items above these are wired, and
 // enabled at all times: they are how a user gets back to a window, so an
 // enablement rule that depended on a window being focused would disable them
@@ -278,6 +284,7 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
         ]),
         Menu::new("File").items([
             MenuItem::action("New Workspace", NewWorkspace).disabled(true),
+            MenuItem::action(knot_core::l10n::t("menu.file.new_agent"), NewAgent),
             MenuItem::separator(),
             MenuItem::action("Import…", OpenImport),
             MenuItem::separator(),

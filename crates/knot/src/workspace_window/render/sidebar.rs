@@ -39,6 +39,7 @@ use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::agent_row::AgentRow;
 use crate::workspace_window::agent_row_context_menu;
 use crate::workspace_window::detail_line;
+use crate::workspace_window::key_hints::with_key_hint;
 
 impl WorkspaceWindow {
     /// One element per agent in this workspace, in sidebar order.
@@ -56,18 +57,24 @@ impl WorkspaceWindow {
         let workspace_id = self.workspace_id;
         let window_entity = cx.entity();
 
+        let hints = self.key_hints.shown().cloned();
         agents.into_iter()
-              .map(|AgentRow { id,
-                               avatar,
-                               name,
-                               folder,
-                               state,
-                               is_shell,
-                               is_companion,
-                               header_title,
-                               persona_name,
-                               agent_type,
-                               is_running, }| {
+              .enumerate()
+              .map(|(index,
+                     AgentRow { id,
+                                avatar,
+                                name,
+                                folder,
+                                state,
+                                is_shell,
+                                is_companion,
+                                header_title,
+                                persona_name,
+                                agent_type,
+                                is_running, })| {
+                       let hint = hints.as_ref()
+                                       .and_then(|hints| hints.agent(index))
+                                       .map(str::to_owned);
                        let menu_name = name.clone();
                        let tooltip_name = name.clone();
                        let menu_folder = folder.clone();
@@ -94,6 +101,7 @@ impl WorkspaceWindow {
                        // cards in
                        // `dashboard.rs`.
                        div().id(gpui_kit::ElementId::from(format!("workspace-agent-{id}")))
+                            .debug_selector(|| format!("workspace-agent-row-{index}"))
                             .cursor_pointer()
                             .rounded(cx.theme().radius)
                             .p_2()
@@ -125,10 +133,20 @@ impl WorkspaceWindow {
                                        Tooltip::new(tooltip_name.clone()).build(window, cx)
                                    })
                             })
+                            .map(|row| {
+                                if compact {
+                                    row
+                                }
+                                else {
+                                    with_key_hint(row, hint.as_deref(), false, cx)
+                                }
+                            })
                             .child(if compact {
                                 compact_agent_row_body(CompactAgentRow { avatar,
-                                                                 state,
-                                                                 is_shell }).into_any_element()
+                                                                         state,
+                                                                         is_shell,
+                                                                         hint: hint.clone() },
+                                                       cx).into_any_element()
                             }
                             else {
                                 h_flex()
@@ -292,40 +310,57 @@ impl WorkspaceWindow {
         // of every agent, so it belongs above them, shaped like the rows it
         // summarises. As a bare icon beside "New agent" it read as a minor
         // control and went unnoticed.
-        div().id("workspace-dashboard-row")
-             .cursor_pointer()
-             .rounded(cx.theme().radius)
-             .p_2()
-             .bg(if is_dashboard {
-                 cx.theme().muted
-             }
-             else {
-                 cx.theme().transparent
-             })
-             .child(h_flex().w_full()
-                            .gap_3()
-                            .items_center()
-                            .when(compact, |row| row.justify_center())
-                            .child(div().w(px(40.))
-                                        .h(px(40.))
-                                        .flex_shrink_0()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(Icon::default().path("icons/layout-dashboard.svg")))
-                            .when(!compact, |row| {
-                                row.child(div().flex_1()
-                                               .min_w_0()
-                                               .font_semibold()
-                                               .child(knot_core::l10n::t("dashboard.title")))
-                            }))
-             .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
-                             view.view_mode = match view.view_mode {
-                                 WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,
-                                 _ => WorkspaceViewMode::Dashboard,
-                             };
-                             cx.notify();
-                         }))
-             .into_any_element()
+        let hint = self.key_hints.shown().map(|hints| hints.dashboard.clone());
+        let row = div().id("workspace-dashboard-row");
+        let row = if compact {
+            row
+        }
+        else {
+            with_key_hint(row, hint.as_deref(), false, cx)
+        };
+        row.debug_selector(|| "workspace-dashboard-row".into())
+           .cursor_pointer()
+           .rounded(cx.theme().radius)
+           .p_2()
+           .bg(if is_dashboard {
+               cx.theme().muted
+           }
+           else {
+               cx.theme().transparent
+           })
+           .child(h_flex().w_full()
+                          .gap_3()
+                          .items_center()
+                          .when(compact, |row| row.justify_center())
+                          .child({
+                              let icon =
+                                  div().w(px(40.))
+                                       .h(px(40.))
+                                       .flex_shrink_0()
+                                       .flex()
+                                       .items_center()
+                                       .justify_center()
+                                       .child(Icon::default().path("icons/layout-dashboard.svg"));
+                              if compact {
+                                  with_key_hint(icon, hint.as_deref(), true, cx)
+                              }
+                              else {
+                                  icon
+                              }
+                          })
+                          .when(!compact, |row| {
+                              row.child(div().flex_1()
+                                             .min_w_0()
+                                             .font_semibold()
+                                             .child(knot_core::l10n::t("dashboard.title")))
+                          }))
+           .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                           view.view_mode = match view.view_mode {
+                               WorkspaceViewMode::Dashboard => WorkspaceViewMode::Terminal,
+                               _ => WorkspaceViewMode::Dashboard,
+                           };
+                           cx.notify();
+                       }))
+           .into_any_element()
     }
 }

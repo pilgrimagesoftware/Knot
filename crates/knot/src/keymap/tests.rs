@@ -94,6 +94,15 @@ fn a_fixed_shortcut_cannot_be_taken() {
                                          holder: knot_core::l10n::t("keymap.fixed.close_window"), }));
 }
 
+/// ⌘T is New Agent's fixed key (`app-menu`), so recording it is a conflict.
+#[test]
+fn the_new_agent_key_cannot_be_taken() {
+    let candidate = Resolved::defaults().with_chord(Shortcut::FocusAgentInput, chord("cmd-t"));
+    assert_eq!(validate(&candidate, Shortcut::FocusAgentInput),
+               Err(Rejection::Conflict { chord:  chord("cmd-t"),
+                                         holder: knot_core::l10n::t("keymap.fixed.new_agent"), }));
+}
+
 #[test]
 fn a_text_editing_key_cannot_be_taken() {
     let candidate = Resolved::defaults().with_chord(Shortcut::ToggleDashboard, chord("cmd-c"));

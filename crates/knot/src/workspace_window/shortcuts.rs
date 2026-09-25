@@ -68,7 +68,10 @@ impl WorkspaceWindow {
                                 SelectAgent7 => 6,
                                 SelectAgent8 => 7,
                                 SelectAgent9 => 8]);
-        let el = el.on_action(cx.listener(|view, _: &ToggleDashboard, _, cx| {
+        let el = el.on_action(cx.listener(|view, _: &crate::app_bootstrap::NewAgent, _, cx| {
+                                    view.open_new_agent_dialog(cx)
+                                }))
+                   .on_action(cx.listener(|view, _: &ToggleDashboard, _, cx| {
                                     view.toggle_view(WorkspaceViewMode::Dashboard, cx)
                                 }))
                    .on_action(cx.listener(|view, _: &TogglePullRequests, _, cx| {

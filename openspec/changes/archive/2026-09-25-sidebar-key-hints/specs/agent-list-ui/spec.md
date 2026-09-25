@@ -11,7 +11,7 @@ the key that reaches each of these controls, beside it:
 | --- | --- |
 | Dashboard row | the Toggle Dashboard shortcut (default ⌥⌘O) |
 | Pull Requests row | the Toggle Pull Requests shortcut (default ⌥⌘P) |
-| The Nth agent row, N from 1 to 9 | the Select agent N shortcut (default ⌥⌘N) |
+| The Nth agent row, N from 1 to 9 | the Select agent N shortcut (`keybindings`) |
 | New agent control | the New Agent shortcut (⌘T) |
 
 Each hint SHALL show the binding currently in effect, in the glyph form macOS
@@ -22,15 +22,16 @@ The hints SHALL appear only after ⌘ has been held for 500 ms with no other key
 pressed, so that an ordinary ⌘ shortcut such as ⌘C does not flash them. They
 SHALL disappear as soon as ⌘ is released, a non-modifier key is pressed, or the
 window stops being the key window. Adding ⌥, ⌃ or ⇧ while ⌘ is held SHALL NOT
-hide them, because the agent shortcuts need ⌥.
+hide them, because several shortcuts need ⌥ as well.
 
 Hints are shown whether or not the binding includes ⌘. ⌘ is the trigger
 because every default binding holds it.
 
 A hint SHALL NOT move or resize the control it labels, or any other row: at
 full width it takes the right end of the row, over the row's own trailing
-content. In the compact layout it SHALL be drawn as a badge over the corner of
-the avatar or icon.
+content. In the compact layout a row's hint SHALL be drawn as a badge over the
+corner of its avatar or icon. The New agent control's hint sits against its
+trailing edge at both widths.
 
 The hints are not a Swift reference feature. The Swift sidebar shows no
 shortcuts.
@@ -39,8 +40,8 @@ shortcuts.
 
 - **WHEN** a workspace window lists agents X, Y and Z, no shortcut is
   customized, and the user holds ⌘ for a second
-- **THEN** the Dashboard row shows ⌥⌘O, the Pull Requests row ⌥⌘P, X ⌥⌘1, Y
-  ⌥⌘2, Z ⌥⌘3, and the new agent control ⌘T
+- **THEN** the Dashboard row shows ⌥⌘O, the Pull Requests row ⌥⌘P, X, Y and Z
+  the default Select agent 1, 2 and 3 keys, and the new agent control ⌘T
 
 #### Scenario: A quick shortcut does not flash them
 
