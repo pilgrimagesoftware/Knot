@@ -140,6 +140,13 @@ impl Repository {
         Ok((!branch.is_empty()).then_some(branch))
     }
 
+    /// Abbreviated commit id of `HEAD` from `git rev-parse --short HEAD` -
+    /// what names a detached HEAD, where [`Self::current_branch`] has
+    /// nothing.
+    pub fn short_head(&self) -> Result<String> {
+        self.runner.run(consts::SHORT_HEAD)
+    }
+
     /// Whether the branch has commits its upstream lacks
     /// (`git log @{u}.. --oneline`). `false` when there is no upstream.
     pub fn has_unpushed(&self) -> Result<bool> {
