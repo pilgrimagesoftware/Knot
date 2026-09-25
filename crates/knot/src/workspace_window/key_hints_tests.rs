@@ -24,8 +24,14 @@ fn the_default_hints() {
     assert_eq!(hints.dashboard, chord("cmd-alt-o").label());
     assert_eq!(hints.pull_requests, chord("cmd-alt-p").label());
     assert_eq!(hints.new_agent, chord("cmd-t").label());
-    assert_eq!(hints.agent(0), Some(chord("cmd-alt-1").label().as_str()));
-    assert_eq!(hints.agent(8), Some(chord("cmd-alt-9").label().as_str()));
+    // From the family's default modifier rather than written out, which
+    // `swap-select-shortcut-defaults` (#487) changes.
+    let agent_modifiers = Shortcut::SelectAgent.default_modifiers()
+                                               .expect("Select agent is a family");
+    assert_eq!(hints.agent(0),
+               Some(Chord::new(agent_modifiers, "1").label().as_str()));
+    assert_eq!(hints.agent(8),
+               Some(Chord::new(agent_modifiers, "9").label().as_str()));
     assert_eq!(hints.agent(9), None, "a tenth row has no shortcut");
 }
 
