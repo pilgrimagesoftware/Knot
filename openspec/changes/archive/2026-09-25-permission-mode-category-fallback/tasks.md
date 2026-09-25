@@ -66,23 +66,73 @@
 
 - [x] 4.1 Run `make` and confirm fmt, size-check, clippy, test and build
       all pass. Exit 0, 1521 tests, no failures.
-- [ ] 4.2 Manual, against a live ACP agent - the check this change exists
+- [x] 4.2 Manual, against a live ACP agent - the check this change exists
       to satisfy, and the one no unit test can stand in for. Start a
       Claude session and a Codex session, and record what each actually
       advertises: the `id`, `name` and `category` of every entry in
       `configOptions`. That roster is the evidence issue #194 asked for,
       and it decides whether the id/name fallback is load-bearing or
       insurance.
-- [ ] 4.3 Manual, same session: confirm the permission-mode, model and
+
+      Captured 2026-09-25 from each adapter's `session/new` response,
+      driven directly over stdio (`initialize`, then `session/new`), in
+      the agent's own array order.
+
+      `@agentclientprotocol/claude-agent-acp` 0.81.2:
+
+      | `id`     | `name`    | `category`      | values                                                 |
+      |----------|-----------|-----------------|--------------------------------------------------------|
+      | `mode`   | Mode      | `mode`          | default, acceptEdits, plan, auto, bypassPermissions    |
+      | `model`  | Model     | `model`         | default, opus[1m], claude-fable-5-1[1m], sonnet, haiku |
+      | `effort` | Effort    | `thought_level` | default, low, medium, high, xhigh, max                 |
+      | `fast`   | Fast mode | `model_config`  | on, off                                                |
+
+      `@agentclientprotocol/codex-acp` 1.13.1:
+
+      | `id`                 | `name`             | `category`           | values                                           |
+      |----------------------|--------------------|----------------------|--------------------------------------------------|
+      | `mode`               | Mode               | `mode`               | read-only, agent, agent-full-access              |
+      | `collaboration_mode` | Collaboration mode | `collaboration_mode` | default, plan                                    |
+      | `model`              | Model              | `model`              | gpt-6-luna, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5 |
+      | `reasoning_effort`   | Reasoning effort   | `thought_level`      | low, medium, high, xhigh, max                    |
+
+      Every option is `select` and carries a category, so all three slots
+      in both agents resolve on the category pass: for these two adapters
+      the id/name fallback is insurance, not load-bearing. If either shows
+      an empty selector in the running app, this lookup is not the cause.
+      `fast` and `collaboration_mode` match no slot, as intended; exact
+      matching keeps `collaboration_mode` out of the permission slot.
+
+      Found in passing: `permission_risk_level`
+      (`crates/knot/src/panel_view/style.rs:102`) rated Codex's
+      `agent-full-access` as `Neutral`, because only "bypass", "yolo" and
+      "danger" mapped to `Danger`. Fixed under 4.6.
+- [x] 4.3 Manual, same session: confirm the permission-mode, model and
       effort selectors are populated rather than showing their empty
       states, and that the inline permission prompt's border takes the
       risk colour of the active mode instead of staying neutral.
-- [ ] 4.4 Manual, same session - carried in from the archived
+
+      Confirmed by the user on 2026-09-25 in a dev build of this branch,
+      against Claude and Codex sessions. The one miss - Codex's full-access
+      mode staying neutral - was fixed under 4.6 and rechecked.
+- [x] 4.4 Manual, same session - carried in from the archived
       `permission-prompt-keybinding-hints` change, task 3.3, which was
       never done: confirm the prompt's decision buttons read
       "Allow ⇧⌘A" / "Deny ⇧⌘D" legibly against the primary button fill,
       that pressing each key resolves the request, and that clicking
       still works.
-- [ ] 4.5 Close issue #194 only once 4.2-4.4 are recorded. Its "Done
+
+      Confirmed by the user on 2026-09-25, same session, with the
+      Keyboard settings at their defaults.
+- [x] 4.5 Close issue #194 only once 4.2-4.4 are recorded. Its "Done
       when" asks for the feature to be established as reachable, not
-      merely for the code to be changed.
+      merely for the code to be changed. 4.2-4.4 are recorded above; the
+      PR carrying them closes the issue.
+- [x] 4.6 Rate Codex's `agent-full-access` as `Danger`, confirmed neutral
+      in the running app during 4.3. `permission_risk_level` folds `-` and
+      `_` to spaces and matches "full access", so the id and the display
+      name ("Full access") both qualify; `read-only` stays `Safe` and
+      `agent` stays `Neutral`. Pinned by
+      `codex_permission_modes_are_classified` in
+      `crates/knot/src/panel_view/tests.rs`, with a scenario added to the
+      `permission-prompt-ui` delta.
