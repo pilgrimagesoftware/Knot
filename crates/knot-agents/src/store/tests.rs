@@ -1,6 +1,7 @@
 mod lifecycle;
 mod persistence;
 mod pull_requests;
+mod startup_prompt;
 mod workspace;
 
 use super::*;
@@ -67,5 +68,5 @@ fn panels_and_bench_behave_as_expected() {
                vec![a.clone(), b]);
     assert!(store.agent(id).unwrap().markdown_maximized);
     let bench = knot_core::BenchAgent::new(Uuid::new_v4(), "Ghost", None, "/missing");
-    assert!(store.deploy_bench(&bench, |_| false).is_none());
+    assert!(store.deploy_bench(&bench, None, |_| false).is_none());
 }

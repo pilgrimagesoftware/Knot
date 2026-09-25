@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use knot_core::{
-    ActivationMode, Capabilities, CostTier, SavedPullRequest, Workspace, WorkspaceUiState,
+    ActivationMode, Capabilities, CostTier, SavedPullRequest, StartupPrompt, Workspace,
+    WorkspaceUiState,
 };
 use uuid::Uuid;
 
@@ -52,6 +53,7 @@ pub struct CreateOptions {
     pub description:     String,
     pub capabilities:    Capabilities,
     pub cost_tier:       CostTier,
+    pub startup_prompt:  Option<StartupPrompt>,
 }
 
 /// Fields an edit may change. `name`/`avatar` always apply and never trigger
@@ -75,6 +77,9 @@ pub struct EditRequest {
     pub description:         String,
     pub capabilities:        Capabilities,
     pub cost_tier:           CostTier,
+    /// Applied verbatim and restart-free: it is sent on the next fresh
+    /// session, not to the one already running.
+    pub startup_prompt:      Option<StartupPrompt>,
 }
 
 /// An agent removed by [`AgentStore::remove`], in cascade order (companions

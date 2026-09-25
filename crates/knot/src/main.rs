@@ -37,6 +37,7 @@ mod panel_session;
 mod panel_state;
 mod panel_view;
 mod plan_view;
+mod prompt_text;
 mod pull_request_filter;
 mod pull_request_groups;
 mod pull_request_state;
@@ -44,6 +45,7 @@ mod quit_guard;
 mod refresh_cache;
 mod settings_global;
 mod settings_window;
+mod startup_choice;
 mod subagent_feed;
 mod terminal_view;
 #[cfg(test)]

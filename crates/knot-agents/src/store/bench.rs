@@ -6,7 +6,12 @@ use uuid::Uuid;
 use super::{AgentStore, CreateOptions};
 
 impl AgentStore {
-    pub fn deploy_bench(&mut self, bench: &BenchAgent, folder_exists: impl FnOnce(&Path) -> bool)
+    /// Create an agent from `bench`, in `workspace_id` when given, or `None`
+    /// when its folder no longer exists - the caller then prunes the entry,
+    /// per `agent-lifecycle`'s "Bench deployment". The entry itself is not
+    /// consumed: one entry deploys any number of times.
+    pub fn deploy_bench(&mut self, bench: &BenchAgent, workspace_id: Option<Uuid>,
+                        folder_exists: impl FnOnce(&Path) -> bool)
                         -> Option<Uuid> {
         if !folder_exists(Path::new(&bench.folder)) {
             return None;
@@ -20,6 +25,8 @@ impl AgentStore {
                                          description: bench.description.clone(),
                                          capabilities: bench.capabilities.clone(),
                                          cost_tier: bench.cost_tier,
+                                         startup_prompt: bench.startup_prompt.clone(),
+                                         workspace_id,
                                          ..Default::default() }))
     }
 }

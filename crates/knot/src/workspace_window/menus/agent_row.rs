@@ -284,14 +284,15 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
             else {
                 return;
             };
-            let prefill = AgentPrefill { name:         Some(format!("{} (fork)", source.name)),
-                                         avatar:       Some(source.avatar.clone()),
-                                         folder:       Some(source.folder.clone()),
-                                         agent_type:   Some(source.agent_type.clone()),
-                                         persona_id:   source.persona_id,
-                                         created_by:   None,
-                                         is_companion: false,
-                                         session_id:   source.session_id.clone(), };
+            let prefill = AgentPrefill { name:           Some(format!("{} (fork)", source.name)),
+                                         avatar:         Some(source.avatar.clone()),
+                                         folder:         Some(source.folder.clone()),
+                                         agent_type:     Some(source.agent_type.clone()),
+                                         persona_id:     source.persona_id,
+                                         startup_prompt: source.startup_prompt.clone(),
+                                         created_by:     None,
+                                         is_companion:   false,
+                                         session_id:     source.session_id.clone(), };
             open_editor_from_menu(targets, prefill, Some(targets.id), None, app);
         }
         AgentMenuEntry::DuplicateAgent => {
@@ -318,6 +319,8 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                                           shell_command: source.shell_command
                                                                                .clone(),
                                                           persona_id: source.persona_id,
+                                                          startup_prompt: source.startup_prompt
+                                                                                .clone(),
                                                           insert_after: Some(targets.id),
                                                           ..Default::default() })
             };
@@ -327,34 +330,42 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                      cx.notify();
                                  });
         }
-        // The bench is edited from the settings window too. This used to
-        // re-read from disk before writing, because persisting this window's
-        // snapshot would have dropped whatever was added there since; the
-        // surface is never stale, so the entry goes straight onto it.
+        // The bench is edited from the settings window too; both write onto
+        // the live settings surface, see `workspace_window::bench`.
         AgentMenuEntry::SaveToBench => {
-            let source = targets.store.lock().agent(targets.id).cloned();
-            let Some(source) = source
-            else {
-                return;
-            };
-            let mut entry = knot_core::BenchAgent::new(Uuid::new_v4(),
-                                                       source.name.clone(),
-                                                       Some(source.avatar.clone()),
-                                                       source.folder.clone());
-            entry.agent_type = source.agent_type.clone();
-            entry.shell_command = source.shell_command.clone();
-            entry.persona_id = source.persona_id;
-            // Registry metadata travels with the template, so a saved entry
-            // records a role and not just a folder. See
-            // `openspec/specs/agent-registry/spec.md`.
-            entry.description = source.description.clone();
-            entry.capabilities = source.capabilities.clone();
-            entry.cost_tier = source.cost_tier;
-            if let Err(error) = crate::settings_global::write_persisting(app, |settings| {
-                settings.add_bench_agent(entry.clone())
-            }) {
+            let saved = targets.window_entity
+                               .read(app)
+                               .save_to_bench(targets.id, app);
+            if let Err(error) = saved {
                 eprintln!("failed to save the agent to the bench: {error}");
             }
+        }
+        // Asks first, unlike Save to Bench: it closes the agent, and its
+        // conversation is not kept.
+        AgentMenuEntry::BenchAgent => {
+            let targets = targets.clone();
+            let has_companions = !targets.store.lock().companions(targets.id).is_empty();
+            let body_key = if has_companions {
+                "menu.agent.confirm.bench_body_companions"
+            }
+            else {
+                "menu.agent.confirm.bench_body"
+            };
+            let description = knot_core::l10n::t_with(body_key, &[("name", &targets.name)]);
+            confirm_then(window,
+                         app,
+                         knot_core::l10n::t("menu.agent.confirm.bench_title"),
+                         description,
+                         move |app| {
+                             targets.window_entity.update(app, |view, cx| {
+                                                      if let Err(error) =
+                                                          view.bench_agent(targets.id, cx)
+                                                      {
+                                                          eprintln!("failed to bench the agent: {error}");
+                                                      }
+                                                      cx.notify();
+                                                  });
+                         });
         }
         AgentMenuEntry::RegisterAgent => {
             targets.window_entity.update(app, |view, cx| {

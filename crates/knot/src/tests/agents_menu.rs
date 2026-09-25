@@ -28,13 +28,14 @@ fn entry_ordinal(entry: AgentMenuEntry) -> usize {
         AgentMenuEntry::DuplicateAgent => 5,
         AgentMenuEntry::MoveToWorkspace => 6,
         AgentMenuEntry::SaveToBench => 7,
-        AgentMenuEntry::OpenIn => 8,
-        AgentMenuEntry::MarkdownFiles => 9,
-        AgentMenuEntry::RegisterAgent => 10,
-        AgentMenuEntry::Deactivate => 11,
-        AgentMenuEntry::RestartAgent => 12,
-        AgentMenuEntry::RestartWithNewConversation => 13,
-        AgentMenuEntry::RemoveAgent => 14,
+        AgentMenuEntry::BenchAgent => 8,
+        AgentMenuEntry::OpenIn => 9,
+        AgentMenuEntry::MarkdownFiles => 10,
+        AgentMenuEntry::RegisterAgent => 11,
+        AgentMenuEntry::Deactivate => 12,
+        AgentMenuEntry::RestartAgent => 13,
+        AgentMenuEntry::RestartWithNewConversation => 14,
+        AgentMenuEntry::RemoveAgent => 15,
     }
 }
 

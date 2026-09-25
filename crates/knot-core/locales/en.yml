@@ -14,6 +14,8 @@ dashboard:
 count:
   agent: "agent"
   agents: "agents"
+  bench_entry: "bench entry"
+  bench_entries: "bench entries"
   file: "file"
   files: "files"
   minute: "minute"
@@ -33,6 +35,17 @@ workspace:
 sidebar:
   new_agent: "New agent"
   width_error: "Could not save the sidebar width: %{error}"
+  bench_entry_missing: "Removed %{name} from the bench: %{folder} no longer exists."
+  # The bench popover on the New Agent button.
+  bench_popover:
+    open: "Deploy from the bench"
+    create: "Create New Agent"
+    header: "BENCH"
+    empty: "Right-click an agent → Save to Bench or Bench Agent…"
+    remove: "Remove %{name} from the bench"
+    remove_tooltip: "Remove from bench"
+    confirm_remove_title: "Remove from Bench"
+    confirm_remove_body: "Remove \"%{name}\" from your bench?"
 
 agent:
   companion: "Shell companion"
@@ -68,6 +81,7 @@ panel:
   copied_code: "Copied code to clipboard"
   queued: "Queued"
   queued_inbox_nudge: "Queued inbox check"
+  queued_startup_prompt: "Queued startup prompt"
   failed: "Failed"
   retry: "Retry"
   retry_queued: "Retry this message"
@@ -78,6 +92,7 @@ panel:
   retry_connect: "Try again"
   context_usage: "Context usage"
   lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  lookup_prompt_tag: "Prompt"
   mentions_gathering: "Listing files…"
   mentions_capped: "This folder is too large to list in full — showing what was found"
   # The input area's session-config dropdowns. One render path serves the
@@ -134,6 +149,8 @@ settings:
     general: "General"
     coding: "Coding"
     personas: "Personas"
+    prompts: "Prompts"
+    bench: "Bench"
     autopilot: "Autopilot"
     voice: "Voice"
     mcp: "MCP"
@@ -209,6 +226,38 @@ settings:
     ui: "UI"
     title: "Title"
     terminal: "Terminal"
+  prompts:
+    prompts: "Prompt Library"
+    none_defined: "No prompts defined."
+    add: "Add Prompt…"
+    edit: "Edit prompt"
+    delete: "Delete prompt"
+    delete_title: "Delete Prompt"
+    delete_body: "\"%{name}\" is the startup prompt of %{agents} and %{bench}. They will launch without a startup prompt. Delete it?"
+  bench:
+    bench: "Bench"
+    none_defined: "The bench is empty. Add an agent from its row menu's Save to Bench or Bench Agent…"
+    edit: "Edit bench entry"
+    remove: "Remove from bench"
+    remove_title: "Remove from Bench"
+    remove_body: "Remove \"%{name}\" from your bench?"
+    custom: "Custom"
+  prompt_editor:
+    title_new: "New Prompt"
+    title_edit: "Edit Prompt"
+    name: "Name"
+    name_placeholder: "Prompt name"
+    text: "Prompt"
+    text_placeholder: "What to ask the agent to do"
+    cancel: "Cancel"
+    create: "Create"
+    save: "Save"
+  bench_editor:
+    title: "Edit Bench Entry"
+    name: "Name"
+    startup_prompt: "Startup prompt"
+    cancel: "Cancel"
+    save: "Save"
   persona_editor:
     name: "Name"
     name_placeholder: "Persona name"
@@ -292,6 +341,7 @@ menu:
     duplicate_agent: "Duplicate Agent"
     move_to_workspace: "Move to Workspace"
     save_to_bench: "Save to Bench"
+    bench_agent: "Bench Agent…"
     open_in: "Open In…"
     markdown_files: "Markdown Files"
     register_agent: "Register Agent"
@@ -308,10 +358,14 @@ menu:
       restart_new_body: "Restart \"%{name}\" in a new conversation? Its current conversation will not be resumed."
       remove_title: "Remove Agent"
       remove_body: "Remove \"%{name}\"? This closes its session and cannot be undone."
+      bench_title: "Bench Agent"
+      bench_body: "Save \"%{name}\" to the bench and close it? Its conversation is not kept."
+      bench_body_companions: "Save \"%{name}\" to the bench and close it and its companions? Its conversation is not kept."
   # The agent list's background menu, over the workspace rather than
   # any one agent.
   sidebar:
     new_agent: "New Agent"
+    new_from_bench: "New from Bench"
     restart_all: "Restart All"
     close_all: "Close All"
     deactivate_all: "Deactivate All"
@@ -410,6 +464,12 @@ agent_editor:
   cancel: "Cancel"
   no_folder: "No folder selected"
   persona_none: "None"
+  startup_prompt: "Startup prompt"
+  startup_prompt_none: "None"
+  startup_prompt_custom: "Custom"
+  startup_prompt_missing: "Missing prompt"
+  startup_prompt_placeholder: "What to ask the agent to do first"
+  startup_prompt_hint: "Sent after the agent registers, on each new conversation - not when a conversation is resumed."
   error_choose_folder: "Choose a folder."
   error_enter_name: "Enter a name."
 
@@ -740,3 +800,17 @@ artifact_panel:
   # since a lone section has no other to give its height to.
   collapse_section: "Collapse section"
   expand_section: "Expand section"
+
+# The variables a library prompt or custom startup prompt can use, as the
+# prompt editors list them.
+prompt_variables:
+  insert: "Insert variable"
+  unknown: "Unknown variable: %{names}"
+  agent_name: "the agent's name"
+  agent_id: "the agent's knot ID"
+  agent_type: "the agent's type"
+  folder: "the agent's folder"
+  folder_name: "the folder's name"
+  workspace: "the workspace's name"
+  branch: "the folder's current branch"
+  date: "today's date"

@@ -69,6 +69,11 @@ pub(crate) struct WorkspaceWindow {
     /// selector's `on_open_change` wrote it and the permission selector
     /// read it, clicking Model or Effort opened the *permission* menu.
     pub(super) open_config_selector:             Option<&'static str>,
+    /// Whether the New Agent button's bench popover is open.
+    pub(super) bench_popover_open:               bool,
+    /// The bench popover row under the pointer, which highlights and
+    /// brightens its remove control.
+    pub(super) bench_popover_hovered:            Option<Uuid>,
     pub(super) store:                            Arc<Mutex<knot_agents::AgentStore>>,
     /// Agent-to-agent messages, for the unread badge and the idle-time
     /// delivery nudge (`mcp-messaging`). Shared with the MCP server, which
@@ -394,7 +399,8 @@ pub(crate) struct WorkspaceWindow {
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
-    /// act on - currently only a sidebar width that could not be saved.
+    /// act on - a sidebar width that could not be saved, or a bench entry
+    /// pruned because its folder is gone.
     pub(super) error:                            Option<String>,
 }
 

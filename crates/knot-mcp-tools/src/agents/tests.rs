@@ -62,16 +62,17 @@ fn create_agent_from_bench_template() {
     let mut store = AgentStore::new();
     let caller = store.create("/tmp/caller", CreateOptions::default());
     let bench_id = Uuid::new_v4();
-    let bench = BenchAgent { id:            bench_id,
-                             name:          "Bench Worker".to_string(),
-                             avatar:        "🤖".to_string(),
-                             folder:        "/tmp/bench".to_string(),
-                             agent_type:    "codex".to_string(),
-                             shell_command: None,
-                             persona_id:    None,
-                             description:   String::new(),
-                             capabilities:  Default::default(),
-                             cost_tier:     Default::default(), };
+    let bench = BenchAgent { id:             bench_id,
+                             name:           "Bench Worker".to_string(),
+                             avatar:         "🤖".to_string(),
+                             folder:         "/tmp/bench".to_string(),
+                             agent_type:     "codex".to_string(),
+                             shell_command:  None,
+                             persona_id:     None,
+                             description:    String::new(),
+                             capabilities:   Default::default(),
+                             cost_tier:      Default::default(),
+                             startup_prompt: None, };
     let result = create_agent(&mut store,
                               &json!({"agentId": caller.to_string(), "benchAgentId": bench_id.to_string()}),
                               &[bench]);

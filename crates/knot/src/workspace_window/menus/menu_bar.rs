@@ -13,6 +13,7 @@ use gpui_kit::Context;
 use gpui_kit::InteractiveElement;
 
 use super::agent_row::{move_agent_to_workspace, run_agent_menu_action, show_agent_markdown_file};
+use crate::agent_menu::AgentMenuBenchAgent;
 use crate::agent_menu::AgentMenuDeactivate;
 use crate::agent_menu::AgentMenuDuplicateAgent;
 use crate::agent_menu::AgentMenuEditAgent;
@@ -194,6 +195,7 @@ pub(in crate::workspace_window) fn with_agents_menu_actions(el: gpui_kit::Div,
                                     DuplicateAgent => AgentMenuDuplicateAgent,
                                     MoveToWorkspace => AgentMenuMoveToWorkspace,
                                     SaveToBench => AgentMenuSaveToBench,
+                                    BenchAgent => AgentMenuBenchAgent,
                                     OpenIn => AgentMenuOpenIn,
                                     MarkdownFiles => AgentMenuMarkdownFiles,
                                     RegisterAgent => AgentMenuRegisterAgent,

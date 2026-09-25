@@ -29,6 +29,9 @@ pub(crate) enum PromptOrigin {
     User,
     /// The automatic "check your inbox" nudge Knot sends of its own accord.
     InboxNudge,
+    /// The agent's startup prompt, queued behind its registration turn on a
+    /// fresh session. See `openspec/specs/agent-launch-command/spec.md`.
+    Startup,
 }
 
 /// One prompt waiting to be delivered to an agent.
@@ -160,6 +163,7 @@ pub(crate) fn queued_status_label(failed: bool, origin: PromptOrigin) -> String 
     knot_core::l10n::t(match (failed, origin) {
                            (true, _) => "panel.failed",
                            (false, PromptOrigin::InboxNudge) => "panel.queued_inbox_nudge",
+                           (false, PromptOrigin::Startup) => "panel.queued_startup_prompt",
                            (false, PromptOrigin::User) => "panel.queued",
                        })
 }

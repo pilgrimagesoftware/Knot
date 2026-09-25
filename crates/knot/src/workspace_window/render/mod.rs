@@ -328,7 +328,8 @@ impl WorkspaceWindow {
                                       }))
     }
 
-    /// The row under the agent list. Compact keeps the icon and moves the
+    /// The row under the agent list: the New Agent button and the chevron
+    /// that opens the bench beside it. Compact keeps the icon and moves the
     /// label into a tooltip, so the control still says what it does.
     fn new_agent_button(&self, compact: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         h_flex().flex_shrink_0()
@@ -354,6 +355,7 @@ impl WorkspaceWindow {
                                                                     cx| {
                                                              view.open_new_agent_dialog(cx);
                                                          })))
+                .child(self.bench_popover(cx))
     }
 
     /// The sidebar column: the window's own title bar, the scrolling agent
@@ -405,8 +407,8 @@ impl WorkspaceWindow {
                 div().id("workspace-agent-list-background")
                      .flex_1()
                      .min_h(px(32.))
-                     .context_menu(move |menu, _, _| {
-                         sidebar_background_context_menu(&background_targets, menu)
+                     .context_menu(move |menu, window, cx| {
+                         sidebar_background_context_menu(&background_targets, menu, window, cx)
                      }),
             ),
         ),

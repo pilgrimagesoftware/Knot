@@ -247,7 +247,8 @@ fn deploying_a_bench_entry_restores_its_registry_metadata() {
     bench.capabilities = ["rust", "code-review"].iter().collect();
     bench.cost_tier = knot_core::CostTier::High;
 
-    let id = store.deploy_bench(&bench, |_| true).expect("folder exists");
+    let id = store.deploy_bench(&bench, None, |_| true)
+                  .expect("folder exists");
 
     let agent = store.agent(id).expect("deployed");
     assert_eq!(agent.description, "Reviews Rust diffs");

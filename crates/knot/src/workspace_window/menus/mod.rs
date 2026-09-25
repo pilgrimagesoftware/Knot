@@ -24,9 +24,10 @@ pub(crate) use sidebar::*;
 /// itself after running a handler and takes an inline dialog down with it -
 /// which is why both menus' confirming items were written this way, four
 /// times over, differing only in the two strings and the action.
-fn confirm_then(window: &mut Window, app: &mut App, title: impl Into<SharedString>,
-                description: impl Into<SharedString>,
-                on_confirm: impl Fn(&mut App) + Clone + 'static) {
+pub(in crate::workspace_window) fn confirm_then(window: &mut Window, app: &mut App,
+                                                title: impl Into<SharedString>,
+                                                description: impl Into<SharedString>,
+                                                on_confirm: impl Fn(&mut App) + Clone + 'static) {
     let title = title.into();
     let description = description.into();
     window.defer(app, move |window, app| {

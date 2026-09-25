@@ -37,8 +37,10 @@ use uuid::Uuid;
 use crate::app_support::single_line;
 use crate::composer_scan::escape_token;
 use crate::panel_commands::ActiveToken;
+use crate::panel_commands::LookupEntry;
 use crate::panel_commands::LookupMatch;
 use crate::panel_commands::LookupRegistry;
+use crate::panel_commands::Matcher;
 use crate::panel_commands::Trigger;
 use crate::panel_commands::active_token;
 use crate::workspace_window::WorkspaceWindow;
@@ -121,7 +123,16 @@ impl WorkspaceWindow {
             return None;
         }
         lookup.dismissed = None;
-        let matches: Vec<LookupMatch> = lookup.registry.matching(&token.filter);
+        let mut matches: Vec<LookupMatch> = lookup.registry.matching(&token.filter);
+        // Library prompts after commands and skills, read from the live
+        // surface on each ask rather than memoized with the registry, so a
+        // prompt added in Settings reaches an open composer. An in-memory
+        // read, not I/O.
+        let prompts = crate::settings_global::read(cx).prompts
+                                                      .iter()
+                                                      .map(LookupEntry::library_prompt)
+                                                      .collect::<Vec<_>>();
+        matches.extend(Matcher::Substring.matching(&prompts, &token.filter));
         if matches.is_empty() {
             return None;
         }
@@ -202,6 +213,14 @@ impl WorkspaceWindow {
                                 .min_w_0()
                                 .text_color(cx.theme().muted_foreground)
                                 .child(single_line(&entry.entry.description)))
+                    // A library prompt inserts its text, not its name, so
+                    // it has to read as something other than a command.
+                    .when(entry.entry.prompt.is_some(), |row| {
+                        row.child(div().flex_shrink_0()
+                                       .text_xs()
+                                       .text_color(cx.theme().muted_foreground)
+                                       .child(knot_core::l10n::t("panel.lookup_prompt_tag")))
+                    })
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.panel_lookup_select(id, index);
                         view.insert_panel_lookup_entry(id, &input, window, cx);
@@ -266,6 +285,12 @@ impl WorkspaceWindow {
         // that can be inserted, and Enter on one must leave the buffer
         // alone rather than write the message into the prompt.
         if matches[selected].is_status {
+            return;
+        }
+        if let Some(prompt) = matches[selected].entry.prompt {
+            self.panel_lookup(id).dismissed = Some(token.filter.clone());
+            self.panel_lookup(id).selected = 0;
+            self.expand_library_prompt(id, prompt, token.range.clone(), input, window, cx);
             return;
         }
         replace_lookup_token(input,

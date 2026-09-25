@@ -5,6 +5,7 @@
 //! per-document arrangement.
 
 mod binding;
+mod prompts;
 mod pull_requests;
 
 use std::fs;
@@ -16,7 +17,7 @@ use super::*;
 use crate::CostTier;
 use crate::consts::{
     AGENTS_FILE, BENCH_FILE, DOCUMENT_TEMP_EXTENSION, PERSONAS_FILE, PREFERENCES_FILE,
-    RECENT_REPOS_FILE, WORKSPACES_FILE,
+    PROMPTS_FILE, RECENT_REPOS_FILE, WORKSPACES_FILE,
 };
 
 fn agent_id() -> Uuid {
@@ -230,6 +231,7 @@ fn a_whole_surface_persist_writes_every_document() {
     s.recent_repos = vec!["alpha".to_string(), "beta".to_string()];
     s.personas = vec![persona("Rookie", PersonaType::User, PersonaState::Enabled)];
     s.bench_agents = vec![BenchAgent::new(agent_id(), "bench", None, "/repo")];
+    s.prompts = vec![crate::Prompt::new("gate", "make").unwrap()];
 
     s.persist().unwrap();
 
@@ -238,6 +240,7 @@ fn a_whole_surface_persist_writes_every_document() {
                  WORKSPACES_FILE,
                  PERSONAS_FILE,
                  BENCH_FILE,
+                 PROMPTS_FILE,
                  RECENT_REPOS_FILE]
     {
         assert!(dir.path().join(file).exists(), "{file} was not written");
@@ -247,6 +250,7 @@ fn a_whole_surface_persist_writes_every_document() {
     assert_eq!(reloaded.recent_repos, vec!["alpha", "beta"]);
     assert_eq!(reloaded.personas.len(), 1);
     assert_eq!(reloaded.bench_agents.len(), 1);
+    assert_eq!(reloaded.prompts.len(), 1);
 }
 
 /// Every document beside the one being written, as bytes.

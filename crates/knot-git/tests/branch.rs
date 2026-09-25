@@ -28,6 +28,18 @@ fn current_branch_reports_name_then_none_when_detached() {
 }
 
 #[test]
+fn short_head_names_the_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    init_repo(path);
+    let full = Runner::new(path).run(&["rev-parse", "HEAD"]).unwrap();
+
+    let short = Repository::open(path).short_head().unwrap();
+
+    assert!(!short.is_empty() && full.starts_with(&short));
+}
+
+#[test]
 fn no_upstream_means_zero_counts_and_not_unpushed() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();

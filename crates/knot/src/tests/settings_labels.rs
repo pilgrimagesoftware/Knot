@@ -247,17 +247,20 @@ fn settings_tab_labels_are_distinct() {
     assert_eq!(labels.len(), SettingsTab::ALL.len());
 }
 
-/// The seven ported panes, in the Swift reference's order, then Keyboard,
-/// which the reference has no counterpart for (`keybindings`), and nothing
-/// else. Settings holds what the user configures; an import is something
-/// they run, and lives in its own window off the File menu - see
-/// `tests::import_window`.
+/// The seven ported panes, in the Swift reference's order, with Prompts and
+/// Bench after Personas (`prompt-library`, `settings-ui` - the reference has
+/// neither), then Keyboard, which the reference has no counterpart for
+/// (`keybindings`), and nothing else. Settings holds what the user configures;
+/// an import is something they run, and lives in its own window off the File
+/// menu - see `tests::import_window`.
 #[test]
 fn settings_tab_covers_every_swift_pane_then_keyboard() {
     assert_eq!(SettingsTab::ALL.to_vec(),
                vec![SettingsTab::General,
                     SettingsTab::Coding,
                     SettingsTab::Personas,
+                    SettingsTab::Prompts,
+                    SettingsTab::Bench,
                     SettingsTab::Autopilot,
                     SettingsTab::Voice,
                     SettingsTab::Mcp,

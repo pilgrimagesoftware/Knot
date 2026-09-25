@@ -2,12 +2,13 @@
 //!
 //! `fields` holds the form's values and the rules that turn them into an
 //! agent's data, `window` owns the dialog and its state, `submit` is what
-//! pressing the button does, `pickers` are the two native choosers, and
-//! `render` draws it.
+//! pressing the button does, `pickers` are the two native choosers,
+//! `startup_prompt` is the Startup Prompt control, and `render` draws it.
 
 mod fields;
 mod pickers;
 mod render;
+mod startup_prompt;
 mod submit;
 mod window;
 
