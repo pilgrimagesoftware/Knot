@@ -31,10 +31,23 @@ When `restore-conversation-on-launch` is enabled, loading agents as part of a
 layout restore SHALL, for each restored agent, resolve a resume-session id
 as follows, applied before that agent's terminal session is launched:
 
-1. If the agent's persisted session id is present, use it directly.
-2. Otherwise, look up the most recent session for that agent's `(folder,
+1. If the agent's persisted ACP session id is present, use it directly.
+2. Otherwise, if its persisted session id is present, use that.
+3. Otherwise, look up the most recent session for that agent's `(folder,
    agent type)` via the conversation-history provider registry, and use its
    id if found.
+
+A Panel-mode agent's connection SHALL load its live ACP session id when it
+has one, and otherwise the resolved resume-session id, so a conversation
+restored at launch is loaded rather than replaced by a new session. The ACP
+session id comes first in the resolution because it is the only one a
+Panel-mode agent records. Without it, every such agent fell through to the
+history lookup, which picks another agent's conversation when two share a
+folder.
+
+When `restore-conversation-on-launch` is enabled, an agent's ACP session id
+SHALL be persisted as soon as its session opens, not left for the next
+roster change, so quitting straight afterwards still restores it.
 
 If neither step yields an id — `restore-conversation-on-launch` is disabled,
 no persisted session id exists, no history provider exists for the agent's
@@ -134,6 +147,13 @@ id.
   the adapter reports the session no longer exists
 - **THEN** the system starts a fresh ACP session for that agent instead of
   surfacing an error to the user
+
+#### Scenario: A panel agent's conversation survives a relaunch
+
+- **WHEN** `restore-conversation-on-launch` is enabled, a Panel-mode agent
+  with ACP session id `a1` is persisted, and the app is relaunched
+- **THEN** the agent's resume-session id is `a1`, and its connection loads
+  session `a1` instead of creating a new one
 
 #### Scenario: Manual restart is unaffected
 

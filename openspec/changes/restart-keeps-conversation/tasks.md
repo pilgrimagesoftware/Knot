@@ -36,9 +36,20 @@
   Verify with a `panel_scroll` test on the real row layout, which fails
   without the change.
 
-## 4. Gate
+## 4. Restore on relaunch
 
-- [ ] 4.1 Run `make`. It must pass.
-- [ ] 4.2 Run the app with "Restore last conversation" on. Restart a panel
+- [x] 4.1 Resolve the launch resume-session id from the persisted ACP session
+  id first, and have the panel connection load `Agent::session_to_load` (the
+  live ACP id, else the resolved one). Verify with a `startup` test and a
+  `knot-agents` test of `session_to_load`.
+- [x] 4.2 Persist the roster when a panel session's id is recorded. Verify by
+  relaunching the app with the setting on (5.2); no fake-adapter window test
+  exists to drive a real connect.
+
+## 5. Gate
+
+- [ ] 5.1 Run `make`. It must pass.
+- [ ] 5.2 Run the app with "Restore last conversation" on. Restart a panel
   agent and confirm the conversation, prompts included, is still there, then use Restart with New
-  Conversation and confirm it starts over.
+  Conversation and confirm it starts over. Quit and relaunch, and confirm
+  the conversation is restored.

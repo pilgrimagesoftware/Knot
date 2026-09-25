@@ -25,8 +25,15 @@ conversation.
 - Restarts caused by editing a launch-affecting field (folder, agent type,
   persona) still always start fresh.
 
+- Conversations are restored at app launch for panel agents too:
+  - the saved ACP session id is resolved first;
+  - the panel connection loads it;
+  - it is saved as soon as a session opens.
+
+  Before, the saved id was never read back, so every panel agent started
+  over after a relaunch.
+
 Non-goals:
-- Changing how conversations are restored at app launch.
 - Changing Resume or Fork.
 
 ## Capabilities
@@ -38,8 +45,9 @@ None.
 ### Modified Capabilities
 
 - `agent-lifecycle`: Restart either keeps or discards the conversation,
-  decided by the setting and by which item the user chose. The launch-restore
-  requirement no longer says a manual restart always clears the session.
+  decided by the setting and by which item the user chose. Launch restore
+  resolves the ACP session id first, the panel connection loads it, and it is
+  persisted when a session opens.
 - `agent-list-ui`: the row context menu gains Restart with New Conversation,
   with its visibility rule. Restart Agent and Restart All follow the setting.
 - `app-menu`: the Agents menu's shortcut table gains ⇧⌘R.

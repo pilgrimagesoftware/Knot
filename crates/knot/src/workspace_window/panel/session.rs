@@ -56,7 +56,7 @@ impl WorkspaceWindow {
         let slot = Arc::new(Mutex::new(connecting));
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
-        let prior_session_id = agent.acp_session_id.clone();
+        let prior_session_id = agent.session_to_load().map(str::to_owned);
         let registration_prompt =
             knot_agent_launch::acp_registration_prompt(agent.id,
                                                        prior_session_id.is_some(),
@@ -69,6 +69,7 @@ impl WorkspaceWindow {
                                                                 &agent.agent_type,
                                                                 Arc::clone(&self.subagents));
         let store = Arc::clone(&self.store);
+        let settings = crate::settings_global::handle(cx);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
                         let request =
@@ -81,8 +82,25 @@ impl WorkspaceWindow {
                                                             session_config,
                                                             subagents };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {
-                            let mut store = store.lock();
-                            store.set_acp_session_id(id, session_id.to_string());
+                            // Written out straight away, not left for the next
+                            // roster change: with conversations restored, this
+                            // id is what the next launch loads, and nothing
+                            // else is guaranteed to persist before the user
+                            // quits. Blocking I/O, on this runtime thread
+                            // rather
+                            // than the render path; the store guard is dropped
+                            // before it, as `persist_agents` does.
+                            let installed = {
+                                let mut store = store.lock();
+                                store.set_acp_session_id(id, session_id.to_string());
+                                settings.write(|settings| {
+                                            settings.saved_agents =
+                                        store.saved_agents(settings.restore_conversation_on_launch);
+                                        })
+                            };
+                            if let Err(error) = installed.persist_roster() {
+                                eprintln!("failed to persist agent {id}'s session: {error}");
+                            }
                         }).await;
                     });
     }

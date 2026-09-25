@@ -425,9 +425,15 @@ pub(crate) fn stale_session_ids(session_ids: &[Uuid], live_ids: &BTreeSet<Uuid>)
 /// the GPUI shell and the MCP catalog so both render the same data.
 ///
 /// When `restore_conversation_on_launch` is also set, resolves each restored
-/// agent's resume-session id: its own persisted session id when present (an
-/// exact restore), otherwise the most recent session for its `(folder,
-/// agent type)` via the `knot-history` provider registry.
+/// agent's resume-session id: its own persisted ACP session id, then its
+/// persisted terminal session id (either is an exact restore), otherwise the
+/// most recent session for its `(folder, agent type)` via the `knot-history`
+/// provider registry.
+///
+/// The ACP id comes first because it is the only one a Panel-mode agent -
+/// every coding agent - ever records; reading the terminal id alone left
+/// every panel agent to the history guess, which picks the wrong
+/// conversation when two agents share a folder.
 pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::AgentStore {
     if !settings.restore_layout_on_launch {
         // No recorded pull requests either: every one of them names an agent
@@ -449,7 +455,12 @@ pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::
         let persisted: BTreeMap<Uuid, String> =
             settings.saved_agents
                     .iter()
-                    .filter_map(|agent| agent.session_id.clone().map(|sid| (agent.id, sid)))
+                    .filter_map(|agent| {
+                        agent.acp_session_id
+                             .clone()
+                             .or_else(|| agent.session_id.clone())
+                             .map(|sid| (agent.id, sid))
+                    })
                     .collect();
         store.resolve_resume_sessions(&persisted, |folder, agent_type| {
                  let provider = knot_history::provider(agent_type)?;

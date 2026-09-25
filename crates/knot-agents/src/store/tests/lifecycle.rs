@@ -67,6 +67,26 @@ fn restart_keeping_conversation_keeps_the_sessions() {
 }
 
 #[test]
+fn session_to_load_prefers_the_live_acp_session_over_the_resolved_one() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    assert_eq!(store.agent(id).unwrap().session_to_load(),
+               None,
+               "a new agent starts fresh");
+
+    store.agent_mut(id).unwrap().resume_session_id = Some("restored".to_string());
+    assert_eq!(store.agent(id).unwrap().session_to_load(), Some("restored"));
+
+    store.set_acp_session_id(id, "live".to_string());
+    assert_eq!(store.agent(id).unwrap().session_to_load(), Some("live"));
+
+    store.restart(id).unwrap();
+    assert_eq!(store.agent(id).unwrap().session_to_load(),
+               None,
+               "a new conversation loads neither");
+}
+
+#[test]
 fn restart_keeping_conversation_clears_a_spent_fork() {
     let mut store = AgentStore::new();
     let id = store.create("/tmp/a", CreateOptions::default());

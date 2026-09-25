@@ -42,6 +42,29 @@ fn build_agent_store_restores_exact_session_id_when_conversation_enabled() {
     assert!(agent.session_id.is_none());
 }
 
+/// A Panel-mode agent records only its ACP session id, and that is the one
+/// its connection loads - restoring the terminal id alone left every panel
+/// agent to start over on relaunch.
+#[test]
+fn build_agent_store_restores_the_acp_session_id_first() {
+    let agent_id = Uuid::new_v4();
+    let mut saved = knot_core::SavedAgent::new(agent_id, "alpha", None, "~/alpha");
+    saved.acp_session_id = Some("acp-7".to_string());
+    saved.session_id = Some("s7".to_string());
+
+    let mut settings = knot_core::Settings::default();
+    settings.restore_layout_on_launch = true;
+    settings.restore_conversation_on_launch = true;
+    settings.saved_agents = vec![saved];
+
+    let store = build_agent_store(&settings);
+    let agent = store.agent(agent_id).unwrap();
+    assert_eq!(agent.resume_session_id.as_deref(), Some("acp-7"));
+    assert_eq!(agent.session_to_load(),
+               Some("acp-7"),
+               "the panel connection loads the restored conversation");
+}
+
 #[test]
 fn build_agent_store_leaves_resume_session_unset_when_conversation_disabled() {
     let agent_id = Uuid::new_v4();
