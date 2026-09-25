@@ -17,6 +17,7 @@ The View menu SHALL carry an item for each workspace navigation shortcut in
 | separator | |
 | View > Select Agent ▸ | submenu, see "The View menu's Select Agent submenu" |
 | View > Select Workspace ▸ | submenu, see "The View menu's Select Workspace submenu" |
+| separator | |
 
 Choosing an item SHALL do exactly what its shortcut does (`keybindings`). Each
 item SHALL show the shortcut's current binding and SHALL update when the user
@@ -36,7 +37,7 @@ Agent. The port has none of those as shortcuts, and lists the ones it has.
   shortcut customized
 - **THEN** it lists Dashboard (⌥⌘O), Pull Requests (⌥⌘P), Focus Agent Input
   (⌘L), Jump to Bottom (⌃⌘↓), Select Agent and Select Workspace, in that order,
-  followed by one Enter Full Screen item
+  followed by a separator and then one Enter Full Screen item
 
 #### Scenario: An item does what its shortcut does
 

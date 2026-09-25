@@ -98,6 +98,9 @@ pub(crate) fn view_menu(snapshot: &ViewMenuSnapshot) -> Menu {
         MenuItem::separator(),
         select_agent_submenu(snapshot.window.as_ref()),
         select_workspace_submenu(snapshot),
+        // Sets off the Enter Full Screen item macOS appends after the last
+        // item, which would otherwise read as part of the submenu group.
+        MenuItem::separator(),
     ])
 }
 

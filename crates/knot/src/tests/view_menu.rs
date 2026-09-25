@@ -91,7 +91,8 @@ fn the_items_are_in_the_specified_order() {
                 t("menu.view.jump_to_bottom"),
                 "-".to_string(),
                 t("menu.view.select_agent"),
-                t("menu.view.select_workspace")]);
+                t("menu.view.select_workspace"),
+                "-".to_string()]);
 }
 
 /// macOS adds Enter Full Screen itself, and only when the menu has no item it
