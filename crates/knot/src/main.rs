@@ -43,6 +43,7 @@ mod quit_guard;
 mod refresh_cache;
 mod settings_global;
 mod settings_window;
+mod startup_choice;
 mod subagent_feed;
 mod terminal_view;
 #[cfg(test)]

@@ -114,7 +114,7 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                           .map(|a| a.startup_prompt.clone())
                                           .unwrap_or_else(|| prefill.startup_prompt.clone());
               let (startup_choice, startup_text) =
-                  super::startup_prompt::initial_choice(stored_startup.as_ref());
+                  crate::startup_choice::initial_choice(stored_startup.as_ref());
               let startup_custom_input = cx.new(|cx| {
                   TextareaState::new(window, cx)
                       .placeholder(knot_core::l10n::t("agent_editor.startup_prompt_placeholder"))
@@ -214,7 +214,7 @@ pub(crate) struct AgentEditor {
     pub(super) original_persona_id:   Option<Uuid>,
     /// Which form of startup prompt is selected. See
     /// `openspec/specs/agent-editor-ui/spec.md`, "Startup prompt control".
-    pub(super) startup_choice:        super::startup_prompt::StartupChoice,
+    pub(super) startup_choice:        crate::startup_choice::StartupChoice,
     /// The custom startup prompt's text, kept while another choice is
     /// selected so switching back does not lose it.
     pub(super) startup_custom_input:  Entity<TextareaState>,

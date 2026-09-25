@@ -28,7 +28,8 @@ use uuid::Uuid;
 use crate::app_support::observe_system_appearance;
 use crate::settings_window::SettingsWindow;
 
-pub(crate) fn persona_editor_window_options(title: &'static str, cx: &App) -> WindowOptions {
+pub(crate) fn persona_editor_window_options(title: impl Into<gpui_kit::SharedString>, cx: &App)
+                                            -> WindowOptions {
     WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some(title.into()),
                                                                ..Default::default() }),
                     window_bounds: Some(WindowBounds::centered(size(px(460.), px(380.)), cx)),

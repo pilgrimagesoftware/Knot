@@ -60,11 +60,11 @@
 
 ## 9. Settings window (`knot`)
 
-- [ ] 9.1 Add `SettingsTab::Prompts` and `SettingsTab::Bench` after Personas; verify the tab list and that switching tabs preserves window state
-- [ ] 9.2 Implement the Prompts tab and its editor after `persona_editor.rs`: list with preview, add, edit, cancel, save disabled on a blank field; verify each Prompts-tab scenario
-- [ ] 9.3 Add the editor's variable list (inserting at the caret) and unknown-variable warnings; verify choosing `folder.name` inserts `{{folder.name}}` at the caret and `{{foldr}}` warns without disabling save
-- [ ] 9.4 Delete immediately when unreferenced, otherwise confirm with counts of referencing agents and bench entries; verify both paths, and that cancel keeps the prompt
-- [ ] 9.5 Implement the Bench tab: list, edit name and startup prompt only, remove with confirmation (the helper shared with the popover), empty-state message; verify each Bench-tab scenario
+- [x] 9.1 Add `SettingsTab::Prompts` and `SettingsTab::Bench` after Personas; verify the tab list and that switching tabs preserves window state
+- [x] 9.2 Implement the Prompts tab and its editor after `persona_editor.rs`: list with preview, add, edit, cancel, save disabled on a blank field; verify each Prompts-tab scenario
+- [x] 9.3 Add the editor's variable list (inserting at the caret) and unknown-variable warnings; verify choosing `folder.name` inserts `{{folder.name}}` at the caret and `{{foldr}}` warns without disabling save
+- [x] 9.4 Delete immediately when unreferenced, otherwise confirm with counts of referencing agents and bench entries; verify both paths, and that cancel keeps the prompt
+- [x] 9.5 Implement the Bench tab: list, edit name and startup prompt only, remove with confirmation (the helper shared with the popover), empty-state message; verify each Bench-tab scenario
 
 ## 10. Slash lookup (`knot`)
 
@@ -77,4 +77,4 @@
 - [ ] 11.1 Add every user-facing string to `crates/knot-core/locales/en.yml` (`settings.prompts.*`, `settings.bench.*`, `prompt_variables.*`, `menu.agent.bench*`, `menu.sidebar.new_from_bench`, `sidebar.bench_popover.*`, `agent_editor.startup_prompt.*`, `panel.queued_startup_prompt`); touch `knot-core` first, then verify with key-resolution tests
 - [ ] 11.2 Run `make` and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass, with no crate-wide `allow` and no implementation in a `mod.rs`
 - [ ] 11.3 Tests that persist settings use `with_store_root`; verify no test writes to the real settings directory
-- [ ] 11.4 Manual verification in the running app (**needs a display**): create a library prompt using `{{agent.name}}` and `{{branch}}`, set it as an ACP agent's startup prompt, restart with a new conversation and see registration then the expanded prompt as two turns; edit the queued prompt before delivery; bench the agent, redeploy it from the New Agent chevron's popover and again from New from Bench, and see the prompt sent each time; remove an entry from the popover; expand the prompt from `/` in a composer
+- [ ] 11.4 Manual verification in the running app (**needs a display**): create a library prompt using `{{agent.name}}` and `{{branch}}`, set it as an ACP agent's startup prompt, restart with a new conversation and see registration then the expanded prompt as two turns; edit the queued prompt before delivery; bench the agent, redeploy it from the New Agent chevron's popover and again from New from Bench, and see the prompt sent each time; remove an entry from the popover; in Settings, add a prompt (Create disabled until both fields are filled, `{{foldr}}` warns), edit and cancel it, delete a referenced prompt and read the counts, rename a bench entry and change its startup prompt; expand the prompt from `/` in a composer
