@@ -106,10 +106,10 @@ impl WorkspaceWindow {
                                         }
                                     }))
                             }))
-                            // Editing returns the message to the composer,
-                            // so it is offered exactly where deletion is:
-                            // a prompt the agent already has is neither.
-                            .children(prompt.is_deletable().then(|| {
+                            // Every queued row can be edited and deleted: a
+                            // prompt leaves the queue as it is handed to the
+                            // agent, so nothing here is one the agent has.
+                            .child(
                                 Button::new(("panel-queued-prompt-edit", element_key(prompt_id)))
                                     .icon(gpui_kit::assets::IconName::Pencil)
                                     .tooltip(knot_core::l10n::t("panel.edit_queued"))
@@ -122,9 +122,9 @@ impl WorkspaceWindow {
                                                           window,
                                                           cx| {
                                         view.edit_queued_prompt(id, prompt_id, window, cx);
-                                    }))
-                            }))
-                            .children(prompt.is_deletable().then(|| {
+                                    })),
+                            )
+                            .child(
                                 Button::new(("panel-queued-prompt-delete", element_key(prompt_id)))
                                     .icon(gpui_kit::assets::IconName::Trash)
                                     .tooltip(knot_core::l10n::t("panel.delete_queued"))
@@ -142,8 +142,8 @@ impl WorkspaceWindow {
                                         {
                                             cx.notify();
                                         }
-                                    }))
-                            }))
+                                    })),
+                            )
                 },
             ))
                                     })

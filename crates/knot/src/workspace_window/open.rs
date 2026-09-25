@@ -152,6 +152,7 @@ impl WorkspaceWindow {
                     panel_selector_items: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_prompt_queues: BTreeMap::new(),
+                    panel_prompts_in_flight: BTreeMap::new(),
                     panel_trackers: BTreeMap::new(),
                     panel_reported_states: BTreeMap::new(),
                     panel_status_landed: Arc::new(std::sync::atomic::AtomicBool::new(false)),

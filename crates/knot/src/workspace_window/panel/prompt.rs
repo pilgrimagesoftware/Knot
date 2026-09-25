@@ -597,11 +597,10 @@ impl WorkspaceWindow {
         cx.notify();
     }
 
-    /// Returns whether a queued prompt was just picked up (moved to
-    /// `in_flight`) - the caller feeds this into `deliver_waiting_prompts`'s
-    /// dirty check, since flipping that flag changes what the queue row
-    /// shows (waiting vs. in flight) with nothing else marking the frame
-    /// dirty.
+    /// Returns whether a queued prompt was just picked up (moved off the
+    /// queue into `panel_prompts_in_flight`) - the caller feeds this into
+    /// `deliver_waiting_prompts`'s dirty check, since the queue losing a row
+    /// changes the frame with nothing else marking it dirty.
     pub(in crate::workspace_window) fn drain_panel_prompt(&mut self, id: Uuid) -> bool {
         let Some(slot) = self.panel_sessions.get(&id)
         else {
@@ -619,14 +618,18 @@ impl WorkspaceWindow {
                 return None;
             }
             drop(state);
-            let queue = self.panel_prompt_queues.get_mut(&id)?;
-            let prompt = queue.first_mut()?;
-            if prompt.failed || prompt.in_flight {
+            // `turn_active` flips only once the spawned prompt reaches the
+            // session, so without this a tick in between would send the
+            // next prompt as well.
+            if self.panel_prompts_in_flight.contains_key(&id) {
                 return None;
             }
-            prompt.in_flight = true;
+            let queue = self.panel_prompt_queues.get_mut(&id)?;
+            let prompt = prompt_queue::take_next(queue)?;
             handle.record_user_message(prompt.text.clone());
-            Some((handle.session(), handle.recorder(), prompt.text.clone(), prompt.id))
+            let sent = (handle.session(), handle.recorder(), prompt.text.clone(), prompt.id);
+            self.panel_prompts_in_flight.insert(id, prompt);
+            Some(sent)
         };
         let Some((session, recorder, text, prompt_id)) = candidate()
         else {

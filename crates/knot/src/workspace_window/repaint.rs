@@ -230,10 +230,23 @@ impl WorkspaceWindow {
         let prompt_results = std::mem::take(&mut *self.panel_prompt_results.lock());
         let drained = !prompt_results.is_empty();
         for (id, prompt_id, result) in prompt_results {
-            if let Some(queue) = self.panel_prompt_queues.get_mut(&id) {
-                // A prompt the user deleted while it was in flight is
-                // simply not there any more; `complete` ignores it.
-                prompt_queue::complete(queue, prompt_id, result.is_ok());
+            // Matched on the prompt's id, not just the agent's: a result
+            // for an agent that was removed and re-added must not clear or
+            // restore a later prompt.
+            if self.panel_prompts_in_flight
+                   .get(&id)
+                   .is_none_or(|prompt| prompt.id != prompt_id)
+            {
+                continue;
+            }
+            let Some(prompt) = self.panel_prompts_in_flight.remove(&id)
+            else {
+                continue;
+            };
+            if result.is_err()
+               && let Some(queue) = self.panel_prompt_queues.get_mut(&id)
+            {
+                prompt_queue::return_failed(queue, prompt);
             }
         }
         drained

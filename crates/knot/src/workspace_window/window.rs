@@ -183,6 +183,14 @@ pub(crate) struct WorkspaceWindow {
     /// cancels it).
     pub(super) panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     pub(super) panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    /// The prompt each agent's pump has taken off its queue and is waiting
+    /// on a result for.
+    ///
+    /// Held outside the queue so the row disappears as soon as the prompt is
+    /// sent. Held at all for two reasons: the pump must not send the next
+    /// prompt before the session reports its turn active, and a failed
+    /// delivery goes back on the queue as the same prompt.
+    pub(super) panel_prompts_in_flight:          BTreeMap<Uuid, QueuedPanelPrompt>,
     /// One activity tracker per Panel-mode agent whose session has been
     /// ready at least once, created lazily by `sync_panel_agent_states`.
     ///
