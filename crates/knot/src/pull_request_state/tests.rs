@@ -5,29 +5,35 @@
 use std::time::{Duration, SystemTime};
 
 use knot_forge::{
-    CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
+    CheckRollup, ForgeAvailability, ForgeError, Mergeability, PullRequestState, PullRequestStatus,
 };
 
-use super::{ForgeStatus, MAX_AGE, PullRequestStateCache, counts_for, expired_urls};
+use super::{
+    ForgeStatus, MAX_AGE, PullRequestLookup, PullRequestStateCache, counts_for, expired_urls,
+};
 
 const ALWAYS: Duration = Duration::ZERO;
 const URL: &str = "https://github.com/acme/widget/pull/42";
 
-fn state(status: PullRequestStatus) -> Option<PullRequestState> {
-    Some(PullRequestState { number: Some(42),
-                            title: Some("Do the thing".to_string()),
-                            status,
-                            checks: Some(CheckRollup::Passing),
-                            mergeable: Mergeability::Mergeable,
-                            merged_at: None })
+fn state(status: PullRequestStatus) -> PullRequestLookup {
+    PullRequestLookup::Known(PullRequestState { number: Some(42),
+                                                title: Some("Do the thing".to_string()),
+                                                status,
+                                                checks: Some(CheckRollup::Passing),
+                                                mergeable: Mergeability::Mergeable,
+                                                merged_at: None })
 }
 
 /// A merged state carrying a merge time, as a fetch of a merged pull request
 /// produces. `into()` rather than a named `OffsetDateTime` so these tests need
 /// no date library of their own.
-fn merged_at(when: SystemTime) -> Option<PullRequestState> {
-    Some(PullRequestState { merged_at: Some(when.into()),
-                            ..state(PullRequestStatus::Merged).unwrap() })
+fn merged_at(when: SystemTime) -> PullRequestLookup {
+    let PullRequestLookup::Known(merged) = state(PullRequestStatus::Merged)
+    else {
+        unreachable!("state() builds a known lookup");
+    };
+    PullRequestLookup::Known(PullRequestState { merged_at: Some(when.into()),
+                                                ..merged })
 }
 
 fn urls(count: usize) -> Vec<String> {
@@ -59,17 +65,17 @@ fn a_fetched_state_is_readable_and_is_not_asked_for_again() {
 }
 
 /// The distinction the row depends on: absent is "not asked yet", a recorded
-/// `None` is "asked, and the fetch failed" - which must stop the row saying
-/// it is still loading.
+/// `Failed` is "asked, and the fetch failed" - a finished answer, not a
+/// missing one.
 #[test]
 fn a_failed_fetch_records_an_answer_rather_than_staying_pending() {
     let mut cache = PullRequestStateCache::default();
 
     cache.claim_refresh(URL.to_string(), MAX_AGE)
          .expect("claimed")
-         .record(None);
+         .record(PullRequestLookup::Failed);
 
-    assert_eq!(cache.get(&URL.to_string()), Some(None));
+    assert_eq!(cache.get(&URL.to_string()), Some(PullRequestLookup::Failed));
 }
 
 /// The spec's "refreshing does not blank the row": the value is replaced
@@ -180,13 +186,99 @@ fn a_failed_fetch_is_counted_as_pending_not_as_a_state() {
     }
     cache.claim_refresh(urls[3].clone(), MAX_AGE)
          .expect("claimed")
-         .record(None);
+         .record(PullRequestLookup::Failed);
 
     let counts = counts_for(&cache.snapshot(), &urls);
 
     assert_eq!((counts.open, counts.merged, counts.closed), (1, 1, 1));
     assert_eq!(counts.pending, 1);
     assert!(!counts.nothing_known());
+}
+
+/// The forge said one of four does not exist: counted on its own, and neither
+/// as a state nor as pending.
+#[test]
+fn a_pull_request_that_does_not_exist_is_counted_apart() {
+    let mut cache = PullRequestStateCache::default();
+    let urls = urls(4);
+    for url in &urls[..3] {
+        cache.claim_refresh(url.clone(), MAX_AGE)
+             .expect("claimed")
+             .record(state(PullRequestStatus::Open));
+    }
+    cache.claim_refresh(urls[3].clone(), MAX_AGE)
+         .expect("claimed")
+         .record(PullRequestLookup::NotFound);
+
+    let counts = counts_for(&cache.snapshot(), &urls);
+
+    assert_eq!((counts.open, counts.not_found, counts.pending), (3, 1, 0));
+    assert_eq!(counts.total(), 4);
+}
+
+/// Not found is an answer: a workspace whose only records are missing pull
+/// requests has a breakdown to show, not just a total.
+#[test]
+fn not_found_alone_counts_as_known() {
+    let mut cache = PullRequestStateCache::default();
+    cache.claim_refresh(URL.to_string(), MAX_AGE)
+         .expect("claimed")
+         .record(PullRequestLookup::NotFound);
+
+    let counts = counts_for(&cache.snapshot(), &[URL.to_string()]);
+
+    assert!(!counts.nothing_known());
+}
+
+/// A pull request that does not exist has no merge time, so it never expires:
+/// only the user removes it.
+#[test]
+fn a_record_the_forge_cannot_find_is_kept() {
+    let cache = cache_of(PullRequestLookup::NotFound);
+
+    assert!(expired_urls(&cache, &[URL.to_string()], DAY, SystemTime::now()).is_empty());
+}
+
+// --- The lookup -------------------------------------------------------------
+
+/// The forge's answer, sorted into the three the row distinguishes.
+#[test]
+fn a_forge_result_becomes_the_matching_lookup() {
+    let known = state(PullRequestStatus::Open);
+    let PullRequestLookup::Known(open) = known.clone()
+    else {
+        unreachable!("state() builds a known lookup");
+    };
+
+    assert_eq!(PullRequestLookup::from(Ok(open)), known);
+    assert_eq!(PullRequestLookup::from(Err(ForgeError::NotFound("gone".to_string()))),
+               PullRequestLookup::NotFound);
+    assert_eq!(PullRequestLookup::from(Err(ForgeError::Timeout { command: "pr view".to_string(), })),
+               PullRequestLookup::Failed);
+    assert_eq!(PullRequestLookup::from(Err(ForgeError::Parse("bad".to_string()))),
+               PullRequestLookup::Failed);
+}
+
+/// Only not found stops the refreshes. A state can change and a failure can
+/// clear, so both are asked about again.
+#[test]
+fn only_not_found_is_final() {
+    assert!(PullRequestLookup::NotFound.is_final());
+    assert!(!PullRequestLookup::Failed.is_final());
+    assert!(!state(PullRequestStatus::Open).is_final());
+    assert!(!state(PullRequestStatus::Merged).is_final());
+}
+
+/// What the refresh loop asks before claiming: a final answer is held, so no
+/// `gh` is spawned for it however long the window stays open.
+#[test]
+fn a_not_found_answer_is_held_as_final_by_the_cache() {
+    let mut cache = PullRequestStateCache::default();
+    cache.claim_refresh(URL.to_string(), ALWAYS)
+         .expect("claimed")
+         .record(PullRequestLookup::NotFound);
+
+    assert!(cache.holds(&URL.to_string(), PullRequestLookup::is_final));
 }
 
 /// A state that belongs to another workspace's record must not reach this
@@ -292,8 +384,7 @@ fn a_later_probe_replaces_an_earlier_answer() {
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// A cache holding one answer for `URL`.
-fn cache_of(answer: Option<PullRequestState>)
-            -> std::collections::BTreeMap<String, Option<PullRequestState>> {
+fn cache_of(answer: PullRequestLookup) -> std::collections::BTreeMap<String, PullRequestLookup> {
     let mut cache = PullRequestStateCache::default();
     cache.claim_refresh(URL.to_string(), MAX_AGE)
          .expect("claimed")
@@ -332,7 +423,7 @@ fn a_record_with_no_answer_yet_is_kept() {
 /// blip.
 #[test]
 fn a_record_whose_fetch_failed_is_kept() {
-    let cache = cache_of(None);
+    let cache = cache_of(PullRequestLookup::Failed);
 
     assert!(expired_urls(&cache, &[URL.to_string()], DAY, SystemTime::now()).is_empty());
 }

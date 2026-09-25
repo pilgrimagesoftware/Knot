@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use super::WorkspaceWindow;
 use crate::pull_request_groups;
-use crate::pull_request_state::{self, PullRequestCounts};
+use crate::pull_request_state::{self, PullRequestCounts, PullRequestLookup};
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::render::pull_requests_pane::{PullRequestGroup, PullRequestRow};
 
@@ -63,8 +63,8 @@ impl WorkspaceWindow {
             let rows = group.urls
                             .into_iter()
                             .map(|url| {
-                                let state = states.get(&url).cloned().flatten();
-                                PullRequestRow { url, state }
+                                let lookup = states.get(&url).cloned();
+                                PullRequestRow { url, lookup }
                             })
                             .collect();
             groups.push(PullRequestGroup { agent_ids: group.owners,
@@ -106,6 +106,14 @@ impl WorkspaceWindow {
             return;
         }
         for url in self.workspace_pull_request_urls() {
+            // A pull request the forge says does not exist is asked about
+            // once per window, not once per cycle; see
+            // `PullRequestLookup::is_final`.
+            if self.pull_request_states
+                   .holds(&url, PullRequestLookup::is_final)
+            {
+                continue;
+            }
             let Some(writer) = self.pull_request_states
                                    .claim_refresh(url.clone(), pull_request_state::MAX_AGE)
             else {
@@ -113,7 +121,7 @@ impl WorkspaceWindow {
             };
             self.runtime.spawn_blocking(move || {
                             let runner = GhRunner::new();
-                            writer.record(knot_forge::pull_request_state_with(&runner, &url).ok());
+                            writer.record(knot_forge::pull_request_state_with(&runner, &url).into());
                         });
         }
     }

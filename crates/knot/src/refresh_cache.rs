@@ -83,6 +83,15 @@ impl<K: Ord + Clone, V: Clone + PartialEq> RefreshCache<K, V> {
         self.values.lock().get(key).cloned()
     }
 
+    /// Whether `key` has a cached value that `predicate` accepts.
+    ///
+    /// A read that does not clone, for a caller that asks something of every
+    /// key each frame - whether an answer is final, say - and needs only a
+    /// yes or no.
+    pub(crate) fn holds(&self, key: &K, predicate: impl FnOnce(&V) -> bool) -> bool {
+        self.values.lock().get(key).is_some_and(predicate)
+    }
+
     /// Every cached value, copied out so a render can read them without
     /// holding the lock across the element tree it builds.
     pub(crate) fn snapshot(&self) -> BTreeMap<K, V> {
