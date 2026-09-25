@@ -288,11 +288,15 @@ menu:
     register_agent: "Register Agent"
     deactivate: "Deactivate"
     restart_agent: "Restart Agent"
+    restart_new_conversation: "Restart with New Conversation"
     remove_agent: "Remove Agent"
     # What the two confirming row actions ask before they run.
     confirm:
       restart_title: "Restart Agent"
       restart_body: "Restart \"%{name}\"? Its session will be cleared."
+      restart_keep_body: "Restart \"%{name}\"? It will resume its current conversation."
+      restart_new_title: "Restart with New Conversation"
+      restart_new_body: "Restart \"%{name}\" in a new conversation? Its current conversation will not be resumed."
       remove_title: "Remove Agent"
       remove_body: "Remove \"%{name}\"? This closes its session and cannot be undone."
   # The agent list's background menu, over the workspace rather than
@@ -309,6 +313,7 @@ menu:
     confirm:
       restart_all_title: "Restart All"
       restart_all_body: "Restart %{agents}? Every session is cleared and cannot be recovered."
+      restart_all_keep_body: "Restart %{agents}? Each will resume its current conversation."
       close_all_title: "Close All"
       close_all_body: "Close %{agents}? This closes every session and cannot be undone."
 

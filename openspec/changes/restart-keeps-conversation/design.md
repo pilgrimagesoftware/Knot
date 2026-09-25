@@ -34,14 +34,18 @@ The fork flag is cleared in both: a fork is a one-time instruction for the
 first launch, and by the time an agent can be restarted it has already
 happened.
 
-### The setting is read at the call site
+### The setting is read when the prompt opens
 
-Restart Agent and Restart All read `restore_conversation_on_launch` when the
-user confirms, not when the menu opens. This follows the rule the settings
-code already keeps: read the shared surface at the moment of use. A
-`WorkspaceWindow::restart_agents(ids, keep_conversation, cx)` helper does the
-store operation, the session teardown and the single persist for both, so the
-row and bulk paths cannot drift apart.
+Restart Agent and Restart All read `restore_conversation_on_launch` when their
+confirmation opens. They pass that value through to the confirm handler
+instead of reading it again, because the prompt says whether the conversation
+will be kept, and confirming must do what it said.
+
+`WorkspaceWindow::restart_agents(ids, keep_conversation, cx)` performs the
+store operation, the session teardown and the single persist for all three
+items, so the row and bulk paths cannot drift apart. The panel state is
+dropped either way, since `session/load` replays a kept conversation's
+history into a fresh one.
 
 ### Menu entry and key
 

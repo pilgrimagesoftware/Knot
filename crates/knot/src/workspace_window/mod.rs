@@ -25,6 +25,8 @@ mod pull_requests;
 mod pull_requests_view;
 mod render;
 mod repaint;
+#[cfg(test)]
+mod restart_tests;
 mod sessions;
 mod shortcuts;
 #[cfg(test)]

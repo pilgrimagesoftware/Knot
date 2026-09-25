@@ -33,7 +33,8 @@ fn entry_ordinal(entry: AgentMenuEntry) -> usize {
         AgentMenuEntry::RegisterAgent => 10,
         AgentMenuEntry::Deactivate => 11,
         AgentMenuEntry::RestartAgent => 12,
-        AgentMenuEntry::RemoveAgent => 13,
+        AgentMenuEntry::RestartWithNewConversation => 13,
+        AgentMenuEntry::RemoveAgent => 14,
     }
 }
 

@@ -198,29 +198,50 @@ impl WorkspaceWindow {
         workspace_agent_ids(&self.store.lock(), self.workspace_id)
     }
 
-    /// Restarts every agent in the workspace, per `agent-list-ui`'s "Restart
-    /// All" requirement - the row menu's Restart Agent applied once per
-    /// agent, with a single persist at the end.
-    pub(super) fn restart_all_agents(&mut self, cx: &App) {
-        let ids = self.workspace_agent_ids();
+    /// Restarts `ids`, each keeping its conversation or starting a new one
+    /// (`agent-lifecycle`: "Restart"), then tears their sessions down and
+    /// writes the roster once. The row's Restart Agent and Restart with New
+    /// Conversation and the sidebar's Restart All all come through here, so
+    /// the three cannot drift apart.
+    ///
+    /// The panel state goes either way. A kept conversation is loaded again
+    /// with `session/load`, which replays its history into a fresh state;
+    /// keeping the old one would show every message twice.
+    pub(super) fn restart_agents(&mut self, ids: &[Uuid], keep_conversation: bool, cx: &App) {
         {
-            // One lock for the whole roster rather than one per agent: the
+            // One lock for the whole batch rather than one per agent: the
             // restarts are independent, and reacquiring between them lets
             // another window see the workspace half restarted.
             let mut store = self.store.lock();
-            for id in &ids {
-                if let Err(error) = store.restart(*id) {
+            for id in ids {
+                let restarted = if keep_conversation {
+                    store.restart_keeping_conversation(*id)
+                }
+                else {
+                    store.restart(*id)
+                };
+                if let Err(error) = restarted {
                     eprintln!("failed to restart agent {id}: {error}");
                 }
             }
         }
         for id in ids {
-            self.remove_session(id);
-            self.panel_states.remove(&id);
+            self.remove_session(*id);
+            self.panel_states.remove(id);
         }
-        // `restart` clears the persisted session ids; write them out so a
-        // relaunch doesn't resume the sessions just dropped.
+        // Written out whichever it was: cleared session ids must not be
+        // resumed by a relaunch, and a kept conversation's resume-session id
+        // has just changed.
         self.persist_agents(cx);
+    }
+
+    /// Restarts every agent in the workspace, per `agent-list-ui`'s "Restart
+    /// All" requirement - the row menu's Restart Agent applied once per
+    /// agent. `keep_conversation` is what the confirmation said would
+    /// happen, decided when it opened.
+    pub(super) fn restart_all_agents(&mut self, keep_conversation: bool, cx: &App) {
+        let ids = self.workspace_agent_ids();
+        self.restart_agents(&ids, keep_conversation, cx);
     }
 
     /// Removes every agent in the workspace, and every companion those

@@ -26,6 +26,7 @@ use crate::agent_menu::AgentMenuForkAgent;
 use crate::agent_menu::AgentMenuNewShellCompanion;
 use crate::agent_menu::AgentMenuRemoveAgent;
 use crate::agent_menu::AgentMenuRestartAgent;
+use crate::agent_menu::AgentMenuRestartWithNewConversation;
 use crate::agent_menu::agent_menu_key_bindings;
 use crate::app_bootstrap::CloseWindow;
 use crate::app_bootstrap::HideApp;
@@ -138,6 +139,7 @@ fn the_agents_menu_carries_the_reference_shortcuts(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-alt-f", &AgentMenuForkAgent);
           assert_bound(cx, "cmd-d", &AgentMenuDuplicateAgent);
           assert_bound(cx, "cmd-r", &AgentMenuRestartAgent);
+          assert_bound(cx, "cmd-shift-r", &AgentMenuRestartWithNewConversation);
           assert_bound(cx, "cmd-w", &CloseWindow);
       });
     // Still gpui's, not ours: cmd-f is the platform's find key, and is left

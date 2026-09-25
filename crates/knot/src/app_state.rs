@@ -123,6 +123,7 @@ pub(crate) enum AgentMenuEntry {
     RegisterAgent,
     Deactivate,
     RestartAgent,
+    RestartWithNewConversation,
     RemoveAgent,
 }
 
@@ -136,7 +137,7 @@ impl AgentMenuEntry {
     /// and `tests::every_agent_menu_entry_is_in_all` walks this list against
     /// an exhaustive match, so a variant added here without an action - or
     /// added to the enum without reaching this list - fails the build.
-    pub(crate) const ALL: [Self; 14] = [Self::Separator,
+    pub(crate) const ALL: [Self; 15] = [Self::Separator,
                                         Self::NewCompanion,
                                         Self::NewShellCompanion,
                                         Self::EditAgent,
@@ -149,6 +150,7 @@ impl AgentMenuEntry {
                                         Self::RegisterAgent,
                                         Self::Deactivate,
                                         Self::RestartAgent,
+                                        Self::RestartWithNewConversation,
                                         Self::RemoveAgent];
 
     /// The user-visible label, or `None` for a separator. Matches the Swift
@@ -170,6 +172,9 @@ impl AgentMenuEntry {
             Self::RegisterAgent => Some(knot_core::l10n::t("menu.agent.register_agent")),
             Self::Deactivate => Some(knot_core::l10n::t("menu.agent.deactivate")),
             Self::RestartAgent => Some(knot_core::l10n::t("menu.agent.restart_agent")),
+            Self::RestartWithNewConversation => {
+                Some(knot_core::l10n::t("menu.agent.restart_new_conversation"))
+            }
             Self::RemoveAgent => Some(knot_core::l10n::t("menu.agent.remove_agent")),
         }
     }
@@ -238,11 +243,18 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
                   // Deactivate sits with the other session actions, and
                   // immediately above Restart Agent: both act on the
                   // session rather than on the agent, and Deactivate is
-                  // the reversible one of the pair.
+                  // the reversible one of the pair. Restart with New
+                  // Conversation follows Restart Agent, whose other half it
+                  // is; a shell has no conversation, so for one it would
+                  // only repeat Restart Agent.
                   [RegisterAgent].into_iter()
                                  .filter(|_| !facts.is_shell)
                                  .chain([Deactivate].into_iter().filter(|_| facts.is_running))
                                  .chain([RestartAgent].into_iter().filter(|_| owner_only))
+                                 .chain([RestartWithNewConversation].into_iter().filter(|_| {
+                                                                                    owner_only
+                                                                       && !facts.is_shell
+                                                                                }))
                                  .chain([RemoveAgent])
                                  .collect()];
 

@@ -113,15 +113,23 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
         AgentListBackgroundEntry::RestartAll => {
             let targets = targets.clone();
             let count = workspace_agent_count(&targets);
-            let description = knot_core::l10n::t_with("menu.sidebar.confirm.restart_all_body",
-                                                      &[("agents", &agent_count(count))]);
+            // Decided when the prompt opens, as for the row's Restart Agent:
+            // the prompt says whether conversations are kept.
+            let keep = crate::settings_global::read(app).restore_conversation_on_launch;
+            let body = if keep {
+                "menu.sidebar.confirm.restart_all_keep_body"
+            }
+            else {
+                "menu.sidebar.confirm.restart_all_body"
+            };
+            let description = knot_core::l10n::t_with(body, &[("agents", &agent_count(count))]);
             confirm_then(window,
                          app,
                          knot_core::l10n::t("menu.sidebar.confirm.restart_all_title"),
                          description,
                          move |app| {
                              targets.window_entity.update(app, |view, cx| {
-                                                      view.restart_all_agents(cx);
+                                                      view.restart_all_agents(keep, cx);
                                                       cx.notify();
                                                   });
                          });
