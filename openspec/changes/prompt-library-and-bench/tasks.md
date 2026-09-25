@@ -74,7 +74,7 @@
 
 ## 11. Conventions and close-out
 
-- [ ] 11.1 Add every user-facing string to `crates/knot-core/locales/en.yml` (`settings.prompts.*`, `settings.bench.*`, `prompt_variables.*`, `menu.agent.bench*`, `menu.sidebar.new_from_bench`, `sidebar.bench_popover.*`, `agent_editor.startup_prompt.*`, `panel.queued_startup_prompt`); touch `knot-core` first, then verify with key-resolution tests
-- [ ] 11.2 Run `make` and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass, with no crate-wide `allow` and no implementation in a `mod.rs`
-- [ ] 11.3 Tests that persist settings use `with_store_root`; verify no test writes to the real settings directory
+- [x] 11.1 Add every user-facing string to `crates/knot-core/locales/en.yml` (`settings.prompts.*`, `settings.bench.*`, `prompt_variables.*`, `menu.agent.bench*`, `menu.sidebar.new_from_bench`, `sidebar.bench_popover.*`, `agent_editor.startup_prompt.*`, `panel.queued_startup_prompt`); touch `knot-core` first, then verify with key-resolution tests
+- [x] 11.2 Run `make` and verify `fmt-check`, `size-check`, `lint`, `test` and `build` all pass, with no crate-wide `allow` and no implementation in a `mod.rs`
+- [x] 11.3 Tests that persist settings use `with_store_root`; verify no test writes to the real settings directory
 - [ ] 11.4 Manual verification in the running app (**needs a display**): create a library prompt using `{{agent.name}}` and `{{branch}}`, set it as an ACP agent's startup prompt, restart with a new conversation and see registration then the expanded prompt as two turns; edit the queued prompt before delivery; bench the agent, redeploy it from the New Agent chevron's popover and again from New from Bench, and see the prompt sent each time; remove an entry from the popover; in Settings, add a prompt (Create disabled until both fields are filled, `{{foldr}}` warns), edit and cancel it, delete a referenced prompt and read the counts, rename a bench entry and change its startup prompt; expand the prompt from `/` in a composer

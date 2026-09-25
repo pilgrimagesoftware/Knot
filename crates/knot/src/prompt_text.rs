@@ -53,7 +53,7 @@ pub(crate) fn variable_menu(mut menu: PopupMenu, target: &Entity<TextareaState>)
 pub(crate) fn insert_variable(target: &Entity<TextareaState>, variable: PromptVariable,
                               window: &mut Window, app: &mut App) {
     target.update(app, |state, cx| {
-              state.replace(&variable.placeholder(), window, cx);
+              state.replace(variable.placeholder(), window, cx);
           });
 }
 
