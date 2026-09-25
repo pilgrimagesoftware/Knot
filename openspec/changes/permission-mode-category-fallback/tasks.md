@@ -66,13 +66,48 @@
 
 - [x] 4.1 Run `make` and confirm fmt, size-check, clippy, test and build
       all pass. Exit 0, 1521 tests, no failures.
-- [ ] 4.2 Manual, against a live ACP agent - the check this change exists
+- [x] 4.2 Manual, against a live ACP agent - the check this change exists
       to satisfy, and the one no unit test can stand in for. Start a
       Claude session and a Codex session, and record what each actually
       advertises: the `id`, `name` and `category` of every entry in
       `configOptions`. That roster is the evidence issue #194 asked for,
       and it decides whether the id/name fallback is load-bearing or
       insurance.
+
+      Captured 2026-09-25 from each adapter's `session/new` response,
+      driven directly over stdio (`initialize`, then `session/new`), in
+      the agent's own array order.
+
+      `@agentclientprotocol/claude-agent-acp` 0.81.2:
+
+      | `id`     | `name`    | `category`      | values                                                 |
+      |----------|-----------|-----------------|--------------------------------------------------------|
+      | `mode`   | Mode      | `mode`          | default, acceptEdits, plan, auto, bypassPermissions    |
+      | `model`  | Model     | `model`         | default, opus[1m], claude-fable-5-1[1m], sonnet, haiku |
+      | `effort` | Effort    | `thought_level` | default, low, medium, high, xhigh, max                 |
+      | `fast`   | Fast mode | `model_config`  | on, off                                                |
+
+      `@agentclientprotocol/codex-acp` 1.13.1:
+
+      | `id`                 | `name`             | `category`           | values                                           |
+      |----------------------|--------------------|----------------------|--------------------------------------------------|
+      | `mode`               | Mode               | `mode`               | read-only, agent, agent-full-access              |
+      | `collaboration_mode` | Collaboration mode | `collaboration_mode` | default, plan                                    |
+      | `model`              | Model              | `model`              | gpt-6-luna, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5 |
+      | `reasoning_effort`   | Reasoning effort   | `thought_level`      | low, medium, high, xhigh, max                    |
+
+      Every option is `select` and carries a category, so all three slots
+      in both agents resolve on the category pass: for these two adapters
+      the id/name fallback is insurance, not load-bearing. If either shows
+      an empty selector in the running app, this lookup is not the cause.
+      `fast` and `collaboration_mode` match no slot, as intended; exact
+      matching keeps `collaboration_mode` out of the permission slot.
+
+      Found in passing, not fixed here: `permission_risk_level`
+      (`crates/knot/src/panel_view/style.rs:102`) rates Codex's
+      `agent-full-access` as `Neutral`, because only "bypass", "yolo" and
+      "danger" map to `Danger`. It is Codex's counterpart to
+      `bypassPermissions`, so that mode keeps the neutral border in 4.3.
 - [ ] 4.3 Manual, same session: confirm the permission-mode, model and
       effort selectors are populated rather than showing their empty
       states, and that the inline permission prompt's border takes the
