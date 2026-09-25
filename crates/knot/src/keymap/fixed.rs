@@ -17,6 +17,7 @@ use crate::app_bootstrap::HideApp;
 use crate::app_bootstrap::HideOthers;
 use crate::app_bootstrap::KnotHelp;
 use crate::app_bootstrap::MinimizeWindow;
+use crate::app_bootstrap::NewAgent;
 use crate::app_bootstrap::NewWorkspace;
 use crate::app_bootstrap::OpenSettings;
 use crate::app_bootstrap::OpenWorkspaces;
@@ -52,6 +53,9 @@ pub(crate) fn fixed_bindings() -> Vec<FixedBinding> {
                        // key equivalent either.
                        fixed(KeyBinding::new("cmd-n", NewWorkspace, None),
                              "keymap.fixed.new_workspace"),
+                       // The Swift reference's New Agent key.
+                       fixed(KeyBinding::new("cmd-t", NewAgent, None),
+                             "keymap.fixed.new_agent"),
                        fixed(KeyBinding::new("cmd-w", CloseWindow, None),
                              "keymap.fixed.close_window"),
                        fixed(KeyBinding::new("cmd-m", MinimizeWindow, None),

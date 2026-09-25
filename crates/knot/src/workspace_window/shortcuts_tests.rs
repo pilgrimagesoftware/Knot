@@ -290,3 +290,15 @@ fn the_shortcuts_stay_reachable_behind_a_panel(cx: &mut TestAppContext) {
     assert!(available(&mut fixture, &SelectAgent2));
     assert!(available(&mut fixture, &ToggleDashboard));
 }
+
+/// ⌘T opens the agent editor - a window of its own - from the workspace
+/// window, behind a panel too, and has nothing to act on elsewhere.
+#[gpui_kit::test]
+fn new_agent_opens_the_editor_even_behind_a_panel(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(1, cx);
+    assert!(available(&mut fixture, &crate::app_bootstrap::NewAgent));
+    fixture.set_view_mode(WorkspaceViewMode::PullRequests);
+    let before = cx.update(|cx| cx.windows().len());
+    fixture.press(crate::app_bootstrap::NewAgent);
+    assert_eq!(cx.update(|cx| cx.windows().len()), before + 1);
+}

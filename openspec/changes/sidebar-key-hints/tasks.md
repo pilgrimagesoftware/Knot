@@ -2,8 +2,8 @@
 
 ## 1. New Agent shortcut
 
-- [ ] 1.1 Add the `NewAgent` action with a fixed ⌘T binding in `keymap/fixed.rs` and a root-element handler on the workspace window that opens the agent editor; verify with a test that ⌘T is bound and that validation rejects a customization onto ⌘T
-- [ ] 1.2 Add File > New Agent… below New Workspace, and verify in `tests/menu_key_equivalents.rs` that it shows ⌘T and in a window test that the action is unavailable with no workspace window focused
+- [x] 1.1 Add the `NewAgent` action with a fixed ⌘T binding in `keymap/fixed.rs` and a root-element handler on the workspace window that opens the agent editor; verify with a test that ⌘T is bound and that validation rejects a customization onto ⌘T
+- [x] 1.2 Add File > New Agent… below New Workspace, and verify in `tests/menu_key_equivalents.rs` that it shows ⌘T and in a window test that the action is unavailable with no workspace window focused
 
 ## 2. Sidebar key hints
 

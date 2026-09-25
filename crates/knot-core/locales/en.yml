@@ -247,6 +247,7 @@ keymap:
     hide: "Hide Knot"
     hide_others: "Hide Others"
     new_workspace: "New Workspace"
+    new_agent: "New Agent"
     close_window: "Close Window"
     minimize: "Minimize"
     help: "Knot Help"
@@ -265,6 +266,9 @@ keymap:
 
 menu:
   agents: "Agents"
+  # The File menu's own items.
+  file:
+    new_agent: "New Agent…"
   # The Help menu's own items.
   help:
     report_bug: "Report a Bug…"
