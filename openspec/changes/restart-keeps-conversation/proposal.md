@@ -1,0 +1,52 @@
+# Proposal
+
+## Why
+
+With "Restore last conversation" enabled, restarting an agent still throws its
+conversation away and relaunches it with its initialization prompt. Users
+restart an agent to recover it or to pick up a changed setting, not to lose
+its context, and the setting reads as "keep my conversations". There is also
+no deliberate way to start an agent over once a restart does keep the
+conversation.
+
+## What Changes
+
+- Restart Agent and Restart All keep each agent's conversation when
+  `restore-conversation-on-launch` is enabled, and start a new one when it is
+  disabled. A panel agent reloads its ACP session. This is a deliberate departure from the Swift reference, which
+  always starts fresh.
+- New agent menu item **Restart with New Conversation** (⇧⌘R). It is in the row
+  context menu and in the menu bar's Agents menu, and always starts a new
+  conversation. It is hidden for shell agents, which have no conversation.
+- The restart confirmations say whether the conversation will be kept.
+- Restarts caused by editing a launch-affecting field (folder, agent type,
+  persona) still always start fresh.
+
+Non-goals:
+- Changing how conversations are restored at app launch.
+- Changing Resume or Fork.
+
+## Capabilities
+
+### New Capabilities
+
+None.
+
+### Modified Capabilities
+
+- `agent-lifecycle`: Restart either keeps or discards the conversation,
+  decided by the setting and by which item the user chose. The launch-restore
+  requirement no longer says a manual restart always clears the session.
+- `agent-list-ui`: the row context menu gains Restart with New Conversation,
+  with its visibility rule. Restart Agent and Restart All follow the setting.
+- `app-menu`: the Agents menu's shortcut table gains ⇧⌘R.
+
+## Impact
+
+- `knot-agents`: a `restart_keeping_conversation` store operation beside
+  `restart`, which is unchanged and still starts fresh.
+- `knot`:
+  - a new `AgentMenuEntry` and action, with its binding in the Agents menu's
+    fixed keys (`keymap::fixed` validates against them);
+  - the two restart handlers choose the operation from the setting;
+  - the confirmation strings move to l10n.
