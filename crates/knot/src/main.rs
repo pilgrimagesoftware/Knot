@@ -25,6 +25,7 @@ mod diff_stats;
 mod external_tools;
 mod git_panel;
 mod import_window;
+mod keymap;
 mod macos;
 mod markdown_view;
 mod mcp_status;

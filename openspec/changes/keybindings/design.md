@@ -9,9 +9,10 @@
   text inputs' own keys.
 - The menu bar is a static snapshot. `set_app_menus` reads each item's key
   equivalent from the keymap at build time.
-- Workspace-scoped behavior is handled per window on the root element, like
-  the Agents menu actions (`agent_menu.rs`). A global handler would make the
-  action available with no workspace window focused.
+- The Agents menu's workspace-scoped actions are handled per window on the
+  root element (`agent_menu.rs`), because a global handler would leave their
+  menu items permanently enabled. See Handler placement for why the new
+  shortcuts do not follow that pattern.
 - The workspace view mode is `WorkspaceViewMode::{Terminal, Dashboard,
   PullRequests}`, with `toggled()`, which the sidebar rows already use. Agent
   selection goes through `WorkspaceWindow::reveal_agent`. Pane focus is latched
@@ -64,19 +65,38 @@ show a specific digit if menus are ever added.
 
 ### Handler placement
 
-- Select workspace N and Open Command Center are global (`cx.on_action`). They
-  must work with no Knot window focused. The workspace handler resolves N
-  against `store.workspaces()` order and calls `WorkspaceWindow::open`, which
-  already raises an open window instead of opening a second one.
-- Select agent N, Focus agent input and the two panel toggles are registered on
-  the workspace window's root element. Unbound elsewhere, they do nothing in
-  the Command Center, the manager or the settings window.
-- Select agent N indexes the same ordered list the sidebar renders, and calls
+All the new handlers are global (`cx.on_action`), in `keymap::handlers`:
+
+- Select workspace N resolves N against `store.workspaces()` order and calls
+  `WorkspaceWindow::open`, which raises a window that is already open instead
+  of opening a second one. The call is **deferred**. The shortcut is
+  dispatched from inside the focused window's own update, and raising that
+  same window means updating its handle, which fails while it is borrowed.
+  `WindowRegistry::activate` reads that failure as "closed", and without the
+  deferral ⌘2 pressed in workspace 2's window opened a duplicate. A test
+  caught this.
+- Select agent N, Focus agent input and the two panel toggles look up the
+  active window's `WorkspaceWindow` through the new
+  `WindowRegistry::workspace_view_in(handle)`. In any other window they find
+  nothing and do nothing.
+  - These were first registered on the workspace window's root element, like
+    the Agents menu actions. That broke as soon as a Dashboard or Pull
+    Requests panel took over. The composer or terminal that held focus is no
+    longer drawn, so focus falls back to the window root, which sits above
+    the element carrying the handlers. The handlers were off the dispatch
+    path at exactly the moment the shortcut was needed to leave the panel.
+  - No menu item shows these actions, so the reason the Agents menu actions
+    must not be global does not apply: enablement is not derived from them.
+- Select agent N indexes `workspace.agent_ids`, filtered to agents that
+  exist, which is the list the sidebar renders. It then calls
   `reveal_agent`.
-- Focus agent input sets the view mode to `Terminal`, then focuses the composer
-  or the terminal directly and records it in `focused_pane`. Going through
-  `focus_showing_pane` would hit its "already focused" early return when focus
-  has moved inside the same pane, such as to the git panel's commit field.
+- Focus agent input sets the view mode to `Terminal`, clears the
+  `focused_pane` latch and notifies. The next frame's `focus_showing_pane`
+  sees a transition and focuses the composer or terminal, keeping its
+  dialog and artifact-panel guards. Without the reset, a press after focus
+  had moved within the same pane (a search field, the git panel's commit
+  field) hit the "no change" early return. A test covers this and fails
+  without the reset.
 
 ### Storage
 
@@ -95,14 +115,21 @@ keyed by an enum: an unknown key in a map fails the whole document decode,
 while an unknown field is ignored. That keeps the store decode-tolerant
 (`settings-persistence`).
 
-Parsing and validation live in the `knot` crate (`keymap::resolve`), because
-`Keystroke::parse` is gpui's. `knot-core` stays free of gpui. At launch,
-`resolve` substitutes the default for any stored value that does not parse, or
-that fails validation.
+Parsing and validation live in the `knot` crate (`Resolved::from_settings`),
+because `Keystroke::parse` is gpui's. `knot-core` stays free of gpui. At
+launch, `from_settings` applies the stored values one at a time. It keeps the
+default for any value that does not parse, or that fails validation against
+the values already accepted.
+
+Decoding `KeybindingSettings` is lenient field by field (a hand-written
+`Deserialize`). The preferences document decodes as one value and falls back
+to all defaults when any field fails, so a wrongly typed shortcut would
+otherwise reset every preference.
 
 ### Validation is one pure function
 
-`keymap::validate(&proposed, &fixed) -> Result<Resolved, Rejection>` checks:
+`keymap::validate(&candidate, changed: Shortcut) -> Result<(), Rejection>`
+checks the shortcut that changed:
 
 - modifier presence (⌘, ⌃ or ⌥);
 - collisions within the configurable set, with the nine digits expanded;
@@ -111,21 +138,26 @@ that fails validation.
 
 It is a pure function because it has to be unit-tested without a window. The
 fixed list moves beside the configurable one, into `keymap`, so a new fixed
-shortcut cannot be added without the validator seeing it. `Rejection` carries
-an l10n key and the conflicting shortcut's label.
+shortcut cannot be added without the validator seeing it. The Edit menu's text
+keys (⌘Z, ⌘C and the rest), which gpui binds for a focused field, are reserved
+beside that list. `Rejection` is `NeedsModifier` or `Conflict { chord, holder }`,
+and renders its message through l10n.
 
 ### Recorder
 
-The Keyboard pane arms a recorder by focusing a dedicated `FocusHandle` whose
-element takes `on_key_down`. The first keystroke with a non-modifier key ends
-recording. Escape cancels. Anything else goes through `validate`.
-
-While a recorder is armed, a pressed chord that is already bound would still
-dispatch its action. To prevent that, the recorder element calls
-`cx.stop_propagation()` / `window.prevent_default()` in a capture-phase key
-handler, so the chord is consumed before it reaches the keymap.
+Arming a recorder installs `cx.intercept_keystrokes`, which runs before the
+keymap is consulted. The first keystroke with a non-modifier key calls
+`stop_propagation`, so a chord that is already bound records instead of
+running. That keystroke then ends recording. Escape cancels. Anything else
+goes through `validate`. Dropping the subscription disarms the recorder.
 
 ## Risks / Trade-offs
+
+- [Risk] AppKit claims a menu item's key equivalent before gpui sees the key.
+  While a recorder is armed, pressing a chord that is a menu item's key
+  equivalent, such as ⌘Q or ⌘, (Settings), runs that item instead of being
+  recorded. → Every such chord is a fixed shortcut that validation would
+  reject anyway. The recorder can only miss chords it could never accept.
 
 - [Risk] AppKit claims a menu key equivalent before the window. With no menu
   items for the new shortcuts, only the Command Center's rebinding touches a

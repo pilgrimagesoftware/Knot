@@ -26,6 +26,9 @@ mod pull_requests_view;
 mod render;
 mod repaint;
 mod sessions;
+mod shortcuts;
+#[cfg(test)]
+mod shortcuts_tests;
 mod sidebar_layout;
 pub(crate) mod terminal_font;
 mod terminal_input;

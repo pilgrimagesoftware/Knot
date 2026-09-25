@@ -34,6 +34,7 @@ impl SettingsWindow {
             SettingsTab::Voice => px(520.),
             SettingsTab::Mcp => px(600.),
             SettingsTab::Terminal => px(380.),
+            SettingsTab::Keyboard => px(520.),
         }
     }
 
@@ -69,6 +70,7 @@ impl Render for SettingsWindow {
             SettingsTab::Voice => self.render_voice(cx).into_any_element(),
             SettingsTab::Mcp => self.render_mcp(cx).into_any_element(),
             SettingsTab::Terminal => self.render_appearance(cx).into_any_element(),
+            SettingsTab::Keyboard => self.render_keyboard(cx).into_any_element(),
         };
 
         // Personas manages its own scroll region (only the list scrolls, the

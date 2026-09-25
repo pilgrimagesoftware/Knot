@@ -138,6 +138,7 @@ settings:
     voice: "Voice"
     mcp: "MCP"
     appearance: "Appearance"
+    keyboard: "Keyboard"
   general:
     appearance: "Appearance"
     appearance_hint: "Light and Dark override the system setting; Auto and System follow it."
@@ -219,9 +220,47 @@ settings:
     api_key: "API key"
     custom_prompt: "Custom prompt"
     port: "Port"
+  keyboard:
+    blurb: "Shortcuts for moving between workspaces, agents and panels. Select workspace and Select agent always use the digits 1–9; choose the modifier that goes with them."
+    shortcuts: "Shortcuts"
+    press_shortcut: "Press a shortcut…"
+    reset: "Reset"
+    restore_defaults: "Restore Defaults"
   font_unavailable: "unavailable"
   compact_tool_calls: "Collapse tool calls"
   compact_tool_calls_hint: "Show a turn's tool calls as one summary line instead of a card each."
+
+# The configurable navigation shortcuts, and the names of the fixed ones a
+# rejected customization quotes back.
+keymap:
+  shortcut:
+    select_workspace: "Select workspace 1–9"
+    select_agent: "Select agent 1–9"
+    focus_agent_input: "Focus agent input"
+    toggle_dashboard: "Toggle Dashboard"
+    toggle_pull_requests: "Toggle Pull Requests"
+    open_command_center: "Open Command Center"
+  fixed:
+    quit: "Quit Knot"
+    settings: "Settings"
+    hide: "Hide Knot"
+    hide_others: "Hide Others"
+    new_workspace: "New Workspace"
+    close_window: "Close Window"
+    minimize: "Minimize"
+    help: "Knot Help"
+    permission_allow: "Allow permission"
+    permission_deny: "Deny permission"
+    permission_selector: "Permission mode selector"
+    undo: "Undo"
+    redo: "Redo"
+    cut: "Cut"
+    copy: "Copy"
+    paste: "Paste"
+    select_all: "Select All"
+  rejection:
+    needs_modifier: "A shortcut needs ⌘, ⌃ or ⌥."
+    conflict: "%{chord} is already used by %{holder}."
 
 menu:
   agents: "Agents"

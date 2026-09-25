@@ -9,16 +9,18 @@ pub(crate) enum SettingsTab {
     Voice,
     Mcp,
     Terminal,
+    Keyboard,
 }
 
 impl SettingsTab {
-    pub(crate) const ALL: [SettingsTab; 7] = [SettingsTab::General,
+    pub(crate) const ALL: [SettingsTab; 8] = [SettingsTab::General,
                                               SettingsTab::Coding,
                                               SettingsTab::Personas,
                                               SettingsTab::Autopilot,
                                               SettingsTab::Voice,
                                               SettingsTab::Mcp,
-                                              SettingsTab::Terminal];
+                                              SettingsTab::Terminal,
+                                              SettingsTab::Keyboard];
 
     /// The tab's title. `Terminal` is titled "Appearance": the pane grew
     /// from terminal appearance into the window's look as a whole, and the
@@ -32,6 +34,7 @@ impl SettingsTab {
             SettingsTab::Voice => knot_core::l10n::t("settings.tabs.voice"),
             SettingsTab::Mcp => knot_core::l10n::t("settings.tabs.mcp"),
             SettingsTab::Terminal => knot_core::l10n::t("settings.tabs.appearance"),
+            SettingsTab::Keyboard => knot_core::l10n::t("settings.tabs.keyboard"),
         }
     }
 }
