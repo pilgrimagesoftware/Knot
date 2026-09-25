@@ -21,7 +21,7 @@ pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// measuring the wrong thing - a sighting is not a merge - so the timestamp
 /// has to come from the forge.
 pub const PULL_REQUEST_FIELDS: &str =
-    "number,title,state,isDraft,mergeable,statusCheckRollup,mergedAt";
+    "number,title,state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,mergedAt";
 
 /// How long to wait before re-asking when GitHub has not yet computed a pull
 /// request's mergeability.
