@@ -21,7 +21,7 @@ pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// measuring the wrong thing - a sighting is not a merge - so the timestamp
 /// has to come from the forge.
 pub const PULL_REQUEST_FIELDS: &str =
-    "number,title,state,isDraft,mergeable,statusCheckRollup,mergedAt";
+    "number,title,state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,mergedAt";
 
 /// How long to wait before re-asking when GitHub has not yet computed a pull
 /// request's mergeability.
@@ -31,6 +31,16 @@ pub const PULL_REQUEST_FIELDS: &str =
 /// One short retry turns the common case into a single fetch, rather than
 /// leaving the row uncoloured until the next refresh a minute later.
 pub const MERGEABILITY_RETRY_DELAY: Duration = Duration::from_millis(1200);
+
+/// `gh pr view` says this when the forge has no such pull request: the first
+/// when the repository cannot be resolved, the second when the repository has
+/// no pull request with that number. Both arrive as a failed command, so the
+/// text is what separates "does not exist" from every other failure.
+///
+/// A private repository this `gh` identity cannot read gets the first answer
+/// too. That is why a not-found answer is shown, never acted on.
+pub const NOT_FOUND_MARKERS: &[&str] = &["could not resolve to a repository",
+                                         "could not resolve to a pullrequest"];
 
 /// `gh auth status` says this when it found no credentials. `gh` reports the
 /// condition on stderr with a non-zero exit, so the text is what separates

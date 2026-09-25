@@ -170,23 +170,23 @@ use std::time::{Duration, SystemTime};
 
 use knot_forge::{CheckRollup, Mergeability, PullRequestState, PullRequestStatus};
 
-use crate::pull_request_state::{PullRequestCounts, counts_for, expired_urls};
+use crate::pull_request_state::{PullRequestCounts, PullRequestLookup, counts_for, expired_urls};
 
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// A fetched state, merged at `when` when one is given.
-fn fetched(status: PullRequestStatus, when: Option<SystemTime>) -> Option<PullRequestState> {
-    Some(PullRequestState { number: Some(42),
-                            title: Some("Do the thing".to_string()),
-                            status,
-                            checks: Some(CheckRollup::Passing),
-                            mergeable: Mergeability::Unknown,
-                            merged_at: when.map(Into::into) })
+fn fetched(status: PullRequestStatus, when: Option<SystemTime>) -> PullRequestLookup {
+    PullRequestLookup::Known(PullRequestState { number: Some(42),
+                                                title: Some("Do the thing".to_string()),
+                                                status,
+                                                checks: Some(CheckRollup::Passing),
+                                                mergeable: Mergeability::Unknown,
+                                                merged_at: when.map(Into::into) })
 }
 
 /// The state cache as a refresh would leave it, for the URLs named.
-fn cache(entries: &[(&str, Option<PullRequestState>)])
-         -> std::collections::BTreeMap<String, Option<PullRequestState>> {
+fn cache(entries: &[(&str, PullRequestLookup)])
+         -> std::collections::BTreeMap<String, PullRequestLookup> {
     entries.iter()
            .map(|(url, state)| ((*url).to_string(), state.clone()))
            .collect()
@@ -247,19 +247,21 @@ fn the_launcher_row_loses_the_expired_record() {
     };
 
     assert_eq!(counts_for(&snapshot, &urls(&store)),
-               PullRequestCounts { open:    1,
-                                   merged:  1,
-                                   closed:  0,
-                                   pending: 0, });
+               PullRequestCounts { open:      1,
+                                   merged:    1,
+                                   closed:    0,
+                                   pending:   0,
+                                   not_found: 0, });
 
     let expired = expired_urls(&snapshot, &urls(&store), DAY, now);
     store.forget_pull_requests(&expired);
 
     assert_eq!(counts_for(&snapshot, &urls(&store)),
-               PullRequestCounts { open:    1,
-                                   merged:  0,
-                                   closed:  0,
-                                   pending: 0, },
+               PullRequestCounts { open:      1,
+                                   merged:    0,
+                                   closed:    0,
+                                   pending:   0,
+                                   not_found: 0, },
                "merged and total both down by one");
 }
 

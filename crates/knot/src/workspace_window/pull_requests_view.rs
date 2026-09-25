@@ -16,19 +16,20 @@ use knot_forge::GhRunner;
 use uuid::Uuid;
 
 use super::WorkspaceWindow;
-use crate::pull_request_state::{self, PullRequestCounts};
+use crate::pull_request_groups;
+use crate::pull_request_state::{self, PullRequestCounts, PullRequestLookup};
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::render::pull_requests_pane::{PullRequestGroup, PullRequestRow};
 
 impl WorkspaceWindow {
-    /// This workspace's recorded pull request URLs, newest first.
+    /// This workspace's recorded pull request URLs, newest first, each once.
+    ///
+    /// Once per pull request rather than per record: the same pull request
+    /// recorded by six agents is one pull request to count and one to fetch.
     pub(super) fn workspace_pull_request_urls(&self) -> Vec<String> {
-        self.store
-            .lock()
-            .pull_requests_for_workspace(self.workspace_id)
-            .into_iter()
-            .map(|record| record.url.clone())
-            .collect()
+        pull_request_groups::unique_urls(&self.store
+                                              .lock()
+                                              .pull_requests_for_workspace(self.workspace_id))
     }
 
     /// How this workspace's records break down by state, for the sidebar row.
@@ -37,33 +38,38 @@ impl WorkspaceWindow {
                                        &self.workspace_pull_request_urls())
     }
 
-    /// The rows the pane draws, grouped by the agent that opened them.
+    /// The rows the pane draws, one per pull request, grouped by the agents
+    /// that opened them.
     ///
     /// Flattened out of the store and the cache here, so neither lock is held
     /// while the element tree is built.
     pub(super) fn pull_request_groups(&self) -> Vec<PullRequestGroup> {
         let states = self.pull_request_states.snapshot();
-        let mut groups: Vec<PullRequestGroup> = Vec::new();
         let store = self.store.lock();
-        for record in store.pull_requests_for_workspace(self.workspace_id) {
-            let row = PullRequestRow { url:   record.url.clone(),
-                                       state: states.get(&record.url).cloned().flatten(), };
-            match groups.iter_mut()
-                        .find(|group| group.agent_id == record.agent_id)
-            {
-                Some(group) => group.rows.push(row),
-                None => {
-                    // An agent that has gone is not a group: its records go
-                    // with it, so this is only reachable mid-removal.
-                    let Some(agent) = store.agent(record.agent_id)
-                    else {
-                        continue;
-                    };
-                    groups.push(PullRequestGroup { agent_id: record.agent_id,
-                                                   agent:    agent.name.clone(),
-                                                   rows:     vec![row], });
-                }
-            }
+        // An agent that has gone owns nothing: its records go with it, so a
+        // record naming one is only reachable mid-removal.
+        let records = store.pull_requests_for_workspace(self.workspace_id)
+                           .into_iter()
+                           .filter(|record| store.agent(record.agent_id).is_some())
+                           .collect::<Vec<_>>();
+        let mut groups = Vec::new();
+        for group in pull_request_groups::group_records(&records) {
+            let mut names = group.owners
+                                 .iter()
+                                 .filter_map(|id| store.agent(*id))
+                                 .map(|agent| agent.name.clone())
+                                 .collect::<Vec<_>>();
+            names.sort();
+            let rows = group.urls
+                            .into_iter()
+                            .map(|url| {
+                                let lookup = states.get(&url).cloned();
+                                PullRequestRow { url, lookup }
+                            })
+                            .collect();
+            groups.push(PullRequestGroup { agent_ids: group.owners,
+                                           agents: names.join(", "),
+                                           rows });
         }
         groups
     }
@@ -100,6 +106,14 @@ impl WorkspaceWindow {
             return;
         }
         for url in self.workspace_pull_request_urls() {
+            // A pull request the forge says does not exist is asked about
+            // once per window, not once per cycle; see
+            // `PullRequestLookup::is_final`.
+            if self.pull_request_states
+                   .holds(&url, PullRequestLookup::is_final)
+            {
+                continue;
+            }
             let Some(writer) = self.pull_request_states
                                    .claim_refresh(url.clone(), pull_request_state::MAX_AGE)
             else {
@@ -107,7 +121,7 @@ impl WorkspaceWindow {
             };
             self.runtime.spawn_blocking(move || {
                             let runner = GhRunner::new();
-                            writer.record(knot_forge::pull_request_state_with(&runner, &url).ok());
+                            writer.record(knot_forge::pull_request_state_with(&runner, &url).into());
                         });
         }
     }
@@ -202,19 +216,23 @@ impl WorkspaceWindow {
     /// undone except by the agent printing the URL again - see
     /// `.claude/rules/knot-ui-conventions.md`. Nothing on the forge changes,
     /// which is what the prompt says.
-    pub(super) fn confirm_remove_pull_request(&mut self, agent_id: Uuid, url: String,
+    ///
+    /// `agent_ids` is every agent the row is listed for, so one row on
+    /// screen is one removal.
+    pub(super) fn confirm_remove_pull_request(&mut self, agent_ids: Vec<Uuid>, url: String,
                                               window: &mut Window, cx: &mut Context<Self>) {
         let body = knot_core::l10n::t_with("pull_requests.remove_body", &[("url", &url)]);
         let entity = cx.entity();
         window.open_alert_dialog(cx, move |alert, _, _| {
                   let entity = entity.clone();
                   let url = url.clone();
+                  let agent_ids = agent_ids.clone();
                   alert.title(knot_core::l10n::t("pull_requests.remove_title"))
                        .description(body.clone())
                        .confirm()
                        .on_ok(move |_, _, app| {
                            entity.update(app, |view, cx| {
-                                     view.remove_pull_request(agent_id, &url, cx);
+                                     view.remove_pull_request(&agent_ids, &url, cx);
                                      cx.notify();
                                  });
                            true
@@ -222,9 +240,22 @@ impl WorkspaceWindow {
               });
     }
 
-    /// Forget one recorded pull request. Knot's record only.
-    pub(super) fn remove_pull_request(&mut self, agent_id: Uuid, url: &str, cx: &App) {
-        let removed = self.store.lock().remove_pull_request(agent_id, url);
+    /// Forget one listed pull request for every agent it is attributed to.
+    /// Knot's record only.
+    ///
+    /// Every attribution rather than one: dropping a single agent's record
+    /// would make the row the user just removed reappear under the remaining
+    /// agent's heading.
+    pub(super) fn remove_pull_request(&mut self, agent_ids: &[Uuid], url: &str, cx: &App) {
+        // A loop rather than `any`, which would stop at the first agent it
+        // removed a record for and leave the rest listed.
+        let mut removed = false;
+        {
+            let mut store = self.store.lock();
+            for agent_id in agent_ids {
+                removed |= store.remove_pull_request(*agent_id, url);
+            }
+        }
         if removed {
             self.persist_pull_requests(cx);
             self.prune_pull_request_states();

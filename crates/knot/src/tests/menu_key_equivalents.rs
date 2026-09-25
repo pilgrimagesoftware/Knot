@@ -26,6 +26,7 @@ use crate::agent_menu::AgentMenuForkAgent;
 use crate::agent_menu::AgentMenuNewShellCompanion;
 use crate::agent_menu::AgentMenuRemoveAgent;
 use crate::agent_menu::AgentMenuRestartAgent;
+use crate::agent_menu::AgentMenuRestartWithNewConversation;
 use crate::agent_menu::agent_menu_key_bindings;
 use crate::app_bootstrap::CloseWindow;
 use crate::app_bootstrap::HideApp;
@@ -37,6 +38,7 @@ use crate::app_bootstrap::OpenCommandCenter;
 use crate::app_bootstrap::OpenSettings;
 use crate::app_bootstrap::OpenWorkspaces;
 use crate::app_bootstrap::Quit;
+use crate::app_bootstrap::ReportBug;
 use crate::app_bootstrap::install_actions_and_keys;
 
 /// An app with the real key bindings installed, over a throwaway settings
@@ -96,6 +98,24 @@ fn standard_menu_items_carry_their_platform_shortcut(cx: &mut TestAppContext) {
 }
 
 /// The Window menu's two openers, which unlike the items above are wired.
+/// Report a Bug has no key equivalent: macOS gives the item none, so any key
+/// Knot bound to it would be one taken from somewhere else.
+#[gpui_kit::test]
+fn report_a_bug_has_no_shortcut(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+
+    cx.update(|cx| {
+          assert!(cx.all_action_names().contains(&ReportBug.name()),
+                  "ReportBug is not a registered action");
+          assert!(cx.key_bindings()
+                    .borrow()
+                    .bindings_for_action(&ReportBug)
+                    .next()
+                    .is_none(),
+                  "Report a Bug was given a key equivalent");
+      });
+}
+
 #[gpui_kit::test]
 fn the_window_menu_openers_carry_their_shortcuts(cx: &mut TestAppContext) {
     app_with_bindings(cx);
@@ -119,6 +139,7 @@ fn the_agents_menu_carries_the_reference_shortcuts(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-alt-f", &AgentMenuForkAgent);
           assert_bound(cx, "cmd-d", &AgentMenuDuplicateAgent);
           assert_bound(cx, "cmd-r", &AgentMenuRestartAgent);
+          assert_bound(cx, "cmd-shift-r", &AgentMenuRestartWithNewConversation);
           assert_bound(cx, "cmd-w", &CloseWindow);
       });
     // Still gpui's, not ours: cmd-f is the platform's find key, and is left

@@ -100,9 +100,13 @@ pub(crate) enum RiskLevel {
 }
 
 pub(crate) fn permission_risk_level(value: &str, name: &str) -> RiskLevel {
-    let value = format!("{value} {name}").to_ascii_lowercase();
-    if ["bypass", "yolo", "danger"].iter()
-                                   .any(|word| value.contains(word))
+    // Separators are folded to spaces so one keyword covers an id
+    // (`agent-full-access`, Codex's counterpart to `bypassPermissions`)
+    // and its display name ("Full access") alike.
+    let value = format!("{value} {name}").to_ascii_lowercase()
+                                         .replace(['-', '_'], " ");
+    if ["bypass", "yolo", "danger", "full access"].iter()
+                                                  .any(|word| value.contains(word))
     {
         RiskLevel::Danger
     }

@@ -108,6 +108,20 @@ pub struct Agent {
 
 impl Agent {
     /// Whether this is a plain shell agent (no AI).
+    /// The ACP session a Panel-mode connection should `session/load`, or
+    /// `None` to start a new one.
+    ///
+    /// The live ACP session id wins: it is what a restart that keeps the
+    /// conversation left in place. Otherwise the resume-session id resolved
+    /// at launch (`agent-lifecycle`: "Durable versus runtime fields"), which
+    /// is how a conversation survives quitting Knot - loading resets the ACP
+    /// session id, so without this fallback a relaunch always started over.
+    pub fn session_to_load(&self) -> Option<&str> {
+        self.acp_session_id
+            .as_deref()
+            .or(self.resume_session_id.as_deref())
+    }
+
     pub fn is_shell(&self) -> bool {
         knot_core::agent_type::is_shell(&self.agent_type)
     }

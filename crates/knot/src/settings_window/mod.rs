@@ -9,6 +9,7 @@ mod controls;
 /// Public within the crate because its rule is asserted directly by
 /// `tests::settings_font_preview`; the panes themselves are not.
 pub(crate) mod font;
+mod keyboard;
 mod panes;
 mod persona_editor;
 mod render;

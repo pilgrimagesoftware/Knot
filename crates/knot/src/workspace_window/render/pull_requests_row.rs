@@ -124,16 +124,17 @@ pub(crate) fn counts_label(counts: PullRequestCounts) -> String {
     [("pull_requests.count_open", counts.open),
      ("pull_requests.count_merged", counts.merged),
      ("pull_requests.count_closed", counts.closed),
-     ("pull_requests.count_pending", counts.pending)].into_iter()
-                                                     .filter(|(_, count)| *count > 0)
-                                                     .map(|(key, count)| {
-                                                         let count = count.to_string();
-                                                         knot_core::l10n::t_with(key,
-                                                                                 &[("count",
-                                                                                    &count)])
-                                                     })
-                                                     .collect::<Vec<_>>()
-                                                     .join(" · ")
+     ("pull_requests.count_pending", counts.pending),
+     ("pull_requests.count_not_found", counts.not_found)].into_iter()
+                                                         .filter(|(_, count)| *count > 0)
+                                                         .map(|(key, count)| {
+                                                             let count = count.to_string();
+                                                             knot_core::l10n::t_with(key,
+                                                                                     &[("count",
+                                                                                        &count)])
+                                                         })
+                                                         .collect::<Vec<_>>()
+                                                         .join(" · ")
 }
 
 #[cfg(test)]

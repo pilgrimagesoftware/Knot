@@ -67,9 +67,19 @@ pub(crate) fn row_at(state: &PanelState, index: usize) -> Option<PanelRow> {
 /// measured at and the reader's scroll position is left alone. `known` is
 /// the count the list currently holds, and the returned count should be
 /// passed back as `known` next frame.
+///
+/// A list filled from empty opens on its newest row. That is a conversation
+/// arriving all at once - one `session/load` replayed after a restart, or
+/// the first frame of a pane whose list was rebuilt - and a reader wants its
+/// end, not its start. Growth after that leaves the scroll position alone,
+/// which is what lets someone reading further up stay where they are.
 pub(crate) fn sync_row_count(list: &ListState, known: usize, state: &PanelState) -> usize {
     let count = row_count(state);
-    if count > known {
+    if known == 0 && count > 0 {
+        list.splice(0..0, count);
+        list.scroll_to_end();
+    }
+    else if count > known {
         list.splice(known..known, count - known);
     }
     else if count < known {

@@ -132,6 +132,18 @@ fn permission_modes_are_classified_case_insensitively() {
                RiskLevel::Neutral);
 }
 
+/// Codex's three modes, as `codex-acp` 1.13.1 advertises them: full access
+/// is its counterpart to `bypassPermissions`, so it must not stay neutral.
+#[test]
+fn codex_permission_modes_are_classified() {
+    assert_eq!(permission_risk_level("agent-full-access", "Mode"),
+               RiskLevel::Danger);
+    assert_eq!(permission_risk_level("unknown", "Full access"),
+               RiskLevel::Danger);
+    assert_eq!(permission_risk_level("read-only", "Mode"), RiskLevel::Safe);
+    assert_eq!(permission_risk_level("agent", "Mode"), RiskLevel::Neutral);
+}
+
 fn permission_request() -> PermissionRequest {
     PermissionRequest { rpc_id:          serde_json::json!(1),
                         tool_call_id:    "tc1".to_string(),
@@ -247,6 +259,8 @@ fn conversation_with_a_run() -> PanelState {
             title:        String::new(),
             status:       "completed".to_string(),
             content:      Vec::new(),
+            raw_input:    None,
+            meta:         None,
         })
     }
     let mut state = PanelState::new();

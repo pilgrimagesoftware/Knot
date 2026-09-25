@@ -284,7 +284,7 @@ impl PanelState {
             .iter()
             .rev()
             .find_map(|message| match message {
-                PanelMessage::ToolCall(card) if card.id == id => Some(card),
+                PanelMessage::ToolCall(card) if card.id == id => Some(card.as_ref()),
                 _ => None,
             })
     }
@@ -294,7 +294,7 @@ impl PanelState {
             .iter_mut()
             .rev()
             .find_map(|message| match message {
-                PanelMessage::ToolCall(card) if card.id == id => Some(card),
+                PanelMessage::ToolCall(card) if card.id == id => Some(card.as_mut()),
                 _ => None,
             })
     }

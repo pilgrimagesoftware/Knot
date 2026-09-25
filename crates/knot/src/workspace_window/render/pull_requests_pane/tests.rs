@@ -5,7 +5,7 @@ use knot_forge::{
     CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
 };
 
-use super::{REMOVE_ICON, detail_line, forge_notice_text, state_color, status_icon};
+use super::{REMOVE_ICON, RowStatus, detail_line, forge_notice_text, state_color, status_icon};
 
 fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestState {
     PullRequestState { number: Some(42),
@@ -22,7 +22,7 @@ fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestS
 fn a_full_row_names_its_number_state_and_checks() {
     let state = state(PullRequestStatus::Open, Some(CheckRollup::Passing));
 
-    let line = detail_line(Some("#42"), Some(state.status), state.checks);
+    let line = detail_line(Some("#42"), RowStatus::Known(state.status), state.checks);
 
     assert!(line.contains("#42"), "{line}");
     assert!(line.contains(&knot_core::l10n::t("pull_requests.open")),
@@ -35,19 +35,73 @@ fn a_full_row_names_its_number_state_and_checks() {
 /// part that is absent is left out rather than shown as a blank.
 #[test]
 fn absent_parts_are_left_out_rather_than_blanked() {
-    let line = detail_line(None, Some(PullRequestStatus::Merged), None);
+    let line = detail_line(None, RowStatus::Known(PullRequestStatus::Merged), None);
 
     assert_eq!(line, knot_core::l10n::t("pull_requests.merged"));
+}
+
+/// A decided pull request's checks say nothing anyone will act on.
+#[test]
+fn a_merged_or_closed_row_leaves_its_checks_out() {
+    for status in [PullRequestStatus::Merged, PullRequestStatus::Closed] {
+        for checks in [CheckRollup::Passing,
+                       CheckRollup::Failing,
+                       CheckRollup::Pending]
+        {
+            let line = detail_line(Some("#42"), RowStatus::Known(status), Some(checks));
+
+            assert_eq!(line.split(" · ").count(),
+                       2,
+                       "{status:?} {checks:?}: {line}");
+        }
+    }
+}
+
+/// A draft is still open, so its checks still matter.
+#[test]
+fn a_draft_row_keeps_its_checks() {
+    let line = detail_line(None,
+                           RowStatus::Known(PullRequestStatus::Draft),
+                           Some(CheckRollup::Failing));
+
+    assert!(line.contains(&knot_core::l10n::t("pull_requests.checks_failing")),
+            "{line}");
 }
 
 /// A row whose state could not be fetched still lists; it says it is being
 /// checked rather than claiming a state.
 #[test]
 fn a_row_with_no_state_says_so_rather_than_guessing() {
-    let line = detail_line(None, None, None);
+    let line = detail_line(None, RowStatus::Pending, None);
 
     assert_eq!(line, knot_core::l10n::t("pull_requests.pending"));
     assert_ne!(line, knot_core::l10n::t("pull_requests.open"));
+}
+
+/// The forge's answer is in, so the row says what it said rather than that
+/// it is still checking.
+#[test]
+fn a_row_the_forge_cannot_find_says_not_found() {
+    let line = detail_line(None, RowStatus::NotFound, None);
+
+    assert_eq!(line, knot_core::l10n::t("pull_requests.not_found"));
+    assert_ne!(line, knot_core::l10n::t("pull_requests.pending"));
+}
+
+/// A failed fetch is retried, so "checking" is still true of it; only an
+/// answer of "does not exist" moves a row off pending.
+#[test]
+fn the_row_status_follows_the_lookup() {
+    use crate::pull_request_state::PullRequestLookup;
+
+    assert_eq!(RowStatus::of(None), RowStatus::Pending);
+    assert_eq!(RowStatus::of(Some(&PullRequestLookup::Failed)),
+               RowStatus::Pending);
+    assert_eq!(RowStatus::of(Some(&PullRequestLookup::NotFound)),
+               RowStatus::NotFound);
+    assert_eq!(RowStatus::of(Some(&PullRequestLookup::Known(state(PullRequestStatus::Closed,
+                                                                  None)))),
+               RowStatus::Known(PullRequestStatus::Closed));
 }
 
 /// Every key the row can show has to resolve, and none may leave a
@@ -59,6 +113,7 @@ fn every_state_and_check_key_resolves() {
                 "pull_requests.merged",
                 "pull_requests.closed",
                 "pull_requests.pending",
+                "pull_requests.not_found",
                 "pull_requests.checks_passing",
                 "pull_requests.checks_failing",
                 "pull_requests.checks_pending",
@@ -93,11 +148,12 @@ fn the_keys_with_values_substitute_them() {
 /// which a plain open icon does not say.
 #[test]
 fn each_state_has_its_own_icon() {
-    let icons = [status_icon(Some(PullRequestStatus::Draft)),
-                 status_icon(Some(PullRequestStatus::Open)),
-                 status_icon(Some(PullRequestStatus::Merged)),
-                 status_icon(Some(PullRequestStatus::Closed)),
-                 status_icon(None)];
+    let icons = [status_icon(RowStatus::Known(PullRequestStatus::Draft)),
+                 status_icon(RowStatus::Known(PullRequestStatus::Open)),
+                 status_icon(RowStatus::Known(PullRequestStatus::Merged)),
+                 status_icon(RowStatus::Known(PullRequestStatus::Closed)),
+                 status_icon(RowStatus::NotFound),
+                 status_icon(RowStatus::Pending)];
 
     let mut unique = icons.to_vec();
     unique.sort_unstable();
@@ -109,13 +165,15 @@ fn each_state_has_its_own_icon() {
 
 // --- The row's colour -------------------------------------------------------
 
-/// Green open and ready, amber open and blocked, purple merged, red closed -
-/// four states that must never collide, since the colour is the first thing
-/// a row is read by.
+/// Each reason an open pull request can or cannot land, and merged and
+/// closed: states that must never collide, since the colour is the first
+/// thing a row is read by. Conflicting and blocked share orange on purpose.
 #[test]
 fn each_state_wears_its_own_colour() {
     let all = [state_color(Some(PullRequestStatus::Open), Mergeability::Mergeable),
-               state_color(Some(PullRequestStatus::Open), Mergeability::Blocked),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Conflicting),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Behind),
+               state_color(Some(PullRequestStatus::Open), Mergeability::ChecksRunning),
                state_color(Some(PullRequestStatus::Merged), Mergeability::Unknown),
                state_color(Some(PullRequestStatus::Closed), Mergeability::Unknown)];
 
@@ -129,6 +187,23 @@ fn each_state_wears_its_own_colour() {
     }
 }
 
+/// The colours the view's feedback named: green mergeable, orange
+/// conflicting, yellow behind, blue checks running.
+#[test]
+fn open_rows_wear_the_named_colours() {
+    let colour = |mergeable| state_color(Some(PullRequestStatus::Open), mergeable);
+    let rgb = |value| Some(gpui_kit::Hsla::from(gpui_kit::rgb(value)));
+
+    assert_eq!(colour(Mergeability::Mergeable),
+               rgb(crate::consts::COLOR_IDLE));
+    assert_eq!(colour(Mergeability::Conflicting),
+               rgb(crate::consts::COLOR_RUNNING));
+    assert_eq!(colour(Mergeability::Behind),
+               rgb(crate::consts::COLOR_PULL_REQUEST_BEHIND));
+    assert_eq!(colour(Mergeability::ChecksRunning),
+               rgb(crate::consts::COLOR_INPUT));
+}
+
 /// A row must not claim a colour it has not earned: no state fetched, or an
 /// open pull request whose mergeability GitHub has not computed yet.
 #[test]
@@ -140,11 +215,14 @@ fn an_unearned_colour_is_not_claimed() {
 }
 
 /// A draft cannot land, so it wears the blocked colour rather than a green
-/// that would read as ready.
+/// that would read as ready - the same orange as a conflict, since both need
+/// work before they can land.
 #[test]
 fn a_draft_wears_the_blocked_colour() {
     assert_eq!(state_color(Some(PullRequestStatus::Draft), Mergeability::Blocked),
                state_color(Some(PullRequestStatus::Open), Mergeability::Blocked));
+    assert_eq!(state_color(Some(PullRequestStatus::Open), Mergeability::Blocked),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Conflicting));
 }
 
 /// The tint is a state marker behind the row's text, not a fill competing
@@ -164,11 +242,12 @@ fn the_background_tint_is_lighter_than_the_border() {
 /// pull request", the one thing Knot will never do.
 #[test]
 fn the_remove_control_does_not_wear_a_status_icon() {
-    let statuses = [status_icon(Some(PullRequestStatus::Draft)),
-                    status_icon(Some(PullRequestStatus::Open)),
-                    status_icon(Some(PullRequestStatus::Merged)),
-                    status_icon(Some(PullRequestStatus::Closed)),
-                    status_icon(None)];
+    let statuses = [status_icon(RowStatus::Known(PullRequestStatus::Draft)),
+                    status_icon(RowStatus::Known(PullRequestStatus::Open)),
+                    status_icon(RowStatus::Known(PullRequestStatus::Merged)),
+                    status_icon(RowStatus::Known(PullRequestStatus::Closed)),
+                    status_icon(RowStatus::NotFound),
+                    status_icon(RowStatus::Pending)];
 
     assert!(!statuses.contains(&REMOVE_ICON),
             "the remove control wears a status icon");

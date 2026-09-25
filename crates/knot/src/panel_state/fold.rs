@@ -41,23 +41,30 @@ impl PanelState {
             }
             SessionUpdate::Usage { .. } => {}
             SessionUpdate::TextDelta { text } => self.append_text(text),
+            SessionUpdate::UserMessageChunk { text } => self.append_user_text(text),
             SessionUpdate::ToolCallStart { tool_call_id,
                                            kind,
                                            title,
                                            status,
-                                           content, } => {
+                                           content,
+                                           raw_input,
+                                           meta, } => {
                 self.note_pull_requests_in(&content);
                 self.messages
-                    .push(PanelMessage::ToolCall(ToolCallCard { id: tool_call_id,
-                                                                kind,
-                                                                title,
-                                                                status,
-                                                                content }));
+                    .push(PanelMessage::ToolCall(Box::new(ToolCallCard { id: tool_call_id,
+                                                                         kind,
+                                                                         title,
+                                                                         status,
+                                                                         content,
+                                                                         raw_input,
+                                                                         meta })));
             }
             SessionUpdate::ToolCallUpdate { tool_call_id,
                                             status,
                                             title,
-                                            content, } => {
+                                            content,
+                                            raw_input,
+                                            meta, } => {
                 self.note_pull_requests_in(&content);
                 if let Some(card) = self.tool_call_mut(&tool_call_id) {
                     // Absent fields mean "unchanged", per the ACP spec's
@@ -70,6 +77,18 @@ impl PanelState {
                     }
                     if !content.is_empty() {
                         card.content = content;
+                    }
+                    // Same rule, and the one that matters most here: the
+                    // completion update carries a *narrower* `_meta` than the
+                    // start did - Claude Code's stamps `subagent: true` on the
+                    // start and only `toolName` on the finish. Overwriting
+                    // unconditionally would erase the marker a recognizer
+                    // reads, so an absent field leaves what is already known.
+                    if raw_input.is_some() {
+                        card.raw_input = raw_input;
+                    }
+                    if meta.is_some() {
+                        card.meta = meta;
                     }
                 }
             }
@@ -107,6 +126,28 @@ impl PanelState {
                 self.config_options = config_options;
             }
             SessionUpdate::Unknown { .. } => {}
+        }
+    }
+
+    /// Folds a replayed piece of one of the user's messages into the
+    /// conversation, joining it to the user message before it when that is
+    /// the last one (a long prompt arrives in several chunks).
+    ///
+    /// Only between turns. `session/load` replays with no turn in flight,
+    /// and a live prompt is already in the conversation - Knot records what
+    /// it sends, because the stream never echoes it - so an adapter that did
+    /// echo one mid-turn would otherwise show it twice. Nor does it start a
+    /// turn the way `push_user_message` does: a replayed prompt was answered
+    /// long ago.
+    fn append_user_text(&mut self, text: String) {
+        if self.turn_active {
+            return;
+        }
+        if let Some(PanelMessage::User(existing)) = self.messages.last_mut() {
+            existing.push_str(&text);
+        }
+        else {
+            self.messages.push(PanelMessage::User(text));
         }
     }
 

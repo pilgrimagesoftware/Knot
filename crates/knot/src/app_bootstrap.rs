@@ -6,7 +6,6 @@ use std::sync::Arc;
 use gpui_kit::AnyWindowHandle;
 use gpui_kit::App;
 use gpui_kit::AppContext;
-use gpui_kit::KeyBinding;
 use gpui_kit::Menu;
 use gpui_kit::MenuItem;
 use gpui_kit::SystemMenuType;
@@ -22,7 +21,6 @@ use parking_lot::Mutex;
 use crate::about_window::register_about_action;
 use crate::agent_menu::AgentMenuSnapshot;
 use crate::agent_menu::AgentsMenuState;
-use crate::agent_menu::agent_menu_key_bindings;
 use crate::agent_menu::agents_menu;
 use crate::app_state::build_agent_store;
 use crate::app_state::notification_response_agent_id;
@@ -33,6 +31,7 @@ use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;
+use crate::bug_report::register_report_bug_action;
 use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
 use crate::mcp_status;
@@ -65,7 +64,8 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::SharedSettings,
                                notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
+                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue,
+                               subagents: crate::app_support::SubagentRegistryHandle)
                                -> (tokio::sync::oneshot::Sender<()>, McpServerStatus) {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
     let status = McpServerStatus::new();
@@ -99,6 +99,7 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
 
                    let catalog = Arc::new(
                 knot_mcp_tools::McpToolCatalog::new(agents, repos_rx, notifier)
+                    .with_subagents(Arc::clone(&subagents))
                     .with_message_store(messages)
                     .with_awaiting_input_queue(awaiting_input)
                     .with_activation_queue(activation)
@@ -149,6 +150,7 @@ actions!(knot_app,
           HideOthers,
           ShowAllWindows,
           AboutKnot,
+          ReportBug,
           OpenSettings,
           OpenImport,
           PanelPermissionAllow,
@@ -322,7 +324,12 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
             MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
             MenuItem::separator(),
         ]),
-        Menu::new("Help").items([MenuItem::action("Knot Help", KnotHelp).disabled(true)]),
+        // Report a Bug has no key equivalent: macOS gives it none, and the
+        // item is enabled everywhere because it is how a user asks for help.
+        Menu::new("Help").items([
+            MenuItem::action("Knot Help", KnotHelp).disabled(true),
+            MenuItem::action(knot_core::l10n::t("menu.help.report_bug"), ReportBug),
+        ]),
     ]);
 }
 
@@ -350,41 +357,18 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
     // Holds its own window handle, and reloads the store when it opens; see
     // `import_window::register_import_action`.
     register_import_action(Arc::clone(&store), cx);
+    // Holds its own single-instance handle; see
+    // `bug_report::register_report_bug_action`.
+    register_report_bug_action(cx);
     cx.on_action(hide_app);
     cx.on_action(hide_others);
     cx.on_action(show_all_windows);
-    // The standard macOS application-menu
-    // shortcuts. A `MenuItem::action` only shows a
-    // shortcut next to its label if the action has
-    // a binding, so without these the menu read as
-    // if Knot had none.
-    cx.bind_keys([KeyBinding::new("cmd-q", Quit, None),
-                  KeyBinding::new("cmd-,", OpenSettings, None),
-                  KeyBinding::new("cmd-h", HideApp, None),
-                  KeyBinding::new("cmd-alt-h", HideOthers, None)]);
-    // The rest of the shortcuts macOS expects on a standard menu item,
-    // whether or not the item behind each is wired up yet - the menu bar
-    // reads as an app with no keyboard at all without them. About Knot,
-    // Show All and Zoom are absent on purpose: macOS gives those three no
-    // key equivalent either. Cut, Copy, Paste, Undo and Redo are absent
-    // because gpui already binds them for a focused input, and the Edit
-    // menu points at those same actions rather than at ours.
-    cx.bind_keys([KeyBinding::new("cmd-n", NewWorkspace, None),
-                  KeyBinding::new("cmd-w", CloseWindow, None),
-                  KeyBinding::new("cmd-m", MinimizeWindow, None),
-                  KeyBinding::new("cmd-shift-/", KnotHelp, None)]);
-    // The Window menu's openers. macOS reserves neither: cmd-0 is
-    // conventionally "reset zoom" in a browser or an editor, and Knot has no
-    // zoom level for it to reset.
-    cx.bind_keys([KeyBinding::new("cmd-alt-0", OpenCommandCenter, None),
-                  KeyBinding::new("cmd-0", OpenWorkspaces, None)]);
-    // The Agents menu's own keys. No platform convention names these -
-    // the items are Knot's - so they come from the Swift reference; see
-    // `agent_menu::agent_menu_key_bindings`.
-    cx.bind_keys(agent_menu_key_bindings());
-    cx.bind_keys([KeyBinding::new("cmd-shift-a", PanelPermissionAllow, None),
-                  KeyBinding::new("cmd-shift-d", PanelPermissionDeny, None),
-                  KeyBinding::new("cmd-shift-p", PanelOpenPermissionSelector, None)]);
+    // Fixed and configurable shortcuts come from `keymap`, which is also
+    // what validates a customization against the fixed ones.
+    cx.bind_keys(crate::keymap::fixed_bindings().into_iter()
+                                                .map(|fixed| fixed.binding));
+    crate::keymap::apply(&crate::keymap::Resolved::from_settings(&settings.keybindings),
+                         cx);
     let settings_window: Rc<RefCell<Option<AnyWindowHandle>>> = Rc::new(RefCell::new(None));
     {
         let settings_window = Rc::clone(&settings_window);
@@ -417,6 +401,7 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
               CommandCenterWindow::open(Arc::clone(&store), Arc::clone(&messages), cx);
           });
     }
+    crate::keymap::register_global_handlers(Arc::clone(&store), Arc::clone(&messages), cx);
     cx.on_action(move |_: &OpenWorkspaces, cx| {
           crate::window_registry::activate_or_open(
               crate::window_registry::WindowKey::WorkspaceManager,
@@ -514,12 +499,16 @@ pub(crate) fn run() {
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
     let activation = Arc::new(Mutex::new(Vec::new()));
+    // One registry for the process, built before the MCP server because both
+    // it and every workspace window write to the same one.
+    let subagents: crate::app_support::SubagentRegistryHandle = Arc::default();
     let (mcp_stop, mcp_status) = start_mcp_server(Arc::clone(&store),
                                                   settings.clone(),
                                                   Arc::clone(&notifier),
                                                   Arc::clone(&messages),
                                                   Arc::clone(&awaiting_input),
-                                                  Arc::clone(&activation));
+                                                  Arc::clone(&activation),
+                                                  Arc::clone(&subagents));
 
     gpui_kit::application()
                            // `Assets` only embeds gpui-component's own curated icon subset; our
@@ -561,6 +550,7 @@ pub(crate) fn run() {
                                // window claims it once one is.
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(Activation(Arc::clone(&activation)));
+                               cx.set_global(crate::app_support::Subagents(Arc::clone(&subagents)));
                                // The MCP server's state, for the settings
                                // pane's row and the failure notification.
                                cx.set_global(mcp_status);

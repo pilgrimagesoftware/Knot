@@ -92,6 +92,9 @@ impl WorkspaceWindow {
                                                        agent_selection_for_workspace(&store,
                                                                                      workspace_id)
                                                    });
+                  // Before the entity closure: the accessor needs `&mut App`,
+                  // which `cx.new`'s context is not.
+                  let subagents = crate::app_support::Subagents::handle(cx);
                   let sidebar_resize = cx.new(|_| ResizableState::default());
                   let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
                   let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
@@ -139,6 +142,7 @@ impl WorkspaceWindow {
                     terminal_font: TerminalFont::default(),
                     clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
+                    subagents: Arc::clone(&subagents),
                     last_spinner_frame: 0,
                     focused_pane: None,
                     panel_phases: BTreeMap::new(),

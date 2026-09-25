@@ -13,7 +13,9 @@ mod agent_context_menu;
 mod agent_registry_fields;
 mod agent_signals;
 mod agents_menu;
+mod bug_report;
 mod import_window;
+mod keybindings;
 mod l10n_catalog;
 mod layout_model;
 mod markdown_view;
@@ -33,12 +35,14 @@ mod pull_request_row_clicks;
 mod quit_warning;
 mod settings_font_preview;
 mod settings_global;
+mod settings_keyboard;
 mod settings_labels;
 mod settings_reach_open_windows;
 mod sidebar_menu;
 mod sidebar_width;
 mod single_line;
 mod startup;
+mod subagent_repaint;
 mod terminal_font;
 mod window_bounds;
 mod window_registry;
@@ -49,7 +53,7 @@ mod workspace_window_open;
 
 use knot_core::Workspace;
 
-fn workspace(name: &str) -> Workspace {
+pub(crate) fn workspace(name: &str) -> Workspace {
     Workspace { id:        Uuid::new_v4(),
                 name:      name.to_string(),
                 color_hex: "#123456".to_string(),

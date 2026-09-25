@@ -188,11 +188,31 @@ impl AgentStore {
         Ok(())
     }
 
+    /// Restarts `id` into a new conversation: every session id is cleared,
+    /// so the relaunch starts a fresh session with the full initialization
+    /// prompt. What a launch-affecting edit and Restart with New
+    /// Conversation do, and what Restart does with
+    /// `restore-conversation-on-launch` off (`agent-lifecycle`: "Restart").
     pub fn restart(&mut self, id: Uuid) -> Result<()> {
         let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
         agent.session_id = None;
         agent.acp_session_id = None;
         agent.resume_session_id = None;
+        agent.fork_session = false;
+        self.recreate_terminal(id)
+    }
+
+    /// Restarts `id` back into the conversation it has: the session ids are
+    /// kept, and the resume-session id is pointed at the session id, so a
+    /// Panel-mode agent loads its ACP session again on relaunch. What
+    /// Restart does with `restore-conversation-on-launch` on.
+    ///
+    /// The fork flag is cleared, as by [`Self::restart`]: a fork is an
+    /// instruction for the agent's first launch, and one that can be
+    /// restarted has already had it.
+    pub fn restart_keeping_conversation(&mut self, id: Uuid) -> Result<()> {
+        let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
+        agent.resume_session_id = agent.session_id.clone();
         agent.fork_session = false;
         self.recreate_terminal(id)
     }

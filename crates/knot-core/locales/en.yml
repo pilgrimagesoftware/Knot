@@ -138,6 +138,7 @@ settings:
     voice: "Voice"
     mcp: "MCP"
     appearance: "Appearance"
+    keyboard: "Keyboard"
   general:
     appearance: "Appearance"
     appearance_hint: "Light and Dark override the system setting; Auto and System follow it."
@@ -219,12 +220,54 @@ settings:
     api_key: "API key"
     custom_prompt: "Custom prompt"
     port: "Port"
+  keyboard:
+    blurb: "Shortcuts for moving between workspaces, agents and panels. Select workspace and Select agent always use the digits 1–9; choose the modifier that goes with them."
+    shortcuts: "Shortcuts"
+    press_shortcut: "Press a shortcut…"
+    reset: "Reset to default"
+    restore_defaults: "Restore Defaults"
   font_unavailable: "unavailable"
   compact_tool_calls: "Collapse tool calls"
   compact_tool_calls_hint: "Show a turn's tool calls as one summary line instead of a card each."
 
+# The configurable navigation shortcuts, and the names of the fixed ones a
+# rejected customization quotes back.
+keymap:
+  shortcut:
+    select_workspace: "Select workspace 1–9"
+    select_agent: "Select agent 1–9"
+    focus_agent_input: "Focus agent input"
+    toggle_dashboard: "Toggle Dashboard"
+    toggle_pull_requests: "Toggle Pull Requests"
+    open_command_center: "Open Command Center"
+    jump_to_bottom: "Jump to bottom"
+  fixed:
+    quit: "Quit Knot"
+    settings: "Settings"
+    hide: "Hide Knot"
+    hide_others: "Hide Others"
+    new_workspace: "New Workspace"
+    close_window: "Close Window"
+    minimize: "Minimize"
+    help: "Knot Help"
+    permission_allow: "Allow permission"
+    permission_deny: "Deny permission"
+    permission_selector: "Permission mode selector"
+    undo: "Undo"
+    redo: "Redo"
+    cut: "Cut"
+    copy: "Copy"
+    paste: "Paste"
+    select_all: "Select All"
+  rejection:
+    needs_modifier: "A shortcut needs ⌘, ⌃ or ⌥."
+    conflict: "%{chord} is already used by %{holder}."
+
 menu:
   agents: "Agents"
+  # The Help menu's own items.
+  help:
+    report_bug: "Report a Bug…"
   # The Window menu's own items. macOS appends and maintains the list of
   # open windows below them.
   window:
@@ -245,11 +288,15 @@ menu:
     register_agent: "Register Agent"
     deactivate: "Deactivate"
     restart_agent: "Restart Agent"
+    restart_new_conversation: "Restart with New Conversation"
     remove_agent: "Remove Agent"
     # What the two confirming row actions ask before they run.
     confirm:
       restart_title: "Restart Agent"
       restart_body: "Restart \"%{name}\"? Its session will be cleared."
+      restart_keep_body: "Restart \"%{name}\"? It will resume its current conversation."
+      restart_new_title: "Restart with New Conversation"
+      restart_new_body: "Restart \"%{name}\" in a new conversation? Its current conversation will not be resumed."
       remove_title: "Remove Agent"
       remove_body: "Remove \"%{name}\"? This closes its session and cannot be undone."
   # The agent list's background menu, over the workspace rather than
@@ -266,6 +313,7 @@ menu:
     confirm:
       restart_all_title: "Restart All"
       restart_all_body: "Restart %{agents}? Every session is cleared and cannot be recovered."
+      restart_all_keep_body: "Restart %{agents}? Each will resume its current conversation."
       close_all_title: "Close All"
       close_all_body: "Close %{agents}? This closes every session and cannot be undone."
 
@@ -292,6 +340,34 @@ about:
     toolkit: "gpui-kit — Apache-2.0"
     terminal: "Alacritty terminal — Apache-2.0"
     fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"
+
+# The bug-report dialog opened from Help > Report a Bug….
+bug_report:
+  title: "Report a Bug"
+  subject_label: "Subject"
+  subject_placeholder: "A short summary of the problem"
+  description_label: "Description"
+  description_placeholder: "What happened, what you expected, and how to reproduce it"
+  diagnostics_label: "Diagnostics"
+  diagnostics_hint: "Attached to the report. Select the text to copy it."
+  diagnostics_collecting: "Collecting diagnostics…"
+  diagnostics:
+    app: "App"
+    os: "OS"
+    arch: "Architecture"
+    forge: "GitHub CLI"
+  forge:
+    missing: "not installed"
+    unauthenticated: "not authenticated"
+    ready: "ready"
+    failed: "unavailable (%{reason})"
+  submitting: "Filing the issue…"
+  filed: "Issue filed: %{url}"
+  failed: "The issue could not be filed: %{error}"
+  browser_ready: "The report was not filed automatically. It is ready to post in your browser."
+  browser_failed: "The browser could not be opened. Your report is still here."
+  cancel: "Cancel"
+  report: "Report"
 
 agent_editor:
   title_new: "New Agent"
@@ -393,6 +469,7 @@ pull_requests:
   merged: "Merged"
   closed: "Closed"
   pending: "Checking…"
+  not_found: "Not found on GitHub"
   checks_passing: "Checks passing"
   checks_failing: "Checks failing"
   checks_pending: "Checks running"
@@ -405,6 +482,7 @@ pull_requests:
   count_merged: "%{count} merged"
   count_closed: "%{count} closed"
   count_pending: "%{count} checking"
+  count_not_found: "%{count} not found"
   forge_missing: "The gh command is not installed, so no status can be read. The list still opens each pull request."
   forge_unauthenticated: "gh is not signed in, so no status can be read. Run gh auth login."
   forge_failed: "Status could not be read: %{reason}"
@@ -528,9 +606,34 @@ processes:
   copy_command: "Copy full command"
   copied_command: "Copied the full command"
   open_viewer: "Open Activity Monitor"
+  # The two groups the expanded section lists. Labelled rather than merely
+  # ordered, because a subagent and a process are different kinds of thing
+  # and a row of one must not read as a row of the other.
+  group_subagents: "Subagents"
+  group_processes: "Processes"
+  # A subagent's state. The words are ours; its kind and task are the
+  # agent's own data and are shown verbatim.
+  subagent_running: "Running"
+  subagent_finished: "Finished"
+  subagent_failed: "Failed"
+  # Shown where a subagent row would show its kind and the agent named
+  # none. Deliberately not blank: the row still describes something real.
+  subagent_kind_unstated: "Subagent"
+  # Expanded, the header counts each group separately - two subagents and
+  # three processes is not five of anything.
+  subagent_count_one: "subagent"
+  subagent_count_many: "subagents"
+  copy_task: "Copy full task"
+  copied_task: "Copied the full task"
+  # A failed subagent's reason, where the agent gave one.
+  subagent_failed_reason: "Failed: %{reason}"
   empty_not_running: "This agent is not running, so nothing descends from it."
   empty_none: "This agent has not started anything that is still running."
   sample_failed: "The process list could not be read: %{reason}"
+  # A running agent that can report subagents and has dispatched none.
+  # Distinct from the section simply omitting the group, which is what an
+  # agent Knot cannot ask says.
+  empty_no_subagents: "This agent has not dispatched any subagents."
 
 git_panel:
   title: "Git Status"

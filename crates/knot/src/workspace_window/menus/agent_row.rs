@@ -363,27 +363,29 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                  });
         }
         AgentMenuEntry::RestartAgent => {
-            let targets = targets.clone();
-            let description = format!("Restart \"{}\"? Its session will be cleared.", targets.name);
-            confirm_then(window, app, "Restart Agent", description, move |app| {
-                {
-                    let mut store = targets.store.lock();
-                    if let Err(error) = store.restart(targets.id) {
-                        eprintln!("failed to restart agent {}: {error}", targets.id);
-                    }
-                }
-                targets.window_entity.update(app, |view, cx| {
-                                         view.remove_session(targets.id);
-                                         view.panel_states.remove(&targets.id);
-                                         // `restart` clears the persisted
-                                         // session ids; write
-                                         // them out so a relaunch doesn't
-                                         // resume the session
-                                         // just dropped.
-                                         view.persist_agents(cx);
-                                         cx.notify();
-                                     });
-            });
+            // Decided now, not on confirm: the prompt says which of the two
+            // it will do, and confirming must do what it said.
+            let keep = crate::settings_global::read(app).restore_conversation_on_launch;
+            let body = if keep {
+                "menu.agent.confirm.restart_keep_body"
+            }
+            else {
+                "menu.agent.confirm.restart_body"
+            };
+            confirm_restart(window,
+                            app,
+                            targets,
+                            "menu.agent.confirm.restart_title",
+                            body,
+                            keep);
+        }
+        AgentMenuEntry::RestartWithNewConversation => {
+            confirm_restart(window,
+                            app,
+                            targets,
+                            "menu.agent.confirm.restart_new_title",
+                            "menu.agent.confirm.restart_new_body",
+                            false);
         }
         AgentMenuEntry::RemoveAgent => {
             let targets = targets.clone();
@@ -407,4 +409,26 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
         | AgentMenuEntry::OpenIn
         | AgentMenuEntry::MarkdownFiles => {}
     }
+}
+
+/// Asks to restart the row's agent, and restarts it on confirmation,
+/// keeping its conversation or starting a new one as `keep_conversation`
+/// says - the prompt named by `title_key` and `body_key` has told the user
+/// which.
+fn confirm_restart(window: &mut Window, app: &mut App, targets: &AgentMenuTargets,
+                   title_key: &str, body_key: &str, keep_conversation: bool) {
+    let targets = targets.clone();
+    let description = knot_core::l10n::t_with(body_key, &[("name", &targets.name)]);
+    confirm_then(window,
+                 app,
+                 knot_core::l10n::t(title_key),
+                 description,
+                 move |app| {
+                     targets.window_entity.update(app, |view, cx| {
+                                              view.restart_agents(&[targets.id],
+                                                                  keep_conversation,
+                                                                  cx);
+                                              cx.notify();
+                                          });
+                 });
 }

@@ -579,26 +579,82 @@ attachments appear only in the strip and have no position in the text.
 The input area SHALL provide a selector for the agent's permission mode,
 applied to the next message and subsequent turns until changed.
 
+The system SHALL locate the agent's permission-mode option without
+requiring the agent to have categorized it. A declared option SHALL be
+matched on its category when it carries one, and otherwise on its
+identifier or name. Where several options match, the one the agent listed
+first SHALL win. An option the system cannot render as a picker SHALL be
+ignored.
+
 #### Scenario: Change permission mode
 - **WHEN** the user selects a different permission mode from the selector
 - **THEN** subsequent agent turns run under the newly selected permission
   mode
 
+#### Scenario: Uncategorized option still populates the selector
+- **WHEN** the agent declares a selectable permission-mode option but
+  attaches no category to it
+- **THEN** the selector is populated from that option, rather than showing
+  the "doesn't report permission modes" empty state
+
+#### Scenario: Unknown category falls back to the option's own names
+- **WHEN** the agent declares a selectable permission-mode option under a
+  category the system does not recognize
+- **THEN** the option is still matched by its identifier or name, and the
+  selector is populated from it
+
+#### Scenario: The agent's ordering breaks a tie
+- **WHEN** more than one declared option matches the permission-mode
+  selector
+- **THEN** the selector uses the one the agent listed first
+
+#### Scenario: No matching option shows the empty state
+- **WHEN** the agent declares no option matching the permission-mode
+  selector by category, identifier or name
+- **THEN** the selector shows its "doesn't report permission modes" empty
+  state, as before
+
 ### Requirement: Input area model selector
 The input area SHALL provide a selector for which model the agent uses,
 applied starting with the next message.
+
+The system SHALL locate the agent's model option under the same matching
+rule as the permission-mode selector: category first, then identifier or
+name, ties broken by the agent's ordering, unrenderable options ignored.
 
 #### Scenario: Change model
 - **WHEN** the user selects a different model from the selector
 - **THEN** the next message is sent using the newly selected model
 
+#### Scenario: Uncategorized option still populates the selector
+- **WHEN** the agent declares a selectable model option but attaches no
+  category to it
+- **THEN** the selector is populated from that option, rather than showing
+  the "doesn't report selectable models" empty state
+
 ### Requirement: Input area effort selector
 The input area SHALL provide a selector for the agent's reasoning effort
 level, applied starting with the next message.
 
+The system SHALL locate the agent's effort option under the same matching
+rule as the permission-mode selector, and SHALL recognize the protocol's
+own category for reasoning level in addition to the identifier spellings
+it already accepts.
+
 #### Scenario: Change effort level
 - **WHEN** the user selects a different effort level from the selector
 - **THEN** the next message is sent using the newly selected effort level
+
+#### Scenario: The protocol's reasoning category is recognized
+- **WHEN** the agent declares its reasoning-level option under the
+  protocol's standard category for that concept
+- **THEN** the effort selector is populated from that option
+
+#### Scenario: Uncategorized option still populates the selector
+- **WHEN** the agent declares a selectable effort option but attaches no
+  category to it
+- **THEN** the selector is populated from that option, rather than showing
+  the "doesn't report selectable effort levels" empty state
 
 ### Requirement: Input area send control
 
@@ -1164,3 +1220,93 @@ NOT be replaced by system colors.
 #### Scenario: Non-macOS platforms are unchanged
 - **WHEN** the app runs on Linux or Windows
 - **THEN** the panel renders with the existing fixed palette
+
+### Requirement: Model dropdown scrolls
+
+When the models a selected agent declares exceed the height available to
+the model selector's dropdown, the dropdown SHALL be vertically scrollable,
+so every declared model remains reachable by scrolling, with no other action
+required. When the declared models fit within the available height, the
+dropdown SHALL show all of them without scrolling.
+
+The Swift reference has no equivalent dropdown to keep parity with: the
+model axis is offered from the agent's own declared Session Config Options,
+which the port introduces. This requirement is intended port behavior.
+
+#### Scenario: More models than fit scroll
+
+- **WHEN** the agent declares more models than the open model dropdown can
+  display at once
+- **THEN** the user can scroll the dropdown, and every model below the fold
+  becomes selectable by scrolling to it
+
+#### Scenario: Models that fit need no scroll
+
+- **WHEN** the agent declares at most as many models as the dropdown can
+  display at once
+- **THEN** every declared model is visible in the open dropdown without
+  scrolling
+
+#### Scenario: The last declared model is reachable
+
+- **WHEN** the agent declares more models than the dropdown can display and
+  the user scrolls the list to its end
+- **THEN** the last declared model is visible and selectable
+
+### Requirement: Model dropdown searches
+
+The model selector's dropdown SHALL provide a search field that filters the
+listed models by case-insensitive substring match on the model's displayed
+name, so a model can be found by typing part of its name. While the search
+field is non-empty, only models matching it SHALL be listed; a model that
+does not match SHALL NOT be offered. Clearing the field SHALL restore the
+full list.
+
+#### Scenario: Typing narrows the list
+
+- **WHEN** the user types text into the model dropdown's search field
+- **THEN** only models whose displayed name contains that text (case-
+  insensitive) are listed
+
+#### Scenario: Empty search shows everything
+
+- **WHEN** the search field is empty
+- **THEN** every declared model is listed, in the agent's declared order
+
+#### Scenario: No match selects nothing
+
+- **WHEN** no declared model matches the search text
+- **THEN** the dropdown offers no model to select, and the currently
+  selected model is left unchanged until the user empties or changes the
+  search text
+
+### Requirement: A loaded conversation shows its history
+When a Panel-mode agent's session is loaded rather than created - a restart
+that keeps the conversation, or a layout restore - the panel SHALL show the
+conversation the agent replays, with each of the user's prompts as its own
+user message and each reply as its own assistant message, in the order
+replayed. Consecutive chunks of one prompt SHALL join into one message.
+
+The loaded conversation SHALL open scrolled to its newest message, not its
+first: a reader coming back to it wants where it left off.
+
+A replayed prompt SHALL NOT start a turn: it was answered long ago, and the
+composer stays usable. A user message chunk that arrives while a turn is in
+flight SHALL be ignored, because the panel has already recorded the prompt it
+sent, and showing an echo would duplicate it.
+
+#### Scenario: Restarting keeps the visible conversation
+- **WHEN** an agent whose conversation holds two prompts and two replies is
+  restarted keeping its conversation
+- **THEN** the panel shows the two prompts and the two replies, alternating,
+  rather than the replies run together with no prompts
+
+#### Scenario: A long loaded conversation opens at its end
+- **WHEN** an agent with a conversation longer than its panel is restarted
+  keeping it
+- **THEN** the panel shows the newest message, with the earlier ones above it
+
+#### Scenario: An echoed prompt is not doubled
+- **WHEN** the user sends a prompt and the agent echoes it as a user message
+  chunk during the turn
+- **THEN** the prompt appears once

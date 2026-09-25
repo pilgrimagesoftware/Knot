@@ -155,3 +155,17 @@ fn retain_drops_every_key_the_predicate_rejects() {
     assert!(cache.claim_refresh("a".to_string(), NEVER).is_some(),
             "a dropped key's request time went with it");
 }
+
+/// `holds` answers from what has landed, and a key with nothing recorded
+/// holds nothing - not even for a predicate that accepts everything.
+#[test]
+fn holds_tests_the_recorded_value_and_only_that() {
+    let mut cache = cache();
+    cache.claim_refresh("a".to_string(), NEVER)
+         .expect("claimed")
+         .record(7);
+
+    assert!(cache.holds(&"a".to_string(), |value| *value == 7));
+    assert!(!cache.holds(&"a".to_string(), |value| *value == 8));
+    assert!(!cache.holds(&"b".to_string(), |_| true));
+}

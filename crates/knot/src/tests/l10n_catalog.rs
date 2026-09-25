@@ -35,6 +35,42 @@ fn about_window_labels_resolve() {
     }
 }
 
+/// Every word the bug-report dialog and its menu item show, per
+/// `bug-reporting`'s localization requirement. A missing key would ship the
+/// key string itself as a label, a forge state or a status message.
+#[test]
+fn bug_report_labels_resolve() {
+    for key in ["menu.help.report_bug",
+                "bug_report.title",
+                "bug_report.subject_label",
+                "bug_report.subject_placeholder",
+                "bug_report.description_label",
+                "bug_report.description_placeholder",
+                "bug_report.diagnostics_label",
+                "bug_report.diagnostics_hint",
+                "bug_report.diagnostics_collecting",
+                "bug_report.diagnostics.app",
+                "bug_report.diagnostics.os",
+                "bug_report.diagnostics.arch",
+                "bug_report.diagnostics.forge",
+                "bug_report.forge.missing",
+                "bug_report.forge.unauthenticated",
+                "bug_report.forge.ready",
+                "bug_report.forge.failed",
+                "bug_report.submitting",
+                "bug_report.filed",
+                "bug_report.failed",
+                "bug_report.browser_ready",
+                "bug_report.browser_failed",
+                "bug_report.cancel",
+                "bug_report.report"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
 /// The queued-row controls carry no visible text of their own, so their
 /// tooltips and accessibility labels are the only thing naming them - a
 /// missing key would ship the key string itself as the button's name.
@@ -454,4 +490,55 @@ fn window_chrome_labels_resolve() {
     assert!(error.contains("disk full"),
             "the width error must say what failed: {error}");
     assert!(!error.contains("%{error}"));
+}
+
+/// Every string the subagents half of the processes section introduces.
+///
+/// Asserted by key, never by copy: a copy edit must not fail a test. What
+/// this catches is a key that is never added to the catalogue, which renders
+/// as the key itself - readable enough to pass a glance in review and wrong
+/// on screen.
+#[test]
+fn subagent_section_labels_resolve() {
+    for key in ["processes.group_subagents",
+                "processes.group_processes",
+                "processes.subagent_running",
+                "processes.subagent_finished",
+                "processes.subagent_failed",
+                "processes.subagent_kind_unstated",
+                "processes.subagent_count_one",
+                "processes.subagent_count_many",
+                "processes.copy_task",
+                "processes.copied_task",
+                "processes.empty_no_subagents"]
+    {
+        let text = knot_core::l10n::t(key);
+
+        assert_ne!(text, key, "{key} is missing from the catalogue");
+        assert!(!text.is_empty(), "{key} resolved to nothing");
+    }
+}
+
+/// The one key here that substitutes a value. A body that lost its
+/// placeholder still resolves and still reads as a sentence, so resolution
+/// alone would not catch it - the value has to survive the substitution.
+#[test]
+fn a_subagent_failure_reason_survives_substitution() {
+    let text = knot_core::l10n::t_with("processes.subagent_failed_reason",
+                                       &[("reason", "ran out of context")]);
+
+    assert!(text.contains("ran out of context"), "{text}");
+    assert!(!text.contains("%{reason}"),
+            "the placeholder was left unsubstituted: {text}");
+}
+
+/// The two groups must not read as the same thing, and neither may collide
+/// with the section's own title.
+#[test]
+fn the_two_group_labels_are_distinguishable() {
+    let subagents = knot_core::l10n::t("processes.group_subagents");
+    let processes = knot_core::l10n::t("processes.group_processes");
+
+    assert_ne!(subagents, processes);
+    assert_ne!(subagents, knot_core::l10n::t("processes.title"));
 }

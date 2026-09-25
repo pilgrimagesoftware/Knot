@@ -27,6 +27,7 @@ use crate::agent_menu::AgentMenuOpenInApp;
 use crate::agent_menu::AgentMenuRegisterAgent;
 use crate::agent_menu::AgentMenuRemoveAgent;
 use crate::agent_menu::AgentMenuRestartAgent;
+use crate::agent_menu::AgentMenuRestartWithNewConversation;
 use crate::agent_menu::AgentMenuSaveToBench;
 use crate::agent_menu::AgentMenuShowMarkdownFile;
 use crate::agent_menu::AgentMenuSnapshot;
@@ -187,6 +188,7 @@ pub(in crate::workspace_window) fn with_agents_menu_actions(el: gpui_kit::Div,
                                     RegisterAgent => AgentMenuRegisterAgent,
                                     Deactivate => AgentMenuDeactivate,
                                     RestartAgent => AgentMenuRestartAgent,
+                                    RestartWithNewConversation => AgentMenuRestartWithNewConversation,
                                     RemoveAgent => AgentMenuRemoveAgent]);
     let Some(selected) = selected
     else {

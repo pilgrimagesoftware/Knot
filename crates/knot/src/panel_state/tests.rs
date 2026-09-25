@@ -1,6 +1,7 @@
 //! Unit tests for [`super`].
 
 mod pull_requests;
+mod replay;
 mod shell;
 
 use knot_acp::ConfigOption;
@@ -9,6 +10,7 @@ use knot_acp::SessionEndCause;
 use knot_acp::SessionEvent;
 use knot_acp::SessionUpdate;
 use knot_acp::ToolCallContent;
+use serde_json::Value;
 use serde_json::json;
 
 use super::*;
@@ -67,14 +69,29 @@ fn tool_call_start(id: &str, kind: &str) -> SessionEvent {
                                                         kind:         kind.to_string(),
                                                         title:        String::new(),
                                                         status:       "pending".to_string(),
-                                                        content:      Vec::new(), })
+                                                        content:      Vec::new(),
+                                                        raw_input:    None,
+                                                        meta:         None, })
+}
+
+/// A start carrying the two fields an adapter identifies a call by.
+fn tool_call_start_with(id: &str, raw_input: Value, meta: Value) -> SessionEvent {
+    SessionEvent::Update(SessionUpdate::ToolCallStart { tool_call_id: id.to_string(),
+                                                        kind:         "think".to_string(),
+                                                        title:        String::new(),
+                                                        status:       "pending".to_string(),
+                                                        content:      Vec::new(),
+                                                        raw_input:    Some(raw_input),
+                                                        meta:         Some(meta), })
 }
 
 fn tool_call_update(id: &str, status: Option<&str>, content: Vec<ToolCallContent>) -> SessionEvent {
     SessionEvent::Update(SessionUpdate::ToolCallUpdate { tool_call_id: id.to_string(),
                                                          status: status.map(str::to_string),
                                                          title: None,
-                                                         content })
+                                                         content,
+                                                         raw_input: None,
+                                                         meta: None })
 }
 
 #[test]
@@ -89,14 +106,61 @@ fn tool_call_lifecycle_builds_one_card() {
 
     assert_eq!(
                state.messages,
-               vec![PanelMessage::ToolCall(
-        ToolCallCard { id:      "tc1".to_string(),
-                       kind:    "execute".to_string(),
-                       title:   String::new(),
-                       status:  "completed".to_string(),
-                       content: vec![ToolCallContent::Text("done".to_string())], }
-    )]
+               vec![PanelMessage::ToolCall(Box::new(
+        ToolCallCard { id:        "tc1".to_string(),
+                       kind:      "execute".to_string(),
+                       title:     String::new(),
+                       status:    "completed".to_string(),
+                       content:   vec![ToolCallContent::Text("done".to_string())],
+                       raw_input: None,
+                       meta:      None, }
+    ))]
     );
+}
+
+/// The two fields a recognizer reads reach the card, unparsed.
+#[test]
+fn a_tool_call_card_carries_raw_input_and_meta() {
+    let mut state = PanelState::new();
+
+    state.apply(tool_call_start_with("tc1",
+                                     json!({ "subagent_type": "discovery" }),
+                                     json!({ "claudeCode": { "subagent": true } })));
+
+    let card = card(&state, 0);
+    assert_eq!(card.raw_input
+                   .as_ref()
+                   .and_then(|input| input.get("subagent_type")),
+               Some(&json!("discovery")));
+    assert_eq!(card.meta
+                   .as_ref()
+                   .and_then(|meta| meta.pointer("/claudeCode/subagent")),
+               Some(&json!(true)));
+}
+
+/// The defect this guards against is specific and quiet. Claude Code's
+/// adapter stamps `subagent: true` on the *start* and sends only `toolName`
+/// on the finish, so overwriting `_meta` unconditionally would erase the
+/// marker at exactly the moment a completion needs to be recognized - and the
+/// subagent would sit on screen as permanently running.
+#[test]
+fn a_status_only_update_does_not_blank_raw_input_or_meta() {
+    let mut state = PanelState::new();
+
+    state.apply(tool_call_start_with("tc1",
+                                     json!({ "subagent_type": "discovery" }),
+                                     json!({ "claudeCode": { "subagent": true } })));
+    state.apply(tool_call_update("tc1", Some("completed"), Vec::new()));
+
+    let card = card(&state, 0);
+    assert_eq!(card.status, "completed");
+    assert!(card.raw_input.is_some(),
+            "raw input was blanked by a status-only update");
+    assert_eq!(card.meta
+                   .as_ref()
+                   .and_then(|meta| meta.pointer("/claudeCode/subagent")),
+               Some(&json!(true)),
+               "the subagent marker was erased by a status-only update");
 }
 
 /// A finished call with no content must not keep reading as running -
@@ -423,12 +487,14 @@ fn permission(tool_call_id: &str, title: Option<&str>) -> PermissionRequest {
 fn display_name_prefers_request_title_then_card_title_kind_then_id() {
     let mut state = PanelState::new();
     state.messages
-         .push(PanelMessage::ToolCall(ToolCallCard { id:      "tc1".to_string(),
-                                                     kind:    "read".to_string(),
+         .push(PanelMessage::ToolCall(Box::new(ToolCallCard { id:        "tc1".to_string(),
+                                                     kind:      "read".to_string(),
                                                      title:
                                                          "Reading configuration file".to_string(),
-                                                     status:  "pending".to_string(),
-                                                     content: Vec::new(), }));
+                                                     status:    "pending".to_string(),
+                                                     content:   Vec::new(),
+                                                     raw_input: None,
+                                                     meta:      None, })));
 
     assert_eq!(state.display_name(&permission("tc1", Some("Wire title"))),
                "Wire title");
@@ -436,11 +502,13 @@ fn display_name_prefers_request_title_then_card_title_kind_then_id() {
                "Reading configuration file");
 
     state.messages
-         .push(PanelMessage::ToolCall(ToolCallCard { id:      "tc2".to_string(),
-                                                     kind:    "execute".to_string(),
-                                                     title:   String::new(),
-                                                     status:  "pending".to_string(),
-                                                     content: Vec::new(), }));
+         .push(PanelMessage::ToolCall(Box::new(ToolCallCard { id:        "tc2".to_string(),
+                                                              kind:      "execute".to_string(),
+                                                              title:     String::new(),
+                                                              status:    "pending".to_string(),
+                                                              content:   Vec::new(),
+                                                              raw_input: None,
+                                                              meta:      None, })));
     assert_eq!(state.display_name(&permission("tc2", None)), "execute");
     assert_eq!(state.display_name(&permission("missing", None)), "missing");
 }

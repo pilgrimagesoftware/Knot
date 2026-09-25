@@ -1,5 +1,5 @@
-//! The Pull Requests pane: this workspace's recorded pull requests, grouped
-//! by the agent that opened them, newest first.
+//! The Pull Requests pane: this workspace's recorded pull requests, one row
+//! per pull request, grouped by the agents that opened them, newest first.
 //!
 //! A content-area takeover like the dashboard, not a popover on each agent
 //! card: the question it answers is "what did this session produce", which is
@@ -13,26 +13,61 @@ use gpui_kit::{
     ClickEvent, Context, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, div,
 };
-use knot_forge::{
-    CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
-};
+use knot_forge::{CheckRollup, ForgeAvailability, Mergeability, PullRequestStatus};
 use uuid::Uuid;
 
 use crate::consts;
+use crate::pull_request_state::PullRequestLookup;
 use crate::workspace_window::WorkspaceWindow;
 
 /// One row, flattened out of the store and the state cache before any
 /// element is built - so neither lock is held across the element tree.
 pub(crate) struct PullRequestRow {
-    pub(crate) url:   String,
-    pub(crate) state: Option<PullRequestState>,
+    pub(crate) url:    String,
+    /// `None` while nothing has been asked for it yet.
+    pub(crate) lookup: Option<PullRequestLookup>,
 }
 
-/// One agent's rows, under that agent's name.
+/// What a row can say about where its pull request stands.
+///
+/// Derived once from the lookup, so the icon and the detail line cannot
+/// disagree. A failed fetch reads as pending: it is retried, so "checking" is
+/// still true of it. Not found is not: the answer is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowStatus {
+    Known(PullRequestStatus),
+    NotFound,
+    Pending,
+}
+
+impl RowStatus {
+    fn of(lookup: Option<&PullRequestLookup>) -> Self {
+        match lookup {
+            Some(PullRequestLookup::Known(state)) => Self::Known(state.status),
+            Some(PullRequestLookup::NotFound) => Self::NotFound,
+            Some(PullRequestLookup::Failed) | None => Self::Pending,
+        }
+    }
+
+    fn known(self) -> Option<PullRequestStatus> {
+        match self {
+            Self::Known(status) => Some(status),
+            Self::NotFound | Self::Pending => None,
+        }
+    }
+}
+
+/// The rows one set of agents opened, under their names.
+///
+/// Several agents rather than one: a pull request several agents recorded is
+/// one row, headed by all of them.
 pub(crate) struct PullRequestGroup {
-    pub(crate) agent_id: Uuid,
-    pub(crate) agent:    String,
-    pub(crate) rows:     Vec<PullRequestRow>,
+    /// Every agent each row here is attributed to, so removing a row
+    /// addresses every record behind it.
+    pub(crate) agent_ids: Vec<Uuid>,
+    /// Their names, joined for the heading.
+    pub(crate) agents:    String,
+    pub(crate) rows:      Vec<PullRequestRow>,
 }
 
 impl WorkspaceWindow {
@@ -107,36 +142,31 @@ fn forge_notice_text(availability: &ForgeAvailability) -> Option<String> {
 
 fn render_group(group: PullRequestGroup, cx: &mut Context<WorkspaceWindow>)
                 -> gpui_kit::AnyElement {
-    let agent_id = group.agent_id;
+    let agent_ids = group.agent_ids;
     v_flex().gap_2()
             .child(div().text_sm()
                         .text_color(cx.theme().muted_foreground)
                         .child(knot_core::l10n::t_with("pull_requests.opened_by",
-                                                       &[("name", &group.agent)])))
+                                                       &[("name", &group.agents)])))
             .children(group.rows
                            .into_iter()
-                           .map(|row| render_row(agent_id, row, cx)))
+                           .map(|row| render_row(agent_ids.clone(), row, cx)))
             .into_any_element()
 }
 
-fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWindow>)
+fn render_row(agent_ids: Vec<Uuid>, row: PullRequestRow, cx: &mut Context<WorkspaceWindow>)
               -> gpui_kit::AnyElement {
     let url = row.url.clone();
     let remove_url = row.url.clone();
-    let title = row.state
-                   .as_ref()
-                   .and_then(|state| state.title.clone())
-                   .unwrap_or_else(|| row.url.clone());
-    let number = row.state
-                    .as_ref()
-                    .and_then(|state| state.number)
-                    .map(|number| format!("#{number}"));
-    let status = row.state.as_ref().map(|state| state.status);
-    let checks = row.state.as_ref().and_then(|state| state.checks);
-    let mergeable = row.state
-                       .as_ref()
-                       .map_or(Mergeability::Unknown, |state| state.mergeable);
-    let tint = state_color(status, mergeable);
+    let state = row.lookup.as_ref().and_then(PullRequestLookup::state);
+    let title = state.and_then(|state| state.title.clone())
+                     .unwrap_or_else(|| row.url.clone());
+    let number = state.and_then(|state| state.number)
+                      .map(|number| format!("#{number}"));
+    let status = RowStatus::of(row.lookup.as_ref());
+    let checks = state.and_then(|state| state.checks);
+    let mergeable = state.map_or(Mergeability::Unknown, |state| state.mergeable);
+    let tint = state_color(status.known(), mergeable);
 
     h_flex().id(gpui_kit::SharedString::from(format!("pull-request-{}", row.url)))
             .w_full()
@@ -202,7 +232,7 @@ fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWin
                                         // it. The dispatch order it relies on
                                         // is pinned by the row-click tests.
                                         cx.stop_propagation();
-                                        view.confirm_remove_pull_request(agent_id,
+                                        view.confirm_remove_pull_request(agent_ids.clone(),
                                                                          remove_url.clone(),
                                                                          window,
                                                                          cx);
@@ -216,10 +246,16 @@ fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWin
 
 /// The colour a row wears, or `None` when no state has been fetched.
 ///
-/// Green open and ready, amber open and blocked, purple merged, red closed -
-/// so the shape of a session's output is readable without reading a word of
-/// it. An open pull request whose mergeability GitHub has not computed yet
-/// gets no colour rather than an optimistic green.
+/// Purple merged, red closed; an open one says why it can or cannot land -
+/// green mergeable, yellow behind its base, blue checks running, orange
+/// conflicting or otherwise blocked - so the shape of a session's output is
+/// readable without reading a word of it. An open pull request whose
+/// mergeability GitHub has not computed yet gets no colour rather than an
+/// optimistic green.
+///
+/// Orange covers both a conflict and every other block (draft, red CI, a
+/// required review): each needs a push or a decision before it can land,
+/// which is the one thing the colour has to say.
 fn state_color(status: Option<PullRequestStatus>, mergeable: Mergeability)
                -> Option<gpui_kit::Hsla> {
     let color = match status? {
@@ -227,7 +263,9 @@ fn state_color(status: Option<PullRequestStatus>, mergeable: Mergeability)
         PullRequestStatus::Closed => consts::COLOR_ERROR,
         PullRequestStatus::Draft | PullRequestStatus::Open => match mergeable {
             Mergeability::Mergeable => consts::COLOR_IDLE,
-            Mergeability::Blocked => consts::COLOR_PULL_REQUEST_BLOCKED,
+            Mergeability::Conflicting | Mergeability::Blocked => consts::COLOR_RUNNING,
+            Mergeability::Behind => consts::COLOR_PULL_REQUEST_BEHIND,
+            Mergeability::ChecksRunning => consts::COLOR_INPUT,
             Mergeability::Unknown => return None,
         },
     };
@@ -244,35 +282,50 @@ pub(super) const REMOVE_ICON: &str = "icons/trash.svg";
 
 /// The icon for a row's state. Draft has its own, because the whole point of
 /// a draft is that it is not ready - which a plain open icon does not say.
-fn status_icon(status: Option<PullRequestStatus>) -> &'static str {
+fn status_icon(status: RowStatus) -> &'static str {
     match status {
-        Some(PullRequestStatus::Draft) => "icons/git-pull-request-draft.svg",
-        Some(PullRequestStatus::Merged) => "icons/git-merge.svg",
-        Some(PullRequestStatus::Closed) => "icons/git-pull-request-closed.svg",
-        Some(PullRequestStatus::Open) => "icons/git-pull-request.svg",
+        RowStatus::Known(PullRequestStatus::Draft) => "icons/git-pull-request-draft.svg",
+        RowStatus::Known(PullRequestStatus::Merged) => "icons/git-merge.svg",
+        RowStatus::Known(PullRequestStatus::Closed) => "icons/git-pull-request-closed.svg",
+        RowStatus::Known(PullRequestStatus::Open) => "icons/git-pull-request.svg",
+        // Looked for and not there. Not a pull request icon, since the forge
+        // says there is no pull request, and not an error icon, since
+        // nothing failed.
+        RowStatus::NotFound => "icons/search-x.svg",
         // No state fetched: the row still lists and still opens, so it gets
         // the neutral icon rather than one that claims a state.
-        None => "icons/git-pull-request-arrow.svg",
+        RowStatus::Pending => "icons/git-pull-request-arrow.svg",
     }
 }
 
 /// The second line: number, state and checks, with whatever is absent simply
 /// left out rather than shown as a blank.
-fn detail_line(number: Option<&str>, status: Option<PullRequestStatus>,
-               checks: Option<CheckRollup>)
-               -> String {
+///
+/// Checks only while the pull request is open. Once it is merged or closed
+/// they say nothing anyone will act on.
+fn detail_line(number: Option<&str>, status: RowStatus, checks: Option<CheckRollup>) -> String {
     let mut parts: Vec<String> = Vec::new();
     if let Some(number) = number {
         parts.push(number.to_string());
     }
     parts.push(match status {
-                   Some(PullRequestStatus::Draft) => knot_core::l10n::t("pull_requests.draft"),
-                   Some(PullRequestStatus::Open) => knot_core::l10n::t("pull_requests.open"),
-                   Some(PullRequestStatus::Merged) => knot_core::l10n::t("pull_requests.merged"),
-                   Some(PullRequestStatus::Closed) => knot_core::l10n::t("pull_requests.closed"),
-                   None => knot_core::l10n::t("pull_requests.pending"),
+                   RowStatus::Known(PullRequestStatus::Draft) => {
+                       knot_core::l10n::t("pull_requests.draft")
+                   }
+                   RowStatus::Known(PullRequestStatus::Open) => {
+                       knot_core::l10n::t("pull_requests.open")
+                   }
+                   RowStatus::Known(PullRequestStatus::Merged) => {
+                       knot_core::l10n::t("pull_requests.merged")
+                   }
+                   RowStatus::Known(PullRequestStatus::Closed) => {
+                       knot_core::l10n::t("pull_requests.closed")
+                   }
+                   RowStatus::NotFound => knot_core::l10n::t("pull_requests.not_found"),
+                   RowStatus::Pending => knot_core::l10n::t("pull_requests.pending"),
                });
-    if let Some(checks) = checks {
+    if let Some(checks) = checks.filter(|_| status.known().is_some_and(PullRequestStatus::is_open))
+    {
         parts.push(match checks {
                        CheckRollup::Passing => knot_core::l10n::t("pull_requests.checks_passing"),
                        CheckRollup::Failing => knot_core::l10n::t("pull_requests.checks_failing"),

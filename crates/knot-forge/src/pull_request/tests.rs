@@ -219,7 +219,8 @@ fn the_url_is_passed_to_gh_with_the_fields_the_view_needs() {
 
     assert_eq!(runner.calls(),
                vec!["pr view https://github.com/acme/widget/pull/42 --json \
-                     number,title,state,isDraft,mergeable,statusCheckRollup,mergedAt"],
+                     number,title,state,isDraft,mergeable,mergeStateStatus,statusCheckRollup,\
+                     mergedAt"],
                "asked once: the captured payload already knows its mergeability");
 }
 
@@ -232,15 +233,50 @@ fn a_missing_binary_surfaces_as_missing() {
     assert!(err.is_persistent());
 }
 
-/// A pull request that has been deleted, or a URL `gh` cannot resolve, is a
-/// failed fetch - which the spec covers without removing the record.
+/// Both of the forge's "does not exist" answers, verbatim from the live `gh`.
+/// A finished answer rather than a failed fetch, so the row can say so
+/// instead of waiting forever.
 #[test]
-fn a_failed_lookup_surfaces_as_a_command_failure() {
-    let runner = StubRunner::failing("could not resolve to a PullRequest", 1);
+fn a_pull_request_the_forge_cannot_resolve_is_not_found() {
+    for output in ["GraphQL: Could not resolve to a Repository with the name 'acme/gone'. \
+                    (repository)\n",
+                   "GraphQL: Could not resolve to a PullRequest with the number of 99999. \
+                    (repository.pullRequest)\n"]
+    {
+        let runner = StubRunner::failing(output, 1);
+
+        let err = pull_request_state_with(&runner, "https://github.com/acme/gone/pull/99999")
+            .unwrap_err();
+
+        let ForgeError::NotFound(said) = &err
+        else {
+            panic!("{output:?} classified as {err:?}");
+        };
+        assert!(said.contains("Could not resolve"), "{said}");
+        assert!(!err.is_persistent(),
+                "one missing pull request is not the view's problem");
+    }
+}
+
+/// The capitalisation is GitHub's to change.
+#[test]
+fn the_not_found_answer_is_matched_regardless_of_case() {
+    let runner = StubRunner::failing("could not resolve to a pullrequest with the number of 3", 1);
+
+    let err = pull_request_state_with(&runner, "https://github.com/a/b/pull/3").unwrap_err();
+
+    assert!(matches!(err, ForgeError::NotFound(_)), "{err:?}");
+}
+
+/// Any other failure stays a failed fetch, which is retried. Reading a network
+/// error as "does not exist" would stop a real pull request refreshing.
+#[test]
+fn any_other_command_failure_stays_a_command_failure() {
+    let runner = StubRunner::failing("error connecting to api.github.com", 1);
 
     let err = pull_request_state_with(&runner, "https://github.com/a/b/pull/1").unwrap_err();
 
-    assert!(matches!(err, ForgeError::Command { .. }));
+    assert!(matches!(err, ForgeError::Command { .. }), "{err:?}");
     assert!(!err.is_persistent(), "a failed lookup is worth retrying");
 }
 
@@ -269,11 +305,82 @@ fn a_pull_request_that_is_not_open_has_no_mergeability() {
 }
 
 #[test]
-fn a_conflicting_pull_request_is_blocked() {
-    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"CONFLICTING"}"#;
+fn a_conflicting_pull_request_reads_as_conflicting() {
+    for json in [r#"{"state":"OPEN","isDraft":false,"mergeable":"CONFLICTING"}"#,
+                 r#"{"state":"OPEN","isDraft":false,"mergeStateStatus":"DIRTY"}"#]
+    {
+        assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+                   Mergeability::Conflicting,
+                   "for {json}");
+    }
+}
+
+/// A conflict is the first thing to fix, so it outranks everything else
+/// wrong with the pull request - here a draft with red CI.
+#[test]
+fn a_conflict_outranks_every_other_reason() {
+    let json = r#"{"state":"OPEN","isDraft":true,"mergeable":"CONFLICTING",
+                   "mergeStateStatus":"DIRTY",
+                   "statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"}]}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::Conflicting);
+}
+
+/// `mergeable` says only that there is no conflict; `mergeStateStatus` is
+/// the one field that says the branch needs updating.
+#[test]
+fn a_branch_behind_its_base_reads_as_behind() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+                   "mergeStateStatus":"BEHIND"}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::Behind);
+}
+
+/// Updating the branch reruns the checks, so behind is what the user acts
+/// on first.
+#[test]
+fn behind_outranks_running_checks() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+                   "mergeStateStatus":"BEHIND",
+                   "statusCheckRollup":[{"status":"IN_PROGRESS"}]}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::Behind);
+}
+
+/// GitHub reports `BLOCKED` while required checks are still pending. That is
+/// a wait, not a problem, so it reads as checks running.
+#[test]
+fn running_checks_read_as_running_even_when_github_says_blocked() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+                   "mergeStateStatus":"BLOCKED",
+                   "statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"},
+                                        {"status":"QUEUED"}]}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::ChecksRunning);
+}
+
+/// Green checks and no conflict, but a required review is outstanding.
+#[test]
+fn a_pull_request_github_calls_blocked_is_blocked_once_checks_finish() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE",
+                   "mergeStateStatus":"BLOCKED",
+                   "statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}"#;
 
     assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
                Mergeability::Blocked);
+}
+
+/// A `gh` too old to send `mergeStateStatus` still colours a mergeable row.
+#[test]
+fn a_gh_without_merge_state_falls_back_to_mergeable() {
+    let json = r#"{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE"}"#;
+
+    assert_eq!(parse_pull_request_state(json).unwrap().mergeable,
+               Mergeability::Mergeable);
 }
 
 /// GitHub refuses to merge a draft, which is the whole point of marking one.

@@ -188,6 +188,7 @@ shortcuts it gives them:
 | Fork Agent | ⌥⌘F |
 | Duplicate Agent | ⌘D |
 | Restart Agent | ⌘R |
+| Restart with New Conversation | ⇧⌘R |
 
 Where the reference wants a key the platform has already spoken for, the
 platform SHALL win, and no item of this menu SHALL hold a key the platform
@@ -202,6 +203,10 @@ Remove Agent SHALL have no key equivalent at all. The reference calls that
 item Close Agent and gives it ⌘W, which belongs to Close Window here; the
 losing item goes without rather than taking a second-choice key - the more
 so as Remove Agent is the destructive one.
+
+Restart with New Conversation has no counterpart in the reference, which
+always starts a new conversation on restart. It SHALL take ⇧⌘R, Restart
+Agent's key with Shift added, since it is that item's other half.
 
 Every other item in the menu SHALL have none: the reference gives them
 none either.
@@ -241,6 +246,13 @@ not apply to.
 - **THEN** Remove Agent shows no key equivalent, and ⌘W remains Close
   Window
 
+#### Scenario: Starting over by keyboard
+
+- **WHEN** a non-shell agent is selected in the focused workspace window and
+  the user presses ⇧⌘R
+- **THEN** the same confirmation appears, and confirming restarts the agent in
+  a new conversation, as choosing Agents > Restart with New Conversation
+
 ### Requirement: The Edit menu operates the focused text field
 
 The Edit menu's Undo, Redo, Cut, Copy and Paste items SHALL dispatch the
@@ -275,8 +287,12 @@ that opens the workspace manager, each with a key equivalent:
 
 | Item | Key |
 | --- | --- |
-| Window > Command Center | ⌥⌘0 |
+| Window > Command Center | the Open Command Center shortcut (default ⌥⌘0) |
 | Window > Workspaces | ⌘0 |
+
+The Command Center's key equivalent is user-configurable (`keybindings`). The
+item SHALL show the current binding, and SHALL update when the user changes
+it, without a restart. Workspaces keeps the fixed ⌘0.
 
 Both SHALL be enabled at all times, including when no window is open at all.
 They are how a user gets back to a window, so an enablement rule that depends
@@ -298,8 +314,13 @@ manager is behind something else.
 
 #### Scenario: Opening the Command Center by keyboard
 
-- **WHEN** the user presses ⌥⌘0
+- **WHEN** the user presses ⌥⌘0 with the default binding in effect
 - **THEN** the same thing happens as choosing Window > Command Center
+
+#### Scenario: The menu follows a rebinding
+
+- **WHEN** the user rebinds Open Command Center to ⌃⌘K and opens the Window menu
+- **THEN** Window > Command Center shows ⌃⌘K
 
 #### Scenario: Getting back to the manager
 
@@ -339,3 +360,25 @@ Zoom command, and the menu's fixed items shift down every time a window opens.
   menu again
 - **THEN** Command Center, Workspaces, Minimize and Zoom are in the same
   positions, and the three new windows are listed below the last separator
+
+### Requirement: The Help menu carries a Report a Bug item
+
+In addition to the standard mac-wide table, the Help menu SHALL carry a
+"Report a Bug…" item that opens the bug report window per `bug-reporting`.
+
+The item SHALL have no key equivalent: GitHub gives the action none, and the
+platform gives none to hand it. It SHALL always be enabled - a report can be
+filed from a window in any state, and this is one of the two ways the user can
+ask for help.
+
+#### Scenario: Report a Bug opens the bug report window
+
+- **WHEN** the user chooses Help > Report a Bug…
+- **THEN** the bug report window opens attached to the active window per
+  `bug-reporting`, and the item has no key equivalent displayed
+
+#### Scenario: The item is not a placeholder
+
+- **WHEN** the user opens the Help menu
+- **THEN** Report a Bug… is enabled and answers, unlike the standard Knot Help
+  item, which stays a disabled placeholder until it is wired
