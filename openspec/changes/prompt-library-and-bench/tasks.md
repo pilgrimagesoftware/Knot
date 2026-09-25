@@ -35,6 +35,7 @@
 - [x] 5.2 Extract `bench_entry_for(&Agent)` from Save to Bench, including the startup prompt, and use it from Save to Bench; verify the existing Save to Bench tests still pass
 - [x] 5.3 Implement benching: write the entry through `write_persisting`, then remove the agent (and its companions) only on success; verify a failed write leaves the agent in place, and an owner with a companion yields one bench entry and two removals
 - [x] 5.4 Exclude the startup prompt from launch-affecting edits; verify changing only the startup prompt does not recreate the session
+- [x] 5.6 Carry the bench entry's startup prompt through MCP `create-agent` with `benchAgentId`, which builds the agent itself rather than calling `deploy_bench` (found during manual verification); verify `create_agent_from_bench_carries_the_startup_prompt`
 - [x] 5.5 Add `WorkspaceWindow::deploy_bench_entry(entry, cx)`: deploy into the sidebar's workspace and select; on a missing folder remove the entry and post a notification naming it; verify both paths with a window test
 
 ## 6. Sidebar menus (`knot`)

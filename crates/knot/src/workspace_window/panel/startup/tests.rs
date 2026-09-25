@@ -142,7 +142,10 @@ fn the_startup_prompt_waits_behind_the_registration_turn(cx: &mut TestAppContext
 
                           assert!(!view.drain_panel_prompt(agent),
                                   "the registration turn is still running");
-                          assert!(!view.panel_prompt_queues[&agent][0].in_flight);
+                          assert_eq!(view.panel_prompt_queues[&agent].len(),
+                                     1,
+                                     "the startup prompt is still waiting in the queue");
+                          assert!(!view.panel_prompts_in_flight.contains_key(&agent));
                       });
       });
 
@@ -156,7 +159,10 @@ fn the_startup_prompt_waits_behind_the_registration_turn(cx: &mut TestAppContext
                                      Some(other),
                                      "delivery must not wait for the agent to be selected");
                           assert!(view.drain_panel_prompt(agent));
-                          assert!(view.panel_prompt_queues[&agent][0].in_flight);
+                          // Handed to the agent: out of the queue, in flight.
+                          assert!(view.panel_prompt_queues[&agent].is_empty());
+                          assert_eq!(view.panel_prompts_in_flight[&agent].origin,
+                                     PromptOrigin::Startup);
                       });
       });
 }

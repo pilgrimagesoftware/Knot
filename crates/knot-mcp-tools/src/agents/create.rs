@@ -156,6 +156,14 @@ pub fn create_agent(store: &mut AgentStore, arguments: &serde_json::Value,
                                           // by another agent, and there is
                                           // no user to select its row.
                                           activation_mode: knot_core::ActivationMode::Active,
+                                          // A bench entry's startup prompt is
+                                          // deployed with it, in the form the
+                                          // entry holds it, per
+                                          // `agent-lifecycle`'s "Bench
+                                          // deployment".
+                                          startup_prompt: bench.and_then(|entry| {
+                                                                   entry.startup_prompt.clone()
+                                                               }),
                                           // Registry metadata is not yet a
                                           // `create-agent` argument; an
                                           // agent created over MCP starts
