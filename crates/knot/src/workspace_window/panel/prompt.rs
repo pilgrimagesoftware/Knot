@@ -78,6 +78,22 @@ pub(crate) fn sends_on(shift_to_send: bool, shift: bool) -> bool {
     shift == shift_to_send
 }
 
+/// Whether a `PressEnter` carrying `shift` from `input` sends, per the
+/// setting as it stands when the key arrives.
+///
+/// Read here, not captured when the composer is built: the composer and its
+/// subscription outlive a settings change, and a captured copy kept sending
+/// on the old chord while the hint named the new one (#429). The widget's
+/// `submit_on_enter` is brought in line on the way, so its own newline
+/// handling agrees with the chord that sends.
+pub(crate) fn enter_sends(input: &Entity<PanelInputState>, shift: bool, cx: &mut App) -> bool {
+    let shift_to_send = crate::settings_global::read(cx).agent_panel_shift_enter_sends;
+    input.update(cx, |state, cx| {
+             state.set_submit_on_enter(!shift_to_send, cx)
+         });
+    sends_on(shift_to_send, shift)
+}
+
 /// Builds the composer's state entity: the placeholder, the send chord
 /// implied by `shift_to_send`, and the auto-grow bounds.
 ///
@@ -281,7 +297,8 @@ impl WorkspaceWindow {
 
     /// Gets or creates the prompt input entity for `id`'s panel, wired so
     /// `Enter`/`Shift+Enter` submits per `agent_panel_shift_enter_sends`
-    /// (the other chord always inserts a newline) - see
+    /// as it stands at each keypress (the other chord always inserts a
+    /// newline) - see
     /// `render_panel_input_area`'s Send button tooltip for the matching
     /// user-facing hint.
     pub(in crate::workspace_window) fn panel_prompt_input(&mut self, id: Uuid,
@@ -300,10 +317,10 @@ impl WorkspaceWindow {
                             window,
                             move |view: &mut Self, input, event, window, cx| {
                                 match event {
-                                    InputEvent::PressEnter { shift, .. }
-                                        if sends_on(shift_to_send, *shift) =>
-                                    {
-                                        view.send_panel_prompt(id, window, cx);
+                                    InputEvent::PressEnter { shift, .. } => {
+                                        if enter_sends(input, *shift, cx) {
+                                            view.send_panel_prompt(id, window, cx);
+                                        }
                                     }
                                     // Every way text arrives reports
                                     // here - typing, paste, undo, redo,

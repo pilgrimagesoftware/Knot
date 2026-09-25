@@ -33,14 +33,17 @@ use gpui_kit::WindowOptions;
 use gpui_kit::component::Root;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::div;
+use tempfile::TempDir;
 
 use crate::composer_scan::Construct;
 use crate::composer_style::ComposerStyling;
 use crate::composer_style::Palette;
+use crate::settings_global;
 use crate::workspace_window::panel::prompt::PANEL_INPUT_ROWS_COLLAPSED;
 use crate::workspace_window::panel::prompt::PANEL_INPUT_ROWS_EXPANDED;
 use crate::workspace_window::panel::prompt::PanelInput;
 use crate::workspace_window::panel::prompt::PanelInputState;
+use crate::workspace_window::panel::prompt::enter_sends;
 use crate::workspace_window::panel::prompt::new_panel_input;
 use crate::workspace_window::panel::prompt::panel_input_max_rows;
 use crate::workspace_window::panel::prompt::sends_on;
@@ -162,6 +165,32 @@ fn the_send_chord_follows_the_setting() {
             "Shift+Enter sends when the setting is on");
     assert!(!sends_on(true, false),
             "Enter is the newline when the setting is on");
+}
+
+/// A composer built under one setting sends on the other chord once the
+/// setting changes, without being rebuilt (#429).
+///
+/// The composer is built with the setting off and then the surface is
+/// flipped, which is what the settings window does to a panel that is
+/// already open. A chord captured at build time answers the old way round
+/// here.
+#[gpui_kit::test]
+fn a_built_composer_follows_a_later_setting_change(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+    let dir = TempDir::new().expect("a temporary settings root");
+    cx.update(|_, cx| {
+          settings_global::install(knot_core::Settings::with_store_root(dir.path()), cx);
+          settings_global::write(cx, |settings| {
+              settings.agent_panel_shift_enter_sends = false
+          });
+          assert!(enter_sends(&input, false, cx),
+                  "Enter sends while the setting is off");
+
+          settings_global::write(cx, |settings| settings.agent_panel_shift_enter_sends = true);
+          assert!(enter_sends(&input, true, cx),
+                  "Shift+Enter sends once the setting is on, in the same composer");
+          assert!(!enter_sends(&input, false, cx), "and Enter is the newline");
+      });
 }
 
 /// Ordinary characters are unaffected by either setting - the guard that
