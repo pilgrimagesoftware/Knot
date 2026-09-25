@@ -245,7 +245,9 @@ SHALL distinguish "the tool is not installed", "it is not authenticated" and "a
 request failed", because the three have different fixes.
 
 A failure to fetch SHALL NOT remove a record, and SHALL NOT stop later refreshes
-from being attempted.
+from being attempted. A pull request the forge says does not exist is not a
+failure to fetch: "A pull request the forge does not know is shown as not found"
+governs it.
 
 #### Scenario: The tool is not installed
 
@@ -303,7 +305,10 @@ A state Knot has not fetched SHALL NOT be guessed at. Where no state is known -
 before the view has been shown for the first time, or where the tool that reads
 state is unavailable - the row SHALL show the total count instead. Where some
 are known and others are not, the row SHALL show the states it knows and count
-the rest as pending, rather than folding them into any state.
+the rest as pending, rather than folding them into any state. A pull request
+the forge says does not exist SHALL be counted as not found - neither as a state
+nor as pending - and the not-found count SHALL be shown only when it is not
+zero.
 
 The row SHALL show a selected background while the Pull Requests view is the one
 being shown.
@@ -364,6 +369,13 @@ being shown.
 - **THEN** the list shows it once, in a group headed by both agents, above the
   single-agent groups
 - **AND** the launcher row counts it once
+
+#### Scenario: A pull request that does not exist is counted apart
+
+- **WHEN** three pull requests are open and the forge says a fourth does not
+  exist
+- **THEN** the launcher row shows three open and one not found, and counts none
+  as pending
 
 ### Requirement: A listed pull request opens in the browser
 
@@ -529,3 +541,62 @@ The Swift reference has no pull request list, so it has nothing of the kind.
   workspace window is open
 - **THEN** the launcher row's merged count drops by one without the user
   reopening the window
+
+### Requirement: A pull request the forge does not know is shown as not found
+
+When the forge answers that a recorded pull request does not exist - its
+repository cannot be resolved, or the repository has no pull request with that
+number - Knot SHALL show that row as not found, with its own icon and wording,
+rather than as pending. Not found is a finished answer; pending means no answer
+has arrived.
+
+The row SHALL still list its URL, SHALL still open in a browser, and SHALL still
+be removable. Knot SHALL NOT remove a not-found record on its own: a private
+repository the tool's identity cannot read gets the same answer as one that does
+not exist, so removing it would be guessing with the user's data.
+
+Once a pull request has been found not to exist, Knot SHALL NOT fetch its state
+again while that window is open. The answer is not persisted, so it is asked
+again after a restart - which is also what recovers a repository that becomes
+readable once the tool is authenticated for it.
+
+The answer SHALL be recognised from the forge's own message, in one place, so
+that every other failure - a timeout, a network error, an unparseable response
+- stays a failed fetch that is retried.
+
+#### Scenario: A repository that cannot be resolved
+
+- **WHEN** a recorded pull request's repository does not exist, or cannot be
+  read by the tool's identity
+- **THEN** its row says the pull request was not found, with an icon of its own,
+  and is neither pending nor any state
+
+#### Scenario: A number the repository does not have
+
+- **WHEN** a recorded pull request's repository exists but has no pull request
+  with that number
+- **THEN** its row says the pull request was not found
+
+#### Scenario: Not found stops the refreshes
+
+- **WHEN** a recorded pull request has been found not to exist and the view
+  stays open past several refresh cycles
+- **THEN** its state is not fetched again
+
+#### Scenario: A restart asks again
+
+- **WHEN** Knot restarts and the view is shown
+- **THEN** a pull request previously found not to exist is fetched again, and
+  shows its state if the forge now answers with one
+
+#### Scenario: A not-found row stays the user's to remove
+
+- **WHEN** a row has been found not to exist
+- **THEN** it is still listed, still opens in a browser when clicked, and is
+  removed only when the user removes it
+
+#### Scenario: Other failures still retry
+
+- **WHEN** a fetch times out or its response cannot be parsed
+- **THEN** the row is not shown as not found, and a later refresh fetches it
+  again
