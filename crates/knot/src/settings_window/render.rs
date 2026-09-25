@@ -73,12 +73,14 @@ impl Render for SettingsWindow {
             SettingsTab::Keyboard => self.render_keyboard(cx).into_any_element(),
         };
 
-        // Personas manages its own scroll region (only the list scrolls, the
-        // title/action row stays pinned) - scrolling the body too would let
-        // both containers move at once and make the group's title/border
-        // appear to drift.
-        let mut settings_body = div().id("settings-body").flex_1();
-        settings_body = if matches!(self.selected_tab, SettingsTab::Personas) {
+        // Personas and Keyboard manage their own scroll region (only the
+        // list scrolls; the title, blurb and action rows stay pinned) -
+        // scrolling the body too would let both containers move at once and
+        // make the group's title/border appear to drift.
+        let mut settings_body = div().id("settings-body").flex_1().min_h_0();
+        settings_body = if matches!(self.selected_tab,
+                                    SettingsTab::Personas | SettingsTab::Keyboard)
+        {
             settings_body.overflow_hidden()
         }
         else {

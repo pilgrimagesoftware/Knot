@@ -61,5 +61,5 @@
 
 - [x] 5.1 Run `make`. It must pass fmt-check, size-check (no file over 700
   lines), lint, test and build.
-- [ ] 5.2 Run the app. Check each default shortcut by hand, rebind Open Command
+- [x] 5.2 Run the app. Check each default shortcut by hand, rebind Open Command
   Center, and confirm that the Window menu shows the new key.

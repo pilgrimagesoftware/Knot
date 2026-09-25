@@ -224,7 +224,7 @@ settings:
     blurb: "Shortcuts for moving between workspaces, agents and panels. Select workspace and Select agent always use the digits 1–9; choose the modifier that goes with them."
     shortcuts: "Shortcuts"
     press_shortcut: "Press a shortcut…"
-    reset: "Reset"
+    reset: "Reset to default"
     restore_defaults: "Restore Defaults"
   font_unavailable: "unavailable"
   compact_tool_calls: "Collapse tool calls"
