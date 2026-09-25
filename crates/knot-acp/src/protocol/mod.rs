@@ -168,6 +168,12 @@ pub enum SessionUpdate {
     TextDelta {
         text: String,
     },
+    /// A piece of one of the user's own messages. Agents send these when
+    /// `session/load` replays a conversation, so the client can show the
+    /// prompts between the replies it replays as text deltas.
+    UserMessageChunk {
+        text: String,
+    },
     ToolCallStart {
         tool_call_id: String,
         kind:         String,
@@ -244,6 +250,9 @@ impl SessionUpdate {
                 size: update.get("size").and_then(Value::as_u64).unwrap_or_default(),
             },
             Some("agent_message_chunk") | Some("text_delta") => SessionUpdate::TextDelta {
+                text: text_content(&update),
+            },
+            Some("user_message_chunk") => SessionUpdate::UserMessageChunk {
                 text: text_content(&update),
             },
             Some("tool_call") => SessionUpdate::ToolCallStart {
@@ -363,6 +372,25 @@ mod tests {
         let update = SessionUpdate::from_params(params);
 
         assert!(matches!(update, SessionUpdate::TextDelta { text } if text == "pong"));
+    }
+
+    /// What `session/load` replays the user's side of a conversation as. It
+    /// used to fall through to `Unknown`, which left a restored
+    /// conversation with the agent's replies and none of the prompts.
+    #[test]
+    fn user_message_chunk_parses_as_the_users_text() {
+        let params = serde_json::json!({
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "user_message_chunk",
+                "content": { "type": "text", "text": "fix the build" }
+            }
+        });
+
+        let update = SessionUpdate::from_params(params);
+
+        assert!(matches!(update,
+                         SessionUpdate::UserMessageChunk { text } if text == "fix the build"));
     }
 
     /// Wire shape taken verbatim from the ACP tool-call docs

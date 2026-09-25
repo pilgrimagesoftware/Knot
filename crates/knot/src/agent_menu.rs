@@ -57,6 +57,7 @@ actions!(knot_app,
           AgentMenuRegisterAgent,
           AgentMenuDeactivate,
           AgentMenuRestartAgent,
+          AgentMenuRestartWithNewConversation,
           AgentMenuRemoveAgent]);
 
 /// The shortcuts the Swift reference gives to items that live in this
@@ -87,7 +88,10 @@ pub(crate) fn agent_menu_key_bindings() -> Vec<KeyBinding> {
     vec![KeyBinding::new("cmd-shift-s", AgentMenuNewShellCompanion, None),
          KeyBinding::new("cmd-alt-f", AgentMenuForkAgent, None),
          KeyBinding::new("cmd-d", AgentMenuDuplicateAgent, None),
-         KeyBinding::new("cmd-r", AgentMenuRestartAgent, None)]
+         KeyBinding::new("cmd-r", AgentMenuRestartAgent, None),
+         // Knot's own: the reference has no such item. Restart Agent's key
+         // with Shift, since it is that item's other half (`app-menu`).
+         KeyBinding::new("cmd-shift-r", AgentMenuRestartWithNewConversation, None)]
 }
 
 /// One workspace in the Move to Workspace submenu.
@@ -135,6 +139,9 @@ pub(crate) fn agent_menu_action(entry: AgentMenuEntry) -> Option<Box<dyn Action>
              AgentMenuEntry::RegisterAgent => Box::new(AgentMenuRegisterAgent),
              AgentMenuEntry::Deactivate => Box::new(AgentMenuDeactivate),
              AgentMenuEntry::RestartAgent => Box::new(AgentMenuRestartAgent),
+             AgentMenuEntry::RestartWithNewConversation => {
+                 Box::new(AgentMenuRestartWithNewConversation)
+             }
              AgentMenuEntry::RemoveAgent => Box::new(AgentMenuRemoveAgent),
          })
 }

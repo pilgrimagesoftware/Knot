@@ -37,6 +37,72 @@ fn restart_keeps_identity_and_drops_session() {
 }
 
 #[test]
+fn restart_drops_the_acp_session_too() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    store.set_acp_session_id(id, "acp".to_string());
+    store.restart(id).unwrap();
+    assert!(store.agent(id).unwrap().acp_session_id.is_none());
+}
+
+#[test]
+fn restart_keeping_conversation_keeps_the_sessions() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    store.set_session_id(id, "session".to_string());
+    store.set_acp_session_id(id, "acp".to_string());
+    store.set_registered(id, true);
+    let token = store.agent(id).unwrap().restart_token;
+
+    store.restart_keeping_conversation(id).unwrap();
+
+    let agent = store.agent(id).unwrap();
+    assert_eq!(agent.id, id);
+    assert_ne!(agent.restart_token, token, "the session is still torn down");
+    assert_eq!(agent.session_id.as_deref(), Some("session"));
+    assert_eq!(agent.acp_session_id.as_deref(), Some("acp"));
+    assert_eq!(agent.resume_session_id.as_deref(), Some("session"));
+    assert!(!agent.is_registered);
+    assert_eq!(agent.state, crate::AgentState::Idle);
+}
+
+#[test]
+fn session_to_load_prefers_the_live_acp_session_over_the_resolved_one() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    assert_eq!(store.agent(id).unwrap().session_to_load(),
+               None,
+               "a new agent starts fresh");
+
+    store.agent_mut(id).unwrap().resume_session_id = Some("restored".to_string());
+    assert_eq!(store.agent(id).unwrap().session_to_load(), Some("restored"));
+
+    store.set_acp_session_id(id, "live".to_string());
+    assert_eq!(store.agent(id).unwrap().session_to_load(), Some("live"));
+
+    store.restart(id).unwrap();
+    assert_eq!(store.agent(id).unwrap().session_to_load(),
+               None,
+               "a new conversation loads neither");
+}
+
+#[test]
+fn restart_keeping_conversation_clears_a_spent_fork() {
+    let mut store = AgentStore::new();
+    let id = store.create("/tmp/a", CreateOptions::default());
+    store.fork_session(id, "source").unwrap();
+    store.restart_keeping_conversation(id).unwrap();
+    assert!(!store.agent(id).unwrap().fork_session);
+}
+
+#[test]
+fn restart_keeping_conversation_of_a_missing_agent_fails() {
+    let mut store = AgentStore::new();
+    assert!(store.restart_keeping_conversation(uuid::Uuid::new_v4())
+                 .is_err());
+}
+
+#[test]
 fn edit_restarts_folder_changes_and_relocates_companions() {
     let mut store = AgentStore::new();
     let owner = store.create("/tmp/old", CreateOptions::default());

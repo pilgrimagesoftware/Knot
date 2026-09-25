@@ -10,6 +10,7 @@ use crate::agent_menu::AgentMenuDuplicateAgent;
 use crate::agent_menu::AgentMenuForkAgent;
 use crate::agent_menu::AgentMenuNewShellCompanion;
 use crate::agent_menu::AgentMenuRestartAgent;
+use crate::agent_menu::AgentMenuRestartWithNewConversation;
 use crate::agent_menu::agent_menu_key_bindings;
 use crate::app_bootstrap::CloseWindow;
 use crate::app_bootstrap::HideApp;
@@ -123,6 +124,9 @@ fn agent_menu_label_key(binding: &KeyBinding) -> &'static str {
     }
     else if action.is::<AgentMenuRestartAgent>() {
         "menu.agent.restart_agent"
+    }
+    else if action.is::<AgentMenuRestartWithNewConversation>() {
+        "menu.agent.restart_new_conversation"
     }
     else {
         "menu.agents"

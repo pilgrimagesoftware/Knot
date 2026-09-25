@@ -304,3 +304,14 @@ fn a_real_conversation_at_its_newest_message_offers_no_jump(cx: &mut TestAppCont
     assert!(!panel_view::scrolled_away_from_tail(&list, list.item_count()),
             "parked at the newest message, there is nowhere to jump to");
 }
+
+/// A conversation that arrives all at once - what `session/load` replays
+/// after a restart that keeps it - opens on its newest message rather than
+/// its first. Before, a rebuilt list sat at the top of a long history.
+#[gpui_kit::test]
+fn a_conversation_filled_in_one_go_opens_on_its_newest_message(cx: &mut TestAppContext) {
+    let (_probe_cx, _probe, _state, list) = panel_probe(cx, ROW_COUNT);
+
+    assert!(!panel_view::scrolled_away_from_tail(&list, list.item_count()),
+            "a history longer than the pane should open at its end");
+}

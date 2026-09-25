@@ -40,7 +40,37 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
                     AgentMenuEntry::RegisterAgent,
                     AgentMenuEntry::Deactivate,
                     AgentMenuEntry::RestartAgent,
+                    AgentMenuEntry::RestartWithNewConversation,
                     AgentMenuEntry::RemoveAgent]);
+}
+
+/// Restart with New Conversation sits directly after Restart Agent, whose
+/// other half it is.
+#[test]
+fn restart_with_new_conversation_follows_restart_agent() {
+    let entries = agent_context_menu_entries(AgentMenuFacts::default());
+    let restart = entries.iter()
+                         .position(|entry| *entry == AgentMenuEntry::RestartAgent);
+    let new_conversation =
+        entries.iter()
+               .position(|entry| *entry == AgentMenuEntry::RestartWithNewConversation);
+    assert_eq!(restart.zip(new_conversation).map(|(r, n)| n == r + 1),
+               Some(true),
+               "{entries:?}");
+}
+
+/// A shell has no conversation to keep or discard, so it gets Restart Agent
+/// alone; a companion is restarted with its owner, so it gets neither.
+#[test]
+fn restart_with_new_conversation_is_for_owners_that_are_not_shells() {
+    let shell = agent_context_menu_entries(AgentMenuFacts { is_shell: true,
+                                                            ..Default::default() });
+    assert!(shell.contains(&AgentMenuEntry::RestartAgent));
+    assert!(!shell.contains(&AgentMenuEntry::RestartWithNewConversation));
+
+    let companion = agent_context_menu_entries(AgentMenuFacts { is_companion: true,
+                                                                ..Default::default() });
+    assert!(!companion.contains(&AgentMenuEntry::RestartWithNewConversation));
 }
 
 #[test]

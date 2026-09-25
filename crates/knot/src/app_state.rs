@@ -123,6 +123,7 @@ pub(crate) enum AgentMenuEntry {
     RegisterAgent,
     Deactivate,
     RestartAgent,
+    RestartWithNewConversation,
     RemoveAgent,
 }
 
@@ -136,7 +137,7 @@ impl AgentMenuEntry {
     /// and `tests::every_agent_menu_entry_is_in_all` walks this list against
     /// an exhaustive match, so a variant added here without an action - or
     /// added to the enum without reaching this list - fails the build.
-    pub(crate) const ALL: [Self; 14] = [Self::Separator,
+    pub(crate) const ALL: [Self; 15] = [Self::Separator,
                                         Self::NewCompanion,
                                         Self::NewShellCompanion,
                                         Self::EditAgent,
@@ -149,6 +150,7 @@ impl AgentMenuEntry {
                                         Self::RegisterAgent,
                                         Self::Deactivate,
                                         Self::RestartAgent,
+                                        Self::RestartWithNewConversation,
                                         Self::RemoveAgent];
 
     /// The user-visible label, or `None` for a separator. Matches the Swift
@@ -170,6 +172,9 @@ impl AgentMenuEntry {
             Self::RegisterAgent => Some(knot_core::l10n::t("menu.agent.register_agent")),
             Self::Deactivate => Some(knot_core::l10n::t("menu.agent.deactivate")),
             Self::RestartAgent => Some(knot_core::l10n::t("menu.agent.restart_agent")),
+            Self::RestartWithNewConversation => {
+                Some(knot_core::l10n::t("menu.agent.restart_new_conversation"))
+            }
             Self::RemoveAgent => Some(knot_core::l10n::t("menu.agent.remove_agent")),
         }
     }
@@ -238,11 +243,18 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
                   // Deactivate sits with the other session actions, and
                   // immediately above Restart Agent: both act on the
                   // session rather than on the agent, and Deactivate is
-                  // the reversible one of the pair.
+                  // the reversible one of the pair. Restart with New
+                  // Conversation follows Restart Agent, whose other half it
+                  // is; a shell has no conversation, so for one it would
+                  // only repeat Restart Agent.
                   [RegisterAgent].into_iter()
                                  .filter(|_| !facts.is_shell)
                                  .chain([Deactivate].into_iter().filter(|_| facts.is_running))
                                  .chain([RestartAgent].into_iter().filter(|_| owner_only))
+                                 .chain([RestartWithNewConversation].into_iter().filter(|_| {
+                                                                                    owner_only
+                                                                       && !facts.is_shell
+                                                                                }))
                                  .chain([RemoveAgent])
                                  .collect()];
 
@@ -413,9 +425,15 @@ pub(crate) fn stale_session_ids(session_ids: &[Uuid], live_ids: &BTreeSet<Uuid>)
 /// the GPUI shell and the MCP catalog so both render the same data.
 ///
 /// When `restore_conversation_on_launch` is also set, resolves each restored
-/// agent's resume-session id: its own persisted session id when present (an
-/// exact restore), otherwise the most recent session for its `(folder,
-/// agent type)` via the `knot-history` provider registry.
+/// agent's resume-session id: its own persisted ACP session id, then its
+/// persisted terminal session id (either is an exact restore), otherwise the
+/// most recent session for its `(folder, agent type)` via the `knot-history`
+/// provider registry.
+///
+/// The ACP id comes first because it is the only one a Panel-mode agent -
+/// every coding agent - ever records; reading the terminal id alone left
+/// every panel agent to the history guess, which picks the wrong
+/// conversation when two agents share a folder.
 pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::AgentStore {
     if !settings.restore_layout_on_launch {
         // No recorded pull requests either: every one of them names an agent
@@ -437,7 +455,12 @@ pub(crate) fn build_agent_store(settings: &knot_core::Settings) -> knot_agents::
         let persisted: BTreeMap<Uuid, String> =
             settings.saved_agents
                     .iter()
-                    .filter_map(|agent| agent.session_id.clone().map(|sid| (agent.id, sid)))
+                    .filter_map(|agent| {
+                        agent.acp_session_id
+                             .clone()
+                             .or_else(|| agent.session_id.clone())
+                             .map(|sid| (agent.id, sid))
+                    })
                     .collect();
         store.resolve_resume_sessions(&persisted, |folder, agent_type| {
                  let provider = knot_history::provider(agent_type)?;
