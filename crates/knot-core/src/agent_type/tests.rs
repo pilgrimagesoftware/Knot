@@ -54,6 +54,58 @@ fn an_unknown_type_answers_as_itself() {
     assert!(!is_shell("nothing-by-that-name"));
     assert!(!supports_inline_registration("nothing-by-that-name"));
     assert!(!has_hook_activity("nothing-by-that-name"));
+    assert_eq!(subagent_reporting("nothing-by-that-name"),
+               SubagentReporting::None);
+}
+
+/// The column that decides whether the processes section shows a subagents
+/// group at all. A row left off the roster would read as "dispatched none",
+/// which is the one answer this capability must never give by accident.
+#[test]
+fn every_type_states_how_it_reports_subagents() {
+    for agent_type in ALL {
+        // Reading the field is the assertion: the struct has no default, so a
+        // row that omitted it would not compile. This test exists so that
+        // removing the column from a populated row fails here too, rather
+        // than only wherever the column happens to be read.
+        let _ = agent_type.subagents;
+    }
+
+    assert_eq!(subagent_reporting("claude"), SubagentReporting::ToolCalls);
+}
+
+/// A shell agent has no AI and so nothing to delegate. It must resolve to
+/// "cannot tell" structurally, not by anybody remembering to special-case it.
+#[test]
+fn a_shell_type_reports_no_subagents_in_either_view_mode() {
+    assert_eq!(subagent_reporting(SHELL), SubagentReporting::None);
+    assert!(!reports_subagents(SHELL, ViewMode::Terminal));
+    assert!(!reports_subagents(SHELL, ViewMode::Panel));
+}
+
+/// The sequencing decision from design.md. Claude ships as `ToolCalls`, not
+/// `Either`, because the hook emitter is a plugin outside this repo - so a
+/// Terminal-mode Claude agent must read as *unavailable* rather than
+/// confidently claiming it dispatched nothing.
+#[test]
+fn claude_reports_subagents_in_panel_mode_only_until_the_hook_plugin_ships() {
+    assert!(reports_subagents("claude", ViewMode::Panel));
+    assert!(!reports_subagents("claude", ViewMode::Terminal));
+}
+
+#[test]
+fn each_reporting_path_answers_for_its_own_view_mode() {
+    assert!(SubagentReporting::ToolCalls.can_report(ViewMode::Panel));
+    assert!(!SubagentReporting::ToolCalls.can_report(ViewMode::Terminal));
+
+    assert!(SubagentReporting::Hooks.can_report(ViewMode::Terminal));
+    assert!(!SubagentReporting::Hooks.can_report(ViewMode::Panel));
+
+    assert!(SubagentReporting::Either.can_report(ViewMode::Panel));
+    assert!(SubagentReporting::Either.can_report(ViewMode::Terminal));
+
+    assert!(!SubagentReporting::None.can_report(ViewMode::Panel));
+    assert!(!SubagentReporting::None.can_report(ViewMode::Terminal));
 }
 
 #[test]

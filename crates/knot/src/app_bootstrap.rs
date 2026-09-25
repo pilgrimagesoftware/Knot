@@ -65,7 +65,8 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::SharedSettings,
                                notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
+                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue,
+                               subagents: crate::app_support::SubagentRegistryHandle)
                                -> (tokio::sync::oneshot::Sender<()>, McpServerStatus) {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
     let status = McpServerStatus::new();
@@ -99,6 +100,7 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
 
                    let catalog = Arc::new(
                 knot_mcp_tools::McpToolCatalog::new(agents, repos_rx, notifier)
+                    .with_subagents(Arc::clone(&subagents))
                     .with_message_store(messages)
                     .with_awaiting_input_queue(awaiting_input)
                     .with_activation_queue(activation)
@@ -514,12 +516,16 @@ pub(crate) fn run() {
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
     let activation = Arc::new(Mutex::new(Vec::new()));
+    // One registry for the process, built before the MCP server because both
+    // it and every workspace window write to the same one.
+    let subagents: crate::app_support::SubagentRegistryHandle = Arc::default();
     let (mcp_stop, mcp_status) = start_mcp_server(Arc::clone(&store),
                                                   settings.clone(),
                                                   Arc::clone(&notifier),
                                                   Arc::clone(&messages),
                                                   Arc::clone(&awaiting_input),
-                                                  Arc::clone(&activation));
+                                                  Arc::clone(&activation),
+                                                  Arc::clone(&subagents));
 
     gpui_kit::application()
                            // `Assets` only embeds gpui-component's own curated icon subset; our
@@ -561,6 +567,7 @@ pub(crate) fn run() {
                                // window claims it once one is.
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(Activation(Arc::clone(&activation)));
+                               cx.set_global(crate::app_support::Subagents(Arc::clone(&subagents)));
                                // The MCP server's state, for the settings
                                // pane's row and the failure notification.
                                cx.set_global(mcp_status);

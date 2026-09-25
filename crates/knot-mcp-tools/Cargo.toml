@@ -20,6 +20,7 @@ knot-core = { path = "../knot-core" }
 knot-agents = { path = "../knot-agents" }
 knot-activity = { path = "../knot-activity" }
 knot-messaging = { path = "../knot-messaging" }
+knot-subagents = { path = "../knot-subagents" }
 knot-discovery = { path = "../knot-discovery" }
 knot-git = { path = "../knot-git" }
 knot-agent-launch = { path = "../knot-agent-launch" }

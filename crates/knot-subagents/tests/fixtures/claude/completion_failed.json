@@ -1,0 +1,30 @@
+{
+  "sessionId": "sess_01HQZK3M4N5P6R7S8T9V",
+  "update": {
+    "_meta": {
+      "claudeCode": {
+        "toolName": "Task"
+      }
+    },
+    "toolCallId": "toolu_01A1B2C3D4E5F6G7H8J9K0",
+    "sessionUpdate": "tool_call_update",
+    "status": "failed",
+    "rawOutput": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Agent type 'discovery' not found. Available agent types: general-purpose, code-reviewer."
+        }
+      ]
+    },
+    "content": [
+      {
+        "type": "content",
+        "content": {
+          "type": "text",
+          "text": "Agent type 'discovery' not found. Available agent types: general-purpose, code-reviewer."
+        }
+      }
+    ]
+  }
+}

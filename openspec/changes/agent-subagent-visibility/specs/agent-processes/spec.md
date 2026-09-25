@@ -74,8 +74,8 @@ because a subagent has none.
 
 - **WHEN** an agent is running three `code-review` subagents and the section is
   collapsed
-- **THEN** the header names `code-review` once, and the remainder accounts for
-  the other two
+- **THEN** the header names `code-review` once, not three times, and carries no
+  remainder — the listed name covers all three
 
 #### Scenario: More processes than the header names
 
