@@ -17,22 +17,10 @@
 
 ## 3. Keeping the menu current
 
-- [ ] 3.1 Add `refresh_menu_bar_workspaces(cx)` and call it after each workspace manager mutation (create, rename, delete, reorder); verify with a test that renaming a workspace from the manager changes the snapshot's workspace list
-- [ ] 3.2 Verify with a test that a rebinding (`apply_and_refresh_menus`) makes the View item show the new chord
+- [x] 3.1 Add `refresh_menu_bar_workspaces` and call it from the workspace manager's `persist`, which every create, rename, delete and reorder goes through; verify with a test that a rename changes the menu bar's workspace list
+- [x] 3.2 Verify with a test that a rebinding (`apply_and_refresh_menus`) makes the View item show the new chord
 
-## 4. New Agent shortcut
+## 4. Gate and manual check
 
-- [ ] 4.1 Add the `NewAgent` action with a fixed ⌘T binding in `keymap/fixed.rs` and a global handler that opens the agent editor in the active workspace window; verify with a test that ⌘T is bound and that validation rejects a customization onto ⌘T
-- [ ] 4.2 Add File > New Agent… below New Workspace, disabled when no workspace window owns the bar; verify in `tests/menu_key_equivalents.rs` that it shows ⌘T
-
-## 5. Sidebar key hints
-
-- [ ] 5.1 Spike: confirm the root element receives `ModifiersChangedEvent` with the terminal pane and with the composer focused; record the result in design.md before continuing
-- [ ] 5.2 Add `SidebarKeyHints`, built from `Resolved` and rebuilt wherever the keymap is applied; verify with unit tests for the defaults, a rebinding, and the nine-agent cap
-- [ ] 5.3 Track the ⌘ hold on the workspace window (modifier listener, key-down cancel, 500 ms timer, deactivation reset); verify with gpui tests that hints turn on after the delay, stay off for a quick ⌘C, stay on when ⌥ is added, and clear on release and on deactivation
-- [ ] 5.4 Render the hints on the Dashboard, Pull Requests, first nine agent rows and New agent control, full-width and compact, without changing row sizes; verify with a render test that row bounds are equal with hints on and off
-
-## 6. Gate and manual check
-
-- [ ] 6.1 Run `make` and verify the whole gate passes
-- [ ] 6.2 Manually verify in the running app: each View item does what its key does; checkmarks and enablement follow the focused window; the submenus follow agent and workspace changes; exactly one Enter Full Screen item appears and works; ⌘T opens the agent editor; holding ⌘ shows the sidebar hints at both widths, and they clear after ⌘Tab
+- [x] 4.1 Run `make` and verify the whole gate passes
+- [x] 4.2 Manually review the View menu in the running app, including the separator before Enter Full Screen (reviewed by the user, 2026-09-25)

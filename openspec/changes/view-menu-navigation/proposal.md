@@ -28,12 +28,8 @@ the Enter Full Screen item macOS adds.
   is focused. Select Workspace stays enabled, because its shortcut works with no
   window open.
 - macOS's own Enter Full Screen item stays the only full-screen item.
-- Holding ⌘ in a workspace window shows each sidebar control's key beside it:
-  the Dashboard and Pull Requests rows, the first nine agent rows, and the New
-  agent control. The hints appear after a short hold, so ordinary ⌘ shortcuts
-  do not flash them, and they follow rebindings.
-- New shortcut **⌘T** for New Agent, from the Swift reference, with a File >
-  New Agent… item. The New agent control had no key to show.
+- The workspace shortcuts' handlers move from app-wide onto the workspace
+  window, so each item is enabled only where its shortcut would do something.
 
 This diverges from the Swift reference. Its View menu carries Toggle Git Panel,
 Toggle Sidebar, Detach Workspace, Cycle Workspace and Next/Previous Agent,
@@ -44,6 +40,8 @@ Non-goals:
 - New or changed navigation shortcuts. Open Command Center stays in the Window
   menu.
 - A menu for the numbered shortcuts beyond nine.
+- Showing the keys in the sidebar, and a New Agent shortcut. Both were planned
+  here and moved to the `sidebar-key-hints` change so this one could ship.
 
 ## Capabilities
 
@@ -54,22 +52,21 @@ None.
 ### Modified Capabilities
 
 - `app-menu`: new requirements for the View menu's navigation items (contents,
-  order, key equivalents, enablement, checked state and submenu contents), and
-  for File > New Agent… (⌘T). The full-screen requirement is unchanged.
-- `agent-list-ui`: holding ⌘ shows the sidebar controls' shortcuts.
+  order, key equivalents, enablement, checked state and submenu contents). The
+  full-screen requirement is unchanged.
 - `keybindings` needs no delta: the navigation shortcuts' behavior does not
-  change. ⌘T joins the fixed shortcuts a customization is checked against,
-  which that spec already covers.
+  change.
 
 ## Impact
 
 - `crates/knot/src/app_bootstrap.rs` (`set_app_menus`): builds the View menu.
-- `crates/knot/src/agent_menu.rs` / `workspace_window/menus/menu_bar.rs`: the
+- `crates/knot/src/menu_bar.rs` / `workspace_window/menus/menu_bar.rs`: the
   menu-bar snapshot and ownership tracking gain what the View menu depends on
   (sidebar agents, workspace names, view mode, selected agent's mode), so the
   bar is rebuilt when any of these changes.
-- `crates/knot/src/keymap`: a fixed ⌘T binding and a global `NewAgent` handler.
-  The View items reuse the existing actions and handlers.
-- `crates/knot/src/workspace_window`: ⌘-hold tracking and hint rendering in
-  the sidebar (`render/sidebar.rs`, `render/mod.rs`).
+- `crates/knot/src/keymap/handlers.rs`: only Select workspace N stays global.
+- `crates/knot/src/workspace_window`: the shortcut handlers on the root element
+  (`shortcuts.rs`), and focus kept on a tracked element (`render/mod.rs`,
+  `panel/pane.rs`).
+- `crates/knot/src/workspace_manager`: workspace changes refresh the menu bar.
 - `knot-core` locale: `menu.view.*` label keys.

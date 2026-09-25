@@ -58,11 +58,7 @@ pub(crate) struct OwningWindow {
 /// Reads the snapshot from `store`, for `window` or for no workspace window.
 pub(crate) fn view_menu_snapshot(store: &knot_agents::AgentStore, window: Option<OwningWindow>)
                                  -> ViewMenuSnapshot {
-    let workspaces = store.workspaces()
-                          .iter()
-                          .take(NUMBERED_SHORTCUTS)
-                          .map(|workspace| (workspace.id, workspace.name.clone()))
-                          .collect();
+    let workspaces = numbered_workspaces(store);
     let window = window.map(|window| WorkspaceViewFacts { workspace_id:   window.workspace_id,
                                                           view_mode:      window.view_mode,
                                                           agents:
@@ -70,6 +66,15 @@ pub(crate) fn view_menu_snapshot(store: &knot_agents::AgentStore, window: Option
                                                                              window.workspace_id),
                                                           selected_agent: window.selected_agent, });
     ViewMenuSnapshot { window, workspaces }
+}
+
+/// The first nine workspaces, in the manager's order.
+pub(crate) fn numbered_workspaces(store: &knot_agents::AgentStore) -> Vec<(Uuid, String)> {
+    store.workspaces()
+         .iter()
+         .take(NUMBERED_SHORTCUTS)
+         .map(|workspace| (workspace.id, workspace.name.clone()))
+         .collect()
 }
 
 /// The first nine agents in `workspace_id`'s sidebar, top to bottom.

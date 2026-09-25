@@ -11,6 +11,8 @@ use gpui_kit::MenuItem;
 use uuid::Uuid;
 
 use crate::keymap::*;
+use crate::menu_bar::MenuBarState;
+use crate::menu_bar::refresh_menu_bar_workspaces;
 use crate::tests::workspace;
 use crate::view_menu::OwningWindow;
 use crate::view_menu::ViewMenuSnapshot;
@@ -219,4 +221,23 @@ fn the_snapshot_changes_with_what_the_menu_shows() {
     assert_ne!(view_menu_snapshot(&store, Some(owning(ids[0]))),
                added,
                "a renamed workspace");
+}
+
+/// The workspace manager has no poll, and while it is focused no workspace
+/// window owns the bar, so its own changes have to reach the menu directly.
+#[gpui_kit::test]
+fn a_workspace_change_reaches_the_menu_bar(cx: &mut gpui_kit::TestAppContext) {
+    let (store, ids) = store_with(2, 0);
+    let store = parking_lot::Mutex::new(store);
+    cx.update(|cx| {
+          cx.set_global(MenuBarState::default());
+          refresh_menu_bar_workspaces(&store, cx);
+          assert_eq!(cx.global::<MenuBarState>().snapshot.view.workspaces.len(),
+                     2);
+
+          assert!(store.lock().rename_workspace(ids[1], "Backend"));
+          refresh_menu_bar_workspaces(&store, cx);
+          let listed = &cx.global::<MenuBarState>().snapshot.view.workspaces;
+          assert_eq!(listed[1], (ids[1], "Backend".to_string()));
+      });
 }

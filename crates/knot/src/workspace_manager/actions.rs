@@ -17,7 +17,9 @@ use crate::workspace_manager::WorkspaceManager;
 use crate::workspace_window::WorkspaceWindow;
 
 impl WorkspaceManager {
-    pub(super) fn persist(&mut self, cx: &App) {
+    /// Writes the roster. Every caller has just changed the workspace list,
+    /// so the menu bar's Select Workspace submenu is brought up to date too.
+    pub(super) fn persist(&mut self, cx: &mut App) {
         // Scoped so the store guard is released before the file write: the
         // same blocking-I/O rule the workspace window's persist follows.
         let installed = {
@@ -31,6 +33,7 @@ impl WorkspaceManager {
             self.error = Some(knot_core::l10n::t_with("workspace_manager.error_save",
                                                       &[("error", &error.to_string())]));
         }
+        crate::menu_bar::refresh_menu_bar_workspaces(&self.store, cx);
     }
 
     pub(super) fn save_name(&mut self, name: String, editing_id: Option<Uuid>,
