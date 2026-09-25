@@ -188,6 +188,7 @@ shortcuts it gives them:
 | Fork Agent | ⌥⌘F |
 | Duplicate Agent | ⌘D |
 | Restart Agent | ⌘R |
+| Restart with New Conversation | ⇧⌘R |
 
 Where the reference wants a key the platform has already spoken for, the
 platform SHALL win, and no item of this menu SHALL hold a key the platform
@@ -202,6 +203,10 @@ Remove Agent SHALL have no key equivalent at all. The reference calls that
 item Close Agent and gives it ⌘W, which belongs to Close Window here; the
 losing item goes without rather than taking a second-choice key - the more
 so as Remove Agent is the destructive one.
+
+Restart with New Conversation has no counterpart in the reference, which
+always starts a new conversation on restart. It SHALL take ⇧⌘R, Restart
+Agent's key with Shift added, since it is that item's other half.
 
 Every other item in the menu SHALL have none: the reference gives them
 none either.
@@ -240,6 +245,13 @@ not apply to.
 - **WHEN** the user opens the Agents menu
 - **THEN** Remove Agent shows no key equivalent, and ⌘W remains Close
   Window
+
+#### Scenario: Starting over by keyboard
+
+- **WHEN** a non-shell agent is selected in the focused workspace window and
+  the user presses ⇧⌘R
+- **THEN** the same confirmation appears, and confirming restarts the agent in
+  a new conversation, as choosing Agents > Restart with New Conversation
 
 ### Requirement: The Edit menu operates the focused text field
 
