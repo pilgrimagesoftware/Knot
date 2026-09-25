@@ -1,0 +1,30 @@
+{
+  "sessionId": "sess_01HQZK3M4N5P6R7S8T9V",
+  "update": {
+    "_meta": {
+      "claudeCode": {
+        "toolName": "Bash",
+        "title": "Run the workspace tests"
+      }
+    },
+    "toolCallId": "toolu_01Z9Y8X7W6V5U4T3S2R1Q0",
+    "sessionUpdate": "tool_call",
+    "name": "Bash",
+    "rawInput": {
+      "command": "cargo test --workspace",
+      "description": "Run the workspace tests"
+    },
+    "status": "pending",
+    "title": "cargo test --workspace",
+    "kind": "execute",
+    "content": [
+      {
+        "type": "content",
+        "content": {
+          "type": "text",
+          "text": "Run the workspace tests"
+        }
+      }
+    ]
+  }
+}

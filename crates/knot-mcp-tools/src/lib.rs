@@ -16,6 +16,7 @@ mod tasks;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use knot_activity::{EventSink, Tracker, TrackerConfig, tracking_for};
 use knot_agents::{AgentState, AgentStore};
@@ -26,6 +27,10 @@ use knot_mcp::{
     AgentHookHandler, HookRequest, HookStatus, claude_status, codex_turn_complete, extract_metadata,
 };
 use knot_messaging::{DeliveryNotifier, MessageStore};
+use knot_subagents::recognize::hooks::{
+    is_subagent_hook, recognize_hook, subagent_payload_is_complete,
+};
+use knot_subagents::registry::SubagentRegistry;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 use uuid::Uuid;
@@ -41,6 +46,9 @@ type AwaitingInputQueue = Arc<Mutex<Vec<(Uuid, Option<String>)>>>;
 /// is constructed in tests and benches with no window to drain it; see
 /// `messaging::send_message`.
 pub type ActivationQueue = Arc<Mutex<Vec<Uuid>>>;
+
+/// The shared subagent registry, as the catalog holds it.
+pub type SubagentRegistryHandle = Arc<Mutex<SubagentRegistry>>;
 
 /// The concrete `ToolCatalog` for the tools in
 /// `openspec/specs/mcp-tools/spec.md`. Holds every piece of shared state a
@@ -58,6 +66,15 @@ pub struct McpToolCatalog {
     /// Committed task plans, one per owning agent. Runtime state, like the
     /// message queue: not persisted, gone with the process.
     graphs:         Mutex<tasks::GraphStore>,
+    /// Where hook-reported subagents are recorded, shared with the windows
+    /// that draw them and with the ACP feed that writes to it too.
+    ///
+    /// `None` in a catalog built without one - the tests, and any embedding
+    /// that has no UI - in which case subagent events validate and are
+    /// acknowledged but recorded nowhere. That is deliberate: the route's
+    /// contract with the poster is about the payload, not about whether
+    /// anything downstream happens to be listening.
+    subagents:      Option<SubagentRegistryHandle>,
 }
 
 impl McpToolCatalog {
@@ -76,7 +93,8 @@ impl McpToolCatalog {
                trackers: Mutex::new(HashMap::new()),
                awaiting_input: Mutex::new(None),
                activation: Mutex::new(None),
-               graphs: Mutex::new(tasks::GraphStore::new()) }
+               graphs: Mutex::new(tasks::GraphStore::new()),
+               subagents: None }
     }
 
     pub fn with_message_store(mut self, messages: Arc<Mutex<MessageStore>>) -> Self {
@@ -221,6 +239,15 @@ impl AgentHookHandler for McpToolCatalog {
         if self.agents.lock().agent(id).is_none() {
             return Err(knot_mcp::HookError::InvalidPayload("Agent not found".to_string()));
         }
+        // Before the status vocabulary is consulted, and returning early: a
+        // subagent event is keyed on `hook`, carries no `status`, and must
+        // not move the agent's activity state as a side effect of being
+        // reported. Falling through would reject it as a missing status.
+        if let Some(hook) = request.hook.as_deref()
+           && is_subagent_hook(hook)
+        {
+            return self.subagent_event(id, hook, &request.payload);
+        }
         self.agents
             .lock()
             .update_metadata(id, extract_metadata(&request.agent, &request.payload));
@@ -260,6 +287,49 @@ impl AgentHookHandler for McpToolCatalog {
         else {
             self.agents.lock().set_state(id, state);
         }
+        // Going idle is this feed's turn-end: the agent has stopped working,
+        // so whatever it delegated during the turn is over. The ACP feed has
+        // `TurnEnd` for the same job. Without this, a terminal agent's
+        // subagents would accumulate across every turn of a session.
+        if matches!(state, AgentState::Idle)
+           && let Some(subagents) = &self.subagents
+        {
+            subagents.lock().clear(id);
+        }
+        Ok(serde_json::json!({"success": true}))
+    }
+}
+
+impl McpToolCatalog {
+    /// Shares the window's subagent registry, so hook-reported delegations
+    /// land in the same place the ACP feed writes to.
+    #[must_use]
+    pub fn with_subagents(mut self, subagents: SubagentRegistryHandle) -> Self {
+        self.subagents = Some(subagents);
+        self
+    }
+
+    /// Records one subagent lifecycle event.
+    ///
+    /// A malformed payload is a 400, per `agent-hooks`. An event naming a
+    /// subagent with no recorded dispatch is *not*: Knot may have started
+    /// after the dispatch, and answering an error there would make the
+    /// agent's hook report a failure for something it did correctly. The
+    /// registry drops it silently.
+    fn subagent_event(&self, id: Uuid, hook: &str, payload: &serde_json::Value)
+                      -> Result<serde_json::Value, knot_mcp::HookError> {
+        if !subagent_payload_is_complete(hook, payload) {
+            return Err(knot_mcp::HookError::InvalidPayload(
+                "Subagent event is missing a required field".to_string(),
+            ));
+        }
+
+        if let Some(subagents) = &self.subagents
+           && let Some(event) = recognize_hook(hook, payload)
+        {
+            subagents.lock().apply(id, event, Instant::now());
+        }
+
         Ok(serde_json::json!({"success": true}))
     }
 }
@@ -360,6 +430,130 @@ mod tests {
         assert_eq!(settings.saved_agents[0].id, id);
         assert_eq!(settings.saved_workspaces.len(), 1);
         assert_eq!(settings.saved_workspaces[0].agent_ids, vec![id]);
+    }
+
+    /// A subagent event is keyed on `hook`, carries no `status`, and must not
+    /// move the agent's activity state as a side effect of being reported.
+    #[test]
+    fn a_subagent_dispatch_is_recorded_without_touching_the_agents_state() {
+        let subagents: SubagentRegistryHandle = Arc::default();
+        let cat = catalog().with_subagents(Arc::clone(&subagents));
+        let id = cat.agents
+                    .lock()
+                    .create("/tmp/a", knot_agents::CreateOptions::default());
+        cat.agents.lock().set_state(id, AgentState::Running);
+
+        cat.status(&subagent_hook(id,
+                                  "SubagentStart",
+                                  serde_json::json!({
+                                      "subagent_id": "sub-1",
+                                      "subagent_type": "discovery",
+                                      "task": "Map the callers"
+                                  })))
+           .expect("a complete dispatch is accepted");
+
+        assert_eq!(cat.agents.lock().agent(id).unwrap().state,
+                   AgentState::Running,
+                   "reporting a subagent moved the agent's own status");
+        let held = subagents.lock();
+        let records = held.ordered(id, std::time::Instant::now());
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].task, "Map the callers");
+    }
+
+    #[test]
+    fn a_subagent_completion_moves_its_record() {
+        let subagents: SubagentRegistryHandle = Arc::default();
+        let cat = catalog().with_subagents(Arc::clone(&subagents));
+        let id = cat.agents
+                    .lock()
+                    .create("/tmp/a", knot_agents::CreateOptions::default());
+
+        cat.status(&subagent_hook(id,
+                                  "SubagentStart",
+                                  serde_json::json!({ "subagent_id": "sub-1",
+                                                      "task": "Map the callers" })))
+           .unwrap();
+        cat.status(&subagent_hook(id,
+                                  "SubagentStop",
+                                  serde_json::json!({ "subagent_id": "sub-1",
+                                                      "outcome": "failed",
+                                                      "reason": "no such persona" })))
+           .unwrap();
+
+        let held = subagents.lock();
+        let records = held.ordered(id, std::time::Instant::now());
+        assert_eq!(records[0].state.failure_reason(), Some("no such persona"));
+    }
+
+    /// The payload is the poster's contract, so a malformed one is an error it
+    /// can act on rather than a silent no-op.
+    #[test]
+    fn a_subagent_event_missing_a_required_field_is_rejected() {
+        let cat = catalog().with_subagents(Arc::default());
+        let id = cat.agents
+                    .lock()
+                    .create("/tmp/a", knot_agents::CreateOptions::default());
+
+        let no_id = subagent_hook(id, "SubagentStart", serde_json::json!({ "task": "go" }));
+        let no_task = subagent_hook(id,
+                                    "SubagentStart",
+                                    serde_json::json!({ "subagent_id": "s" }));
+        let no_outcome = subagent_hook(id,
+                                       "SubagentStop",
+                                       serde_json::json!({ "subagent_id": "s" }));
+
+        assert!(cat.status(&no_id).is_err());
+        assert!(cat.status(&no_task).is_err());
+        assert!(cat.status(&no_outcome).is_err());
+    }
+
+    /// Knot may have started after the dispatch. Answering an error there would
+    /// make the agent's hook report a failure for something it did correctly.
+    #[test]
+    fn a_completion_for_an_unknown_subagent_succeeds_and_records_nothing() {
+        let subagents: SubagentRegistryHandle = Arc::default();
+        let cat = catalog().with_subagents(Arc::clone(&subagents));
+        let id = cat.agents
+                    .lock()
+                    .create("/tmp/a", knot_agents::CreateOptions::default());
+
+        let request = subagent_hook(id,
+                                    "SubagentStop",
+                                    serde_json::json!({ "subagent_id": "never-seen",
+                                                        "outcome": "succeeded" }));
+
+        assert!(cat.status(&request).is_ok());
+        assert!(subagents.lock().is_empty_for(id));
+    }
+
+    /// The subagent branch returns early, so a mistake there would silently
+    /// stop every ordinary activity update.
+    #[test]
+    fn an_ordinary_status_hook_still_moves_the_agent() {
+        let cat = catalog().with_subagents(Arc::default());
+        let id = cat.agents
+                    .lock()
+                    .create("/tmp/a", knot_agents::CreateOptions::default());
+
+        let request: HookRequest = serde_json::from_value(serde_json::json!({
+                                                              "agent_id": id,
+                                                              "hook": "Stop",
+                                                              "status": "idle",
+                                                              "payload": {}
+                                                          })).unwrap();
+
+        cat.status(&request)
+           .expect("an ordinary status post is accepted");
+        assert_eq!(cat.agents.lock().agent(id).unwrap().state, AgentState::Idle);
+    }
+
+    fn subagent_hook(agent: Uuid, hook: &str, payload: serde_json::Value) -> HookRequest {
+        serde_json::from_value(serde_json::json!({
+                                   "agent_id": agent,
+                                   "hook": hook,
+                                   "payload": payload
+                               })).unwrap()
     }
 
     #[test]

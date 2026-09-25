@@ -62,6 +62,12 @@ impl WorkspaceWindow {
                                                        prior_session_id.is_some(),
                                                        crate::settings_global::read(cx).persona(id));
         let session_config = agent.session_config.clone();
+        // Built here because this is the only place that knows both the
+        // agent's id and its type; `None` for a type with no recognizer,
+        // which costs the session nothing.
+        let subagents = crate::subagent_feed::SubagentSink::new(id,
+                                                                &agent.agent_type,
+                                                                Arc::clone(&self.subagents));
         let store = Arc::clone(&self.store);
         let _runtime_guard = self.runtime.enter();
         self.runtime.spawn(async move {
@@ -72,7 +78,8 @@ impl WorkspaceWindow {
                                                                 prior_session_id.as_deref(),
                                                             mcp_url: mcp_url.as_deref(),
                                                             registration_prompt,
-                                                            session_config };
+                                                            session_config,
+                                                            subagents };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {
                             let mut store = store.lock();
                             store.set_acp_session_id(id, session_id.to_string());

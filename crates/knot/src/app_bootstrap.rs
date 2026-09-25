@@ -31,6 +31,7 @@ use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;
+use crate::bug_report::register_report_bug_action;
 use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
 use crate::mcp_status;
@@ -63,7 +64,8 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
                                settings: knot_core::SharedSettings,
                                notifier: Arc<QueuedNotifier>,
                                messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue)
+                               awaiting_input: AwaitingInputQueue, activation: ActivationQueue,
+                               subagents: crate::app_support::SubagentRegistryHandle)
                                -> (tokio::sync::oneshot::Sender<()>, McpServerStatus) {
     let (stop, stop_rx) = tokio::sync::oneshot::channel();
     let status = McpServerStatus::new();
@@ -97,6 +99,7 @@ pub(crate) fn start_mcp_server(agents: Arc<Mutex<knot_agents::AgentStore>>,
 
                    let catalog = Arc::new(
                 knot_mcp_tools::McpToolCatalog::new(agents, repos_rx, notifier)
+                    .with_subagents(Arc::clone(&subagents))
                     .with_message_store(messages)
                     .with_awaiting_input_queue(awaiting_input)
                     .with_activation_queue(activation)
@@ -147,6 +150,7 @@ actions!(knot_app,
           HideOthers,
           ShowAllWindows,
           AboutKnot,
+          ReportBug,
           OpenSettings,
           OpenImport,
           PanelPermissionAllow,
@@ -320,7 +324,12 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
             MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
             MenuItem::separator(),
         ]),
-        Menu::new("Help").items([MenuItem::action("Knot Help", KnotHelp).disabled(true)]),
+        // Report a Bug has no key equivalent: macOS gives it none, and the
+        // item is enabled everywhere because it is how a user asks for help.
+        Menu::new("Help").items([
+            MenuItem::action("Knot Help", KnotHelp).disabled(true),
+            MenuItem::action(knot_core::l10n::t("menu.help.report_bug"), ReportBug),
+        ]),
     ]);
 }
 
@@ -348,6 +357,9 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
     // Holds its own window handle, and reloads the store when it opens; see
     // `import_window::register_import_action`.
     register_import_action(Arc::clone(&store), cx);
+    // Holds its own single-instance handle; see
+    // `bug_report::register_report_bug_action`.
+    register_report_bug_action(cx);
     cx.on_action(hide_app);
     cx.on_action(hide_others);
     cx.on_action(show_all_windows);
@@ -487,12 +499,16 @@ pub(crate) fn run() {
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let awaiting_input = Arc::new(Mutex::new(Vec::new()));
     let activation = Arc::new(Mutex::new(Vec::new()));
+    // One registry for the process, built before the MCP server because both
+    // it and every workspace window write to the same one.
+    let subagents: crate::app_support::SubagentRegistryHandle = Arc::default();
     let (mcp_stop, mcp_status) = start_mcp_server(Arc::clone(&store),
                                                   settings.clone(),
                                                   Arc::clone(&notifier),
                                                   Arc::clone(&messages),
                                                   Arc::clone(&awaiting_input),
-                                                  Arc::clone(&activation));
+                                                  Arc::clone(&activation),
+                                                  Arc::clone(&subagents));
 
     gpui_kit::application()
                            // `Assets` only embeds gpui-component's own curated icon subset; our
@@ -534,6 +550,7 @@ pub(crate) fn run() {
                                // window claims it once one is.
                                cx.set_global(AwaitingInput(Arc::clone(&awaiting_input)));
                                cx.set_global(Activation(Arc::clone(&activation)));
+                               cx.set_global(crate::app_support::Subagents(Arc::clone(&subagents)));
                                // The MCP server's state, for the settings
                                // pane's row and the failure notification.
                                cx.set_global(mcp_status);

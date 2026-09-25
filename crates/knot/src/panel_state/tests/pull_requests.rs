@@ -11,14 +11,18 @@ fn start(id: &str, kind: &str) -> SessionEvent {
                                                         kind:         kind.to_string(),
                                                         title:        String::new(),
                                                         status:       "pending".to_string(),
-                                                        content:      Vec::new(), })
+                                                        content:      Vec::new(),
+                                                        raw_input:    None,
+                                                        meta:         None, })
 }
 
 fn update(id: &str, content: Vec<ToolCallContent>) -> SessionEvent {
     SessionEvent::Update(SessionUpdate::ToolCallUpdate { tool_call_id: id.to_string(),
                                                          status: Some("completed".to_string()),
                                                          title: None,
-                                                         content })
+                                                         content,
+                                                         raw_input: None,
+                                                         meta: None })
 }
 
 fn text(body: impl Into<String>) -> Vec<ToolCallContent> {

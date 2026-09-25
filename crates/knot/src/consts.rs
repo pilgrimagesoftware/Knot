@@ -184,10 +184,12 @@ pub(crate) const MCP_STATE_POLL_INTERVAL: Duration = Duration::from_millis(500);
 /// Green: an agent that is idle, and a diff's added lines.
 pub(crate) const COLOR_IDLE: u32 = 0x22C55E;
 
-/// Orange: an agent that is working.
+/// Orange: an agent that is working, and an open pull request that cannot
+/// land without work - a conflict, a red check, a draft, a required review.
 pub(crate) const COLOR_RUNNING: u32 = 0xF97316;
 
-/// Blue: an agent awaiting input, and a diff's changed-file count.
+/// Blue: an agent awaiting input, a diff's changed-file count, and an open
+/// pull request whose checks are still running.
 pub(crate) const COLOR_INPUT: u32 = 0x3B82F6;
 
 /// Red: an agent in error, and a diff's removed lines.
@@ -199,11 +201,9 @@ pub(crate) const COLOR_STOPPED: u32 = 0x6B7280;
 /// Muted text on a dashboard card.
 pub(crate) const COLOR_CARD_MUTED: u32 = 0x888888;
 
-/// Amber: a pull request that is open but cannot land - a conflict, a red
-/// check, a draft. Distinct from [`COLOR_RUNNING`]'s orange, which is about
-/// an agent rather than a pull request, and further from green so the two
-/// open states are told apart at a glance.
-pub(crate) const COLOR_PULL_REQUEST_BLOCKED: u32 = 0xEAB308;
+/// Yellow: an open pull request whose branch is behind its base. Updating
+/// the branch is all it needs, so it sits between green and orange.
+pub(crate) const COLOR_PULL_REQUEST_BEHIND: u32 = 0xEAB308;
 
 /// Purple: a merged pull request. The one state with no counterpart in the
 /// agent palette, and the colour GitHub itself uses for it.
@@ -226,6 +226,11 @@ pub(crate) const PULL_REQUEST_ROW_BORDER_TINT: f32 = 0.55;
 /// single-line name field, and a box twice as wide as its contents reads as
 /// an empty one.
 pub(crate) const WORKSPACE_DIALOG_WIDTH: f32 = 360.;
+
+/// Wider than the dialog host's 448px default: the diagnostics block's
+/// longest line - the app name, version, build date and commit - should fit
+/// without wrapping, so it reads as the one line it is when pasted.
+pub(crate) const BUG_REPORT_DIALOG_WIDTH: f32 = 560.;
 
 /// The colour a workspace gets when it has none, or when the one it has
 /// stored will not parse.

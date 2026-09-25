@@ -1,4 +1,5 @@
-//! Reads pull request state from GitHub through the `gh` CLI.
+//! Reads pull request state from GitHub, and files bug-report issues, through
+//! the `gh` CLI.
 //!
 //! Contract:
 //! `openspec/changes/pull-request-tracking/specs/pull-request-tracking/spec.
@@ -26,11 +27,13 @@
 pub mod availability;
 pub mod consts;
 pub mod error;
+pub mod issue;
 pub mod pull_request;
 pub mod runner;
 
 pub use availability::{ForgeAvailability, probe, probe_with};
 pub use error::{ForgeError, Result};
+pub use issue::{create_issue, create_issue_with};
 pub use pull_request::{
     CheckRollup, Mergeability, PullRequestState, PullRequestStatus, pull_request_state,
     pull_request_state_with,

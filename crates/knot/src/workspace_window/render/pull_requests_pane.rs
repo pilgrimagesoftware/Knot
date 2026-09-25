@@ -1,5 +1,5 @@
-//! The Pull Requests pane: this workspace's recorded pull requests, grouped
-//! by the agent that opened them, newest first.
+//! The Pull Requests pane: this workspace's recorded pull requests, one row
+//! per pull request, grouped by the agents that opened them, newest first.
 //!
 //! A content-area takeover like the dashboard, not a popover on each agent
 //! card: the question it answers is "what did this session produce", which is
@@ -28,11 +28,17 @@ pub(crate) struct PullRequestRow {
     pub(crate) state: Option<PullRequestState>,
 }
 
-/// One agent's rows, under that agent's name.
+/// The rows one set of agents opened, under their names.
+///
+/// Several agents rather than one: a pull request several agents recorded is
+/// one row, headed by all of them.
 pub(crate) struct PullRequestGroup {
-    pub(crate) agent_id: Uuid,
-    pub(crate) agent:    String,
-    pub(crate) rows:     Vec<PullRequestRow>,
+    /// Every agent each row here is attributed to, so removing a row
+    /// addresses every record behind it.
+    pub(crate) agent_ids: Vec<Uuid>,
+    /// Their names, joined for the heading.
+    pub(crate) agents:    String,
+    pub(crate) rows:      Vec<PullRequestRow>,
 }
 
 impl WorkspaceWindow {
@@ -107,19 +113,19 @@ fn forge_notice_text(availability: &ForgeAvailability) -> Option<String> {
 
 fn render_group(group: PullRequestGroup, cx: &mut Context<WorkspaceWindow>)
                 -> gpui_kit::AnyElement {
-    let agent_id = group.agent_id;
+    let agent_ids = group.agent_ids;
     v_flex().gap_2()
             .child(div().text_sm()
                         .text_color(cx.theme().muted_foreground)
                         .child(knot_core::l10n::t_with("pull_requests.opened_by",
-                                                       &[("name", &group.agent)])))
+                                                       &[("name", &group.agents)])))
             .children(group.rows
                            .into_iter()
-                           .map(|row| render_row(agent_id, row, cx)))
+                           .map(|row| render_row(agent_ids.clone(), row, cx)))
             .into_any_element()
 }
 
-fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWindow>)
+fn render_row(agent_ids: Vec<Uuid>, row: PullRequestRow, cx: &mut Context<WorkspaceWindow>)
               -> gpui_kit::AnyElement {
     let url = row.url.clone();
     let remove_url = row.url.clone();
@@ -202,7 +208,7 @@ fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWin
                                         // it. The dispatch order it relies on
                                         // is pinned by the row-click tests.
                                         cx.stop_propagation();
-                                        view.confirm_remove_pull_request(agent_id,
+                                        view.confirm_remove_pull_request(agent_ids.clone(),
                                                                          remove_url.clone(),
                                                                          window,
                                                                          cx);
@@ -216,10 +222,16 @@ fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWin
 
 /// The colour a row wears, or `None` when no state has been fetched.
 ///
-/// Green open and ready, amber open and blocked, purple merged, red closed -
-/// so the shape of a session's output is readable without reading a word of
-/// it. An open pull request whose mergeability GitHub has not computed yet
-/// gets no colour rather than an optimistic green.
+/// Purple merged, red closed; an open one says why it can or cannot land -
+/// green mergeable, yellow behind its base, blue checks running, orange
+/// conflicting or otherwise blocked - so the shape of a session's output is
+/// readable without reading a word of it. An open pull request whose
+/// mergeability GitHub has not computed yet gets no colour rather than an
+/// optimistic green.
+///
+/// Orange covers both a conflict and every other block (draft, red CI, a
+/// required review): each needs a push or a decision before it can land,
+/// which is the one thing the colour has to say.
 fn state_color(status: Option<PullRequestStatus>, mergeable: Mergeability)
                -> Option<gpui_kit::Hsla> {
     let color = match status? {
@@ -227,7 +239,9 @@ fn state_color(status: Option<PullRequestStatus>, mergeable: Mergeability)
         PullRequestStatus::Closed => consts::COLOR_ERROR,
         PullRequestStatus::Draft | PullRequestStatus::Open => match mergeable {
             Mergeability::Mergeable => consts::COLOR_IDLE,
-            Mergeability::Blocked => consts::COLOR_PULL_REQUEST_BLOCKED,
+            Mergeability::Conflicting | Mergeability::Blocked => consts::COLOR_RUNNING,
+            Mergeability::Behind => consts::COLOR_PULL_REQUEST_BEHIND,
+            Mergeability::ChecksRunning => consts::COLOR_INPUT,
             Mergeability::Unknown => return None,
         },
     };
@@ -258,6 +272,9 @@ fn status_icon(status: Option<PullRequestStatus>) -> &'static str {
 
 /// The second line: number, state and checks, with whatever is absent simply
 /// left out rather than shown as a blank.
+///
+/// Checks only while the pull request is open. Once it is merged or closed
+/// they say nothing anyone will act on.
 fn detail_line(number: Option<&str>, status: Option<PullRequestStatus>,
                checks: Option<CheckRollup>)
                -> String {
@@ -272,7 +289,7 @@ fn detail_line(number: Option<&str>, status: Option<PullRequestStatus>,
                    Some(PullRequestStatus::Closed) => knot_core::l10n::t("pull_requests.closed"),
                    None => knot_core::l10n::t("pull_requests.pending"),
                });
-    if let Some(checks) = checks {
+    if let Some(checks) = checks.filter(|_| status.is_some_and(PullRequestStatus::is_open)) {
         parts.push(match checks {
                        CheckRollup::Passing => knot_core::l10n::t("pull_requests.checks_passing"),
                        CheckRollup::Failing => knot_core::l10n::t("pull_requests.checks_failing"),

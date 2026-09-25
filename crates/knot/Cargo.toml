@@ -22,6 +22,7 @@ knot-messaging = { path = "../knot-messaging" }
 knot-mcp = { path = "../knot-mcp" }
 knot-mcp-tools = { path = "../knot-mcp-tools" }
 knot-processes = { path = "../knot-processes" }
+knot-subagents = { path = "../knot-subagents" }
 knot-tasks = { path = "../knot-tasks" }
 knot-terminal = { path = "../knot-terminal" }
 knot-watch = { path = "../knot-watch" }
