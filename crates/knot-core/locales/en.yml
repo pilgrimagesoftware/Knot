@@ -34,6 +34,16 @@ sidebar:
   new_agent: "New agent"
   width_error: "Could not save the sidebar width: %{error}"
   bench_entry_missing: "Removed %{name} from the bench: %{folder} no longer exists."
+  # The bench popover on the New Agent button.
+  bench_popover:
+    open: "Deploy from the bench"
+    create: "Create New Agent"
+    header: "BENCH"
+    empty: "Right-click an agent → Save to Bench or Bench Agent…"
+    remove: "Remove %{name} from the bench"
+    remove_tooltip: "Remove from bench"
+    confirm_remove_title: "Remove from Bench"
+    confirm_remove_body: "Remove \"%{name}\" from your bench?"
 
 agent:
   companion: "Shell companion"

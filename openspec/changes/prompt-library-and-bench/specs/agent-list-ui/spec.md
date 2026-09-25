@@ -240,9 +240,10 @@ button, porting the Swift app's `SplitButton` with its `BenchDropdownView`:
   background menu" - same workspace, same selection, same reporting of a
   stale entry - and close the popover. Clicking Create New Agent SHALL close
   the popover and open the agent editor, as the main part does.
-- Hovering an entry row SHALL highlight it and reveal a remove control on
-  it, whose tooltip says it removes the entry from the bench. Activating the
-  remove control SHALL NOT deploy the entry; it SHALL ask for confirmation
+- Each entry row SHALL carry a remove control, whose tooltip says it
+  removes the entry from the bench. It SHALL be drawn muted, and hovering
+  the row SHALL highlight the row and draw the control at full strength.
+  Activating the remove control SHALL NOT deploy the entry; it SHALL ask for confirmation
   naming the entry, and on confirmation remove it from the bench, leaving
   the popover open on the updated list.
 - The popover SHALL read the bench when it opens, so an entry saved from
@@ -259,8 +260,8 @@ accessible name: the chevron, Create New Agent, each entry (by its name) and
 each entry's remove control.
 
 The Rust port differs from the Swift dropdown in reading the bench on open
-rather than observing it, and in keeping the remove control keyboard
-reachable rather than hover-only.
+rather than observing it, and in keeping the remove control present - so a
+keyboard can reach it - rather than showing it on hover only.
 
 #### Scenario: The main part still creates an agent
 

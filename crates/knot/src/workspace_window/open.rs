@@ -126,6 +126,8 @@ impl WorkspaceWindow {
                     forge_status: crate::pull_request_state::ForgeStatus::default(),
                     pull_request_open_failed: false,
                     open_config_selector: None,
+                    bench_popover_open: false,
+                    bench_popover_hovered: None,
                     store,
                     messages,
                     nudged_messages: BTreeMap::new(),

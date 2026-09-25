@@ -195,14 +195,16 @@ built on open from `settings_global::read(cx).bench_agents` - read on open,
 not cached, which is both what the spec requires and what keeps it out of
 the repaint chain.
 
-- Rows are hover-tracked with a `hovered: Option<Uuid>`; the remove control
-  renders when hovered *or* focused, so keyboard users can reach it (the
-  Swift view shows it on hover only).
+- Rows are hover-tracked with `bench_popover_hovered: Option<Uuid>` on the
+  window; the remove control is always rendered, muted until its row is
+  hovered, so keyboard users can reach it (the Swift view shows it on hover
+  only). Tracking per-row focus to reveal it would need a focus handle per
+  entry for no gain over always drawing it.
 - Deploying and New from Bench share one `deploy_bench_entry(entry, cx)` on
   `WorkspaceWindow`, so stale-entry pruning and its notification exist once.
-- Removal goes through the same confirmation helper as the Bench tab, then
-  `write_persisting(|s| s.remove_bench_agent(id))`; the popover re-reads the
-  bench after the write so it stays open on the updated list.
+- Removal confirms through the workspace menus' `confirm_then`, then
+  `write_persisting(|s| s.remove_bench_agent(id))`; the popover reads the
+  bench on each draw, so it stays open on the updated list.
 - The 300px scroll cap and the 260px popover width are layout numbers and
   stay inline; nothing here is a decision for `consts.rs`.
 

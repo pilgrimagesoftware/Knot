@@ -45,12 +45,12 @@
 
 ## 7. Bench popover - Swift dropdown port (`knot`)
 
-- [ ] 7.1 Split `new_agent_button` into the existing main button and a chevron that toggles a gpui-kit `Popover`; verify the main part still opens the agent editor with no popover, and the compact layout keeps the chevron with a tooltip
-- [ ] 7.2 Add `workspace_window/bench_popover.rs`: Create New Agent row, divider, BENCH header, entries (avatar, name, folder name, one line each) in bench order, scrolling past 300px, and the empty-bench hint; verify both the populated and empty renders
-- [ ] 7.3 Read the bench from the settings global when the popover opens; verify an entry saved from another window after the window last drew is listed
-- [ ] 7.4 Clicking an entry calls `deploy_bench_entry` and closes the popover; Create New Agent closes it and opens the editor; Escape and an outside click close it without acting; verify each
-- [ ] 7.5 Show the remove control on hover or focus, confirm naming the entry, remove via `remove_bench_agent`, and re-read so the popover stays open on the updated list; verify removing never deploys and cancel keeps the entry
-- [ ] 7.6 Give the chevron, Create New Agent, each entry and each remove control a keyboard focus stop and an accessible name; verify by tabbing through the popover in a window test
+- [x] 7.1 Split `new_agent_button` into the existing main button and a chevron that toggles a gpui-kit `Popover`; verify the main part still opens the agent editor with no popover, and the compact layout keeps the chevron with a tooltip
+- [x] 7.2 Add `workspace_window/bench_popover.rs`: Create New Agent row, divider, BENCH header, entries (avatar, name, folder name, one line each) in bench order, scrolling past 300px, and the empty-bench hint; verify both the populated and empty renders
+- [x] 7.3 Read the bench from the settings global when the popover opens; verify an entry saved from another window after the window last drew is listed
+- [ ] 7.4 Clicking an entry calls `deploy_bench_entry` and closes the popover; Create New Agent closes it and opens the editor; Escape and an outside click close it without acting; verify each - the deploy path is covered by `deploy_bench_entry`'s tests, the popover's own click and dismissal wiring **needs a display** (manual step in 11.4)
+- [x] 7.5 Show the remove control (always present, muted until its row is hovered), confirm naming the entry, remove via `remove_bench_agent`, and re-read so the popover stays open on the updated list; verify removing never deploys and cancel keeps the entry
+- [ ] 7.6 Give the chevron, Create New Agent, each entry and each remove control a keyboard focus stop and an accessible name; verify by tabbing through the popover - **needs a display** (manual step in 11.4); gpui's test context cannot drive a popover's focus order
 
 ## 8. Agent editor (`knot`)
 
