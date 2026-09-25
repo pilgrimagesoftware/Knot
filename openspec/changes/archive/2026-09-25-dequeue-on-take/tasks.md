@@ -11,5 +11,5 @@
 ## 2. Gate
 
 - [x] 2.1 Run `make`. It must pass.
-- [ ] 2.2 Run the app, queue two prompts behind a running turn, and confirm
+- [x] 2.2 Run the app, queue two prompts behind a running turn, and confirm
   each row disappears as its prompt is sent.
