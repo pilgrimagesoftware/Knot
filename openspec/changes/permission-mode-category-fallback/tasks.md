@@ -103,11 +103,10 @@
       `fast` and `collaboration_mode` match no slot, as intended; exact
       matching keeps `collaboration_mode` out of the permission slot.
 
-      Found in passing, not fixed here: `permission_risk_level`
-      (`crates/knot/src/panel_view/style.rs:102`) rates Codex's
+      Found in passing: `permission_risk_level`
+      (`crates/knot/src/panel_view/style.rs:102`) rated Codex's
       `agent-full-access` as `Neutral`, because only "bypass", "yolo" and
-      "danger" map to `Danger`. It is Codex's counterpart to
-      `bypassPermissions`, so that mode keeps the neutral border in 4.3.
+      "danger" mapped to `Danger`. Fixed under 4.6.
 - [ ] 4.3 Manual, same session: confirm the permission-mode, model and
       effort selectors are populated rather than showing their empty
       states, and that the inline permission prompt's border takes the
@@ -121,3 +120,11 @@
 - [ ] 4.5 Close issue #194 only once 4.2-4.4 are recorded. Its "Done
       when" asks for the feature to be established as reachable, not
       merely for the code to be changed.
+- [x] 4.6 Rate Codex's `agent-full-access` as `Danger`, confirmed neutral
+      in the running app during 4.3. `permission_risk_level` folds `-` and
+      `_` to spaces and matches "full access", so the id and the display
+      name ("Full access") both qualify; `read-only` stays `Safe` and
+      `agent` stays `Neutral`. Pinned by
+      `codex_permission_modes_are_classified` in
+      `crates/knot/src/panel_view/tests.rs`, with a scenario added to the
+      `permission-prompt-ui` delta.

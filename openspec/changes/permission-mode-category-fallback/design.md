@@ -45,9 +45,12 @@ rather than a loosening.
 
 **Non-Goals:**
 
-- Inferring risk level differently. `permission_risk_level`
-  (`crates/knot/src/panel_view/style.rs:102`) is untouched; this change
-  only decides which option feeds it.
+- Reworking how risk level is inferred. `permission_risk_level`
+  (`crates/knot/src/panel_view/style.rs:102`) keeps its keyword match.
+  One keyword was added during verification: the live roster (task 4.2)
+  showed Codex's `agent-full-access` rating `Neutral` although it is
+  Codex's counterpart to `bypassPermissions`, so "full access" now maps
+  to the highest risk level (task 4.6).
 - Rendering non-`select` option types. ACP tells clients to ignore option
   types they do not recognize, and the pickers cannot draw them.
 - Reporting a missing option to the user as an error. The empty state

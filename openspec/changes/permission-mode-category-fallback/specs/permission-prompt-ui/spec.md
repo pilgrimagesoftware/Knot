@@ -8,9 +8,10 @@ reflects the risk level of the currently selected mode, and SHALL apply
 that same color to each mode's entry in the selector's dropdown list.
 
 Risk level is derived from the mode's identifier or name as reported by
-the agent's config option value (e.g. containing "bypass", "yolo", or
-"danger" maps to the highest risk level; containing "plan" or "read"
-maps to the lowest). A mode whose identifier matches no known risk keyword
+the agent's config option value (e.g. containing "bypass", "yolo",
+"danger" or "full access" maps to the highest risk level; containing
+"plan" or "read" maps to the lowest). Hyphens and underscores count as
+spaces, so `agent-full-access` matches "full access". A mode whose identifier matches no known risk keyword
 renders with the selector's default (unstyled) appearance.
 
 The mode's option SHALL be located without requiring the agent to have
@@ -21,6 +22,12 @@ decide whether the coloring appears.
 #### Scenario: Bypass-permissions mode is colored as dangerous
 - **WHEN** the agent's current permission-mode config option value is
   `bypassPermissions` (or another value matching a high-risk keyword)
+- **THEN** the permission-mode selector button renders in the high-risk
+  (warning/red) color
+
+#### Scenario: Codex full-access mode is colored as dangerous
+- **WHEN** the agent's current permission-mode config option value is
+  `agent-full-access`, Codex's counterpart to `bypassPermissions`
 - **THEN** the permission-mode selector button renders in the high-risk
   (warning/red) color
 
