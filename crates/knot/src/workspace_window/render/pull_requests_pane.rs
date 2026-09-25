@@ -6,27 +6,22 @@
 //! a cross-agent question, and a per-card popover buries exactly that.
 
 use gpui_kit::base::{StyledExt, h_flex, v_flex};
+use gpui_kit::component::button::Button;
+use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, Icon};
+use gpui_kit::component::{ActiveTheme, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    ClickEvent, Context, InteractiveElement, IntoElement, ParentElement,
-    StatefulInteractiveElement, Styled, div,
+    ClickEvent, Context, Entity, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, Window, div,
 };
 use knot_forge::{CheckRollup, ForgeAvailability, Mergeability, PullRequestStatus};
 use uuid::Uuid;
 
 use crate::consts;
+use crate::pull_request_filter::{PullRequestGroup, PullRequestRow};
 use crate::pull_request_state::PullRequestLookup;
 use crate::workspace_window::WorkspaceWindow;
-
-/// One row, flattened out of the store and the state cache before any
-/// element is built - so neither lock is held across the element tree.
-pub(crate) struct PullRequestRow {
-    pub(crate) url:    String,
-    /// `None` while nothing has been asked for it yet.
-    pub(crate) lookup: Option<PullRequestLookup>,
-}
 
 /// What a row can say about where its pull request stands.
 ///
@@ -57,28 +52,21 @@ impl RowStatus {
     }
 }
 
-/// The rows one set of agents opened, under their names.
-///
-/// Several agents rather than one: a pull request several agents recorded is
-/// one row, headed by all of them.
-pub(crate) struct PullRequestGroup {
-    /// Every agent each row here is attributed to, so removing a row
-    /// addresses every record behind it.
-    pub(crate) agent_ids: Vec<Uuid>,
-    /// Their names, joined for the heading.
-    pub(crate) agents:    String,
-    pub(crate) rows:      Vec<PullRequestRow>,
-}
-
 impl WorkspaceWindow {
     /// The Pull Requests pane, or `None` when the window is not showing it.
-    pub(super) fn pull_requests_content(&mut self, is_showing: bool, cx: &mut Context<Self>)
+    pub(super) fn pull_requests_content(&mut self, is_showing: bool, window: &mut Window,
+                                        cx: &mut Context<Self>)
                                         -> Option<gpui_kit::AnyElement> {
         if !is_showing {
             return None;
         }
-        let groups = self.pull_request_groups();
+        let (groups, shown) = self.filtered_pull_request_groups(cx);
         let notice = self.forge_notice();
+        // No toolbar over nothing: a workspace with no records has nothing to
+        // search, and says so instead.
+        let toolbar =
+            (!groups.is_empty()).then(|| self.pull_requests_toolbar(&groups, &shown, window, cx));
+        let empty = empty_message(groups.is_empty(), shown.is_empty());
 
         Some(div().id("workspace-pull-requests")
                   .flex_1()
@@ -102,12 +90,9 @@ impl WorkspaceWindow {
                                           .text_color(cx.theme().danger)
                                           .child(knot_core::l10n::t("pull_requests.open_failed"))
                                                                         }))
-                                 .children(groups.is_empty().then(|| {
-                                                                div().text_sm()
-                                          .text_color(cx.theme().muted_foreground)
-                                          .child(knot_core::l10n::t("pull_requests.empty"))
-                                                            }))
-                                 .children(groups.into_iter().map(|group| render_group(group, cx))))
+                                 .children(toolbar)
+                                 .children(empty.map(|empty| render_empty(empty, cx)))
+                                 .children(shown.into_iter().map(|group| render_group(group, cx))))
                   .into_any_element())
     }
 
@@ -140,6 +125,56 @@ fn forge_notice_text(availability: &ForgeAvailability) -> Option<String> {
     }
 }
 
+/// Why the view has no rows to draw, when it has none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmptyList {
+    /// The workspace has no recorded pull requests at all.
+    NoneRecorded,
+    /// It has some, and the search and filters hide every one.
+    NoneMatch,
+}
+
+/// Which message an empty list shows, or `None` when rows are drawn.
+///
+/// Kept apart because they have different fixes: a workspace with none has
+/// nothing to do, and one whose filters hide everything has a control to
+/// clear them. Saying "none yet" over a filtered-out list reads as data loss.
+fn empty_message(no_records: bool, none_shown: bool) -> Option<EmptyList> {
+    if no_records {
+        Some(EmptyList::NoneRecorded)
+    }
+    else if none_shown {
+        Some(EmptyList::NoneMatch)
+    }
+    else {
+        None
+    }
+}
+
+fn render_empty(empty: EmptyList, cx: &mut Context<WorkspaceWindow>) -> gpui_kit::AnyElement {
+    let muted = cx.theme().muted_foreground;
+    match empty {
+        EmptyList::NoneRecorded => div().text_sm()
+                                        .text_color(muted)
+                                        .child(knot_core::l10n::t("pull_requests.empty"))
+                                        .into_any_element(),
+        EmptyList::NoneMatch => {
+            v_flex().gap_2()
+                    .items_start()
+                    .child(div().text_sm()
+                                .text_color(muted)
+                                .child(knot_core::l10n::t("pull_requests.no_match")))
+                    .child(Button::new("pull-requests-clear-filters")
+                               .label(knot_core::l10n::t("pull_requests.clear_filters"))
+                               .small()
+                               .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
+                                               view.clear_pull_request_filters(window, cx);
+                                           })))
+                    .into_any_element()
+        }
+    }
+}
+
 fn render_group(group: PullRequestGroup, cx: &mut Context<WorkspaceWindow>)
                 -> gpui_kit::AnyElement {
     let agent_ids = group.agent_ids;
@@ -158,6 +193,9 @@ fn render_row(agent_ids: Vec<Uuid>, row: PullRequestRow, cx: &mut Context<Worksp
               -> gpui_kit::AnyElement {
     let url = row.url.clone();
     let remove_url = row.url.clone();
+    let menu_url = row.url.clone();
+    let entity = cx.entity();
+    let menu_agent_ids = agent_ids.clone();
     let state = row.lookup.as_ref().and_then(PullRequestLookup::state);
     let title = state.and_then(|state| state.title.clone())
                      .unwrap_or_else(|| row.url.clone());
@@ -241,7 +279,46 @@ fn render_row(agent_ids: Vec<Uuid>, row: PullRequestRow, cx: &mut Context<Worksp
                             view.open_pull_request(&url);
                             cx.notify();
                         }))
+            // Last: it wraps the row, so every handler above stays the row's.
+            // A secondary click opens this menu and nothing else.
+            .context_menu(move |menu, _, _| {
+                row_context_menu(menu, &entity, &menu_agent_ids, &menu_url)
+            })
             .into_any_element()
+}
+
+/// A row's context menu: the row's own actions, reachable without aiming at
+/// the trash icon.
+fn row_context_menu(menu: PopupMenu, entity: &Entity<WorkspaceWindow>, agent_ids: &[Uuid],
+                    url: &str)
+                    -> PopupMenu {
+    let open = (entity.clone(), url.to_string());
+    let copied = url.to_string();
+    let remove = (entity.clone(), agent_ids.to_vec(), url.to_string());
+    menu.item(PopupMenuItem::new(knot_core::l10n::t("pull_requests.open_in_browser"))
+                  .on_click(move |_, _, app| {
+                      let (entity, url) = open.clone();
+                      entity.update(app, |view, cx| {
+                                view.open_pull_request(&url);
+                                cx.notify();
+                            });
+                  }))
+        .item(PopupMenuItem::new(knot_core::l10n::t("pull_requests.copy_url"))
+                  .on_click(move |_, _, app| {
+                      WorkspaceWindow::copy_to_clipboard(copied.clone(), app);
+                  }))
+        .item(PopupMenuItem::new(knot_core::l10n::t("pull_requests.remove"))
+                  .on_click(move |_, window, app| {
+                      // Deferred: the menu dismisses itself after this handler
+                      // and would take an inline dialog down with it.
+                      let (entity, agent_ids, url) = remove.clone();
+                      window.defer(app, move |window, app| {
+                                entity.update(app, |view, cx| {
+                                          view.confirm_remove_pull_request(agent_ids, url, window,
+                                                                           cx);
+                                      });
+                            });
+                  }))
 }
 
 /// The colour a row wears, or `None` when no state has been fetched.

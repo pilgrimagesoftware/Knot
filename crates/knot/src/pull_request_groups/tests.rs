@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use knot_core::SavedPullRequest;
 use uuid::Uuid;
 
-use super::{OwnedPullRequests, group_records, unique_urls};
+use super::{OwnedPullRequests, first_seen_by_url, group_records, unique_urls};
 use crate::pull_request_state::counts_for;
 
 const FIRST: &str = "https://github.com/acme/widget/pull/1";
@@ -112,4 +112,16 @@ fn a_pull_request_several_agents_recorded_counts_once() {
 
     assert_eq!(urls, vec![FIRST.to_string(), SECOND.to_string()]);
     assert_eq!(counts_for(&BTreeMap::new(), &urls).total(), 2);
+}
+
+/// A row several agents saw is as old as the first sighting.
+#[test]
+fn first_seen_is_the_earliest_across_agents() {
+    let (one, two) = (Uuid::new_v4(), Uuid::new_v4());
+    let early = record(FIRST, one, 100);
+    let late = record(FIRST, two, 300);
+
+    let seen = first_seen_by_url(&[&late, &early]);
+
+    assert_eq!(seen.get(FIRST), Some(&100));
 }

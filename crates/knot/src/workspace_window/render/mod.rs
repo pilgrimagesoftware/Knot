@@ -67,6 +67,7 @@ mod processes_pane;
 mod processes_summary;
 pub(super) mod pull_requests_pane;
 mod pull_requests_row;
+mod pull_requests_toolbar;
 mod sidebar;
 mod sidebar_compact;
 mod title_bar;
@@ -465,8 +466,12 @@ impl Render for WorkspaceWindow {
 
         // One content slot: at most one takeover shows at a time, so the
         // first that claims it wins and `content_column` needs no third arm.
-        let takeover_content = self.dashboard_content(is_dashboard, cx)
-                                   .or_else(|| self.pull_requests_content(is_pull_requests, cx));
+        let takeover_content =
+            self.dashboard_content(is_dashboard, cx).or_else(|| {
+                                                        self.pull_requests_content(is_pull_requests,
+                                                                                   window,
+                                                                                   cx)
+                                                    });
 
         let title_bar_left = self.title_bar_left(is_takeover,
                                                  &selected_header,
