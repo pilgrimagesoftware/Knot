@@ -13,7 +13,7 @@
 
 ## 3. Dependent spec text
 
-- [ ] 3.1 If PR #477 has merged, update the ⌥⌘N / ⌥⌘2 agent examples in `openspec/specs/app-menu/spec.md` (View menu requirement) and in the `sidebar-key-hints` change's `agent-list-ui` and `app-menu` deltas to ⌘N / ⌘2; if it has not merged, tell the agent that owns PR #477 so it updates them there; verify `grep -rn "⌥⌘[1-9N]" openspec/specs openspec/changes --exclude-dir=archive` shows no agent-selection example left
+- [x] 3.1 Update the agent and workspace examples in the `app-menu` View menu requirements (as a delta here) and in the `sidebar-key-hints` change's `agent-list-ui` delta and design; verify `grep -rn "⌥⌘[1-9N]" openspec/specs openspec/changes --exclude-dir=archive` shows no agent-selection example outside the main `keybindings` and `app-menu` specs, which the deltas update at archive
 
 ## 4. Verification
 

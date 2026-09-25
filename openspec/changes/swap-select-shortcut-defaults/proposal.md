@@ -45,6 +45,8 @@ None.
 - `keybindings`: the default modifiers of the two numbered families swap, and
   the requirements' examples and scenarios that name those defaults are
   updated to match.
+- `app-menu`: the View menu's Select Agent and Select Workspace submenus
+  name the swapped defaults (⌘N for agents, ⌥⌘N for workspaces).
 
 ## Impact
 
@@ -55,7 +57,7 @@ None.
   `crates/knot/src/tests/settings_keyboard.rs`, and
   `crates/knot/src/workspace_window/shortcuts_tests.rs` if it presses chords
   rather than dispatching actions.
-- Spec text elsewhere that names ⌥⌘N as the agent default: `app-menu`'s
-  View menu requirement and the `sidebar-key-hints` change, both arriving in
-  PR #477 (https://github.com/pilgrimagesoftware/Knot/pull/477).
+- The unstarted `sidebar-key-hints` change (#481) names ⌥⌘N as the agent
+  default in its `agent-list-ui` delta and design; this change updates that
+  text in place.
 - Stored preferences: no format or migration change.

@@ -12,8 +12,8 @@ Everything else derives from it:
 - `Resolved::from_settings` applies stored values over the defaults one at a
   time, workspace family first, validating each against what is already
   accepted and skipping any that conflicts.
-- The Keyboard tab, the View menu's select items (PR #477) and the sidebar
-  hints (`sidebar-key-hints`, also in PR #477) label chords from the resolved
+- The Keyboard tab, the View menu's Select submenus and the sidebar
+  hints (`sidebar-key-hints`, #481) label chords from the resolved
   keymap, not from literals.
 
 ## Goals / Non-Goals
