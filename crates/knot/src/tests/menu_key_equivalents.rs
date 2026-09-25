@@ -33,6 +33,7 @@ use crate::app_bootstrap::HideApp;
 use crate::app_bootstrap::HideOthers;
 use crate::app_bootstrap::KnotHelp;
 use crate::app_bootstrap::MinimizeWindow;
+use crate::app_bootstrap::NewAgent;
 use crate::app_bootstrap::NewWorkspace;
 use crate::app_bootstrap::OpenCommandCenter;
 use crate::app_bootstrap::OpenSettings;
@@ -40,6 +41,7 @@ use crate::app_bootstrap::OpenWorkspaces;
 use crate::app_bootstrap::Quit;
 use crate::app_bootstrap::ReportBug;
 use crate::app_bootstrap::install_actions_and_keys;
+use crate::keymap::*;
 
 /// An app with the real key bindings installed, over a throwaway settings
 /// file so nothing here touches the developer's own configuration.
@@ -174,5 +176,32 @@ fn the_edit_menu_leaves_the_text_keys_with_gpui(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-x", &input::Cut);
           assert_bound(cx, "cmd-c", &input::Copy);
           assert_bound(cx, "cmd-v", &input::Paste);
+      });
+}
+
+/// The View menu's items are the navigation shortcuts' own actions, so their
+/// key equivalents are those shortcuts' defaults (`keybindings`).
+#[gpui_kit::test]
+fn the_view_menu_carries_the_navigation_shortcuts(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert_bound(cx, "cmd-alt-o", &ToggleDashboard);
+          assert_bound(cx, "cmd-alt-p", &TogglePullRequests);
+          assert_bound(cx, "cmd-l", &FocusAgentInput);
+          assert_bound(cx, "ctrl-cmd-down", &JumpToBottom);
+          assert_bound(cx, "cmd-2", &SelectAgent2);
+          assert_bound(cx, "cmd-alt-3", &SelectWorkspace3);
+      });
+}
+
+/// File > New Agent… carries the Swift reference's ⌘T, and with no workspace
+/// window it has no handler: nothing registers it globally, so macOS draws the
+/// item disabled.
+#[gpui_kit::test]
+fn new_agent_carries_the_reference_shortcut(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert_bound(cx, "cmd-t", &NewAgent);
+          assert!(!cx.is_action_available(&NewAgent));
       });
 }

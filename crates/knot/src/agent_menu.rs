@@ -52,6 +52,7 @@ actions!(knot_app,
           AgentMenuDuplicateAgent,
           AgentMenuMoveToWorkspace,
           AgentMenuSaveToBench,
+          AgentMenuBenchAgent,
           AgentMenuOpenIn,
           AgentMenuMarkdownFiles,
           AgentMenuRegisterAgent,
@@ -134,6 +135,7 @@ pub(crate) fn agent_menu_action(entry: AgentMenuEntry) -> Option<Box<dyn Action>
              AgentMenuEntry::DuplicateAgent => Box::new(AgentMenuDuplicateAgent),
              AgentMenuEntry::MoveToWorkspace => Box::new(AgentMenuMoveToWorkspace),
              AgentMenuEntry::SaveToBench => Box::new(AgentMenuSaveToBench),
+             AgentMenuEntry::BenchAgent => Box::new(AgentMenuBenchAgent),
              AgentMenuEntry::OpenIn => Box::new(AgentMenuOpenIn),
              AgentMenuEntry::MarkdownFiles => Box::new(AgentMenuMarkdownFiles),
              AgentMenuEntry::RegisterAgent => Box::new(AgentMenuRegisterAgent),
@@ -174,22 +176,6 @@ pub(crate) struct AgentMenuSnapshot {
     /// The markdown files the selected agent has shown.
     pub(crate) markdown_history: Vec<PathBuf>,
 }
-
-/// Which window's selection the menu bar's Agents menu is currently
-/// showing, and what it was built from.
-///
-/// The menu bar is app-wide but the selection it acts on belongs to one
-/// window, so ownership has to be recorded somewhere both windows can see:
-/// the active window claims it, and only the window that holds it may give
-/// it up. Without that, two open workspace windows would overwrite each
-/// other's submenus on alternating polls.
-#[derive(Default)]
-pub(crate) struct AgentsMenuState {
-    pub(crate) owner:    Option<gpui_kit::AnyWindowHandle>,
-    pub(crate) snapshot: AgentMenuSnapshot,
-}
-
-impl gpui_kit::Global for AgentsMenuState {}
 
 /// The Agents menu, carrying every item the context menu can offer.
 ///

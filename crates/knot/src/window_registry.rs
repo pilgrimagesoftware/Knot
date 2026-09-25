@@ -102,20 +102,6 @@ impl WindowRegistry {
           .upgrade()
     }
 
-    /// The workspace view drawn in `handle`'s window, if it is a workspace
-    /// window. How a shortcut scoped to "the focused workspace window" finds
-    /// it from `cx.active_window()`, whatever inside that window has focus.
-    pub(crate) fn workspace_view_in(handle: AnyWindowHandle, cx: &App)
-                                    -> Option<Entity<WorkspaceWindow>> {
-        cx.try_global::<Self>()?
-          .windows
-          .values()
-          .find(|registered| registered.handle == handle)?
-          .workspace
-          .as_ref()?
-          .upgrade()
-    }
-
     /// Records a window that has just opened.
     ///
     /// `workspace` is the view for a workspace window and `None` for the

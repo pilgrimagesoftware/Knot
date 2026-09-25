@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use gpui_kit::App;
+use gpui_kit::Context;
 use gpui_kit::Entity;
 use gpui_kit::Window;
 use gpui_kit::component::menu::PopupMenu;
@@ -70,19 +71,36 @@ pub(crate) fn sidebar_menu_facts(store: &knot_agents::AgentStore, workspace_id: 
                           .filter_map(|id| store.agent(*id))
                           .collect::<Vec<_>>();
     SidebarMenuFacts { agent_count:   agents.len(),
-                       running_count: agents.iter().filter(|agent| agent.activated).count(), }
+                       running_count: agents.iter().filter(|agent| agent.activated).count(),
+                       bench_count:   0, }
 }
 
 /// Builds the sidebar's background context menu: every entry
 /// [`sidebar_background_menu_entries`] returns, with the ones that do not
 /// apply rendered disabled rather than omitted.
-pub(crate) fn sidebar_background_context_menu(targets: &SidebarMenuTargets, menu: PopupMenu)
+///
+/// The bench is read from the live settings surface as the menu opens, so an
+/// entry saved from another window or from Settings is listed.
+pub(crate) fn sidebar_background_context_menu(targets: &SidebarMenuTargets, menu: PopupMenu,
+                                              window: &mut Window, cx: &mut Context<PopupMenu>)
                                               -> PopupMenu {
-    let facts = sidebar_menu_facts(&targets.store.lock(), targets.workspace_id);
+    let bench = crate::settings_global::read(cx).bench_agents.clone();
+    let facts = SidebarMenuFacts { bench_count: bench.len(),
+                                   ..sidebar_menu_facts(&targets.store.lock(),
+                                                        targets.workspace_id) };
     let mut menu = menu;
     for item in sidebar_background_menu_entries(facts) {
         menu = match item.entry.label() {
             None => menu.separator(),
+            // A submenu with nothing in it would open empty, so an empty
+            // bench shows the item disabled instead, keeping its position.
+            Some(label) if item.entry == AgentListBackgroundEntry::NewFromBench && item.enabled => {
+                let targets = targets.clone();
+                let bench = bench.clone();
+                menu.submenu(label, window, cx, move |submenu, _, _| {
+                        bench_submenu(submenu, &bench, &targets)
+                    })
+            }
             Some(label) => {
                 let targets = targets.clone();
                 let entry = item.entry;
@@ -95,6 +113,25 @@ pub(crate) fn sidebar_background_context_menu(targets: &SidebarMenuTargets, menu
         };
     }
     menu
+}
+
+/// The New from Bench submenu: each entry by avatar and name, in bench
+/// order, deploying into the sidebar's workspace.
+fn bench_submenu(mut submenu: PopupMenu, bench: &[knot_core::BenchAgent],
+                 targets: &SidebarMenuTargets)
+                 -> PopupMenu {
+    for entry in bench {
+        let label = format!("{} {}", entry.avatar, entry.name);
+        let entry = entry.clone();
+        let targets = targets.clone();
+        submenu = submenu.item(PopupMenuItem::new(label).on_click(move |_, _, app| {
+                                   targets.window_entity.update(app, |view, cx| {
+                                                            view.deploy_bench_entry(&entry, cx);
+                                                            cx.notify();
+                                                        });
+                               }));
+    }
+    submenu
 }
 
 /// Runs one item of the sidebar's background menu.
@@ -172,7 +209,8 @@ fn run_sidebar_menu_action(entry: AgentListBackgroundEntry, targets: &SidebarMen
                                            app);
                   });
         }
-        AgentListBackgroundEntry::Separator => {}
+        // Opens its submenu rather than running anything.
+        AgentListBackgroundEntry::NewFromBench | AgentListBackgroundEntry::Separator => {}
     }
 }
 

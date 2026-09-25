@@ -8,9 +8,14 @@
 mod agent_row;
 mod agents;
 pub(crate) mod artifact_panel;
+mod bench;
+mod bench_popover;
 mod chrome;
 mod creation;
 mod git_panel;
+mod key_hints;
+#[cfg(test)]
+mod key_hints_tests;
 pub(crate) mod mcp_panel;
 mod menus;
 mod notifications;
@@ -22,6 +27,7 @@ mod process_actions;
 mod processes;
 pub(crate) mod prompt_queue;
 mod pull_requests;
+mod pull_requests_actions;
 mod pull_requests_view;
 mod render;
 mod repaint;

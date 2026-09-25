@@ -25,7 +25,8 @@ pub use l10n::t;
 pub use log_dir::log_dir;
 pub use settings::{
     ActivationMode, AiProvider, AppearanceMode, AutopilotAction, BenchAgent, Capabilities,
-    CostTier, KeybindingSettings, Persona, PersonaState, PersonaType, SavedAgent, SavedPullRequest,
-    SavedWindowBounds, Settings, SharedSettings, ShortcutModifiers, UnknownVariant, ViewMode,
-    Workspace, WorkspaceUiState, detect_source_base_folder,
+    CostTier, KeybindingSettings, Persona, PersonaState, PersonaType, Prompt, PromptReferences,
+    SavedAgent, SavedPullRequest, SavedWindowBounds, Settings, SharedSettings, ShortcutModifiers,
+    StartupPrompt, UnknownVariant, ViewMode, Workspace, WorkspaceUiState,
+    detect_source_base_folder,
 };

@@ -62,16 +62,17 @@ fn create_agent_from_bench_template() {
     let mut store = AgentStore::new();
     let caller = store.create("/tmp/caller", CreateOptions::default());
     let bench_id = Uuid::new_v4();
-    let bench = BenchAgent { id:            bench_id,
-                             name:          "Bench Worker".to_string(),
-                             avatar:        "🤖".to_string(),
-                             folder:        "/tmp/bench".to_string(),
-                             agent_type:    "codex".to_string(),
-                             shell_command: None,
-                             persona_id:    None,
-                             description:   String::new(),
-                             capabilities:  Default::default(),
-                             cost_tier:     Default::default(), };
+    let bench = BenchAgent { id:             bench_id,
+                             name:           "Bench Worker".to_string(),
+                             avatar:         "🤖".to_string(),
+                             folder:         "/tmp/bench".to_string(),
+                             agent_type:     "codex".to_string(),
+                             shell_command:  None,
+                             persona_id:     None,
+                             description:    String::new(),
+                             capabilities:   Default::default(),
+                             cost_tier:      Default::default(),
+                             startup_prompt: None, };
     let result = create_agent(&mut store,
                               &json!({"agentId": caller.to_string(), "benchAgentId": bench_id.to_string()}),
                               &[bench]);
@@ -82,6 +83,48 @@ fn create_agent_from_bench_template() {
                        .unwrap();
     assert_eq!(created.folder, "/tmp/bench");
     assert_eq!(created.agent_type, "codex");
+}
+
+/// `agent-lifecycle` - "Bench deployment": the entry's startup prompt is
+/// deployed with it, and `create-agent` builds the agent itself rather than
+/// through `AgentStore::deploy_bench`, so it has to carry the field too.
+#[test]
+fn create_agent_from_bench_carries_the_startup_prompt() {
+    let mut store = AgentStore::new();
+    let caller = store.create("/tmp/caller", CreateOptions::default());
+    let prompt = Uuid::new_v4();
+    let mut bench = BenchAgent::new(Uuid::new_v4(), "Prompted", None, "/tmp/bench");
+    bench.startup_prompt = Some(knot_core::StartupPrompt::Library(prompt));
+    let bench_id = bench.id;
+
+    let result = create_agent(&mut store,
+                              &json!({"agentId": caller.to_string(), "benchAgentId": bench_id.to_string()}),
+                              &[bench]);
+
+    assert_eq!(result.is_error, None);
+    let created = store.agents()
+                       .iter()
+                       .find(|agent| agent.name == "Prompted")
+                       .unwrap();
+    assert_eq!(created.startup_prompt,
+               Some(knot_core::StartupPrompt::Library(prompt)));
+}
+
+/// An agent created over MCP without a bench entry has no startup prompt.
+#[test]
+fn create_agent_without_bench_has_no_startup_prompt() {
+    let mut store = AgentStore::new();
+    let caller = store.create("/tmp/caller", CreateOptions::default());
+
+    create_agent(&mut store,
+                 &json!({"agentId": caller.to_string(), "name": "plain", "agentType": "claude", "repoPath": "/tmp/plain"}),
+                 &[]);
+
+    let created = store.agents()
+                       .iter()
+                       .find(|agent| agent.name == "plain")
+                       .unwrap();
+    assert_eq!(created.startup_prompt, None);
 }
 
 #[test]

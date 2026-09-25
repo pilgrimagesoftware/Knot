@@ -121,6 +121,21 @@ fn a_queued_inbox_nudge_says_where_it_came_from() {
                knot_core::l10n::t("panel.failed"));
 }
 
+/// `queued-message-management` - "A queued startup prompt is labelled as
+/// one": distinct from both a user's prompt and an inbox check.
+#[test]
+fn a_queued_startup_prompt_says_where_it_came_from() {
+    use workspace_window::prompt_queue::{PromptOrigin, queued_status_label};
+
+    let label = queued_status_label(false, PromptOrigin::Startup);
+    assert_eq!(label, knot_core::l10n::t("panel.queued_startup_prompt"));
+    assert_ne!(label, "panel.queued_startup_prompt", "the key must resolve");
+    assert_ne!(label, queued_status_label(false, PromptOrigin::User));
+    assert_ne!(label, queued_status_label(false, PromptOrigin::InboxNudge));
+    assert_eq!(queued_status_label(true, PromptOrigin::Startup),
+               knot_core::l10n::t("panel.failed"));
+}
+
 /// Every key the settings window asks for, harvested from the source rather
 /// than hand-listed, so a new label cannot be added without an entry. A
 /// missing one renders the key itself - visible in the window, easy to miss
@@ -248,6 +263,22 @@ fn dialog_labels_resolve() {
                 "workspace_manager.rename",
                 "workspace_manager.title",
                 "workspace_manager.workspace"]
+    {
+        let value = knot_core::l10n::t(key);
+        assert_ne!(value, key, "{key} is missing from the catalog");
+        assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+}
+
+/// The View menu's labels (`app-menu`).
+#[test]
+fn view_menu_labels_resolve() {
+    for key in ["menu.view.dashboard",
+                "menu.view.pull_requests",
+                "menu.view.focus_agent_input",
+                "menu.view.jump_to_bottom",
+                "menu.view.select_agent",
+                "menu.view.select_workspace"]
     {
         let value = knot_core::l10n::t(key);
         assert_ne!(value, key, "{key} is missing from the catalog");

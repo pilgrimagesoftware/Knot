@@ -52,6 +52,7 @@ use crate::workspace_window::SidebarMenuTargets;
 use crate::workspace_window::WorkspaceViewMode;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::agent_row::AgentRow;
+use crate::workspace_window::key_hints::with_key_hint;
 use crate::workspace_window::pane_focus;
 use crate::workspace_window::panel::input::PERMISSION_SELECTOR_ID;
 use crate::workspace_window::sidebar_background_context_menu;
@@ -67,6 +68,7 @@ mod processes_pane;
 mod processes_summary;
 pub(super) mod pull_requests_pane;
 mod pull_requests_row;
+mod pull_requests_toolbar;
 mod sidebar;
 mod sidebar_compact;
 mod title_bar;
@@ -169,6 +171,7 @@ impl WorkspaceWindow {
         }
 
         self.focus_showing_pane(is_dashboard, window, cx);
+        self.key_hints_follow_activation(window);
 
         // See `root_focus`: without this the Agents menu's items are never
         // on the dispatch path macOS validates them against. Done here
@@ -229,8 +232,17 @@ impl WorkspaceWindow {
         if !changed {
             return;
         }
+        // A takeover draws neither the composer nor the terminal, so a focus
+        // handle left on either points at nothing rendered, and gpui resolves
+        // that to the dispatch-tree root - above the root element carrying
+        // the shortcut and menu handlers. Leaving a panel by ⌥⌘1, or reading
+        // the View menu's state, would then find no handler. Focusing the
+        // root element keeps them on the path.
         let Some(target) = showing
         else {
+            if is_takeover && !window.has_active_dialog(cx) {
+                window.focus(&self.root_focus.clone(), cx);
+            }
             return;
         };
         // A dialog's focus handle is a descendant of `root_focus` - the
@@ -318,10 +330,16 @@ impl WorkspaceWindow {
                                       }))
     }
 
-    /// The row under the agent list. Compact keeps the icon and moves the
+    /// The row under the agent list: the New Agent button and the chevron
+    /// that opens the bench beside it. Compact keeps the icon and moves the
     /// label into a tooltip, so the control still says what it does.
     fn new_agent_button(&self, compact: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        h_flex().flex_shrink_0()
+        let hint = self.key_hints.shown().map(|hints| hints.new_agent.clone());
+        // Against the row's trailing edge at either width. The compact
+        // corner badge would overhang the sidebar's edge from a row this
+        // wide, and a compact row centres its icon-only button well clear of
+        // that edge anyway.
+        with_key_hint(h_flex(), hint.as_deref(), false, cx).flex_shrink_0()
                 .h(px(48.))
                 .w_full()
                 .items_center()
@@ -344,6 +362,7 @@ impl WorkspaceWindow {
                                                                     cx| {
                                                              view.open_new_agent_dialog(cx);
                                                          })))
+                .child(self.bench_popover(cx))
     }
 
     /// The sidebar column: the window's own title bar, the scrolling agent
@@ -395,8 +414,8 @@ impl WorkspaceWindow {
                 div().id("workspace-agent-list-background")
                      .flex_1()
                      .min_h(px(32.))
-                     .context_menu(move |menu, _, _| {
-                         sidebar_background_context_menu(&background_targets, menu)
+                     .context_menu(move |menu, window, cx| {
+                         sidebar_background_context_menu(&background_targets, menu, window, cx)
                      }),
             ),
         ),
@@ -465,8 +484,12 @@ impl Render for WorkspaceWindow {
 
         // One content slot: at most one takeover shows at a time, so the
         // first that claims it wins and `content_column` needs no third arm.
-        let takeover_content = self.dashboard_content(is_dashboard, cx)
-                                   .or_else(|| self.pull_requests_content(is_pull_requests, cx));
+        let takeover_content =
+            self.dashboard_content(is_dashboard, cx).or_else(|| {
+                                                        self.pull_requests_content(is_pull_requests,
+                                                                                   window,
+                                                                                   cx)
+                                                    });
 
         let title_bar_left = self.title_bar_left(is_takeover,
                                                  &selected_header,
@@ -479,12 +502,22 @@ impl Render for WorkspaceWindow {
                                                    title_font_size,
                                                    cx);
         let selected_menu = self.selected_agent_menu(cx);
+        let shortcuts = self.shortcut_availability();
         let background_targets = SidebarMenuTargets { store:         Arc::clone(&self.store),
                                                       window_entity: cx.entity(),
                                                       workspace_id:  self.workspace_id, };
         h_flex()
             .size_full()
             .map(|el| with_agents_menu_actions(el, selected_menu.as_ref()))
+            .map(|el| Self::with_shortcut_actions(el, shortcuts, cx))
+            // On the root element, so a hold registers wherever focus is in
+            // the window - the composer and the terminal both let modifier
+            // changes and key-downs through. Capture phase for the key-down:
+            // a focused input handles most keys and stops them bubbling.
+            .on_modifiers_changed(cx.listener(|view, event, _, cx| {
+                view.key_hints_modifiers_changed(event, cx)
+            }))
+            .capture_key_down(cx.listener(|view, event, _, cx| view.key_hints_key_down(event, cx)))
             .track_focus(&self.root_focus)
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
                 view.answer_selected_permission(knot_acp::PermissionDecision::Allow);

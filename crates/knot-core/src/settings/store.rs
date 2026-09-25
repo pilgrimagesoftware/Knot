@@ -1,11 +1,12 @@
 //! Durable configuration store: scalar settings plus the serialized
-//! collections (saved agents, workspaces, personas, bench templates, recent
-//! repos, recorded pull requests), with decode-tolerant migration,
-//! first-launch source-folder detection, and a bounded recent-repos MRU.
+//! collections (saved agents, workspaces, personas, bench templates, library
+//! prompts, recent repos, recorded pull requests), with decode-tolerant
+//! migration, first-launch source-folder detection, and a bounded recent-repos
+//! MRU.
 //!
 //! Contract: `openspec/specs/settings-persistence/spec.md`.
 //!
-//! One [`Settings`] value is one settings surface over eight documents, whose
+//! One [`Settings`] value is one settings surface over nine documents, whose
 //! locations [`StorePaths`] derives:
 //!
 //! | Document | Holds | Directory |
@@ -16,6 +17,7 @@
 //! | `workspace-ui-state.json` | per-workspace UI state | application data |
 //! | `personas.json` | personas | application data |
 //! | `bench.json` | bench templates | application data |
+//! | `prompts.json` | library prompts | application data |
 //! | `recent-repos.json` | recent repositories | application data |
 //! | `pull-requests.json` | recorded pull requests | application data |
 //!
@@ -51,14 +53,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+mod bench;
 mod binding;
 mod documents;
 mod legacy;
 mod paths;
+mod prompts;
 mod workspace_split;
 
 pub use paths::StorePaths;
+pub use prompts::PromptReferences;
 
+use super::prompts::Prompt;
 pub use super::records::{
     BenchAgent, Persona, PersonaState, PersonaType, SavedAgent, SavedPullRequest, Workspace,
     WorkspaceUiState,
@@ -158,6 +164,8 @@ pub struct Settings {
     #[serde(skip)]
     pub bench_agents:     Vec<BenchAgent>,
     #[serde(skip)]
+    pub prompts:          Vec<Prompt>,
+    #[serde(skip)]
     pub recent_repos:     Vec<String>,
     #[serde(skip)]
     pub pull_requests:    Vec<SavedPullRequest>,
@@ -207,6 +215,7 @@ impl Default for Settings {
                workspace_ui:                   BTreeMap::new(),
                personas:                       Vec::new(),
                bench_agents:                   Vec::new(),
+               prompts:                        Vec::new(),
                recent_repos:                   Vec::new(),
                pull_requests:                  Vec::new(),
                paths:                          None, }
@@ -255,6 +264,7 @@ impl Settings {
         settings.workspace_ui = workspaces.ui_state;
         settings.personas = documents::read_collection(&paths.personas());
         settings.bench_agents = documents::read_collection(&paths.bench());
+        settings.prompts = documents::read_collection(&paths.prompts());
         settings.recent_repos = documents::read_collection(&paths.recent_repos());
         settings.pull_requests = documents::read_collection(&paths.pull_requests());
         settings.prune_workspace_ui();
@@ -326,6 +336,7 @@ impl Settings {
         self.persist_workspace_ui()?;
         self.persist_personas()?;
         self.persist_bench()?;
+        self.persist_prompts()?;
         self.persist_recent_repos()?;
         self.persist_pull_requests()
     }
@@ -392,10 +403,6 @@ impl Settings {
         documents::write_collection(&self.resolved_paths()?.personas(), &self.personas)
     }
 
-    pub(crate) fn persist_bench(&self) -> Result<()> {
-        documents::write_collection(&self.resolved_paths()?.bench(), &self.bench_agents)
-    }
-
     fn persist_recent_repos(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.recent_repos(), &self.recent_repos)
     }
@@ -441,13 +448,6 @@ impl Settings {
         self.recent_repos.insert(0, name);
         self.recent_repos.truncate(RECENT_REPOS_MAX);
         self.persist_recent_repos()
-    }
-
-    /// Add a bench template, replacing any existing entry for the same folder.
-    pub fn add_bench_agent(&mut self, entry: BenchAgent) -> Result<()> {
-        self.bench_agents.retain(|b| b.folder != entry.folder);
-        self.bench_agents.push(entry);
-        self.persist_bench()
     }
 
     /// Personas excluding soft-deleted ones, sorted case-insensitively by name.

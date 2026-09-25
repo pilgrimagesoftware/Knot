@@ -5,6 +5,7 @@
 //! draws the frame around whichever pane is selected, and each pane's own
 //! content lives under `panes`.
 
+mod bench_editor;
 mod controls;
 /// Public within the crate because its rule is asserted directly by
 /// `tests::settings_font_preview`; the panes themselves are not.
@@ -12,6 +13,7 @@ pub(crate) mod font;
 mod keyboard;
 mod panes;
 mod persona_editor;
+mod prompt_editor;
 mod render;
 mod tab;
 mod window;

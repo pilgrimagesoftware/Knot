@@ -64,6 +64,34 @@ fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
+/// One line of the file, parsed. Parsing every line is itself an assertion:
+/// the file is JSON Lines, so a line that is not an object is a defect.
+#[derive(Debug)]
+struct Logged {
+    level:   String,
+    subject: String,
+    message: String,
+}
+
+fn entries(path: &Path) -> Vec<Logged> {
+    read(path).lines()
+              .map(|line| {
+                  let value: Value = serde_json::from_str(line)
+                      .unwrap_or_else(|error| panic!("not a JSON line ({error}): {line}"));
+                  let field = |key: &str| value[key].as_str().unwrap_or_default().to_owned();
+                  Logged { level:   field("level"),
+                           subject: field("subject"),
+                           message: field("message"), }
+              })
+              .collect()
+}
+
+/// The first entry about `subject` whose message starts with `prefix`.
+fn find<'a>(entries: &'a [Logged], subject: &str, prefix: &str) -> Option<&'a Logged> {
+    entries.iter()
+           .find(|entry| entry.subject == subject && entry.message.starts_with(prefix))
+}
+
 #[tokio::test]
 async fn the_log_file_and_its_directory_are_created() {
     let (mut server, _base, _root, path) = start(Arc::new(EmptyCatalog)).await;
@@ -79,13 +107,13 @@ async fn binding_and_stopping_are_logged() {
     let bound = server.bound_addr().expect("bound address");
     settle(&mut server).await;
 
-    let contents = read(&path);
-    assert!(contents.contains("lifecycle binding"),
-            "the attempt is logged: {contents}");
-    assert!(contents.contains(&format!("lifecycle bound {bound}")),
-            "with the address it actually bound: {contents}");
-    assert!(contents.contains("lifecycle stopped"),
-            "and so is the stop: {contents}");
+    let logged = entries(&path);
+    assert!(find(&logged, "lifecycle", "binding").is_some(),
+            "the attempt is logged: {logged:?}");
+    assert!(find(&logged, "lifecycle", &format!("bound {bound}")).is_some(),
+            "with the address it actually bound: {logged:?}");
+    assert!(find(&logged, "lifecycle", "stopped").is_some(),
+            "and so is the stop: {logged:?}");
 }
 
 #[tokio::test]
@@ -104,11 +132,13 @@ async fn a_bind_failure_is_logged_with_its_error() {
     settle(&mut blocked).await;
     settle(&mut holder).await;
 
-    let contents = read(&path);
-    assert!(contents.contains("ERROR lifecycle bind"),
-            "a failed bind is an error, not an info: {contents}");
-    assert!(contents.contains(&format!("127.0.0.1:{taken}")),
-            "naming the address it could not have: {contents}");
+    let logged = entries(&path);
+    let failure = logged.iter()
+                        .find(|entry| entry.subject == "lifecycle" && entry.level == "ERROR")
+                        .unwrap_or_else(|| panic!("a failed bind is an error: {logged:?}"));
+    assert!(failure.message.starts_with("bind"), "{failure:?}");
+    assert!(failure.message.contains(&format!("127.0.0.1:{taken}")),
+            "naming the address it could not have: {failure:?}");
 }
 
 #[tokio::test]
@@ -122,17 +152,18 @@ async fn a_method_round_trip_is_logged_both_ways() {
                           .unwrap();
     settle(&mut server).await;
 
-    let contents = read(&path);
-    let request = contents.lines()
-                          .find(|line| line.contains("request "))
-                          .unwrap_or_else(|| panic!("no request entry in: {contents}"));
-    let response = contents.lines()
-                           .find(|line| line.contains("response "))
-                           .unwrap_or_else(|| panic!("no response entry in: {contents}"));
+    let logged = entries(&path);
+    let request = find(&logged, "request", "[").unwrap_or_else(|| panic!("no request: {logged:?}"))
+                                               .message
+                                               .as_str();
+    let response =
+        find(&logged, "response", "[").unwrap_or_else(|| panic!("no response: {logged:?}"))
+                                      .message
+                                      .as_str();
 
     assert!(request.contains("initialize"));
     assert!(response.contains("initialize"));
-    assert!(response.contains(" ok"),
+    assert!(response.ends_with(" ok"),
             "the response records that it was not an error");
 
     // Both carry the same session, which is what lets a reader pair them up
@@ -158,9 +189,11 @@ async fn an_errored_response_is_logged_as_an_error_outcome() {
                           .unwrap();
     settle(&mut server).await;
 
-    let contents = read(&path);
-    assert!(contents.contains("response [") && contents.contains("nonexistent error"),
-            "an unknown method's response is recorded as an error: {contents}");
+    let logged = entries(&path);
+    let response =
+        find(&logged, "response", "[").unwrap_or_else(|| panic!("no response: {logged:?}"));
+    assert!(response.message.ends_with("nonexistent error"),
+            "an unknown method's response is recorded as an error: {response:?}");
 }
 
 #[tokio::test]
@@ -174,7 +207,7 @@ async fn the_tool_catalog_size_is_logged() {
                           .unwrap();
     settle(&mut server).await;
 
-    assert!(read(&path).contains("tool tools/list -> 1 tools"));
+    assert!(find(&entries(&path), "tool", "tools/list -> 1 tools").is_some());
 }
 
 #[tokio::test]

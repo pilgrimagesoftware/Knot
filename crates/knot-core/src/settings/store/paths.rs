@@ -17,7 +17,7 @@ use directories::ProjectDirs;
 
 use crate::consts::{
     AGENTS_FILE, APP_NAME, BENCH_FILE, LEGACY_SETTINGS_FILE, ORG_NAME, ORG_QUALIFIER,
-    PERSONAS_FILE, PREFERENCES_FILE, PULL_REQUESTS_FILE, RECENT_REPOS_FILE,
+    PERSONAS_FILE, PREFERENCES_FILE, PROMPTS_FILE, PULL_REQUESTS_FILE, RECENT_REPOS_FILE,
     WORKSPACE_UI_STATE_FILE, WORKSPACES_FILE,
 };
 
@@ -82,6 +82,11 @@ impl StorePaths {
     /// The bench-templates document.
     pub fn bench(&self) -> PathBuf {
         self.data_dir.join(BENCH_FILE)
+    }
+
+    /// The prompt-library document.
+    pub fn prompts(&self) -> PathBuf {
+        self.data_dir.join(PROMPTS_FILE)
     }
 
     /// The recent-repositories document.

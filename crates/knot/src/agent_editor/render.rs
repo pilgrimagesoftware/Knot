@@ -35,8 +35,8 @@ impl AgentEditor {
     /// A `LabeledContent`-style row: label at the leading edge, control(s)
     /// trailing - matching the Swift reference's `Form` rows, as opposed to
     /// the Settings window's fixed right-aligned label column.
-    fn dialog_row(label: impl Into<gpui_kit::SharedString>, control: impl IntoElement)
-                  -> impl IntoElement {
+    pub(super) fn dialog_row(label: impl Into<gpui_kit::SharedString>, control: impl IntoElement)
+                             -> impl IntoElement {
         h_flex().justify_between()
                 .items_center()
                 .gap_3()
@@ -49,8 +49,8 @@ impl AgentEditor {
     /// leading-label/trailing-control rather than the settings window's
     /// fixed label column, so the hint spans the card instead of being
     /// indented past a column that isn't there.
-    fn dialog_hint(cx: &Context<Self>, text: impl Into<gpui_kit::SharedString>)
-                   -> impl IntoElement {
+    pub(super) fn dialog_hint(cx: &Context<Self>, text: impl Into<gpui_kit::SharedString>)
+                              -> impl IntoElement {
         div().text_sm()
              .whitespace_normal()
              .text_color(cx.theme().muted_foreground)
@@ -105,6 +105,7 @@ impl AgentEditor {
         if !personas.is_empty() {
             rows.push(self.persona_row(personas, cx));
         }
+        rows.extend(self.startup_prompt_rows(cx));
         rows.extend(self.activation_rows(cx));
         rows
     }

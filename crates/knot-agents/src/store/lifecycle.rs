@@ -28,6 +28,7 @@ impl AgentStore {
                             capabilities: opts.capabilities,
                             cost_tier: opts.cost_tier,
                             session_config: BTreeMap::new(),
+                            startup_prompt: opts.startup_prompt,
                             // An `Active` agent is activated from birth, so
                             // it starts when its workspace next opens.
                             activated: opts.activation_mode == ActivationMode::Active,

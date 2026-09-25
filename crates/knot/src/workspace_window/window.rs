@@ -54,6 +54,9 @@ pub(crate) struct WorkspaceWindow {
     /// Set when a pull request could not be handed to a browser, so the view
     /// can say so. A click that silently did nothing reads as a broken row.
     pub(super) pull_request_open_failed:         bool,
+    /// The Pull Requests view's search, filters and sort, for as long as the
+    /// window is open. Never persisted: a relaunch opens the view clean.
+    pub(super) pull_request_view:                super::pull_requests_actions::PullRequestViewState,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off
@@ -66,6 +69,11 @@ pub(crate) struct WorkspaceWindow {
     /// selector's `on_open_change` wrote it and the permission selector
     /// read it, clicking Model or Effort opened the *permission* menu.
     pub(super) open_config_selector:             Option<&'static str>,
+    /// Whether the New Agent button's bench popover is open.
+    pub(super) bench_popover_open:               bool,
+    /// The bench popover row under the pointer, which highlights and
+    /// brightens its remove control.
+    pub(super) bench_popover_hovered:            Option<Uuid>,
     pub(super) store:                            Arc<Mutex<knot_agents::AgentStore>>,
     /// Agent-to-agent messages, for the unread badge and the idle-time
     /// delivery nudge (`mcp-messaging`). Shared with the MCP server, which
@@ -107,6 +115,9 @@ pub(crate) struct WorkspaceWindow {
     /// path, and leaves them there once a pane takes focus, since the root
     /// is that pane's ancestor.
     pub(super) root_focus:                       gpui_kit::FocusHandle,
+    /// Whether ⌘ is held, and the sidebar's key hints once it has been held
+    /// long enough (`agent-list-ui`).
+    pub(super) key_hints:                        super::key_hints::KeyHintHold,
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
     pub(super) terminal_focus:                   gpui_kit::FocusHandle,
@@ -183,6 +194,14 @@ pub(crate) struct WorkspaceWindow {
     /// cancels it).
     pub(super) panel_prompt_input_subscriptions: BTreeMap<Uuid, Subscription>,
     pub(super) panel_prompt_queues:              BTreeMap<Uuid, Vec<QueuedPanelPrompt>>,
+    /// The prompt each agent's pump has taken off its queue and is waiting
+    /// on a result for.
+    ///
+    /// Held outside the queue so the row disappears as soon as the prompt is
+    /// sent. Held at all for two reasons: the pump must not send the next
+    /// prompt before the session reports its turn active, and a failed
+    /// delivery goes back on the queue as the same prompt.
+    pub(super) panel_prompts_in_flight:          BTreeMap<Uuid, QueuedPanelPrompt>,
     /// One activity tracker per Panel-mode agent whose session has been
     /// ready at least once, created lazily by `sync_panel_agent_states`.
     ///
@@ -391,7 +410,8 @@ pub(crate) struct WorkspaceWindow {
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
-    /// act on - currently only a sidebar width that could not be saved.
+    /// act on - a sidebar width that could not be saved, or a bench entry
+    /// pruned because its folder is gone.
     pub(super) error:                            Option<String>,
 }
 

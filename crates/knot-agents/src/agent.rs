@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-use knot_core::{ActivationMode, Capabilities, CostTier, ViewMode};
+use knot_core::{ActivationMode, Capabilities, CostTier, StartupPrompt, ViewMode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -73,6 +73,10 @@ pub struct Agent {
     /// not conversation content. See
     /// `openspec/specs/session-setup-persistence/spec.md`.
     pub session_config:  BTreeMap<String, String>,
+    /// Sent as its own turn after the initialization prompt on each fresh
+    /// session. Durable, and restart-free to edit: it takes effect on the
+    /// next fresh session. See `openspec/specs/prompt-library/spec.md`.
+    pub startup_prompt:  Option<StartupPrompt>,
 
     // Runtime-only
     /// Whether this agent has been activated in this run and so may start.
@@ -196,6 +200,7 @@ mod tests {
                 capabilities:       Default::default(),
                 cost_tier:          Default::default(),
                 session_config:     BTreeMap::new(),
+                startup_prompt:     None,
                 activated:          false,
                 state:              AgentState::Idle,
                 status_text:        String::new(),

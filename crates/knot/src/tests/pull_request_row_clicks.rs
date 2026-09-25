@@ -152,3 +152,21 @@ fn the_row_still_takes_clicks_outside_the_control(cx: &mut TestAppContext) {
     assert_eq!(hits.control.get(), 0, "the control was not clicked");
     assert_eq!(hits.row.get(), 1, "the row's own handler should still run");
 }
+
+/// A row's context menu opens on a secondary click, and that click must not
+/// also open the pull request. `on_click` is primary-button only, which is
+/// what `render_row` relies on by adding the menu without a guard.
+#[gpui_kit::test]
+fn a_secondary_click_does_not_reach_the_rows_click_handler(cx: &mut TestAppContext) {
+    let (mut probe_cx, hits) = probe_window(false, cx);
+    probe_cx.run_until_parked();
+
+    let at = point(px(20.), px(20.));
+    probe_cx.simulate_mouse_down(at, gpui_kit::MouseButton::Right, Modifiers::default());
+    probe_cx.simulate_mouse_up(at, gpui_kit::MouseButton::Right, Modifiers::default());
+    probe_cx.run_until_parked();
+
+    assert_eq!(hits.row.get(),
+               0,
+               "a secondary click must not open the pull request");
+}

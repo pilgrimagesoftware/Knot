@@ -1,4 +1,4 @@
-//! The macOS menu bar's Agents menu.
+//! The macOS menu bar's Agents menu, and this window's claim on the bar.
 //!
 //! Unlike the two context menus, this one is app-global: macOS owns it, so
 //! a workspace window only *claims* it while it is the active window, and
@@ -13,6 +13,7 @@ use gpui_kit::Context;
 use gpui_kit::InteractiveElement;
 
 use super::agent_row::{move_agent_to_workspace, run_agent_menu_action, show_agent_markdown_file};
+use crate::agent_menu::AgentMenuBenchAgent;
 use crate::agent_menu::AgentMenuDeactivate;
 use crate::agent_menu::AgentMenuDuplicateAgent;
 use crate::agent_menu::AgentMenuEditAgent;
@@ -31,12 +32,15 @@ use crate::agent_menu::AgentMenuRestartWithNewConversation;
 use crate::agent_menu::AgentMenuSaveToBench;
 use crate::agent_menu::AgentMenuShowMarkdownFile;
 use crate::agent_menu::AgentMenuSnapshot;
-use crate::agent_menu::AgentsMenuState;
 use crate::app_bootstrap;
 use crate::app_state::AgentMenuEntry;
 use crate::app_state::agent_context_menu_entries;
 use crate::app_support::shorten_path;
+use crate::menu_bar::MenuBarSnapshot;
+use crate::menu_bar::MenuBarState;
 use crate::open_in;
+use crate::view_menu::OwningWindow;
+use crate::view_menu::view_menu_snapshot;
 use crate::workspace_window::AgentMenuTargets;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::agent_menu_facts;
@@ -67,23 +71,24 @@ macro_rules! agents_menu_handlers {
 }
 
 impl WorkspaceWindow {
-    /// Rebuilds the menu bar when the Agents menu's submenus would now
-    /// list something different.
+    /// Rebuilds the menu bar when what its dynamic parts list would now be
+    /// different.
     ///
     /// A `Menu` is a static snapshot: Move to Workspace and Markdown Files
     /// cannot re-read the store when they open, so a workspace created or
     /// a markdown file shown since the bar was built would be missing from
-    /// them (`app-menu`). Everything else in the menu - which items exist,
-    /// and whether each is enabled - is handled by action availability and
-    /// needs no rebuild, which is why this compares before calling rather
-    /// than replacing the bar on every tick.
+    /// them (`app-menu`), and the View menu's checkmarks and submenus would
+    /// show a past panel, selection or roster. The plain items' enabled
+    /// state is handled by action availability and needs no rebuild, which
+    /// is why this compares before calling rather than replacing the bar on
+    /// every tick.
     ///
     /// Only the active window rebuilds: the menu bar is app-wide, and two
     /// open workspace windows would otherwise overwrite each other's
     /// submenus on alternating polls.
     pub(in crate::workspace_window) fn refresh_agents_menu(&mut self, cx: &mut Context<Self>) {
         let active = cx.active_window() == Some(self.window_handle);
-        let owned = cx.global::<AgentsMenuState>().owner == Some(self.window_handle);
+        let owned = cx.global::<MenuBarState>().owner == Some(self.window_handle);
         if !active && !owned {
             // The menu bar is showing someone else's selection, or nobody's.
             return;
@@ -93,20 +98,27 @@ impl WorkspaceWindow {
         // window holding it may do so - which is what makes the order the
         // two windows happen to poll in stop mattering.
         let (owner, snapshot) = if active {
-            (Some(self.window_handle),
-             self.selected_agent_menu(cx)
-                 .map(|selected| selected.snapshot)
-                 .unwrap_or_default())
+            let agents = self.selected_agent_menu(cx)
+                             .map(|selected| selected.snapshot)
+                             .unwrap_or_default();
+            let window = OwningWindow { workspace_id:   self.workspace_id,
+                                        view_mode:      self.view_mode,
+                                        selected_agent: self.selected_agent, };
+            let view = view_menu_snapshot(&self.store.lock(), Some(window));
+            (Some(self.window_handle), MenuBarSnapshot { agents, view })
         }
         else {
-            (None, AgentMenuSnapshot::default())
+            let view = view_menu_snapshot(&self.store.lock(), None);
+            (None,
+             MenuBarSnapshot { agents: AgentMenuSnapshot::default(),
+                               view })
         };
-        let state = cx.global::<AgentsMenuState>();
+        let state = cx.global::<MenuBarState>();
         if state.owner == owner && state.snapshot == snapshot {
             return;
         }
-        cx.set_global(AgentsMenuState { owner,
-                                        snapshot: snapshot.clone() });
+        cx.set_global(MenuBarState { owner,
+                                     snapshot: snapshot.clone() });
         app_bootstrap::set_app_menus(&snapshot, cx);
     }
 
@@ -183,6 +195,7 @@ pub(in crate::workspace_window) fn with_agents_menu_actions(el: gpui_kit::Div,
                                     DuplicateAgent => AgentMenuDuplicateAgent,
                                     MoveToWorkspace => AgentMenuMoveToWorkspace,
                                     SaveToBench => AgentMenuSaveToBench,
+                                    BenchAgent => AgentMenuBenchAgent,
                                     OpenIn => AgentMenuOpenIn,
                                     MarkdownFiles => AgentMenuMarkdownFiles,
                                     RegisterAgent => AgentMenuRegisterAgent,

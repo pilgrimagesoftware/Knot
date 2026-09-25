@@ -29,24 +29,27 @@ pub(crate) enum PromptOrigin {
     User,
     /// The automatic "check your inbox" nudge Knot sends of its own accord.
     InboxNudge,
+    /// The agent's startup prompt, queued behind its registration turn on a
+    /// fresh session. See `openspec/specs/agent-launch-command/spec.md`.
+    Startup,
 }
 
 /// One prompt waiting to be delivered to an agent.
 ///
-/// `in_flight` marks the entry the pump has handed to the agent - it stays
-/// in the queue until its result comes back, so the row keeps its place
-/// while the turn runs. `failed` marks one whose delivery returned an
-/// error; it holds its position until the user retries or deletes it,
-/// rather than being retried automatically.
+/// An entry leaves the queue the moment the pump hands it to the agent -
+/// the prompt is in the conversation from then on, and a row left behind
+/// for the length of the turn read as one still waiting. `failed` marks
+/// one whose delivery returned an error; [`return_failed`] puts it back at
+/// the head, where it holds its position until the user retries or deletes
+/// it, rather than being retried automatically.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct QueuedPanelPrompt {
-    pub(crate) id:        Uuid,
-    pub(crate) text:      String,
-    pub(crate) failed:    bool,
-    pub(crate) in_flight: bool,
+    pub(crate) id:     Uuid,
+    pub(crate) text:   String,
+    pub(crate) failed: bool,
     /// What put this prompt here. Set at the one point where that is still
     /// known; nothing downstream can recover it.
-    pub(crate) origin:    PromptOrigin,
+    pub(crate) origin: PromptOrigin,
 }
 
 impl QueuedPanelPrompt {
@@ -54,18 +57,7 @@ impl QueuedPanelPrompt {
         Self { id: Uuid::new_v4(),
                text,
                failed: false,
-               in_flight: false,
                origin }
-    }
-
-    /// Whether the user may delete this entry.
-    ///
-    /// An in-flight entry has already been submitted and the agent is
-    /// answering it, so removing its row would leave a turn running with
-    /// nothing on screen to explain it - the spec's "deletion does not
-    /// affect active work" cuts both ways.
-    pub(crate) fn is_deletable(&self) -> bool {
-        !self.in_flight
     }
 }
 
@@ -78,24 +70,18 @@ pub(crate) fn remove(queue: &mut Vec<QueuedPanelPrompt>, id: Uuid) -> bool {
     else {
         return false;
     };
-    if !queue[index].is_deletable() {
-        return false;
-    }
     queue.remove(index);
     true
 }
 
 /// Removes the entry `id` names and returns its text, for editing.
 ///
-/// Editability is the test deletion uses: a prompt the agent already has
-/// cannot be taken back. `None` means the entry is gone or is in flight,
-/// and the caller leaves the composer as it found it. The entry does not
-/// hold its place - edited text is sent as a new prompt, at the back.
+/// `None` means the entry is gone - already handed to the agent, which
+/// cannot be taken back - and the caller leaves the composer as it found
+/// it. The entry does not hold its place - edited text is sent as a new
+/// prompt, at the back.
 pub(crate) fn take(queue: &mut Vec<QueuedPanelPrompt>, id: Uuid) -> Option<String> {
     let index = position(queue, id)?;
-    if !queue[index].is_deletable() {
-        return None;
-    }
     Some(queue.remove(index).text)
 }
 
@@ -115,20 +101,27 @@ pub(crate) fn retry(queue: &mut [QueuedPanelPrompt], id: Uuid) -> bool {
     true
 }
 
-/// Applies a delivery result: a delivered prompt leaves the queue, a failed
-/// one stays and is marked so the user can retry or delete it.
-pub(crate) fn complete(queue: &mut Vec<QueuedPanelPrompt>, id: Uuid, delivered: bool) {
-    let Some(index) = position(queue, id)
-    else {
-        return;
-    };
-    if delivered {
-        queue.remove(index);
+/// Takes the head of the queue for delivery.
+///
+/// A failed head is not taken: it waits for the user to retry or delete it,
+/// and everything behind it waits too, so prompts are never delivered out
+/// of the order they were queued in.
+pub(crate) fn take_next(queue: &mut Vec<QueuedPanelPrompt>) -> Option<QueuedPanelPrompt> {
+    if queue.first()?.failed {
+        return None;
     }
-    else {
-        queue[index].in_flight = false;
-        queue[index].failed = true;
-    }
+    Some(queue.remove(0))
+}
+
+/// Puts a prompt whose delivery failed back at the head of the queue,
+/// marked failed, with its text and identity intact.
+///
+/// The head, because it was the head when it was taken: the pump takes
+/// nothing else while a delivery is outstanding, so everything still queued
+/// was behind it.
+pub(crate) fn return_failed(queue: &mut Vec<QueuedPanelPrompt>, mut prompt: QueuedPanelPrompt) {
+    prompt.failed = true;
+    queue.insert(0, prompt);
 }
 
 fn position(queue: &[QueuedPanelPrompt], id: Uuid) -> Option<usize> {
@@ -160,6 +153,7 @@ pub(crate) fn queued_status_label(failed: bool, origin: PromptOrigin) -> String 
     knot_core::l10n::t(match (failed, origin) {
                            (true, _) => "panel.failed",
                            (false, PromptOrigin::InboxNudge) => "panel.queued_inbox_nudge",
+                           (false, PromptOrigin::Startup) => "panel.queued_startup_prompt",
                            (false, PromptOrigin::User) => "panel.queued",
                        })
 }
@@ -193,22 +187,19 @@ mod tests {
                     PromptOrigin::InboxNudge]);
     }
 
-    /// Delivering the entry in front of a nudge leaves the nudge where it
-    /// is - the turn it was waiting behind ending is what promotes it, not
+    /// Taking the entry in front of a nudge leaves the nudge where it is -
+    /// the turn it was waiting behind ending is what promotes it, not
     /// anything about the nudge itself.
     #[test]
-    fn completing_the_entry_ahead_promotes_the_nudge_unchanged() {
+    fn taking_the_entry_ahead_promotes_the_nudge_unchanged() {
         let mut queue = queue(&["first"]);
         queue.push(QueuedPanelPrompt::new("nudge".to_string(), PromptOrigin::InboxNudge));
-        let first = queue[0].id;
-        queue[0].in_flight = true;
 
-        complete(&mut queue, first, true);
+        assert_eq!(take_next(&mut queue).map(|prompt| prompt.text).as_deref(),
+                   Some("first"));
 
         assert_eq!(texts(&queue), ["nudge"]);
         assert_eq!(queue[0].origin, PromptOrigin::InboxNudge);
-        assert!(!queue[0].in_flight,
-                "the promoted nudge has not been sent yet");
     }
 
     #[test]
@@ -243,29 +234,6 @@ mod tests {
     }
 
     #[test]
-    fn an_in_flight_entry_is_not_deletable() {
-        let mut queue = queue(&["running", "waiting"]);
-        queue[0].in_flight = true;
-        let running = queue[0].id;
-
-        assert!(!remove(&mut queue, running));
-
-        assert_eq!(texts(&queue), ["running", "waiting"]);
-    }
-
-    #[test]
-    fn deleting_while_a_turn_runs_leaves_the_running_entry_alone() {
-        let mut queue = queue(&["running", "waiting"]);
-        queue[0].in_flight = true;
-        let waiting = queue[1].id;
-
-        assert!(remove(&mut queue, waiting));
-
-        assert_eq!(texts(&queue), ["running"]);
-        assert!(queue[0].in_flight);
-    }
-
-    #[test]
     fn a_failed_entry_is_deletable() {
         let mut queue = queue(&["failed"]);
         queue[0].failed = true;
@@ -296,29 +264,6 @@ mod tests {
 
         assert_eq!(queue.iter().map(|prompt| prompt.id).collect::<Vec<_>>(),
                    [first, last]);
-    }
-
-    #[test]
-    fn taking_an_in_flight_entry_is_refused() {
-        let mut queue = queue(&["running", "waiting"]);
-        queue[0].in_flight = true;
-        let running = queue[0].id;
-
-        assert_eq!(take(&mut queue, running), None);
-
-        assert_eq!(texts(&queue), ["running", "waiting"]);
-    }
-
-    #[test]
-    fn taking_while_a_turn_runs_leaves_the_running_entry_alone() {
-        let mut queue = queue(&["running", "waiting"]);
-        queue[0].in_flight = true;
-        let waiting = queue[1].id;
-
-        assert_eq!(take(&mut queue, waiting).as_deref(), Some("waiting"));
-
-        assert_eq!(texts(&queue), ["running"]);
-        assert!(queue[0].in_flight);
     }
 
     #[test]
@@ -406,50 +351,49 @@ mod tests {
         assert!(!retry(&mut queue, first));
     }
 
+    /// The row disappears when the prompt is sent, not when its turn ends.
     #[test]
-    fn a_delivered_prompt_leaves_the_queue() {
+    fn taking_the_head_removes_it_from_the_queue() {
         let mut queue = queue(&["first", "second"]);
         let first = queue[0].id;
-        queue[0].in_flight = true;
 
-        complete(&mut queue, first, true);
+        let taken = take_next(&mut queue).expect("the head is waiting");
 
+        assert_eq!(taken.id, first);
         assert_eq!(texts(&queue), ["second"]);
     }
 
     #[test]
-    fn a_failed_delivery_stays_and_is_marked() {
+    fn a_failed_head_is_not_taken() {
+        let mut queue = queue(&["failed", "second"]);
+        queue[0].failed = true;
+
+        assert_eq!(take_next(&mut queue), None);
+
+        assert_eq!(texts(&queue), ["failed", "second"]);
+    }
+
+    #[test]
+    fn taking_from_an_empty_queue_takes_nothing() {
+        assert_eq!(take_next(&mut Vec::new()), None);
+    }
+
+    /// A failed delivery comes back as the same prompt, in front of what
+    /// was queued behind it while it was out.
+    #[test]
+    fn a_failed_delivery_returns_to_the_head_marked() {
         let mut queue = queue(&["first", "second"]);
-        let first = queue[0].id;
-        queue[0].in_flight = true;
+        let taken = take_next(&mut queue).expect("the head is waiting");
+        let first = taken.id;
+        queue.push(QueuedPanelPrompt::new("third".to_string(), PromptOrigin::User));
 
-        complete(&mut queue, first, false);
+        return_failed(&mut queue, taken);
 
-        assert_eq!(texts(&queue), ["first", "second"]);
+        assert_eq!(texts(&queue), ["first", "second", "third"]);
+        assert_eq!(queue[0].id, first);
         assert!(queue[0].failed);
-        assert!(!queue[0].in_flight);
-    }
-
-    #[test]
-    fn a_result_completes_its_own_entry_among_identical_text() {
-        let mut queue = queue(&["same", "same"]);
-        let second = queue[1].id;
-        queue[1].in_flight = true;
-
-        complete(&mut queue, second, true);
-
-        assert_eq!(queue.len(), 1);
-        assert_ne!(queue[0].id, second);
-    }
-
-    #[test]
-    fn a_result_for_a_deleted_entry_is_ignored() {
-        let mut queue = queue(&["first"]);
-        let gone = Uuid::new_v4();
-
-        complete(&mut queue, gone, false);
-
-        assert_eq!(texts(&queue), ["first"]);
-        assert!(!queue[0].failed);
+        assert_eq!(take_next(&mut queue),
+                   None,
+                   "the failed head blocks the queue");
     }
 }

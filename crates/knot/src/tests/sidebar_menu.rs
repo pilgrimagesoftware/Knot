@@ -25,6 +25,7 @@ fn background_menu_entries(facts: SidebarMenuFacts) -> Vec<(AgentListBackgroundE
 fn sidebar_background_menu_keeps_its_shape_and_offers_only_new_agent_when_empty() {
     assert_eq!(background_menu_entries(SidebarMenuFacts::default()),
                vec![(AgentListBackgroundEntry::NewAgent, true),
+                    (AgentListBackgroundEntry::NewFromBench, false),
                     (AgentListBackgroundEntry::RestartAll, false),
                     (AgentListBackgroundEntry::CloseAll, false),
                     (AgentListBackgroundEntry::DeactivateAll, false),
@@ -35,8 +36,10 @@ fn sidebar_background_menu_keeps_its_shape_and_offers_only_new_agent_when_empty(
 #[test]
 fn sidebar_background_menu_cannot_deactivate_a_workspace_of_stopped_agents() {
     assert_eq!(background_menu_entries(SidebarMenuFacts { agent_count:   3,
-                                                          running_count: 0, }),
+                                                          running_count: 0,
+                                                          bench_count:   0, }),
                vec![(AgentListBackgroundEntry::NewAgent, true),
+                    (AgentListBackgroundEntry::NewFromBench, false),
                     (AgentListBackgroundEntry::RestartAll, true),
                     (AgentListBackgroundEntry::CloseAll, true),
                     (AgentListBackgroundEntry::DeactivateAll, false),
@@ -47,13 +50,27 @@ fn sidebar_background_menu_cannot_deactivate_a_workspace_of_stopped_agents() {
 #[test]
 fn sidebar_background_menu_enables_every_item_with_a_running_agent() {
     assert_eq!(background_menu_entries(SidebarMenuFacts { agent_count:   3,
-                                                          running_count: 1, }),
+                                                          running_count: 1,
+                                                          bench_count:   2, }),
                vec![(AgentListBackgroundEntry::NewAgent, true),
+                    (AgentListBackgroundEntry::NewFromBench, true),
                     (AgentListBackgroundEntry::RestartAll, true),
                     (AgentListBackgroundEntry::CloseAll, true),
                     (AgentListBackgroundEntry::DeactivateAll, true),
                     (AgentListBackgroundEntry::Separator, false),
                     (AgentListBackgroundEntry::Broadcast, true)]);
+}
+
+/// `agent-list-ui` - "An empty workspace can deploy from the bench": New
+/// from Bench follows the bench, not the workspace.
+#[test]
+fn new_from_bench_is_enabled_by_the_bench_alone() {
+    let entries = background_menu_entries(SidebarMenuFacts { bench_count: 1,
+                                                             ..SidebarMenuFacts::default() });
+    assert_eq!(&entries[..2],
+               [(AgentListBackgroundEntry::NewAgent, true),
+                (AgentListBackgroundEntry::NewFromBench, true)]);
+    assert!(entries[2..].iter().all(|(_, enabled)| !enabled));
 }
 
 /// A workspace of three agents, one of them owning a shell companion, in a
@@ -87,7 +104,8 @@ fn a_bulk_action_over_the_snapshot_reaches_every_agent() {
     assert!(workspace_agent_ids(&store, workspace_id).is_empty());
     assert_eq!(sidebar_menu_facts(&store, workspace_id),
                SidebarMenuFacts { agent_count:   0,
-                                  running_count: 0, });
+                                  running_count: 0,
+                                  bench_count:   0, });
 }
 
 #[test]
@@ -95,13 +113,15 @@ fn sidebar_menu_facts_count_the_workspaces_agents_and_the_running_ones() {
     let (mut store, workspace_id) = workspace_with_agents_and_a_companion();
     assert_eq!(sidebar_menu_facts(&store, workspace_id),
                SidebarMenuFacts { agent_count:   4,
-                                  running_count: 0, });
+                                  running_count: 0,
+                                  bench_count:   0, });
 
     let running = workspace_agent_ids(&store, workspace_id)[0];
     store.set_activated(running, true);
     assert_eq!(sidebar_menu_facts(&store, workspace_id),
                SidebarMenuFacts { agent_count:   4,
-                                  running_count: 1, });
+                                  running_count: 1,
+                                  bench_count:   0, });
 }
 
 /// Every item is scoped to the workspace the sidebar is showing, so a second

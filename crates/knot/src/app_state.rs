@@ -118,6 +118,7 @@ pub(crate) enum AgentMenuEntry {
     DuplicateAgent,
     MoveToWorkspace,
     SaveToBench,
+    BenchAgent,
     OpenIn,
     MarkdownFiles,
     RegisterAgent,
@@ -137,7 +138,7 @@ impl AgentMenuEntry {
     /// and `tests::every_agent_menu_entry_is_in_all` walks this list against
     /// an exhaustive match, so a variant added here without an action - or
     /// added to the enum without reaching this list - fails the build.
-    pub(crate) const ALL: [Self; 15] = [Self::Separator,
+    pub(crate) const ALL: [Self; 16] = [Self::Separator,
                                         Self::NewCompanion,
                                         Self::NewShellCompanion,
                                         Self::EditAgent,
@@ -145,6 +146,7 @@ impl AgentMenuEntry {
                                         Self::DuplicateAgent,
                                         Self::MoveToWorkspace,
                                         Self::SaveToBench,
+                                        Self::BenchAgent,
                                         Self::OpenIn,
                                         Self::MarkdownFiles,
                                         Self::RegisterAgent,
@@ -167,6 +169,7 @@ impl AgentMenuEntry {
             Self::DuplicateAgent => Some(knot_core::l10n::t("menu.agent.duplicate_agent")),
             Self::MoveToWorkspace => Some(knot_core::l10n::t("menu.agent.move_to_workspace")),
             Self::SaveToBench => Some(knot_core::l10n::t("menu.agent.save_to_bench")),
+            Self::BenchAgent => Some(knot_core::l10n::t("menu.agent.bench_agent")),
             Self::OpenIn => Some(knot_core::l10n::t("menu.agent.open_in")),
             Self::MarkdownFiles => Some(knot_core::l10n::t("menu.agent.markdown_files")),
             Self::RegisterAgent => Some(knot_core::l10n::t("menu.agent.register_agent")),
@@ -234,7 +237,8 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
                              .collect(),
                   [MoveToWorkspace].into_iter()
                                    .filter(|_| owner_only && facts.has_move_targets)
-                                   .chain([SaveToBench].into_iter().filter(|_| owner_only))
+                                   .chain([SaveToBench, BenchAgent].into_iter()
+                                                                   .filter(|_| owner_only))
                                    .collect(),
                   [OpenIn].into_iter()
                           .chain([MarkdownFiles].into_iter()
@@ -280,6 +284,8 @@ pub(crate) fn agent_context_menu_entries(facts: AgentMenuFacts) -> Vec<AgentMenu
 pub(crate) enum AgentListBackgroundEntry {
     Separator,
     NewAgent,
+    /// A submenu of the bench's entries, deployed into this workspace.
+    NewFromBench,
     RestartAll,
     CloseAll,
     DeactivateAll,
@@ -294,6 +300,7 @@ impl AgentListBackgroundEntry {
         match self {
             Self::Separator => None,
             Self::NewAgent => Some(knot_core::l10n::t("menu.sidebar.new_agent")),
+            Self::NewFromBench => Some(knot_core::l10n::t("menu.sidebar.new_from_bench")),
             Self::RestartAll => Some(knot_core::l10n::t("menu.sidebar.restart_all")),
             Self::CloseAll => Some(knot_core::l10n::t("menu.sidebar.close_all")),
             Self::DeactivateAll => Some(knot_core::l10n::t("menu.sidebar.deactivate_all")),
@@ -311,6 +318,9 @@ pub(crate) struct SidebarMenuFacts {
     pub(crate) agent_count:   usize,
     /// How many of those are running, i.e. have a session to stop.
     pub(crate) running_count: usize,
+    /// Entries on the bench, which New from Bench lists whatever the
+    /// workspace holds.
+    pub(crate) bench_count:   usize,
 }
 
 /// One item of the sidebar's background menu: the entry and whether it
@@ -338,6 +348,7 @@ pub(crate) fn sidebar_background_menu_entries(facts: SidebarMenuFacts) -> Vec<Si
     // Restart All and Close All apply to a stopped agent, stopping does not.
     let has_running = facts.running_count > 0;
     [(NewAgent, true),
+     (NewFromBench, facts.bench_count > 0),
      (RestartAll, has_agents),
      (CloseAll, has_agents),
      (DeactivateAll, has_running),

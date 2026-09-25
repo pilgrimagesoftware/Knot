@@ -40,6 +40,9 @@ pub const PERSONAS_FILE: &str = "personas.json";
 /// The bench-templates collection.
 pub const BENCH_FILE: &str = "bench.json";
 
+/// The prompt-library collection. Written only once a prompt exists.
+pub const PROMPTS_FILE: &str = "prompts.json";
+
 /// The recent-repositories collection.
 pub const RECENT_REPOS_FILE: &str = "recent-repos.json";
 

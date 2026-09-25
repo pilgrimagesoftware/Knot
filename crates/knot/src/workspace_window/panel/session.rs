@@ -61,6 +61,10 @@ impl WorkspaceWindow {
             knot_agent_launch::acp_registration_prompt(agent.id,
                                                        prior_session_id.is_some(),
                                                        crate::settings_global::read(cx).persona(id));
+        // Only alongside a registration prompt, which is what marks a fresh
+        // session: a resumed conversation gets neither.
+        let startup_prompt = registration_prompt.as_ref()
+                                                .and_then(|_| self.startup_request(&agent, cx));
         let session_config = agent.session_config.clone();
         // Built here because this is the only place that knows both the
         // agent's id and its type; `None` for a type with no recognizer,
@@ -80,7 +84,8 @@ impl WorkspaceWindow {
                                                             mcp_url: mcp_url.as_deref(),
                                                             registration_prompt,
                                                             session_config,
-                                                            subagents };
+                                                            subagents,
+                                                            startup_prompt };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {
                             // Written out straight away, not left for the next
                             // roster change: with conversations restored, this
