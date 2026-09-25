@@ -19,6 +19,7 @@ use gpui_kit::div;
 use gpui_kit::px;
 
 use crate::app_state::state_color;
+use crate::workspace_window::key_hints::with_key_hint;
 
 /// What the compact row draws. A struct rather than three positional
 /// parameters, and deliberately a subset of [`AgentRow`]: everything the
@@ -30,6 +31,8 @@ pub(crate) struct CompactAgentRow {
     pub avatar:   String,
     pub state:    knot_agents::AgentState,
     pub is_shell: bool,
+    /// The row's key hint while ⌘ is held (`key_hints`).
+    pub hint:     Option<String>,
 }
 
 /// The compact row's body: the avatar alone, centred, with the state dot
@@ -38,10 +41,11 @@ pub(crate) struct CompactAgentRow {
 /// The dot moves onto the avatar because the text block it used to sit
 /// beside is gone; it keeps its colour mapping and its "a shell agent has
 /// none" rule, so where it sits is the only thing that changes.
-pub(crate) fn compact_agent_row_body(row: CompactAgentRow) -> impl IntoElement {
+pub(crate) fn compact_agent_row_body(row: CompactAgentRow, cx: &gpui_kit::App) -> impl IntoElement {
     let CompactAgentRow { avatar,
                           state,
-                          is_shell, } = row;
+                          is_shell,
+                          hint, } = row;
     let dot = (!is_shell).then(|| {
                              div().absolute()
                                   .bottom_0()
@@ -66,5 +70,8 @@ pub(crate) fn compact_agent_row_body(row: CompactAgentRow) -> impl IntoElement {
                     .text_2xl()
                     .child(avatar)
                     .children(dot);
-    h_flex().w_full().justify_center().child(tile)
+    // The hint goes on a box around the tile rather than on the tile, which
+    // clips to its bounds and would cut the badge off.
+    let framed = with_key_hint(div().relative().child(tile), hint.as_deref(), true, cx);
+    h_flex().w_full().justify_center().child(framed)
 }

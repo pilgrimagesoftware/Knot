@@ -33,33 +33,51 @@ handler (see that change's design).
 Alternative: make it configurable. Rejected. Nothing asked for it, and the
 reference's key is fixed.
 
-### ⌘-hold hints: window state, a timer, and a cached label set
+### ⌘-hold hints: window state, a timer, and a label set formatted once
 
-The workspace window tracks `command_held_since: Option<Instant>` and
-`show_key_hints: bool`:
+The workspace window holds a `KeyHintHold` (`workspace_window/key_hints.rs`):
+whether a hold is armed, a generation counter, and the `SidebarKeyHints`
+labels once they are showing.
 
-- The root element's `on_modifiers_changed` sets `command_held_since` when ⌘
-  goes down and clears both when it goes up.
-- A key-down listener in the capture phase clears both, so that ⌘C cancels the
-  hold. It does not stop propagation.
-- `show_key_hints` turns on from a 500 ms timer spawned when ⌘ goes down. The
-  timer checks that the hold it was started for is still the current one and
-  then notifies the view. A per-frame elapsed-time check would need the window
-  to keep repainting while nothing else changes.
-- Window deactivation (`observe_window_activation`) clears both. macOS does not
-  deliver the ⌘ key-up to a window that lost key status during ⌘Tab, so without
-  this the hints would still be showing when the user returns.
+- The root element's `on_modifiers_changed` arms the hold when ⌘ goes down and
+  ends it when ⌘ comes up. Other modifiers do neither, so adding ⌥ keeps the
+  hints.
+- A `capture_key_down` listener on the root ends the hold, so ⌘C cancels it.
+  It does not stop propagation. It is in the capture phase because a focused
+  input handles most keys and stops them bubbling.
+- Arming spawns a 500 ms timer (`consts::KEY_HINT_DELAY`). When it fires it
+  checks that the hold it was started for is still the current one, by
+  generation, before showing anything. A per-frame elapsed-time check would
+  need the window to keep repainting while nothing else changes.
+- The frame's prepare pass ends the hold when the window is not active. gpui
+  refreshes a window when its activation changes, so this runs on
+  deactivation. macOS does not deliver the ⌘ key-up to a window that lost key
+  status during ⌘Tab.
 
-The labels come from `Resolved`, stored on the window as a `SidebarKeyHints`
-(Dashboard, Pull Requests, New Agent and nine agent chords as strings). It is
-rebuilt when the keymap is applied, the same moment the menu bar is rebuilt, so
-the render path formats nothing and reads no settings. This follows the
-no-work-on-the-render-path rule in `.claude/rules/rust-structure.md`.
+Modifier changes and key-downs are dispatched along the focused element's
+path, innermost first. The composer's input listens for modifier changes but
+does not stop propagation, and the terminal registers no such listener, so the
+root receives both with either pane focused. This was checked in task 2.1, and
+`key_hints_tests` covers the composer case.
 
-Rendering: at full width a hint is an absolutely positioned, right-aligned
-label inside the row, over its trailing content. In compact layout it is an
-absolutely positioned badge at the avatar's or icon's corner. Being absolutely
-positioned is what keeps row sizes unchanged.
+The labels are formatted from `Resolved` when the timer turns the hints on,
+and kept until the hold ends. The render path formats nothing and reads no
+settings, per the no-work-on-the-render-path rule in
+`.claude/rules/rust-structure.md`. A rebinding cannot land mid-hold: recording
+one needs the settings window focused, which ends the hold. That is simpler
+than rebuilding on every keymap apply, which the first version of this design
+proposed, and it is equivalent.
+
+Rendering: `with_key_hint` adds an absolutely positioned badge to an element,
+which is what keeps row sizes unchanged.
+- At full width the badge sits against the row's trailing edge, vertically
+  centred.
+- In the compact layout it goes over the corner of the avatar or icon. The
+  compact agent row puts it on a box around the avatar tile, because the tile
+  clips to its bounds.
+- The New agent control uses the trailing-edge placement at both widths. From
+  a row as wide as the sidebar, a corner badge would overhang the sidebar's
+  edge.
 
 Alternative: show hints for as long as ⌘ is held, with no delay. Rejected. The
 hints would flash on every ⌘C, ⌘V and ⌘Tab.
@@ -72,7 +90,7 @@ show it to them.
 
 - [gpui may not deliver `ModifiersChangedEvent` to a window whose focused
   element is the terminal pane] → The listener is on the root element, which
-  is an ancestor of every pane. Task 5.1 verifies this with the terminal
+  is an ancestor of every pane. Task 2.1 verifies this with the terminal
   focused before any rendering work starts.
 - [⌘T in the terminal pane: a shell user may expect it to reach the program]
   → The terminal forwards no ⌘ chords today (they are app shortcuts on macOS),

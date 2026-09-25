@@ -11,6 +11,9 @@ pub(crate) mod artifact_panel;
 mod chrome;
 mod creation;
 mod git_panel;
+mod key_hints;
+#[cfg(test)]
+mod key_hints_tests;
 pub(crate) mod mcp_panel;
 mod menus;
 mod notifications;

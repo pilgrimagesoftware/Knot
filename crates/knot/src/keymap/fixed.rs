@@ -54,7 +54,7 @@ pub(crate) fn fixed_bindings() -> Vec<FixedBinding> {
                        fixed(KeyBinding::new("cmd-n", NewWorkspace, None),
                              "keymap.fixed.new_workspace"),
                        // The Swift reference's New Agent key.
-                       fixed(KeyBinding::new("cmd-t", NewAgent, None),
+                       fixed(KeyBinding::new(crate::consts::NEW_AGENT_CHORD, NewAgent, None),
                              "keymap.fixed.new_agent"),
                        fixed(KeyBinding::new("cmd-w", CloseWindow, None),
                              "keymap.fixed.close_window"),

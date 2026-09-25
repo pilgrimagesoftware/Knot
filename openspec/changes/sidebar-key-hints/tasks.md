@@ -7,10 +7,10 @@
 
 ## 2. Sidebar key hints
 
-- [ ] 2.1 Spike: confirm the root element receives `ModifiersChangedEvent` with the terminal pane and with the composer focused; record the result in design.md before continuing
-- [ ] 2.2 Add `SidebarKeyHints`, built from `Resolved` and rebuilt wherever the keymap is applied; verify with unit tests for the defaults, a rebinding, and the nine-agent cap
-- [ ] 2.3 Track the ⌘ hold on the workspace window (modifier listener, key-down cancel, 500 ms timer, deactivation reset); verify with gpui tests that hints turn on after the delay, stay off for a quick ⌘C, stay on when ⌥ is added, and clear on release and on deactivation
-- [ ] 2.4 Render the hints on the Dashboard, Pull Requests, first nine agent rows and New agent control, full-width and compact, without changing row sizes; verify with a render test that row bounds are equal with hints on and off
+- [x] 2.1 Spike: confirm the root element receives `ModifiersChangedEvent` with the terminal pane and with the composer focused; record the result in design.md before continuing (both pass the events through; recorded under the ⌘-hold decision)
+- [x] 2.2 Add `SidebarKeyHints`, built from `Resolved` when a hold turns the hints on; verify with unit tests for the defaults, a rebinding, and the nine-agent cap
+- [x] 2.3 Track the ⌘ hold on the workspace window (modifier listener, key-down cancel, 500 ms timer, deactivation reset); verify with gpui tests that hints turn on after the delay, stay off for a quick ⌘C, stay on when ⌥ is added, and clear on release and on deactivation
+- [x] 2.4 Render the hints on the Dashboard, Pull Requests, first nine agent rows and New agent control, full-width and compact, without changing row sizes; verify with a render test that row bounds are equal with hints on and off
 
 ## 3. Gate and manual check
 

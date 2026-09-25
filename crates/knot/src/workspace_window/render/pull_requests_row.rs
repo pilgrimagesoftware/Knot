@@ -19,6 +19,7 @@ use gpui_kit::{
 };
 
 use crate::pull_request_state::PullRequestCounts;
+use crate::workspace_window::key_hints::with_key_hint;
 use crate::workspace_window::{WorkspaceViewMode, WorkspaceWindow};
 
 impl WorkspaceWindow {
@@ -43,8 +44,17 @@ impl WorkspaceWindow {
                               knot_core::l10n::t("pull_requests.title"),
                               counts_label(counts));
 
-        Some(div().id("workspace-pull-requests-row")
-                  .cursor_pointer()
+        let hint = self.key_hints
+                       .shown()
+                       .map(|hints| hints.pull_requests.clone());
+        let row = div().id("workspace-pull-requests-row");
+        let row = if compact {
+            row
+        }
+        else {
+            with_key_hint(row, hint.as_deref(), false, cx)
+        };
+        Some(row.cursor_pointer()
                   .rounded(cx.theme().radius)
                   .p_2()
                   .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
@@ -58,13 +68,16 @@ impl WorkspaceWindow {
                                  .gap_3()
                                  .items_center()
                                  .when(compact, |row| row.justify_center())
-                                 .child(div().w(px(40.))
-                                             .h(px(40.))
-                                             .flex_shrink_0()
-                                             .flex()
-                                             .items_center()
-                                             .justify_center()
-                                             .child(Icon::default().path("icons/git-pull-request.svg")))
+                                 .child({
+                                     let icon = div().w(px(40.))
+                                                     .h(px(40.))
+                                                     .flex_shrink_0()
+                                                     .flex()
+                                                     .items_center()
+                                                     .justify_center()
+                                                     .child(Icon::default().path("icons/git-pull-request.svg"));
+                                     if compact { with_key_hint(icon, hint.as_deref(), true, cx) } else { icon }
+                                 })
                                  .when(!compact, |row| {
                                      // `min_w_0` on the growing child, not
                                      // just `flex_1`: the breakdown is the

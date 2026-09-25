@@ -29,14 +29,21 @@ use crate::workspace_window::pane_focus::FocusTarget;
 /// registered under it.
 const INERT_AGENT_TYPE: &str = "keybindings-test-inert";
 
-struct Fixture {
-    window: VisualTestContext,
-    view:   Entity<WorkspaceWindow>,
-    agents: Vec<Uuid>,
-    _dir:   TempDir,
+pub(super) struct Fixture {
+    pub(super) window: VisualTestContext,
+    pub(super) view:   Entity<WorkspaceWindow>,
+    pub(super) agents: Vec<Uuid>,
+    _dir:              TempDir,
 }
 
-fn window_with_agents(count: usize, cx: &mut TestAppContext) -> Fixture {
+pub(super) fn window_with_agents(count: usize, cx: &mut TestAppContext) -> Fixture {
+    window_with(count, |_| {}, cx)
+}
+
+/// [`window_with_agents`], with `configure` applied to the settings first.
+pub(super) fn window_with(count: usize, configure: impl FnOnce(&mut knot_core::Settings),
+                          cx: &mut TestAppContext)
+                          -> Fixture {
     let mut store = knot_agents::AgentStore::new();
     let space = crate::tests::workspace("Only");
     let workspace_id = space.id;
@@ -55,15 +62,19 @@ fn window_with_agents(count: usize, cx: &mut TestAppContext) -> Fixture {
     let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
     let dir = TempDir::new().expect("a temporary settings root");
     let view = cx.update(|cx| {
-                   gpui_kit::init(cx);
-                   WindowRegistry::install(cx);
-                   crate::settings_global::install(knot_core::Settings::with_store_root(dir.path()),
-                                                     cx);
-                   register_global_handlers(Arc::clone(&store), Arc::clone(&messages), cx);
-                   WorkspaceWindow::open(store, messages, workspace_id, cx);
-                   WindowRegistry::workspace_view(WindowKey::Workspace(workspace_id), cx)
+                     gpui_kit::init(cx);
+                     WindowRegistry::install(cx);
+                     // Bootstrap's, which the repaint poll reads once the
+                     // clock is advanced past its first tick.
+                     cx.set_global(crate::menu_bar::MenuBarState::default());
+                     let mut settings = knot_core::Settings::with_store_root(dir.path());
+                     configure(&mut settings);
+                     crate::settings_global::install(settings, cx);
+                     register_global_handlers(Arc::clone(&store), Arc::clone(&messages), cx);
+                     WorkspaceWindow::open(store, messages, workspace_id, cx);
+                     WindowRegistry::workspace_view(WindowKey::Workspace(workspace_id), cx)
                          .expect("opening a workspace registers its view")
-               });
+                 });
     let handle = cx.update(|cx| *cx.windows().first().expect("the workspace window"));
     let window = VisualTestContext::from_window(handle, cx);
     Fixture { window,
@@ -73,7 +84,7 @@ fn window_with_agents(count: usize, cx: &mut TestAppContext) -> Fixture {
 }
 
 impl Fixture {
-    fn press(&mut self, action: impl gpui_kit::Action) {
+    pub(super) fn press(&mut self, action: impl gpui_kit::Action) {
         self.window.dispatch_action(action);
         self.window.run_until_parked();
     }
@@ -87,7 +98,7 @@ impl Fixture {
         self.view.read_with(&self.window, |view, _| view.view_mode)
     }
 
-    fn set_view_mode(&mut self, mode: WorkspaceViewMode) {
+    pub(super) fn set_view_mode(&mut self, mode: WorkspaceViewMode) {
         self.view.update(&mut self.window, |view, cx| {
                      view.view_mode = mode;
                      cx.notify();

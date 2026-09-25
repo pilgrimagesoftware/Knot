@@ -29,8 +29,9 @@ because every default binding holds it.
 
 A hint SHALL NOT move or resize the control it labels, or any other row: at
 full width it takes the right end of the row, over the row's own trailing
-content. In the compact layout it SHALL be drawn as a badge over the corner of
-the avatar or icon.
+content. In the compact layout a row's hint SHALL be drawn as a badge over the
+corner of its avatar or icon. The New agent control's hint sits against its
+trailing edge at both widths.
 
 The hints are not a Swift reference feature. The Swift sidebar shows no
 shortcuts.

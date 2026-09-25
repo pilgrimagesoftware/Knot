@@ -272,3 +272,11 @@ pub(crate) const WINDOW_MIN_VISIBLE_WIDTH: f32 = 160.;
 /// How many targets a numbered shortcut family reaches: the digits 1 to 9
 /// (`keybindings`). The View menu's submenus list no more than this.
 pub(crate) const NUMBERED_SHORTCUTS: usize = 9;
+
+/// New Agent's fixed key, the Swift reference's. One definition, because the
+/// sidebar's hint has to name the key the binding actually uses.
+pub(crate) const NEW_AGENT_CHORD: &str = "cmd-t";
+
+/// How long ⌘ has to be held before the sidebar shows its keys - long enough
+/// that an ordinary ⌘C or ⌘Tab does not flash them (`agent-list-ui`).
+pub(crate) const KEY_HINT_DELAY: Duration = Duration::from_millis(500);

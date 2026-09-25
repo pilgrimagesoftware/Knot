@@ -107,6 +107,9 @@ pub(crate) struct WorkspaceWindow {
     /// path, and leaves them there once a pane takes focus, since the root
     /// is that pane's ancestor.
     pub(super) root_focus:                       gpui_kit::FocusHandle,
+    /// Whether ⌘ is held, and the sidebar's key hints once it has been held
+    /// long enough (`agent-list-ui`).
+    pub(super) key_hints:                        super::key_hints::KeyHintHold,
     /// Focus target for the terminal grid pane - key events only reach
     /// `dispatch_key` while this is focused (click the pane to focus it).
     pub(super) terminal_focus:                   gpui_kit::FocusHandle,
