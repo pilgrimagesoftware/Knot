@@ -1,6 +1,7 @@
 //! The window-scoped shortcuts, dispatched to a real workspace window
-//! (`keybindings`: selecting an agent by number, focusing its input, and
-//! toggling the panels), through the global handlers the app registers.
+//! (`keybindings`: selecting an agent by number, focusing its input,
+//! jumping to the latest output and toggling the panels), through the global
+//! handlers the app registers.
 //!
 //! The agents use an agent type with no terminal process and no ACP
 //! adapter, so selecting one - which activates it - starts nothing.
@@ -192,5 +193,41 @@ fn focus_agent_input_does_nothing_without_a_selection(cx: &mut TestAppContext) {
     let mut fixture = window_with_agents(0, cx);
     fixture.set_view_mode(WorkspaceViewMode::Dashboard);
     fixture.press(FocusAgentInput);
+    assert_eq!(fixture.view_mode(), WorkspaceViewMode::Dashboard);
+}
+
+/// A conversation list for the selected agent, scrolled to its top.
+fn scrolled_up_list(fixture: &mut Fixture, id: Uuid) -> gpui_kit::ListState {
+    let list = gpui_kit::ListState::new(20, gpui_kit::ListAlignment::Top, gpui_kit::px(0.));
+    list.scroll_to(gpui_kit::ListOffset { item_ix:        0,
+                                          offset_in_item: gpui_kit::px(0.), });
+    let installed = list.clone();
+    fixture.view.update(&mut fixture.window, |view, _| {
+                    view.panel_lists.insert(id, installed);
+                });
+    list
+}
+
+#[gpui_kit::test]
+fn jump_to_bottom_scrolls_the_conversation_to_its_end(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(1, cx);
+    let id = fixture.agents[0];
+    fixture.press(SelectAgent1);
+    let list = scrolled_up_list(&mut fixture, id);
+
+    fixture.press(JumpToBottom);
+    assert_eq!(list.logical_scroll_top().item_ix, list.item_count());
+}
+
+#[gpui_kit::test]
+fn jump_to_bottom_leaves_a_hidden_conversation_alone(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(1, cx);
+    let id = fixture.agents[0];
+    fixture.press(SelectAgent1);
+    fixture.set_view_mode(WorkspaceViewMode::Dashboard);
+    let list = scrolled_up_list(&mut fixture, id);
+
+    fixture.press(JumpToBottom);
+    assert_eq!(list.logical_scroll_top().item_ix, 0);
     assert_eq!(fixture.view_mode(), WorkspaceViewMode::Dashboard);
 }

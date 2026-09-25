@@ -34,7 +34,7 @@ impl SettingsWindow {
             SettingsTab::Voice => px(520.),
             SettingsTab::Mcp => px(600.),
             SettingsTab::Terminal => px(380.),
-            SettingsTab::Keyboard => px(520.),
+            SettingsTab::Keyboard => px(560.),
         }
     }
 

@@ -3,7 +3,7 @@
 //! `app_bootstrap`.
 //!
 //! All of them are global. The workspace-scoped ones (Select agent N, Focus
-//! agent input, the panel toggles) find their window from
+//! agent input, Jump to bottom, the panel toggles) find their window from
 //! `cx.active_window()` rather than being registered on the window's root
 //! element: once a Dashboard or Pull Requests panel takes over, the composer
 //! or terminal that held focus is no longer drawn, focus falls outside the
@@ -62,6 +62,9 @@ pub(crate) fn register_global_handlers(store: Arc<Mutex<knot_agents::AgentStore>
 
     cx.on_action(|_: &FocusAgentInput, cx| {
           in_active_workspace(cx, |view, cx| view.focus_agent_input(cx));
+      });
+    cx.on_action(|_: &JumpToBottom, cx| {
+          in_active_workspace(cx, |view, cx| view.jump_to_bottom(cx));
       });
     cx.on_action(|_: &ToggleDashboard, cx| {
           in_active_workspace(cx, |view, cx| {

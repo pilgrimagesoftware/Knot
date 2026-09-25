@@ -29,7 +29,8 @@ actions!(knot_app,
           SelectAgent9,
           FocusAgentInput,
           ToggleDashboard,
-          TogglePullRequests]);
+          TogglePullRequests,
+          JumpToBottom]);
 
 /// Builds a context-less binding of one action to a chord string.
 pub(crate) type BindFn = fn(&str) -> KeyBinding;

@@ -1,5 +1,6 @@
 //! What the workspace-scoped configurable shortcuts do to a workspace
-//! window: select an agent by number, focus its input, toggle a panel
+//! window: select an agent by number, focus its input, jump to the latest
+//! output, toggle a panel
 //! (`keybindings`). Their handlers are in `keymap::handlers`, which says why
 //! they are global.
 
@@ -39,6 +40,33 @@ impl WorkspaceWindow {
         }
         self.view_mode = WorkspaceViewMode::Terminal;
         self.focused_pane = None;
+        cx.notify();
+    }
+
+    /// Scrolls the selected agent's conversation to its latest output and
+    /// resumes following it - what the panel's own "Scroll to latest"
+    /// button does. Nothing for a Terminal-mode agent, whose pane always
+    /// shows the bottom of its grid (the port has no scrollback view), or
+    /// while a Dashboard or Pull Requests panel is showing, which has no
+    /// conversation on screen to scroll.
+    pub(crate) fn jump_to_bottom(&mut self, cx: &mut Context<Self>) {
+        if self.view_mode.is_takeover() {
+            return;
+        }
+        let Some(id) = self.selected_agent
+        else {
+            return;
+        };
+        let Some(list) = self.panel_lists.get(&id)
+        else {
+            return;
+        };
+        list.scroll_to_end();
+        if let Some(slot) = self.panel_sessions.get(&id)
+           && let crate::panel_session::PanelSessionSlot::Ready(handle) = &*slot.lock()
+        {
+            handle.set_tracking(true);
+        }
         cx.notify();
     }
 

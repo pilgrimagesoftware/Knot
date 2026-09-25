@@ -17,10 +17,12 @@ user's other tools cannot be moved.
   - focus the selected agent's input (default ⌘L);
   - toggle the workspace's Dashboard panel (default ⌥⌘O);
   - toggle the workspace's Pull Requests panel (default ⌥⌘P);
+  - jump to the bottom of the selected agent's conversation and resume
+    following new output (default ⌃⌘↓);
   - open or raise the Command Center (⌥⌘0; already exists, now customizable).
 - Add a **Keyboard** tab to the settings window. It lets the user:
   - choose the modifier used by the two numbered families;
-  - record a new chord for each of the other four shortcuts;
+  - record a new chord for each of the other five shortcuts;
   - reset any of them to its default.
 - Persist the customizations as preferences. A change takes effect
   immediately, including the key equivalent shown beside Window > Command

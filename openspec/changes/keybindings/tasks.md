@@ -38,6 +38,11 @@
   including Focus agent input after focus has moved elsewhere in the window
   and from a Dashboard. That test fails without the latch reset.
 
+- [x] 3.3 Add Jump to bottom (default ⌃⌘↓): scroll the selected agent's
+  conversation to its end and resume following, as the "Scroll to latest"
+  button does. Verify with gpui tests that it scrolls a scrolled-up
+  conversation, and leaves it alone while a Dashboard is showing.
+
 ## 4. Settings pane
 
 - [x] 4.1 Add `SettingsTab::Keyboard` (eighth tab, label key) and its pane

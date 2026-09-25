@@ -12,15 +12,17 @@ pub(crate) enum Shortcut {
     ToggleDashboard,
     TogglePullRequests,
     OpenCommandCenter,
+    JumpToBottom,
 }
 
 impl Shortcut {
     /// In the order the Keyboard settings pane lists them.
-    pub(crate) const ALL: [Shortcut; 6] = [Shortcut::SelectWorkspace,
+    pub(crate) const ALL: [Shortcut; 7] = [Shortcut::SelectWorkspace,
                                            Shortcut::SelectAgent,
                                            Shortcut::FocusAgentInput,
                                            Shortcut::ToggleDashboard,
                                            Shortcut::TogglePullRequests,
+                                           Shortcut::JumpToBottom,
                                            Shortcut::OpenCommandCenter];
 
     pub(crate) fn label_key(self) -> &'static str {
@@ -31,6 +33,7 @@ impl Shortcut {
             Shortcut::ToggleDashboard => "keymap.shortcut.toggle_dashboard",
             Shortcut::TogglePullRequests => "keymap.shortcut.toggle_pull_requests",
             Shortcut::OpenCommandCenter => "keymap.shortcut.open_command_center",
+            Shortcut::JumpToBottom => "keymap.shortcut.jump_to_bottom",
         }
     }
 
@@ -59,6 +62,11 @@ impl Shortcut {
             Shortcut::ToggleDashboard => "cmd-alt-o",
             Shortcut::TogglePullRequests => "cmd-alt-p",
             Shortcut::OpenCommandCenter => "cmd-alt-0",
+            // Not cmd-down, the platform's "go to end": the composer, which
+            // usually has focus, binds cmd-down, cmd-shift-down and
+            // cmd-alt-down in its own context, and a context binding
+            // out-ranks this context-less one while the composer is focused.
+            Shortcut::JumpToBottom => "ctrl-cmd-down",
             Shortcut::SelectWorkspace | Shortcut::SelectAgent => return None,
         };
         Chord::parse(source)

@@ -9,6 +9,7 @@ use crate::app_bootstrap::OpenCommandCenter;
 use crate::keymap::BindFn;
 use crate::keymap::Chord;
 use crate::keymap::FocusAgentInput;
+use crate::keymap::JumpToBottom;
 use crate::keymap::SELECT_AGENT;
 use crate::keymap::SELECT_WORKSPACE;
 use crate::keymap::Shortcut;
@@ -36,6 +37,7 @@ pub(crate) struct Resolved {
     toggle_dashboard:     Chord,
     toggle_pull_requests: Chord,
     open_command_center:  Chord,
+    jump_to_bottom:       Chord,
 }
 
 /// A default that does not parse is a bug in `Shortcut::default_chord`,
@@ -57,7 +59,8 @@ impl Resolved {
                focus_agent_input:    default_chord(Shortcut::FocusAgentInput),
                toggle_dashboard:     default_chord(Shortcut::ToggleDashboard),
                toggle_pull_requests: default_chord(Shortcut::TogglePullRequests),
-               open_command_center:  default_chord(Shortcut::OpenCommandCenter), }
+               open_command_center:  default_chord(Shortcut::OpenCommandCenter),
+               jump_to_bottom:       default_chord(Shortcut::JumpToBottom), }
     }
 
     /// The stored customizations applied over the defaults, one at a time
@@ -76,7 +79,8 @@ impl Resolved {
         let singles = [(Shortcut::FocusAgentInput, &stored.focus_input),
                        (Shortcut::ToggleDashboard, &stored.toggle_dashboard),
                        (Shortcut::TogglePullRequests, &stored.toggle_pull_requests),
-                       (Shortcut::OpenCommandCenter, &stored.open_command_center)];
+                       (Shortcut::OpenCommandCenter, &stored.open_command_center),
+                       (Shortcut::JumpToBottom, &stored.jump_to_bottom)];
         for (shortcut, source) in singles {
             let Some(source) = source
             else {
@@ -128,7 +132,8 @@ impl Resolved {
                              focus_input:                chord(Shortcut::FocusAgentInput),
                              toggle_dashboard:           chord(Shortcut::ToggleDashboard),
                              toggle_pull_requests:       chord(Shortcut::TogglePullRequests),
-                             open_command_center:        chord(Shortcut::OpenCommandCenter), }
+                             open_command_center:        chord(Shortcut::OpenCommandCenter),
+                             jump_to_bottom:             chord(Shortcut::JumpToBottom), }
     }
 
     pub(crate) fn modifiers(&self, shortcut: Shortcut) -> Option<ShortcutModifiers> {
@@ -145,6 +150,7 @@ impl Resolved {
             Shortcut::ToggleDashboard => Some(&self.toggle_dashboard),
             Shortcut::TogglePullRequests => Some(&self.toggle_pull_requests),
             Shortcut::OpenCommandCenter => Some(&self.open_command_center),
+            Shortcut::JumpToBottom => Some(&self.jump_to_bottom),
             Shortcut::SelectWorkspace | Shortcut::SelectAgent => None,
         }
     }
@@ -167,6 +173,7 @@ impl Resolved {
             Shortcut::ToggleDashboard => self.toggle_dashboard = chord,
             Shortcut::TogglePullRequests => self.toggle_pull_requests = chord,
             Shortcut::OpenCommandCenter => self.open_command_center = chord,
+            Shortcut::JumpToBottom => self.jump_to_bottom = chord,
             Shortcut::SelectWorkspace | Shortcut::SelectAgent => {}
         }
         self
@@ -201,11 +208,12 @@ impl Resolved {
                 out.push(ConfiguredBinding { chord, bind });
             }
         }
-        let singles: [(Shortcut, BindFn); 4] =
+        let singles: [(Shortcut, BindFn); 5] =
             [(Shortcut::FocusAgentInput, |c| KeyBinding::new(c, FocusAgentInput, None)),
              (Shortcut::ToggleDashboard, |c| KeyBinding::new(c, ToggleDashboard, None)),
              (Shortcut::TogglePullRequests, |c| KeyBinding::new(c, TogglePullRequests, None)),
-             (Shortcut::OpenCommandCenter, |c| KeyBinding::new(c, OpenCommandCenter, None))];
+             (Shortcut::OpenCommandCenter, |c| KeyBinding::new(c, OpenCommandCenter, None)),
+             (Shortcut::JumpToBottom, |c| KeyBinding::new(c, JumpToBottom, None))];
         for (shortcut, bind) in singles {
             for chord in self.chords_of(shortcut) {
                 out.push(ConfiguredBinding { chord, bind });

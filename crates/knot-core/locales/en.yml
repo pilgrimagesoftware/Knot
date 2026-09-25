@@ -240,6 +240,7 @@ keymap:
     toggle_dashboard: "Toggle Dashboard"
     toggle_pull_requests: "Toggle Pull Requests"
     open_command_center: "Open Command Center"
+    jump_to_bottom: "Jump to bottom"
   fixed:
     quit: "Quit Knot"
     settings: "Settings"

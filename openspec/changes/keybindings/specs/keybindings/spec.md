@@ -20,23 +20,29 @@ the user changes them:
 | Focus agent input | ⌘L |
 | Toggle Dashboard | ⌥⌘O |
 | Toggle Pull Requests | ⌥⌘P |
+| Jump to bottom | ⌃⌘↓ |
 | Open Command Center | ⌥⌘0 |
 
 The two numbered families SHALL always use the digits 1 through 9; only their
-modifier is configurable. Each of the other four is a single configurable
+modifier is configurable. Each of the other five is a single configurable
 chord.
 
 The Swift reference binds ⌘1–⌘9 to workspace switching and ⌘0 to the Command
 Center. The port keeps ⌘1–⌘9 and the existing ⌥⌘0, because ⌘0 already opens
-the workspace manager here. Numbered agent selection, Focus agent input and the
-two panel toggles have no reference counterpart.
+the workspace manager here. Numbered agent selection, Focus agent input, Jump
+to bottom and the two panel toggles have no reference counterpart.
+
+Jump to bottom defaults to ⌃⌘↓ rather than the platform's ⌘↓. The composer,
+which usually has focus, uses ⌘↓, ⇧⌘↓ and ⌥⌘↓ for its own caret movement, and
+takes them first while it is focused.
 
 #### Scenario: Defaults on first launch
 
 - **WHEN** the user has never customized a shortcut
 - **THEN** ⌘3 selects workspace 3, ⌥⌘2 selects agent 2, ⌘L focuses the
   selected agent's input, ⌥⌘O toggles the Dashboard, ⌥⌘P toggles Pull
-  Requests, and ⌥⌘0 opens the Command Center
+  Requests, ⌃⌘↓ jumps to the bottom of the conversation, and ⌥⌘0 opens the
+  Command Center
 
 ### Requirement: Selecting a workspace by number
 
@@ -108,6 +114,31 @@ selected, or outside a workspace window, the shortcut SHALL do nothing.
 
 - **WHEN** the Dashboard is showing and the user presses ⌘L
 - **THEN** the selected agent's view is shown and its input has focus
+
+### Requirement: Jumping to the bottom of the conversation
+
+The Jump to bottom shortcut SHALL scroll the selected agent's conversation in
+the focused workspace window to its latest output, and SHALL resume following
+new output, the same as the conversation's "Scroll to latest" control. It
+applies to an agent in panel mode. A terminal-mode agent's pane always shows
+the bottom of its output, so there the shortcut SHALL do nothing. It SHALL
+also do nothing:
+
+- while a Dashboard or Pull Requests panel is showing;
+- with no agent selected;
+- outside a workspace window.
+
+#### Scenario: Back to the latest output
+
+- **WHEN** the user has scrolled a panel-mode agent's conversation up and
+  presses ⌃⌘↓
+- **THEN** the conversation shows its latest output and follows new output
+  as it arrives
+
+#### Scenario: With a panel showing
+
+- **WHEN** the Dashboard is showing and the user presses ⌃⌘↓
+- **THEN** the Dashboard stays, and the conversation behind it does not move
 
 ### Requirement: Toggling the workspace panels
 
