@@ -51,15 +51,6 @@ back of the queue.
 - **WHEN** the user edits a queued message while another response is streaming
 - **THEN** the streaming response continues and only the edited message leaves the queue
 
-### Requirement: A message being delivered cannot be edited
-
-The system SHALL NOT offer an edit action for a message whose delivery has started, so that
-editing never alters a prompt the agent has already been given.
-
-#### Scenario: No edit control on a message in flight
-- **WHEN** a queued message has been handed to the agent and its turn is running
-- **THEN** its row exposes no edit control
-
 ### Requirement: Typed composer text is not discarded silently
 
 If the composer already holds text the user has typed, the system SHALL ask for confirmation
@@ -139,3 +130,20 @@ check.
   turn
 - **THEN** its status control's accessible name identifies it as a queued
   startup prompt, distinct from a queued user prompt and a queued inbox check
+
+### Requirement: A queued message leaves the queue when delivery starts
+
+The system SHALL remove a queued message from the queue at the moment it is
+handed to the agent, not when the agent's turn ends. If the delivery fails,
+the message SHALL return to the head of the queue, marked failed, keeping its
+text and identity, so the user can retry or delete it.
+
+#### Scenario: The row disappears when the prompt is sent
+- **WHEN** the agent's turn ends and the message at the head of the queue is
+  handed to it
+- **THEN** that message's row disappears from the queue while the new turn
+  runs
+
+#### Scenario: A failed delivery returns to the queue
+- **WHEN** a message taken from the queue fails to deliver
+- **THEN** it reappears at the head of the queue marked failed
