@@ -229,8 +229,17 @@ impl WorkspaceWindow {
         if !changed {
             return;
         }
+        // A takeover draws neither the composer nor the terminal, so a focus
+        // handle left on either points at nothing rendered, and gpui resolves
+        // that to the dispatch-tree root - above the root element carrying
+        // the shortcut and menu handlers. Leaving a panel by ⌥⌘1, or reading
+        // the View menu's state, would then find no handler. Focusing the
+        // root element keeps them on the path.
         let Some(target) = showing
         else {
+            if is_takeover && !window.has_active_dialog(cx) {
+                window.focus(&self.root_focus.clone(), cx);
+            }
             return;
         };
         // A dialog's focus handle is a descendant of `root_focus` - the
@@ -479,12 +488,14 @@ impl Render for WorkspaceWindow {
                                                    title_font_size,
                                                    cx);
         let selected_menu = self.selected_agent_menu(cx);
+        let shortcuts = self.shortcut_availability();
         let background_targets = SidebarMenuTargets { store:         Arc::clone(&self.store),
                                                       window_entity: cx.entity(),
                                                       workspace_id:  self.workspace_id, };
         h_flex()
             .size_full()
             .map(|el| with_agents_menu_actions(el, selected_menu.as_ref()))
+            .map(|el| Self::with_shortcut_actions(el, shortcuts, cx))
             .track_focus(&self.root_focus)
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
                 view.answer_selected_permission(knot_acp::PermissionDecision::Allow);

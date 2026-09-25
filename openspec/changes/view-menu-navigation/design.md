@@ -12,11 +12,10 @@
   back.
 - `keymap::apply_and_refresh_menus` already rebuilds the bar after a rebinding,
   so key equivalents come from the live keymap.
-- The navigation shortcuts' handlers are global (`keymap/handlers.rs`) and find
-  their window through `cx.active_window()`. That is deliberate: a handler on
-  the window root falls off the dispatch path once a panel replaces the focused
-  composer. The consequence here is that `is_action_available` is always true
-  for these actions, so AppKit would draw every View item enabled.
+- The navigation shortcuts' handlers were global (`keymap/handlers.rs`) and
+  found their window through `cx.active_window()`, because a handler on the
+  window root fell off the dispatch path once a panel replaced the focused
+  composer. See "Enablement through availability" for why that had to change.
 - The View menu is currently `Menu::new("View").items([])`, and macOS appends
   Enter Full Screen to it.
 
@@ -29,12 +28,12 @@
   window with no extra polling.
 
 **Non-Goals:**
-- Changing how the shortcuts dispatch, or moving their handlers.
+- Changing what any shortcut does.
 - A general menu framework. This adds one menu to the existing snapshot model.
 
 ## Decisions
 
-### Reuse the existing actions and global handlers
+### Reuse the existing actions
 
 Each item uses the shortcut's own action (`ToggleDashboard`, `SelectAgent3`,
 `SelectWorkspace1`, ...). gpui looks up a menu item's key equivalent by action,
@@ -45,35 +44,62 @@ Alternative: menu-only actions that forward to the shortcut. Rejected. They
 would carry no binding, so the items would show no key, and binding them too
 would double every chord.
 
-### Enablement through `disabled`, computed from the snapshot
+### Enablement through availability: the handlers move to the window
 
-The handlers are global, so availability cannot disable anything. The View
-menu's items therefore set `MenuItem::disabled` from the snapshot, the way File
-> New Workspace does today. A disabled item still shows its key equivalent.
+`MenuItem::disabled` cannot disable an item whose action has a handler. gpui
+never turns off AppKit's `autoenablesItems`, so AppKit re-validates each item
+through `validateMenuItem:`, which gpui answers with `App::is_action_available`
+and which overrides the flag. That call ORs the focused window's dispatch tree
+with "is there a global listener", so a global handler leaves its item enabled
+everywhere. (Found during implementation; the first version of this design
+proposed `disabled`.)
 
-Alternative: register the handlers on the window root as well, and let
-availability decide. Rejected. A global listener makes the action available
-everywhere, so the root handler would change nothing, and removing the global
-handler reintroduces the panel dispatch bug described in `handlers.rs`.
+So the workspace-scoped handlers (Select agent N, Focus agent input, Jump to
+bottom, the panel toggles) move from `keymap/handlers.rs` onto the workspace
+window's root element, in `WorkspaceWindow::with_shortcut_actions`. Each is
+registered only while it would do something, from a `ShortcutAvailability`
+read once per frame. Select agent N is registered only for N up to the agent
+count. Focus agent input needs a selection. Jump to bottom needs a selected
+agent with a conversation list and no takeover. Select workspace N stays
+global, because it works with no window open.
+
+They were global because a handler on the root element fell off the dispatch
+path. When a panel took over, or before a selected agent's composer was first
+drawn, focus sat on a handle that no rendered element tracked, and gpui
+resolves such a handle to the dispatch tree's root, above the root element.
+Two changes keep focus on a tracked element:
+
+- The panel pane's placeholders (connecting, failed, no session) track the
+  composer's focus handle. The focus pass focuses that handle as soon as the
+  agent is selected.
+- The frame that starts a takeover focuses the root element, unless a dialog is
+  open. The composer or terminal that had focus is no longer drawn.
+
+A broader rule ("refocus the root whenever the focused handle is untracked")
+was tried and rejected. It fired on the frame before a composer first rendered,
+so it would take focus away from an agent that was still starting.
+`shortcuts_tests` pins each of the two fixes: removing either one fails a test.
+
+The submenus' parents carry no action and are never validated, so their
+`disabled` flag does work. It comes from the snapshot, and so do the
+checkmarks.
 
 ### Extend the snapshot, not a second global
 
-`AgentMenuSnapshot` becomes the menu bar's snapshot. It gains a `view` part,
-computed in the same pass as the Agents menu's facts:
+A `MenuBarSnapshot` (`crates/knot/src/menu_bar.rs`) wraps the existing
+`AgentMenuSnapshot` alongside a new `ViewMenuSnapshot`, and `MenuBarState`
+replaces `AgentsMenuState`. The View part holds:
 
-- `workspace_window: bool` - whether a workspace window owns the bar;
-- `view_mode` - agent view, Dashboard or Pull Requests, for the checkmarks and
-  Jump to Bottom;
-- `selected_agent_mode` - none, panel or terminal;
-- `agents: Vec<(Uuid, String)>` - the first nine sidebar agents, and which one
-  is selected;
-- `workspaces: Vec<(Uuid, String)>` - the first nine workspaces, and which one
-  the owner shows.
+- the owning window, if any: its workspace, view mode (for the checkmarks), its
+  first nine sidebar agents and the selected one;
+- the first nine workspaces, filled whether or not a workspace window owns the
+  bar.
 
-The existing compare-then-rebuild in `refresh_agents_menu` then covers every
-View change: a selection, a panel toggle, an agent added or renamed. Renaming
-the type and state to `MenuBarSnapshot` / `MenuBarState` is part of the change,
-since they no longer describe only the Agents menu.
+Enablement is not in the snapshot; availability covers it. The existing
+compare-then-rebuild in `refresh_agents_menu` then covers every View change: a
+selection, a panel toggle, an agent added or renamed. Wrapping rather than
+renaming `AgentMenuSnapshot` leaves the Agents menu's code and tests
+untouched.
 
 Alternative: a separate `ViewMenuState` global. Rejected. The bar is rebuilt as
 a whole, so two globals would each rebuild it and could race to overwrite each
@@ -100,7 +126,7 @@ knows when it makes one.
 
 ### Menu construction lives beside the Agents menu
 
-A `view_menu(&snapshot) -> Menu` function in a new sibling file
+A `view_menu(&ViewMenuSnapshot) -> Menu` function in a new sibling file
 (`crates/knot/src/view_menu.rs`) builds the items, as `agents_menu` does in
 `agent_menu.rs`. `app_bootstrap.rs` keeps only the call, which keeps it under
 the 700-line limit. Labels go through `knot_core::l10n::t` under `menu.view.*`.
@@ -171,6 +197,8 @@ show it to them.
 - [⌘T in the terminal pane: a shell user may expect it to reach the program]
   → The terminal forwards no ⌘ chords today (they are app shortcuts on macOS),
   so ⌘T takes nothing that currently works.
-- [A disabled item whose global handler still exists: the key keeps working
-  where the item is disabled] → Intended. The keys already do nothing outside a
-  workspace window, and the item's disabled state reflects that.
+- [Moving the handlers off global makes every workspace shortcut depend on
+  focus staying inside the root element] → The two focus fixes above, and the
+  tests that pin them. A focus path missed here shows up as a shortcut that
+  does nothing and a View item drawn disabled at the same time, which is
+  visible rather than silent.
