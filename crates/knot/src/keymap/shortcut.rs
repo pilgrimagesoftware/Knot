@@ -44,11 +44,13 @@ impl Shortcut {
     /// A family's default modifier. `None` for a single-chord shortcut.
     pub(crate) fn default_modifiers(self) -> Option<ShortcutModifiers> {
         match self {
-            // The Swift reference's workspace switcher (`SkwadApp.swift`).
+            // Agents are switched far more often than workspaces, so they
+            // get plain ⌘. The Swift reference (`SkwadApp.swift`) gives ⌘1-⌘9
+            // to workspaces and has no numbered agent selection.
             Shortcut::SelectWorkspace => Some(ShortcutModifiers { command: true,
+                                                                  alt: true,
                                                                   ..Default::default() }),
             Shortcut::SelectAgent => Some(ShortcutModifiers { command: true,
-                                                              alt: true,
                                                               ..Default::default() }),
             _ => None,
         }
