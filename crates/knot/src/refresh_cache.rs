@@ -72,6 +72,14 @@ impl<K: Ord + Clone, V: Clone + PartialEq> RefreshCache<K, V> {
                              dirty: Arc::clone(&self.dirty) })
     }
 
+    /// Forget when every key was last requested, keeping every value, so each
+    /// key's next [`Self::claim_refresh`] succeeds whatever its age while the
+    /// value it replaces goes on being drawn. Forgetting the values instead
+    /// would blank every row until its answer landed.
+    pub(crate) fn mark_all_stale(&mut self) {
+        self.requested.clear();
+    }
+
     /// One key's cached value, or `None` when no answer has landed yet.
     ///
     /// A value type that is itself an `Option` therefore has two levels, and

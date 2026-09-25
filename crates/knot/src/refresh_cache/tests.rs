@@ -169,3 +169,19 @@ fn holds_tests_the_recorded_value_and_only_that() {
     assert!(!cache.holds(&"a".to_string(), |value| *value == 8));
     assert!(!cache.holds(&"b".to_string(), |_| true));
 }
+
+/// Refresh now: every key claims again at once, and the value it will
+/// replace is still there to draw until the new one lands.
+#[test]
+fn marking_stale_reclaims_every_key_and_keeps_its_value() {
+    let mut cache = cache();
+    cache.claim_refresh("a".to_string(), NEVER)
+         .expect("claimed")
+         .record(7);
+    assert!(cache.claim_refresh("a".to_string(), NEVER).is_none());
+
+    cache.mark_all_stale();
+
+    assert_eq!(cache.get(&"a".to_string()), Some(7));
+    assert!(cache.claim_refresh("a".to_string(), NEVER).is_some());
+}

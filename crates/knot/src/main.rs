@@ -37,6 +37,7 @@ mod panel_session;
 mod panel_state;
 mod panel_view;
 mod plan_view;
+mod pull_request_filter;
 mod pull_request_groups;
 mod pull_request_state;
 mod quit_guard;

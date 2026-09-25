@@ -20,16 +20,17 @@
 //! restart nothing expires until the answers land again, which is the same
 //! rule as every other thing this cache decides.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use knot_forge::{ForgeAvailability, ForgeError, PullRequestState, PullRequestStatus};
+use knot_forge::{ForgeAvailability, ForgeError, PullRequestState};
 use parking_lot::Mutex;
 
 use crate::consts;
-use crate::refresh_cache::RefreshCache;
+use crate::pull_request_filter::RowCategory;
+use crate::refresh_cache::{RefreshCache, RefreshWriter};
 
 /// Last known state per pull request URL, and when each was last requested.
 ///
@@ -169,18 +170,45 @@ pub(crate) fn counts_for(cache: &BTreeMap<String, PullRequestLookup>, urls: &[St
                          -> PullRequestCounts {
     let mut counts = PullRequestCounts::default();
     for url in urls {
-        match cache.get(url) {
-            Some(PullRequestLookup::Known(state)) => match state.status {
-                PullRequestStatus::Merged => counts.merged += 1,
-                PullRequestStatus::Closed => counts.closed += 1,
-                // Draft and open both; see `PullRequestCounts`.
-                PullRequestStatus::Draft | PullRequestStatus::Open => counts.open += 1,
-            },
-            Some(PullRequestLookup::NotFound) => counts.not_found += 1,
-            Some(PullRequestLookup::Failed) | None => counts.pending += 1,
+        // The one classification the view's status toggles also read, so the
+        // sidebar and the toggles cannot disagree; see `RowCategory`.
+        match RowCategory::of(cache.get(url)) {
+            RowCategory::Open => counts.open += 1,
+            RowCategory::Merged => counts.merged += 1,
+            RowCategory::Closed => counts.closed += 1,
+            RowCategory::NotFound => counts.not_found += 1,
+            RowCategory::Pending => counts.pending += 1,
         }
     }
     counts
+}
+
+/// Claim a refresh for each of `urls` that is due, returning the URL and the
+/// writer for each one claimed.
+///
+/// A URL whose last answer was final (not found) is skipped whatever its age,
+/// unless it is in `asked_again` - the set Refresh now fills. Claiming one
+/// takes it out of that set, so the user's refresh asks once more and later
+/// cycles go back to skipping it.
+///
+/// Pure over the cache, so the rule is testable without a window; the caller
+/// hands each writer to `spawn_blocking`.
+pub(crate) fn claim_refreshes(cache: &mut PullRequestStateCache, urls: &[String],
+                              asked_again: &mut BTreeSet<String>, max_age: Duration)
+                              -> Vec<(String, RefreshWriter<String, PullRequestLookup>)> {
+    let mut claimed = Vec::new();
+    for url in urls {
+        if !asked_again.contains(url) && cache.holds(url, PullRequestLookup::is_final) {
+            continue;
+        }
+        let Some(writer) = cache.claim_refresh(url.clone(), max_age)
+        else {
+            continue;
+        };
+        asked_again.remove(url);
+        claimed.push((url.clone(), writer));
+    }
+    claimed
 }
 
 /// Whether state can be fetched at all right now.
@@ -227,6 +255,13 @@ impl ForgeStatus {
         self.requested = Some(Instant::now());
         Some(ForgeProbeWriter { availability: Arc::clone(&self.availability),
                                 dirty:        Arc::clone(&self.dirty), })
+    }
+
+    /// Forget when the last probe was requested, so the next claim runs one
+    /// whatever its age. Keeps the last answer, so the view's message does
+    /// not blank while the new probe runs. For Refresh now.
+    pub(crate) fn mark_stale(&mut self) {
+        self.requested = None;
     }
 
     /// Whether state is worth fetching. False before the first probe lands,

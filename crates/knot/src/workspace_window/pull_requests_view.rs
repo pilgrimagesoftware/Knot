@@ -16,10 +16,10 @@ use knot_forge::GhRunner;
 use uuid::Uuid;
 
 use super::WorkspaceWindow;
+use crate::pull_request_filter::{PullRequestGroup, PullRequestRow};
 use crate::pull_request_groups;
-use crate::pull_request_state::{self, PullRequestCounts, PullRequestLookup};
+use crate::pull_request_state::{self, PullRequestCounts};
 use crate::workspace_window::WorkspaceViewMode;
-use crate::workspace_window::render::pull_requests_pane::{PullRequestGroup, PullRequestRow};
 
 impl WorkspaceWindow {
     /// This workspace's recorded pull request URLs, newest first, each once.
@@ -52,6 +52,7 @@ impl WorkspaceWindow {
                            .into_iter()
                            .filter(|record| store.agent(record.agent_id).is_some())
                            .collect::<Vec<_>>();
+        let first_seen = pull_request_groups::first_seen_by_url(&records);
         let mut groups = Vec::new();
         for group in pull_request_groups::group_records(&records) {
             let mut names = group.owners
@@ -64,7 +65,10 @@ impl WorkspaceWindow {
                             .into_iter()
                             .map(|url| {
                                 let lookup = states.get(&url).cloned();
-                                PullRequestRow { url, lookup }
+                                let first_seen = first_seen.get(&url).copied().unwrap_or_default();
+                                PullRequestRow { url,
+                                                 lookup,
+                                                 first_seen }
                             })
                             .collect();
             groups.push(PullRequestGroup { agent_ids: group.owners,
@@ -105,20 +109,16 @@ impl WorkspaceWindow {
         if !self.forge_status.is_ready() {
             return;
         }
-        for url in self.workspace_pull_request_urls() {
-            // A pull request the forge says does not exist is asked about
-            // once per window, not once per cycle; see
-            // `PullRequestLookup::is_final`.
-            if self.pull_request_states
-                   .holds(&url, PullRequestLookup::is_final)
-            {
-                continue;
-            }
-            let Some(writer) = self.pull_request_states
-                                   .claim_refresh(url.clone(), pull_request_state::MAX_AGE)
-            else {
-                continue;
-            };
+        // A pull request the forge says does not exist is asked about once
+        // per window, not once per cycle - unless the user chose Refresh now;
+        // see `claim_refreshes`.
+        let urls = self.workspace_pull_request_urls();
+        let claimed = pull_request_state::claim_refreshes(&mut self.pull_request_states,
+                                                          &urls,
+                                                          &mut self.pull_request_view
+                                                                   .refresh_final,
+                                                          pull_request_state::MAX_AGE);
+        for (url, writer) in claimed {
             self.runtime.spawn_blocking(move || {
                             let runner = GhRunner::new();
                             writer.record(knot_forge::pull_request_state_with(&runner, &url).into());
@@ -232,7 +232,8 @@ impl WorkspaceWindow {
                        .confirm()
                        .on_ok(move |_, _, app| {
                            entity.update(app, |view, cx| {
-                                     view.remove_pull_request(&agent_ids, &url, cx);
+                                     view.remove_pull_requests(&[(agent_ids.clone(), url.clone())],
+                                                               cx);
                                      cx.notify();
                                  });
                            true
@@ -240,22 +241,17 @@ impl WorkspaceWindow {
               });
     }
 
-    /// Forget one listed pull request for every agent it is attributed to.
-    /// Knot's record only.
+    /// Forget listed pull requests, each for every agent it is attributed
+    /// to, in one pass and one write. Knot's record only.
     ///
     /// Every attribution rather than one: dropping a single agent's record
     /// would make the row the user just removed reappear under the remaining
-    /// agent's heading.
-    pub(super) fn remove_pull_request(&mut self, agent_ids: &[Uuid], url: &str, cx: &App) {
-        // A loop rather than `any`, which would stop at the first agent it
-        // removed a record for and leave the rest listed.
-        let mut removed = false;
-        {
-            let mut store = self.store.lock();
-            for agent_id in agent_ids {
-                removed |= store.remove_pull_request(*agent_id, url);
-            }
-        }
+    /// agent's heading. One write for the lot, because a bulk removal of
+    /// thirty rows is one change to the settings document, not thirty.
+    pub(super) fn remove_pull_requests(&mut self, rows: &[(Vec<Uuid>, String)], cx: &App) {
+        // A temporary guard, gone at the end of the statement:
+        // `persist_pull_requests` takes the same non-reentrant lock.
+        let removed = pull_request_groups::remove_rows(&mut self.store.lock(), rows);
         if removed {
             self.persist_pull_requests(cx);
             self.prune_pull_request_states();
