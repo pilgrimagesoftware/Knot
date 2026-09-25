@@ -7,14 +7,17 @@
 
 mod agent_row;
 mod agents;
+pub(crate) mod artifact_panel;
 mod chrome;
-pub(crate) mod composer_focus;
 mod creation;
 mod git_panel;
+pub(crate) mod mcp_panel;
 mod menus;
 mod notifications;
 mod open;
+pub(crate) mod pane_focus;
 pub(crate) mod panel;
+mod panel_activity;
 mod process_actions;
 mod processes;
 pub(crate) mod prompt_queue;
@@ -23,7 +26,6 @@ mod pull_requests_view;
 mod render;
 mod repaint;
 mod sessions;
-mod settings_refresh;
 mod sidebar_layout;
 pub(crate) mod terminal_font;
 mod terminal_input;

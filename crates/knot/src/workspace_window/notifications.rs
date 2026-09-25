@@ -42,7 +42,7 @@ impl WorkspaceWindow {
             return;
         }
         let claimed = cx.global::<McpServerStatus>().claim_failure();
-        if !should_notify_mcp_failure(self.settings.desktop_notifications_enabled, claimed) {
+        if !should_notify_mcp_failure(crate::settings_global::read(cx).desktop_notifications_enabled, claimed) {
             return;
         }
         cx.show_system_notification(SystemNotification {
@@ -94,7 +94,9 @@ impl WorkspaceWindow {
                 continue;
             }
             self.notified_awaiting.insert(id, message.clone());
-            if !should_notify(self.settings.desktop_notifications_enabled, true) {
+            if !should_notify(crate::settings_global::read(cx).desktop_notifications_enabled,
+                              true)
+            {
                 continue;
             }
             let Some(name) = self.store.lock().agent(id).map(|agent| agent.name.clone())

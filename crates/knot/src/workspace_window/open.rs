@@ -34,9 +34,9 @@ use crate::workspace_window::workspace_title;
 
 impl WorkspaceWindow {
     pub(crate) fn open(store: Arc<Mutex<knot_agents::AgentStore>>,
-                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                       settings: knot_core::Settings, workspace_id: Uuid, cx: &mut App) {
-        Self::open_with_selection(store, messages, settings, workspace_id, None, cx);
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>, workspace_id: Uuid,
+                       cx: &mut App) {
+        Self::open_with_selection(store, messages, workspace_id, None, cx);
     }
 
     /// Like `open`, but overrides the agent that would otherwise be picked
@@ -45,8 +45,8 @@ impl WorkspaceWindow {
     /// land on.
     pub(crate) fn open_with_selection(store: Arc<Mutex<knot_agents::AgentStore>>,
                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                                      settings: knot_core::Settings, workspace_id: Uuid,
-                                      select_agent: Option<Uuid>, cx: &mut App) {
+                                      workspace_id: Uuid, select_agent: Option<Uuid>,
+                                      cx: &mut App) {
         // One window per workspace: a second request raises the first rather
         // than opening another, and shows the agent it named if it named one
         // (`openspec/specs/window-lifecycle`). Every route that opens a
@@ -117,6 +117,10 @@ impl WorkspaceWindow {
                     git_diff_lists: BTreeMap::new(),
                     git_diff_row_counts: BTreeMap::new(),
                     git_panel_resize: BTreeMap::new(),
+                    artifact_panel: BTreeMap::new(),
+                    artifact_panel_resize: BTreeMap::new(),
+                    artifact_split_resize: BTreeMap::new(),
+                    artifact_drawn: BTreeMap::new(),
                     pull_request_states:
                         crate::pull_request_state::PullRequestStateCache::default(),
                     forge_status: crate::pull_request_state::ForgeStatus::default(),
@@ -126,7 +130,6 @@ impl WorkspaceWindow {
                     messages,
                     nudged_messages: BTreeMap::new(),
                     notified_awaiting: BTreeMap::new(),
-                    settings,
                     workspace_id,
                     selected_agent,
                     sessions: BTreeMap::new(),
@@ -141,11 +144,17 @@ impl WorkspaceWindow {
                     panel_sessions: BTreeMap::new(),
                     subagents: Arc::clone(&subagents),
                     last_spinner_frame: 0,
-                    focused_composer: None,
+                    focused_pane: None,
                     panel_phases: BTreeMap::new(),
                     panel_prompt_inputs: BTreeMap::new(),
+                    panel_selectors: BTreeMap::new(),
+                    panel_selector_subscriptions: BTreeMap::new(),
+                    panel_selector_items: BTreeMap::new(),
                     panel_prompt_input_subscriptions: BTreeMap::new(),
                     panel_prompt_queues: BTreeMap::new(),
+                    panel_trackers: BTreeMap::new(),
+                    panel_reported_states: BTreeMap::new(),
+                    panel_status_landed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                     panel_stopping: BTreeSet::new(),
                     panel_prompt_results: Arc::new(Mutex::new(Vec::new())),
                     panel_lists: BTreeMap::new(),
@@ -153,6 +162,10 @@ impl WorkspaceWindow {
                     window_handle: window.window_handle(),
                     titled_as: workspace_name.clone(),
                     panel_pending_context: BTreeMap::new(),
+                    panel_composer_styling: BTreeMap::new(),
+                    panel_mentions: BTreeMap::new(),
+                    panel_pending_attachments: BTreeMap::new(),
+                    panel_shell_runs: Arc::new(Mutex::new(BTreeMap::new())),
                     panel_input_expanded: BTreeSet::new(),
                     panel_lookups: BTreeMap::new(),
                     process_sections: BTreeMap::new(),
@@ -163,6 +176,10 @@ impl WorkspaceWindow {
                     process_sampled_at: None,
                     process_sampling: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                     process_failures: Arc::new(Mutex::new(Vec::new())),
+                    mcp_sections: BTreeMap::new(),
+                    mcp_in_flight: Arc::new(Mutex::new(BTreeSet::new())),
+                    mcp_results: Arc::new(Mutex::new(Vec::new())),
+                    mcp_handover_terminals: BTreeMap::new(),
                     view_mode: WorkspaceViewMode::Terminal,
                     dashboard_sort: dashboard::DashboardSort::default(),
                     error: None,
@@ -196,8 +213,8 @@ impl WorkspaceWindow {
                                 }
                             }
                             for id in agent_ids {
-                                window.ensure_session(id);
-                                window.ensure_panel_session(id);
+                                window.ensure_session(id, cx);
+                                window.ensure_panel_session(id, cx);
                             }
                             window
                         });
@@ -215,7 +232,7 @@ impl WorkspaceWindow {
                   // changed and only then is anything written to disk.
                   view.update(cx, |view, cx| {
                           let subscription =
-                              cx.observe_window_bounds(window, move |view, window, _cx| {
+                              cx.observe_window_bounds(window, move |view, window, cx| {
                                     let bounds = window.window_bounds().get_bounds();
                                     // Our own placement is not a move the user
                                     // made. Writing it back would replace the
@@ -247,7 +264,7 @@ impl WorkspaceWindow {
                                     if changed {
                                         // The UI-state document alone: a
                                         // drag must not rewrite the roster.
-                                        view.persist_workspace_ui();
+                                        view.persist_workspace_ui(cx);
                                     }
                                 });
                           view.window_bounds_subscription = Some(subscription);

@@ -20,6 +20,7 @@ use crate::consts;
 use crate::panel_session;
 use crate::working_indicator;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::panel_activity;
 use crate::workspace_window::prompt_queue;
 
 /// Starts the window's repaint poll, which runs for the window's lifetime.
@@ -60,12 +61,16 @@ impl WorkspaceWindow {
         // A shell companion whose process exited has nothing left to show,
         // so close it rather than leaving a dead pane that looks hung.
         for id in exited {
-            self.remove_agent(*id);
+            // Before the removal: a terminal opened to hand the user an
+            // agent's own MCP flow is how that section finds out anything
+            // changed, and after `remove_agent` there is nothing left to ask.
+            self.finish_mcp_handover(*id);
+            self.remove_agent(*id, cx);
             cx.notify();
         }
         // Messages arrive from the MCP server on another thread; this poll
         // is where an agent going idle is noticed.
-        self.deliver_inbox_nudges();
+        self.deliver_inbox_nudges(cx);
         self.raise_awaiting_notifications(cx);
         self.raise_mcp_failure_notification(cx);
         // Before the repaint checks below, so an agent started here has its
@@ -77,17 +82,41 @@ impl WorkspaceWindow {
                              .is_some_and(|grid| grid.lock().take_dirty());
         // Every agent's taps, not just the selected one's: an agent working
         // in an unselected pane is the case this feature exists for.
-        let pull_requests_recorded = self.drain_pull_requests();
+        let pull_requests_recorded = self.drain_pull_requests(cx);
         let prompts_completed = self.drain_prompt_results();
-        let panel_states_moved = self.sync_panel_agent_states();
+        let panel_states_moved = self.sync_panel_agent_states(cx);
+        // The other half of that sync. `sync_panel_agent_states` says a
+        // transition was sent to a tracker; this says one the tracker already
+        // wrote to the store has not been drawn yet. They are different
+        // ticks - the send and the landing are a channel apart - so a frame
+        // that notified on the send would draw the status the store held
+        // before it. Taken into a local rather than into the `||` chain for
+        // the reason `shell_runs_moved` is below: `swap` clears as it reads,
+        // and a short-circuit past it would strand the write until the next
+        // transition, which for a settled agent may never come.
+        let panel_status_landed = self.panel_status_landed
+                                      .swap(false, std::sync::atomic::Ordering::AcqRel);
         let prompts_sent = self.deliver_waiting_prompts();
         let panel_dirty = self.panel_needs_repaint();
+        // A `!` command's output lands on its own drain threads with no
+        // context to notify from. Taken into a local rather than into the
+        // `||` chain below: `take_dirty` clears as it reads, so a
+        // short-circuit past it would strand a command's output until its
+        // next append - and a finished command has no next append.
+        let shell_runs_moved = self.poll_panel_shell_runs();
         // Both land from `spawn_blocking` with no context to notify from, so
         // without this a fetched pull request state drew only when something
         // unrelated happened to repaint the window - and on a workspace with
         // nothing running, that could be never.
         let forge_probed = self.forge_status.take_changed();
         let pull_request_states_changed = self.pull_request_states.take_changed();
+        // Expiry runs on the render path, so it needs a frame to run in. A
+        // merged pull request sitting stable across the retention boundary
+        // flags nothing - `record` marks the cache changed only when the
+        // answer differs - so without this the row would wait for something
+        // unrelated to repaint the window, which on an idle workspace is the
+        // "could be never" the two above exist to prevent.
+        let pull_requests_expiring = self.pull_requests_expiring();
         // The git panel's three off-main-thread sources, all draining here
         // for the same reason: none of them has a GPUI context, so each only
         // leaves something behind for this tick to act on. A staging
@@ -97,6 +126,20 @@ impl WorkspaceWindow {
         let git_commits_landed = self.drain_git_commits();
         let git_watches_fired = self.drain_git_watches();
         let git_reads_landed = self.git_panel_needs_repaint();
+        // A file listing walked off the main thread, and the folder watch
+        // that asks for a fresh one. Neither has a GPUI context, so
+        // without this an `@` lookup would show whatever it had when
+        // something unrelated last repainted the window.
+        let mentions_listed = self.drain_mention_listings();
+        // `display-markdown` and `view-mermaid` are served on the MCP
+        // server's thread, which has no context to notify from, and nothing
+        // else in this chain reads the fields they write. Until this existed
+        // an artifact reached a frame only when the calling agent's own
+        // streaming happened to repaint the window - so an artifact set for
+        // an idle or Terminal-mode agent waited for something unrelated to
+        // happen. Taken into a local rather than into the `||` chain below,
+        // which short-circuits: the compare-and-store has to run every tick.
+        let artifacts_moved = self.drain_artifact_changes();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -110,22 +153,33 @@ impl WorkspaceWindow {
         // swap a skipped flag would stay set and fire a spurious repaint on
         // the next tick.
         let subagents_changed = self.subagents.lock().take_changed();
+        // Runs an agent's own MCP list command, off any cadence at all: on
+        // first becoming visible, on refresh, and when a delegated terminal
+        // exits. Lands here because `spawn_blocking` has no context to
+        // notify from - see `workspace_window::mcp_panel::probe`.
+        let mcp_probed = self.mcp_probe_tick(cx);
         if grid_dirty
            || panel_states_moved
+           || panel_status_landed
            || panel_dirty
            || spinner_dirty
            || activated
            || processes_sampled
+           || mcp_probed
            || prompts_completed
            || prompts_sent
            || pull_requests_recorded
            || forge_probed
            || pull_request_states_changed
+           || pull_requests_expiring
            || git_actions_landed
            || git_commits_landed
            || git_watches_fired
            || git_reads_landed
            || subagents_changed
+           || mentions_listed
+           || artifacts_moved
+           || shell_runs_moved
         {
             cx.notify();
         }
@@ -185,9 +239,9 @@ impl WorkspaceWindow {
         drained
     }
 
-    /// Writes each ready panel session's lifecycle back to the store, so the
-    /// sidebar and dashboard show what the ACP session is actually doing,
-    /// and says whether any of them moved.
+    /// Reports each ready panel session's lifecycle to that agent's activity
+    /// tracker, so the sidebar and dashboard show what the ACP session is
+    /// actually doing, and says whether any of them moved.
     ///
     /// Reporting it matters because this is the only thing that notices an
     /// *unselected* agent's turn ending: `panel_needs_repaint` consults the
@@ -196,7 +250,31 @@ impl WorkspaceWindow {
     /// this was polled, the transition reached the store and stopped there,
     /// and the dot caught up whenever something unrelated repainted the
     /// window.
-    fn sync_panel_agent_states(&mut self) -> bool {
+    ///
+    /// The tracker writes the store, not this function: its `on_status` sink
+    /// does, the same way the hook route's tracker does in `knot-mcp-tools`.
+    /// Writing the store here as well would race the tracker's channel and
+    /// fight any status the tracker later re-derives, so there is exactly one
+    /// writer - and going through it is what makes the awaiting-input
+    /// notification and the idle delivery nudge fire at all (see
+    /// `panel_activity`).
+    ///
+    /// Only agents whose status *differs from the one last reported* are
+    /// reported. The panel reports a level - a permission request pending for
+    /// thirty ticks reads the same every tick - while the tracker takes edges
+    /// and emits an `AwaitingInput` effect for every `Input` it is handed.
+    /// Without this gate one prompt would raise a notification per poll.
+    ///
+    /// The gate reads `panel_reported_states`, not the store, because the
+    /// store is now written by the sink a channel hop later: a tick that
+    /// compared against it could still see the previous status and report the
+    /// same prompt twice.
+    ///
+    /// The bool this returns says a transition was *sent*, which is not the
+    /// tick the dot changes on - the write lands later, and announces itself
+    /// through `panel_status_landed`. Both reach the `if` chain, because they
+    /// are two different repaints.
+    fn sync_panel_agent_states(&mut self, cx: &mut gpui_kit::Context<Self>) -> bool {
         let panel_states = self.panel_sessions
                                .iter()
                                .filter_map(|(id, slot)| {
@@ -207,27 +285,33 @@ impl WorkspaceWindow {
                                    };
                                    let state_arc = handle.state();
                                    let state = state_arc.lock();
-                                   let agent_state = if state.pending_permission.is_some() {
-                                       knot_agents::AgentState::Input
-                                   }
-                                   else if state.turn_active {
-                                       knot_agents::AgentState::Running
-                                   }
-                                   else {
-                                       knot_agents::AgentState::Idle
-                                   };
-                                   Some((*id, agent_state))
+                                   Some((*id, panel_activity::acp_status(&state)))
                                })
                                .collect::<Vec<_>>();
-        let mut moved = false;
-        {
-            let mut store = self.store.lock();
-            for (id, state) in panel_states {
-                moved |= store.agent(id).is_some_and(|agent| agent.state != state);
-                store.set_state(id, state);
-            }
+        let moved = panel_activity::transitions(panel_states, |id| {
+            self.panel_reported_states.get(&id).copied()
+        });
+        if moved.is_empty() {
+            return false;
         }
-        moved
+        for (id, (state, message)) in moved {
+            if self.ensure_panel_tracker(id, cx)
+               && let Some(tracker) = self.panel_trackers.get(&id)
+            {
+                tracker.apply_acp_status(state, message);
+            }
+            else {
+                // No tracker: degraded rather than frozen. The dot still
+                // moves, synchronously; the effects it would have carried are
+                // lost.
+                self.store.lock().set_state(id, state);
+            }
+            // After either branch, and before the next tick can read it: the
+            // gate's whole job is to remember what was handed over, whether
+            // or not a tracker took it.
+            self.panel_reported_states.insert(id, state);
+        }
+        true
     }
 
     /// Sends the next queued prompt to every agent that has one, and says

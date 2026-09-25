@@ -1,5 +1,8 @@
 //! Unit tests for [`super`].
 
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
+
 use super::{
     CheckRollup, Mergeability, PullRequestStatus, parse_pull_request_state, pull_request_state_with,
 };
@@ -33,6 +36,56 @@ fn a_captured_merged_payload_parses() {
     assert_eq!(state.number, Some(312));
     assert_eq!(state.status, PullRequestStatus::Merged);
     assert_eq!(state.checks, Some(CheckRollup::Passing));
+    assert_eq!(state.merged_at,
+               Some(OffsetDateTime::parse("2026-09-22T18:23:05Z", &Rfc3339).unwrap()));
+}
+
+/// The timestamp the retention window is measured against. Absent from what
+/// any row shows, so nothing else in the parse would notice it going missing.
+#[test]
+fn a_merged_payload_carries_its_merge_time() {
+    let state = parse_pull_request_state(
+        r#"{"state":"MERGED","number":7,"mergedAt":"2026-01-02T03:04:05Z"}"#,
+    ).unwrap();
+
+    assert_eq!(state.merged_at,
+               Some(OffsetDateTime::parse("2026-01-02T03:04:05Z", &Rfc3339).unwrap()));
+}
+
+/// A `gh` too old to report the field. The record simply never expires, which
+/// is the documented degradation - it must not cost the row.
+#[test]
+fn a_merged_payload_without_a_merge_time_parses_with_none() {
+    let state = parse_pull_request_state(r#"{"state":"MERGED","number":7}"#).unwrap();
+
+    assert_eq!(state.status, PullRequestStatus::Merged);
+    assert_eq!(state.merged_at, None);
+}
+
+/// Dropped rather than raised: losing the whole row over one unreadable field
+/// would be worse than a record that does not expire.
+#[test]
+fn an_unparseable_merge_time_is_dropped_not_fatal() {
+    let state =
+        parse_pull_request_state(r#"{"state":"MERGED","number":7,"mergedAt":"last Tuesday"}"#)
+            .unwrap();
+
+    assert_eq!(state.status, PullRequestStatus::Merged);
+    assert_eq!(state.merged_at, None);
+}
+
+/// Gated on the status, so a forge volunteering the field on something it also
+/// calls closed cannot produce a state that is both merged and not.
+#[test]
+fn an_unmerged_pull_request_has_no_merge_time() {
+    for payload in [r#"{"state":"OPEN","number":7}"#,
+                    r#"{"state":"OPEN","number":7,"isDraft":true}"#,
+                    r#"{"state":"CLOSED","number":7,"mergedAt":"2026-01-02T03:04:05Z"}"#]
+    {
+        let state = parse_pull_request_state(payload).unwrap();
+
+        assert_eq!(state.merged_at, None, "{payload}");
+    }
 }
 
 /// GitHub models draft as `state: OPEN` plus `isDraft`. The row shows one
@@ -166,7 +219,7 @@ fn the_url_is_passed_to_gh_with_the_fields_the_view_needs() {
 
     assert_eq!(runner.calls(),
                vec!["pr view https://github.com/acme/widget/pull/42 --json \
-                     number,title,state,isDraft,mergeable,statusCheckRollup"],
+                     number,title,state,isDraft,mergeable,statusCheckRollup,mergedAt"],
                "asked once: the captured payload already knows its mergeability");
 }
 
@@ -280,4 +333,77 @@ fn a_merged_pull_request_is_never_asked_twice() {
     pull_request_state_with(&runner, "https://github.com/a/b/pull/1").unwrap();
 
     assert_eq!(runner.calls().len(), 1);
+}
+
+// --- The retention window ---------------------------------------------------
+
+const DAY: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// A state merged at `merged_at`, or unmerged when it is `None`.
+fn merged(status: PullRequestStatus, merged_at: Option<OffsetDateTime>) -> super::PullRequestState {
+    super::PullRequestState { number: Some(42),
+                              title: Some("Do the thing".to_owned()),
+                              status,
+                              checks: Some(CheckRollup::Passing),
+                              mergeable: Mergeability::Unknown,
+                              merged_at }
+}
+
+fn at(rfc3339: &str) -> OffsetDateTime {
+    OffsetDateTime::parse(rfc3339, &Rfc3339).unwrap()
+}
+
+#[test]
+fn a_pull_request_merged_past_the_window_is_past_the_window() {
+    let state = merged(PullRequestStatus::Merged, Some(at("2026-01-01T00:00:00Z")));
+
+    assert!(state.merged_longer_than(DAY, at("2026-01-02T00:00:01Z").into()));
+}
+
+#[test]
+fn a_pull_request_merged_within_the_window_is_not() {
+    let state = merged(PullRequestStatus::Merged, Some(at("2026-01-01T00:00:00Z")));
+
+    assert!(!state.merged_longer_than(DAY, at("2026-01-01T23:59:59Z").into()));
+}
+
+/// The boundary is strict, so "a day old" is still listed and the rule reads
+/// as "merged longer than a day ago" rather than "a day or more".
+#[test]
+fn exactly_the_window_is_not_past_it() {
+    let state = merged(PullRequestStatus::Merged, Some(at("2026-01-01T00:00:00Z")));
+
+    assert!(!state.merged_longer_than(DAY, at("2026-01-02T00:00:00Z").into()));
+}
+
+/// A `gh` too old to report `mergedAt`. The record never expires, which is the
+/// documented degradation rather than a reason to drop it.
+#[test]
+fn merged_with_no_merge_time_is_never_past_the_window() {
+    let state = merged(PullRequestStatus::Merged, None);
+
+    assert!(!state.merged_longer_than(DAY, at("2030-01-01T00:00:00Z").into()));
+}
+
+#[test]
+fn an_unmerged_pull_request_is_never_past_the_window() {
+    for status in [PullRequestStatus::Open,
+                   PullRequestStatus::Draft,
+                   PullRequestStatus::Closed]
+    {
+        let state = merged(status, Some(at("2020-01-01T00:00:00Z")));
+
+        assert!(!state.merged_longer_than(DAY, at("2030-01-01T00:00:00Z").into()),
+                "{status:?}");
+    }
+}
+
+/// This machine's clock behind the forge's. The span is negative, which is not
+/// a `Duration` - so the record stays rather than being dropped on arithmetic
+/// nobody intended.
+#[test]
+fn a_merge_time_in_the_future_keeps_the_record() {
+    let state = merged(PullRequestStatus::Merged, Some(at("2030-01-01T00:00:00Z")));
+
+    assert!(!state.merged_longer_than(DAY, at("2026-01-01T00:00:00Z").into()));
 }

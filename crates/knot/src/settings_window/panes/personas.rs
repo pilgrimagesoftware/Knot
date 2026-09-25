@@ -68,14 +68,18 @@ impl SettingsWindow {
             cx.notify();
             return;
         }
-        if let Err(error) = self.settings.remove_persona(id) {
+        if let Err(error) =
+            crate::settings_global::write_persisting(cx, |settings| settings.remove_persona(id))
+        {
             eprintln!("failed to remove persona: {error}");
         }
         cx.notify();
     }
 
     fn restore_default_personas(&mut self, cx: &mut Context<Self>) {
-        if let Err(error) = self.settings.restore_default_personas() {
+        if let Err(error) = crate::settings_global::write_persisting(cx, |settings| {
+            settings.restore_default_personas()
+        }) {
             eprintln!("failed to restore default personas: {error}");
         }
         cx.notify();
@@ -177,11 +181,10 @@ impl SettingsWindow {
 
     pub(crate) fn render_personas(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let settings_window = cx.entity();
-        let personas: Vec<knot_core::Persona> = self.settings
-                                                    .active_personas()
-                                                    .into_iter()
-                                                    .cloned()
-                                                    .collect();
+        let personas: Vec<knot_core::Persona> = crate::settings_global::read(cx).active_personas()
+                                                                                .into_iter()
+                                                                                .cloned()
+                                                                                .collect();
 
         let in_use = self.live_personas_in_use();
 

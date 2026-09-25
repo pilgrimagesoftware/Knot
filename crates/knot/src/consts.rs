@@ -55,6 +55,47 @@ pub(crate) const GIT_PANEL_DEFAULT_WIDTH: f32 = 500.;
 pub(crate) const GIT_PANEL_MIN_WIDTH: f32 = 350.;
 pub(crate) const GIT_PANEL_MAX_WIDTH: f32 = 800.;
 
+/// The artifact panel's width when it opens, and the bounds a drag may take
+/// it to.
+///
+/// The same three values the git panel uses, and deliberately so: the two are
+/// siblings in the same resizable group, and a user who has learned how wide
+/// one goes has learned the other. Carried from `ArtifactPanelView`'s own
+/// `max(350, min(800, ...))`. Not persisted, for the reason the git panel's
+/// are not.
+pub(crate) const ARTIFACT_PANEL_DEFAULT_WIDTH: f32 = 500.;
+pub(crate) const ARTIFACT_PANEL_MIN_WIDTH: f32 = 350.;
+pub(crate) const ARTIFACT_PANEL_MAX_WIDTH: f32 = 800.;
+
+/// How the artifact panel's height divides between its two sections, and how
+/// far a drag on the divider may take it.
+///
+/// The clamp keeps either section from being dragged away entirely: at the
+/// limit the smaller one still shows content rather than collapsing to its
+/// header, which is what the collapse chevron is for and is a different
+/// gesture. Carried from `ArtifactPanelView.sectionDivider`.
+pub(crate) const ARTIFACT_PANEL_DEFAULT_SPLIT: f32 = 0.5;
+pub(crate) const ARTIFACT_PANEL_MIN_SPLIT: f32 = 0.15;
+pub(crate) const ARTIFACT_PANEL_MAX_SPLIT: f32 = 0.85;
+
+/// A collapsed artifact section's height: its header and nothing else.
+pub(crate) const ARTIFACT_SECTION_HEADER_HEIGHT: f32 = 34.;
+
+/// The draggable divider between the two artifact sections.
+///
+/// Counted out of the height the sections share, so the two plus this equal
+/// the section area exactly at every split.
+pub(crate) const ARTIFACT_PANEL_DIVIDER_HEIGHT: f32 = 4.;
+
+/// The least width the content pane keeps while side panels are open.
+///
+/// Both side panels have a 350pt minimum of their own, which on a narrow
+/// window would otherwise leave the conversation nothing. This does not apply
+/// while the artifact panel is expanded: that state takes the content pane's
+/// width deliberately, and is the one case both focus requirements account
+/// for.
+pub(crate) const CONTENT_PANE_MIN_WIDTH: f32 = 360.;
+
 /// The most diff lines the panel will hold and draw for one file.
 ///
 /// Drawing is virtualized, so this is not what bounds the frame - it bounds
@@ -93,6 +134,19 @@ pub(crate) const GIT_DIFF_LINE_HEIGHT: f32 = 19.;
 /// timescale rather than a keystroke's. A list of twenty rows therefore costs
 /// twenty `gh` runs a minute while it is open, and none while it is not.
 pub(crate) const PULL_REQUEST_STATE_MAX_AGE: Duration = Duration::from_secs(60);
+
+/// How long a merged pull request stays in the list after it merged.
+///
+/// Measured against the merge time the forge reports, not against when Knot
+/// first saw the URL: a sighting says nothing about when the pull request
+/// landed. A day is long enough that work merged this morning is still there
+/// when the user looks after lunch, and short enough that the list is what is
+/// outstanding rather than a lifetime tally.
+///
+/// A constant rather than a setting: a settings row, a persisted field and a
+/// migration are a lot to spend on a number nobody has yet asked to change,
+/// and this forecloses none of them.
+pub(crate) const PULL_REQUEST_MERGED_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// How stale the answer to "can state be fetched at all" may be.
 ///

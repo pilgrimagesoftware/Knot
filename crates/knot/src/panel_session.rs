@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use knot_acp::{PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent};
+use knot_acp::{
+    ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
+};
 use knot_agent_launch::AdapterConfig;
 use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
 use parking_lot::Mutex;
@@ -160,6 +162,12 @@ impl PanelSessionHandle {
         self.dirty.store(true, Ordering::SeqCst);
     }
 
+    /// Drops one `!` command's pending result, so no later prompt carries it.
+    pub fn discard_shell_result(&self, card_id: uuid::Uuid) {
+        self.state.lock().discard_shell_result(card_id);
+        self.dirty.store(true, Ordering::SeqCst);
+    }
+
     /// Opens or closes one compact summary's run of tool calls.
     pub fn toggle_tool_run(&self, head_id: String) {
         self.state.lock().toggle_tool_run(head_id);
@@ -227,6 +235,19 @@ impl PanelRecorder {
         }
         self.dirty.store(true, Ordering::SeqCst);
     }
+
+    /// Puts a `!` command's card in the conversation, per
+    /// `panel-shell-passthrough`.
+    ///
+    /// Unlike `record_user_message` this starts no turn: a shell command is
+    /// the user's own work and the agent is not answering it.
+    pub fn shell_command(&self, card: crate::panel_state::ShellCard) {
+        {
+            let mut state = self.state.lock();
+            state.push_shell_command(card);
+        }
+        self.dirty.store(true, Ordering::SeqCst);
+    }
 }
 
 /// A Panel-mode agent's connection lifecycle: connecting, ready to use, or
@@ -278,6 +299,17 @@ impl PanelSessionSlot {
         match self {
             Self::Ready(handle) => handle.process_id(),
             Self::Connecting(_) | Self::Failed(_) => None,
+        }
+    }
+
+    /// The Session Config Options the agent currently declares, which is
+    /// what the panel's control bar draws its selectors from. Empty until
+    /// the slot is `Ready`: nothing has been declared before the session
+    /// opens.
+    pub fn config_options(&self) -> Vec<ConfigOption> {
+        match self {
+            Self::Ready(handle) => handle.state().lock().config_options.clone(),
+            Self::Connecting(_) | Self::Failed(_) => Vec::new(),
         }
     }
 }

@@ -21,8 +21,6 @@ use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::StyledExt;
-use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Sizable;
@@ -34,28 +32,24 @@ use gpui_kit::rgb;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::app_support::single_line;
 use crate::panel_session;
 use crate::panel_view;
 use crate::workspace_window::WorkspaceWindow;
+use crate::workspace_window::artifact_panel::section::Section;
+use crate::workspace_window::artifact_panel::section::SectionChrome;
 
 impl WorkspaceWindow {
-    /// Renders the markdown pane for `id`, which takes over the content
-    /// area while the agent has a markdown file open.
+    /// The mermaid section: an agent's diagram - a committed task plan, or
+    /// anything else it showed with `view-mermaid`.
     ///
-    /// The `display-markdown` MCP tool and the "Markdown Files" context
-    /// menu item both set that file; until this existed, both wrote state
-    /// no UI ever read, so an agent calling the tool appeared to be
-    /// ignored. Closing the pane clears the file but keeps the history, so
-    /// the menu can bring it back.
-    /// The content pane for an agent's diagram: a committed task plan, or
-    /// anything else an agent showed with `view-mermaid`.
-    ///
-    /// Same chrome as the markdown pane, because it is the same kind of
+    /// Same chrome as the markdown section, because it is the same kind of
     /// thing - something an agent put in front of the user, which the user
-    /// closes when done with it.
+    /// closes when done with it. `chrome` says whether it is drawn with a
+    /// collapse chevron and whether it is currently collapsed; a collapsed
+    /// section is its header and nothing else.
     pub(in crate::workspace_window) fn render_mermaid_pane(&self, id: Uuid, source: &str,
                                                            title: Option<&str>,
+                                                           chrome: SectionChrome,
                                                            cx: &mut Context<Self>)
                                                            -> gpui_kit::AnyElement {
         let heading = title.map(str::to_string)
@@ -69,62 +63,32 @@ impl WorkspaceWindow {
                             .child(knot_core::l10n::t("plan.empty"))
                             .into_any_element()
                                                              });
-        v_flex()
-            .size_full()
-            .child(
-                h_flex()
-                    .w_full()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
+        let header = self.artifact_section_header(id, Section::Mermaid, &heading, chrome, cx);
+        if chrome.collapsed {
+            return v_flex().size_full().child(header).into_any_element();
+        }
+        v_flex().size_full()
+                .child(header)
+                .child(div().id(("mermaid-pane", id.as_u128() as u64))
                             .flex_1()
+                            .min_h_0()
+                            .w_full()
                             .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .font_semibold()
-                            .child(single_line(&heading)),
-                    )
-                    .child(
-                        Button::new("mermaid-pane-close")
-                            .icon(IconName::Close)
-                            .ghost()
-                            .small()
-                            .tooltip("Close")
-                            .on_click(cx.listener(move |view, _, _window, cx| {
-                                {
-                                    let mut store = view.store.lock();
-                                    if let Err(error) = store.clear_mermaid_panel(id) {
-                                        eprintln!("failed to close the diagram panel: \
-                                                   {error}");
-                                    }
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .id(("mermaid-pane", id.as_u128() as u64))
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .min_w_0()
-                    .overflow_scroll()
-                    .p_4()
-                    .child(body),
-            )
-            .into_any_element()
+                            .overflow_scroll()
+                            .p_4()
+                            .child(body))
+                .into_any_element()
     }
 
+    /// The markdown section: the file an agent put in front of the user.
+    ///
+    /// The `display-markdown` MCP tool and the "Markdown Files" context menu
+    /// item both set that file; until this existed, both wrote state no UI
+    /// ever read, so an agent calling the tool appeared to be ignored.
+    /// Closing the section clears the file but keeps the history, so the menu
+    /// can bring it back.
     pub(in crate::workspace_window) fn render_markdown_pane(&self, id: Uuid, file: &Path,
+                                                            chrome: SectionChrome,
                                                             cx: &mut Context<Self>)
                                                             -> gpui_kit::AnyElement {
         let title = file.file_name()
@@ -137,67 +101,30 @@ impl WorkspaceWindow {
         let body = std::fs::read_to_string(file).unwrap_or_else(|error| {
                        format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
                    });
-        v_flex()
-            .size_full()
-            .child(
-                h_flex()
-                    .w_full()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
+        let header = self.artifact_section_header(id, Section::Markdown, &title, chrome, cx);
+        if chrome.collapsed {
+            return v_flex().size_full().child(header).into_any_element();
+        }
+        v_flex().size_full()
+                .child(header)
+                .child(div().id(("markdown-pane", id.as_u128() as u64))
                             .flex_1()
+                            .min_h_0()
+                            .w_full()
                             .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .font_semibold()
-                            .child(single_line(&title)),
-                    )
-                    .child(
-                        Button::new("markdown-pane-close")
-                            .icon(IconName::Close)
-                            .ghost()
-                            .small()
-                            .tooltip(knot_core::l10n::t("panel.close"))
-                            .on_click(cx.listener(move |view, _, _window, cx| {
-                                {
-                                    let mut store = view.store.lock();
-                                    if let Err(error) = store.clear_markdown_panel(id) {
-                                        eprintln!("failed to close the markdown panel: \
-                                                   {error}");
-                                    }
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .id(("markdown-pane", id.as_u128() as u64))
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .min_w_0()
-                    .overflow_y_scroll()
-                    .p_4()
-                    // The same constructor the panel's assistant messages
-                    // use, with the same families and body size: the spec
-                    // requires the two Markdown surfaces to render alike.
-                    .child(crate::markdown_view::markdown_view(
-                        ("markdown-pane-body", id.as_u128() as u64),
-                        body,
-                        cx.theme().font_family.clone(),
-                        self.settings.title_font_name.clone().into(),
-                        px(self.settings.markdown_font_size as f32),
-                    )),
-            )
+                            .overflow_y_scroll()
+                            .p_4()
+                            // The same constructor the panel's assistant
+                            // messages use, with the same families and body
+                            // size: the spec requires the two Markdown
+                            // surfaces to render alike.
+                            .child(crate::markdown_view::markdown_view(
+                                ("markdown-pane-body", id.as_u128() as u64),
+                                body,
+                                cx.theme().font_family.clone(),
+                                crate::settings_global::read(cx).title_font_name.clone().into(),
+                                px(crate::settings_global::read(cx).markdown_font_size as f32),
+                            )))
             .into_any_element()
     }
 
@@ -232,7 +159,14 @@ impl WorkspaceWindow {
                                                          window: &mut Window,
                                                          cx: &mut Context<Self>)
                                                          -> gpui_kit::AnyElement {
-        self.ensure_panel_session(id);
+        self.ensure_panel_session(id, cx);
+        // The first place after an attachment arrives with a window to
+        // edit the buffer with. Nothing else in the frame depends on the
+        // insertion, so doing it here rather than threading a window back
+        // through three arrival paths costs one frame and no correctness.
+        if self.insert_queued_attachments(id, window, cx) {
+            self.restyle_panel_attachments(id, crate::composer_style::Palette::of(cx), cx);
+        }
         let Some(slot) = self.panel_sessions.get(&id)
         else {
             return div().into_any_element();
@@ -280,7 +214,7 @@ impl WorkspaceWindow {
                             .accessibility_label(knot_core::l10n::t("panel.retry_connect"))
                             .primary()
                             .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
-                                view.retry_panel_session(id);
+                                view.retry_panel_session(id, cx);
                                 cx.notify();
                             })),
                     )
@@ -326,6 +260,19 @@ impl WorkspaceWindow {
                         handle.clear_tracking();
                     }
                 };
+                // The `!` command controls. Cancel reaches the run table
+                // rather than the session: a shell command is not the agent's
+                // and stopping one must not touch its turn.
+                let shell_runs = Arc::clone(&self.panel_shell_runs);
+                let on_cancel_shell = move |card_id: Uuid| {
+                    super::shell::cancel_run(&shell_runs, card_id);
+                };
+                let discard_slot = Arc::clone(slot);
+                let on_discard_shell = move |card_id: Uuid| {
+                    if let panel_session::PanelSessionSlot::Ready(handle) = &*discard_slot.lock() {
+                        handle.discard_shell_result(card_id);
+                    }
+                };
                 let follow_slot = Arc::clone(slot);
                 let list_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
@@ -341,11 +288,11 @@ impl WorkspaceWindow {
                 let theme = cx.theme();
                 let panel_style =
                     panel_view::PanelStyle { permission_risk,
-                                             markdown_font_size: px(self.settings.markdown_font_size
+                                             markdown_font_size: px(crate::settings_global::read(cx).markdown_font_size
                                                                     as f32),
                                              mono_font_family: theme.mono_font_family.clone(),
                                              ui_font_family: theme.font_family.clone(),
-                                             title_font_family: self.settings
+                                             title_font_family: crate::settings_global::read(cx)
                                                                     .title_font_name
                                                                     .clone()
                                                                     .into(),
@@ -356,7 +303,7 @@ impl WorkspaceWindow {
                                              prompt_color: theme.primary,
                                              prompt_foreground: theme.primary_foreground,
                                              compact_tool_calls:
-                                                 self.settings.agent_panel_compact_tool_calls };
+                                                 crate::settings_global::read(cx).agent_panel_compact_tool_calls };
                 drop(state);
                 drop(slot_guard);
                 // Reconcile the virtualized list with the folded state:
@@ -417,7 +364,8 @@ impl WorkspaceWindow {
                                     on_toggle_tool_call,
                                     on_toggle_tool_run,
                                     on_manual_scroll,
-                                ),
+                                )
+                                .with_shell(on_cancel_shell, on_discard_shell),
                             ))
                             .children(scrolled_up.then(|| {
                                 div().absolute().bottom_3().right_4().child(

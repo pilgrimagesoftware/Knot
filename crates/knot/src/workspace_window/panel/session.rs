@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use gpui_kit::App;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
@@ -22,7 +23,7 @@ impl WorkspaceWindow {
     /// Falls back silently (no session, no error) if the agent type has no
     /// registered adapter - the caller renders the terminal in that case,
     /// and likewise if the agent is not activated (see `ensure_session`).
-    pub(in crate::workspace_window) fn ensure_panel_session(&mut self, id: Uuid) {
+    pub(in crate::workspace_window) fn ensure_panel_session(&mut self, id: Uuid, cx: &App) {
         if self.panel_sessions.contains_key(&id) {
             return;
         }
@@ -47,9 +48,9 @@ impl WorkspaceWindow {
             // to fall through to the Terminal path.
             return;
         };
-        let mcp_url = self.settings
+        let mcp_url = crate::settings_global::read(cx)
                           .mcp_server_enabled
-                          .then(|| knot_agent_launch::mcp_url(&self.settings));
+                          .then(|| knot_agent_launch::mcp_url(&crate::settings_global::read(cx)));
 
         let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
         let slot = Arc::new(Mutex::new(connecting));
@@ -59,7 +60,7 @@ impl WorkspaceWindow {
         let registration_prompt =
             knot_agent_launch::acp_registration_prompt(agent.id,
                                                        prior_session_id.is_some(),
-                                                       self.settings.persona(id));
+                                                       crate::settings_global::read(cx).persona(id));
         let session_config = agent.session_config.clone();
         // Built here because this is the only place that knows both the
         // agent's id and its type; `None` for a type with no recognizer,
@@ -94,14 +95,14 @@ impl WorkspaceWindow {
     /// the caller through `set_config_option`, and a session that isn't
     /// running yet picks this up when `ensure_panel_session` replays it.
     pub(in crate::workspace_window) fn remember_session_config(&mut self, id: Uuid,
-                                                               config_id: String, value: String)
-    {
+                                                               config_id: String, value: String,
+                                                               cx: &App) {
         let recorded = self.store
                            .lock()
                            .set_session_config_option(id, config_id, value)
                            .is_ok();
         if recorded {
-            self.persist_agents();
+            self.persist_agents(cx);
         }
     }
 
@@ -118,8 +119,8 @@ impl WorkspaceWindow {
     /// taken - sent or queued. An agent with no panel session takes
     /// nothing, and the spec's "delivered when that agent next has a live
     /// session" depends on the message still looking un-nudged next poll.
-    pub(in crate::workspace_window) fn deliver_inbox_nudges(&mut self) {
-        if !self.settings.mcp_server_enabled {
+    pub(in crate::workspace_window) fn deliver_inbox_nudges(&mut self, cx: &App) {
+        if !crate::settings_global::read(cx).mcp_server_enabled {
             return;
         }
         let candidates = {

@@ -54,6 +54,17 @@ impl Runner {
     /// stderr is empty) and the exit code. Exceeding the timeout kills the
     /// process and yields [`GitError::Timeout`].
     pub fn run(&self, args: &[&str]) -> Result<String> {
+        Ok(self.run_raw(args)?.trim().to_owned())
+    }
+
+    /// As [`Runner::run`], but returns stdout exactly as git wrote it.
+    ///
+    /// For output where whitespace is data rather than formatting: a
+    /// NUL-separated path list whose first entry begins with a space is
+    /// still that path, and trimming it produces a path that does not
+    /// exist. Prefer [`Runner::run`] for everything else - most git output
+    /// carries a trailing newline nobody wants.
+    pub fn run_raw(&self, args: &[&str]) -> Result<String> {
         let label = display_command(args);
 
         let mut command = Command::new(&self.program);
@@ -97,7 +108,7 @@ impl Runner {
         let stderr = stderr_reader.join().unwrap_or_default();
 
         if status.success() {
-            return Ok(stdout.trim().to_owned());
+            return Ok(stdout);
         }
 
         let output = if stderr.trim().is_empty() {

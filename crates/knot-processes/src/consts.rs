@@ -51,3 +51,37 @@ pub const SAMPLE_INTERVAL: Duration = Duration::from_secs(3);
 /// Neither can equal a real process group id, so both fall through to
 /// background without being special-cased.
 pub const NO_FOREGROUND_GROUP: i32 = -1;
+
+/// Wall-clock ceiling on one `!` shell command. Deliberately not
+/// [`DEFAULT_TIMEOUT`]: that bounds a `ps` or `kill` that should answer
+/// instantly, whereas a test run or a build is a legitimate `!` command and
+/// routinely takes minutes.
+pub const SHELL_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Bytes kept from one captured stream before the rest is discarded. The head
+/// is what is kept: it is where a command states what it could not do.
+pub const SHELL_OUTPUT_LIMIT: usize = 256 * 1024;
+
+/// How often the supervisor re-checks whether the command has exited. Output
+/// reaches the screen from the drain threads, not from this loop, so polling
+/// faster buys no responsiveness -- only wakeups, once per running command.
+pub const SHELL_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// How long a cancelled or timed-out command gets to exit on `TERM` before its
+/// process group is sent `KILL`. Shorter than [`TERMINATE_GRACE`]: that grace
+/// is a courtesy to an agent that may be writing a file, while this one is a
+/// user who has already asked twice by waiting.
+pub const SHELL_KILL_GRACE: Duration = Duration::from_secs(2);
+
+/// Runs when `SHELL` is unset or empty.
+pub const SHELL_FALLBACK: &str = "/bin/sh";
+
+/// Login shell, reading the command from the next argument. `-l` is what makes
+/// `!npm test` find `npm`: the application is launched from Finder with an
+/// environment that has none of what the user's profile puts on `PATH`.
+pub const SHELL_LOGIN_ARGS: &[&str] = &["-lc"];
+
+/// The fallback shell's arguments. `-l` is dropped here: `/bin/sh` is `dash`
+/// on the Linux CI runner, which does not accept it, and a fallback shell has
+/// no profile worth loading anyway.
+pub const SHELL_FALLBACK_ARGS: &[&str] = &["-c"];

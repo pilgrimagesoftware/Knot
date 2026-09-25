@@ -21,8 +21,23 @@ impl AgentStore {
 
     /// Replace the collection wholesale, as the settings document supplies it
     /// at load.
+    ///
+    /// Records naming an agent this store does not hold are dropped, the same
+    /// rule [`Self::record_pull_request`] applies on the way in and the
+    /// removal cascade applies on the way out. The cascade only fires when an
+    /// agent leaves through the store, so an agent lost any other way - a
+    /// roster document restored on its own, or replaced - leaves records
+    /// behind; and a record with no agent has nothing to show it under. The
+    /// sidebar row counts a workspace's records while the pane draws them
+    /// under their agent, so leaving one in is a count over an empty pane.
+    ///
+    /// The roster has to be installed first, which is what the one caller
+    /// does: `build_agent_store` fills the store from the saved agents, then
+    /// hands the records over.
     pub fn set_pull_requests(&mut self, records: Vec<SavedPullRequest>) {
-        self.pull_requests = records;
+        self.pull_requests = records.into_iter()
+                                    .filter(|record| self.agent(record.agent_id).is_some())
+                                    .collect();
     }
 
     /// Record `url` against `agent_id`, returning whether this was new.
@@ -65,6 +80,32 @@ impl AgentStore {
         let before = self.pull_requests.len();
         self.pull_requests
             .retain(|record| !record.is_same_sighting(url, agent_id));
+        self.pull_requests.len() != before
+    }
+
+    /// Forget every record whose URL is named, whichever agent recorded it,
+    /// returning whether anything went.
+    ///
+    /// The caller decides what has expired; this only carries it out. The
+    /// store knows nothing of merge times, forges or clocks, which is what
+    /// keeps it testable without any of them.
+    ///
+    /// Named by URL rather than by sighting because expiry is a fact about
+    /// the pull request, not about who linked it: if it merged a week ago it
+    /// merged a week ago for every agent that recorded it, and leaving one
+    /// agent's copy behind would list a pull request the rule just said to
+    /// stop listing.
+    ///
+    /// Knot's record only, exactly as [`Self::remove_pull_request`]: nothing
+    /// is closed, deleted or changed on the forge, and the same URL appearing
+    /// in an agent's output again records it again.
+    pub fn forget_pull_requests(&mut self, urls: &[String]) -> bool {
+        if urls.is_empty() {
+            return false;
+        }
+        let before = self.pull_requests.len();
+        self.pull_requests
+            .retain(|record| !urls.contains(&record.url));
         self.pull_requests.len() != before
     }
 

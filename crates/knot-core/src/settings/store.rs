@@ -55,7 +55,6 @@ mod binding;
 mod documents;
 mod legacy;
 mod paths;
-mod refresh;
 mod workspace_split;
 
 pub use paths::StorePaths;
@@ -344,11 +343,11 @@ impl Settings {
         self.persist_workspaces()
     }
 
-    fn persist_agents(&self) -> Result<()> {
+    pub(crate) fn persist_agents(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.agents(), &self.saved_agents)
     }
 
-    fn persist_workspaces(&self) -> Result<()> {
+    pub(crate) fn persist_workspaces(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.workspaces(), &self.saved_workspaces)
     }
 
@@ -385,11 +384,11 @@ impl Settings {
         self.persist_workspace_ui()
     }
 
-    fn persist_personas(&self) -> Result<()> {
+    pub(crate) fn persist_personas(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.personas(), &self.personas)
     }
 
-    fn persist_bench(&self) -> Result<()> {
+    pub(crate) fn persist_bench(&self) -> Result<()> {
         documents::write_collection(&self.resolved_paths()?.bench(), &self.bench_agents)
     }
 

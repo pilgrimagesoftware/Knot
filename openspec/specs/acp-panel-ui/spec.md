@@ -32,13 +32,20 @@ turn or terminal process.
 ### Requirement: Streaming message rendering
 The system SHALL render assistant text as it streams (text deltas appended
 to the current message, not replaced), and SHALL visually distinguish user
-messages, assistant messages, and system/tool content.
+messages, assistant messages, system/tool content, and shell-command results
+the user ran from the prompt input.
 
 #### Scenario: Rapid successive text deltas
 - **WHEN** the agent emits several text deltas for the same message in quick
   succession
 - **THEN** the panel reflects the latest accumulated text without visible
   flicker or reordering
+
+#### Scenario: A shell result reads as neither message nor tool call
+- **WHEN** the conversation holds a user message, an assistant message, a
+  tool call, and a shell-command result
+- **THEN** each is visually distinct from the others, so the reader can tell
+  the user ran the command rather than the agent
 
 ### Requirement: The conversation shows that a turn is in progress
 
@@ -539,10 +546,34 @@ ever resumed by enabling the toggle or jumping to latest.
 The input area SHALL provide an add-context control that lets the user
 attach files or images to the next message.
 
+Attached context SHALL have two presences, not one: an entry in the strip
+above the input carrying its name and, for an image, its thumbnail; and a
+styled reference at the caret in the buffer, giving the attachment a position
+in the prompt. The two SHALL stay in step — removing either one removes the
+attachment.
+
+This holds however the context arrived: the add-context control, a drag from
+the Finder, or a pasted image. This diverges from the Swift reference, whose
+attachments appear only in the strip and have no position in the text.
+
 #### Scenario: Attach a file
 - **WHEN** the user activates the add-context control and selects a file
 - **THEN** the file is attached to the pending message and shown in the
   input area before send
+
+#### Scenario: An attachment has a place in the text
+- **WHEN** the user attaches a file with the caret mid-sentence
+- **THEN** a styled reference to it appears at the caret and its entry appears
+  in the strip above the input
+
+#### Scenario: Removing the strip entry removes the reference
+- **WHEN** the user removes an attachment's entry from the strip
+- **THEN** its reference is gone from the buffer and the attachment is not
+  sent
+
+#### Scenario: Deleting the reference removes the strip entry
+- **WHEN** the user deletes an attachment's reference from the buffer
+- **THEN** its entry is gone from the strip and the attachment is not sent
 
 ### Requirement: Input area permission mode selector
 The input area SHALL provide a selector for the agent's permission mode,
@@ -580,6 +611,13 @@ SHALL NOT be disabled on that account. While a response is in progress, the
 input area SHALL also provide a stop control that interrupts the active ACP
 turn for the selected session.
 
+A pending message recognised as a shell command SHALL be exempt from these
+rules: the control SHALL remain enabled for it while a permission request is
+pending and while a response is in progress, and activating it SHALL run the
+command rather than send or enqueue a message. The stop control SHALL keep
+interrupting only the ACP turn; it SHALL NOT terminate a running shell
+command.
+
 #### Scenario: Send a message
 - **WHEN** the user activates send with non-empty input and no response is in
   progress
@@ -592,11 +630,27 @@ turn for the selected session.
 - **THEN** the message joins the prompt queue, the input area clears, and the
   message is delivered when the current turn ends
 
+#### Scenario: A shell command sends during a response
+- **WHEN** the user activates send on a shell command while a response is in
+  progress
+- **THEN** the command runs immediately, the input area clears, and the
+  prompt queue is unchanged
+
+#### Scenario: A shell command sends while permission is pending
+- **WHEN** a permission request is pending and the input holds a shell
+  command
+- **THEN** the send control is enabled and activating it runs the command
+
 #### Scenario: Stop an active turn
 - **WHEN** the user activates stop while an ACP turn is in progress
 - **THEN** the selected session receives a cancellation request and the
   control remains safe to activate again until the turn reaches a terminal
   state
+
+#### Scenario: Stop leaves a running command alone
+- **WHEN** the user activates stop while both an ACP turn and a shell command
+  are running
+- **THEN** the turn is cancelled and the shell command continues
 
 #### Scenario: Cancellation completes
 - **WHEN** the active turn is cancelled or finishes after a stop request
@@ -682,10 +736,11 @@ user is working somewhere else in it.
 
 Focus SHALL NOT be taken when the composer is not what the content area shows.
 That covers the window showing its dashboard rather than an agent, an open
-markdown or diagram pane holding the content area ahead of the conversation, a
-deactivated agent whose pane shows the stopped placeholder, and an agent that
-runs in Terminal mode rather than Panel mode. In each of those cases focus SHALL
-be left where it is.
+markdown or diagram pane holding the content area ahead of the conversation,
+and a deactivated agent whose pane shows the stopped placeholder. In each of
+those cases focus SHALL be left where it is. A Terminal-mode agent focuses its
+terminal surface instead, under `terminal-input`'s "Selecting a Terminal-mode
+agent focuses its terminal surface"; no composer is focused for it.
 
 Focus SHALL NOT be taken from a modal dialog while one is open.
 
@@ -729,7 +784,10 @@ placement included where the composer already preserves it.
 #### Scenario: A Terminal-mode agent does not move focus
 
 - **WHEN** the user selects an agent that runs in Terminal mode
-- **THEN** focus is left where it was, and no composer is focused
+- **THEN** no prompt input is focused
+- **AND** that agent's terminal surface takes focus instead, per
+  `terminal-input`'s "Selecting a Terminal-mode agent focuses its terminal
+  surface"
 
 #### Scenario: The dashboard is showing
 
@@ -1106,3 +1164,62 @@ NOT be replaced by system colors.
 #### Scenario: Non-macOS platforms are unchanged
 - **WHEN** the app runs on Linux or Windows
 - **THEN** the panel renders with the existing fixed palette
+
+### Requirement: Model dropdown scrolls
+
+When the models a selected agent declares exceed the height available to
+the model selector's dropdown, the dropdown SHALL be vertically scrollable,
+so every declared model remains reachable by scrolling, with no other action
+required. When the declared models fit within the available height, the
+dropdown SHALL show all of them without scrolling.
+
+The Swift reference has no equivalent dropdown to keep parity with: the
+model axis is offered from the agent's own declared Session Config Options,
+which the port introduces. This requirement is intended port behavior.
+
+#### Scenario: More models than fit scroll
+
+- **WHEN** the agent declares more models than the open model dropdown can
+  display at once
+- **THEN** the user can scroll the dropdown, and every model below the fold
+  becomes selectable by scrolling to it
+
+#### Scenario: Models that fit need no scroll
+
+- **WHEN** the agent declares at most as many models as the dropdown can
+  display at once
+- **THEN** every declared model is visible in the open dropdown without
+  scrolling
+
+#### Scenario: The last declared model is reachable
+
+- **WHEN** the agent declares more models than the dropdown can display and
+  the user scrolls the list to its end
+- **THEN** the last declared model is visible and selectable
+
+### Requirement: Model dropdown searches
+
+The model selector's dropdown SHALL provide a search field that filters the
+listed models by case-insensitive substring match on the model's displayed
+name, so a model can be found by typing part of its name. While the search
+field is non-empty, only models matching it SHALL be listed; a model that
+does not match SHALL NOT be offered. Clearing the field SHALL restore the
+full list.
+
+#### Scenario: Typing narrows the list
+
+- **WHEN** the user types text into the model dropdown's search field
+- **THEN** only models whose displayed name contains that text (case-
+  insensitive) are listed
+
+#### Scenario: Empty search shows everything
+
+- **WHEN** the search field is empty
+- **THEN** every declared model is listed, in the agent's declared order
+
+#### Scenario: No match selects nothing
+
+- **WHEN** no declared model matches the search text
+- **THEN** the dropdown offers no model to select, and the currently
+  selected model is left unchanged until the user empties or changes the
+  search text
