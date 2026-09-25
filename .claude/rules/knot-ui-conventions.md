@@ -34,6 +34,15 @@ and dialogs; follow them for any new pane, dialog, or window in `crates/knot`.
   `min_w_0()` on the immediate flex child, not just `flex_1()` - `flex_1()`
   alone keeps the browser/GPUI default `min-width: auto` and the content
   overflows its container instead of wrapping.
+- Dialog layer: `gpui_component::Root::render` does not draw
+  `active_dialogs`; a window's own root view must render
+  `Root::render_dialog_layer`, or every dialog it opens is invisible.
+- Dialogs from menu actions: the macOS menu dispatches through
+  `App::dispatch_action`, which already runs inside
+  `active_window.update(...)`. Opening a dialog on that same window is a
+  re-entrant `window.update`, which gpui refuses with `"window not found"` -
+  the same message as for a closed window. Defer the open with `cx.defer`
+  (found via "About Knot", PR #124).
 - Native pickers/panels over in-app equivalents where the OS provides one
   (e.g. `NSFontManager`/`NSFontPanel` for font choice, folder pickers via
   `cx.prompt_for_paths`, `NSApplication.orderFrontCharacterPalette` for an
