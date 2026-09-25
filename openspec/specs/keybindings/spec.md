@@ -14,8 +14,8 @@ the user changes them:
 
 | Shortcut | Default |
 | --- | --- |
-| Select workspace 1–9 | ⌘1 … ⌘9 |
-| Select agent 1–9 | ⌥⌘1 … ⌥⌘9 |
+| Select workspace 1–9 | ⌥⌘1 … ⌥⌘9 |
+| Select agent 1–9 | ⌘1 … ⌘9 |
 | Focus agent input | ⌘L |
 | Toggle Dashboard | ⌥⌘O |
 | Toggle Pull Requests | ⌥⌘P |
@@ -26,10 +26,13 @@ The two numbered families SHALL always use the digits 1 through 9; only their
 modifier is configurable. Each of the other five is a single configurable
 chord.
 
-The Swift reference binds ⌘1–⌘9 to workspace switching and ⌘0 to the Command
-Center. The port keeps ⌘1–⌘9 and the existing ⌥⌘0, because ⌘0 already opens
-the workspace manager here. Numbered agent selection, Focus agent input, Jump
-to bottom and the two panel toggles have no reference counterpart.
+Agent selection takes the plain ⌘ modifier because moving between the agents
+of one workspace is far more frequent than moving between workspaces. This
+diverges from the Swift reference, which binds ⌘1–⌘9 to workspace switching
+and has no numbered agent selection. The reference's ⌘0 for the Command
+Center is not kept either: ⌘0 already opens the workspace manager here, so the
+Command Center takes ⌥⌘0. Focus agent input, Jump to bottom and the two panel
+toggles have no reference counterpart.
 
 Jump to bottom defaults to ⌃⌘↓ rather than the platform's ⌘↓. The composer,
 which usually has focus, uses ⌘↓, ⇧⌘↓ and ⌥⌘↓ for its own caret movement, and
@@ -38,10 +41,22 @@ takes them first while it is focused.
 #### Scenario: Defaults on first launch
 
 - **WHEN** the user has never customized a shortcut
-- **THEN** ⌘3 selects workspace 3, ⌥⌘2 selects agent 2, ⌘L focuses the
+- **THEN** ⌥⌘3 selects workspace 3, ⌘2 selects agent 2, ⌘L focuses the
   selected agent's input, ⌥⌘O toggles the Dashboard, ⌥⌘P toggles Pull
   Requests, ⌃⌘↓ jumps to the bottom of the conversation, and ⌥⌘0 opens the
   Command Center
+
+#### Scenario: Upgrading on the defaults
+
+- **WHEN** a user who never customized either numbered family upgrades from a
+  version whose defaults were ⌘ for workspaces and ⌥⌘ for agents
+- **THEN** ⌘N selects agent N and ⌥⌘N selects workspace N
+
+#### Scenario: Upgrading with a customized family
+
+- **WHEN** a user who had set the agent modifier to ⌃⌘, and left the workspace
+  modifier on its default, upgrades
+- **THEN** ⌃⌘N still selects agent N, and ⌥⌘N selects workspace N
 
 ### Requirement: Selecting a workspace by number
 
@@ -55,18 +70,18 @@ workspaces, it SHALL do nothing.
 #### Scenario: Raising an open workspace
 
 - **WHEN** workspaces A, B and C are listed in that order, B's window is open
-  behind A's, and the user presses ⌘2
+  behind A's, and the user presses ⌥⌘2
 - **THEN** B's window comes to the front and is focused, and no second window
   for B opens
 
 #### Scenario: Opening a closed workspace
 
-- **WHEN** workspace C has no open window and the user presses ⌘3
+- **WHEN** workspace C has no open window and the user presses ⌥⌘3
 - **THEN** C's window opens
 
 #### Scenario: Out of range
 
-- **WHEN** there are two workspaces and the user presses ⌘5
+- **WHEN** there are two workspaces and the user presses ⌥⌘5
 - **THEN** nothing happens
 
 ### Requirement: Selecting an agent by number
@@ -80,17 +95,17 @@ workspace has fewer than N agents.
 
 #### Scenario: Selecting the second agent
 
-- **WHEN** a workspace window lists agents X, Y and Z, and the user presses ⌥⌘2
+- **WHEN** a workspace window lists agents X, Y and Z, and the user presses ⌘2
 - **THEN** Y is selected and its terminal or panel is shown
 
 #### Scenario: Leaving a panel
 
-- **WHEN** the Dashboard is showing and the user presses ⌥⌘1
+- **WHEN** the Dashboard is showing and the user presses ⌘1
 - **THEN** the first agent is selected and shown in place of the Dashboard
 
 #### Scenario: Outside a workspace window
 
-- **WHEN** the Command Center is focused and the user presses ⌥⌘1
+- **WHEN** the Command Center is focused and the user presses ⌘1
 - **THEN** nothing happens
 
 ### Requirement: Focusing the agent's input
@@ -188,8 +203,8 @@ stop triggering the shortcut.
 
 #### Scenario: Changing the agent modifier
 
-- **WHEN** the user changes the agent-selection modifier from ⌥⌘ to ⌃⌘
-- **THEN** ⌃⌘2 selects the second agent, ⌥⌘2 no longer does, and the setting
+- **WHEN** the user changes the agent-selection modifier from ⌘ to ⌃⌘
+- **THEN** ⌃⌘2 selects the second agent, ⌘2 no longer does, and the setting
   survives a relaunch
 
 #### Scenario: Recording a chord
@@ -235,8 +250,9 @@ document must not leave Knot without its shortcuts.
 
 #### Scenario: Families collide
 
-- **WHEN** the workspace modifier is ⌘ and the user sets the agent modifier to ⌘
-- **THEN** the change is rejected with a message naming Select workspace
+- **WHEN** the agent modifier is ⌘ and the user sets the workspace modifier to
+  ⌘
+- **THEN** the change is rejected with a message naming Select agent
 
 #### Scenario: Unmodified chord
 
@@ -249,3 +265,10 @@ document must not leave Knot without its shortcuts.
 - **WHEN** the preferences document stores `"cmd-q"` for Toggle Dashboard and
   Knot launches
 - **THEN** Toggle Dashboard is bound to ⌥⌘O and ⌘Q still quits
+
+#### Scenario: Stored family collides with the new default
+
+- **WHEN** a hand-edited preference document stores ⌘ as the workspace
+  modifier and no agent modifier, and Knot launches
+- **THEN** the stored workspace modifier is ignored, ⌥⌘N selects workspace N,
+  and ⌘N selects agent N

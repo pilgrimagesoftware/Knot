@@ -18,5 +18,5 @@
 ## 4. Verification
 
 - [x] 4.1 Run `make` (fmt-check, size-check, lint, test, build) and verify it passes
-- [ ] 4.2 In a running build with no customized shortcuts, verify ⌘2 selects the second agent with the terminal focused and with the composer focused, ⌥⌘2 raises the second workspace, and the Keyboard tab shows ⌘ for agents and ⌥⌘ for workspaces
+- [x] 4.2 In a running build with no customized shortcuts, verify ⌘2 selects the second agent with the terminal focused and with the composer focused, ⌥⌘2 raises the second workspace, and the Keyboard tab shows ⌘ for agents and ⌥⌘ for workspaces
 - [x] 4.3 Run `openspec validate swap-select-shortcut-defaults --strict` and verify it passes
