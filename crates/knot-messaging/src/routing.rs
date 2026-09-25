@@ -126,6 +126,7 @@ mod tests {
                 capabilities:       Default::default(),
                 cost_tier:          Default::default(),
                 session_config:     Default::default(),
+                startup_prompt:     None,
                 activated:          false,
                 state:              AgentState::Idle,
                 status_text:        String::new(),

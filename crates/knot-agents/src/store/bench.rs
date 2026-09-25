@@ -20,6 +20,7 @@ impl AgentStore {
                                          description: bench.description.clone(),
                                          capabilities: bench.capabilities.clone(),
                                          cost_tier: bench.cost_tier,
+                                         startup_prompt: bench.startup_prompt.clone(),
                                          ..Default::default() }))
     }
 }

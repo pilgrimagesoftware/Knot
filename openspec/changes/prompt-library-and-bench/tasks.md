@@ -2,12 +2,12 @@
 
 ## 1. Data model (`knot-core`)
 
-- [ ] 1.1 Add the `Prompt` record (id, name, text) and the `StartupPrompt` enum (`Library(Uuid)`, `Custom(String)`) with serde tagging; verify a round-trip test for each variant and that a blank-name or blank-text prompt is refused by the constructor
-- [ ] 1.2 Add `#[serde(default)] startup_prompt: Option<StartupPrompt>` to `SavedAgent` and `BenchAgent`, storing blank custom text as `None`; verify a legacy agent and a legacy bench entry decode with `None`, and a custom prompt round-trips through the agents document
-- [ ] 1.3 Add `PROMPTS_FILE` to `consts.rs`, the `prompts` collection, its path and `persist_prompts`; verify a store with no prompts document loads an empty library and writes none, and that seven collection documents exist after persisting a full store (update the six-document test)
-- [ ] 1.4 Add library add/update/remove that persist before returning, keeping insertion order; verify removing a referenced prompt leaves the agents document's bytes unchanged
-- [ ] 1.5 Add `remove_bench_agent(id)` if not already present; verify it removes only that entry and persists the bench document
-- [ ] 1.6 Verify the bench keeps a library reference as a reference: save an agent referencing P to the bench, reload, and assert the entry holds `Library(P)`, not P's text
+- [x] 1.1 Add the `Prompt` record (id, name, text) and the `StartupPrompt` enum (`Library(Uuid)`, `Custom(String)`) with serde tagging; verify a round-trip test for each variant and that a blank-name or blank-text prompt is refused by the constructor
+- [x] 1.2 Add `#[serde(default)] startup_prompt: Option<StartupPrompt>` to `SavedAgent` and `BenchAgent`, storing blank custom text as `None`; verify a legacy agent and a legacy bench entry decode with `None`, and a custom prompt round-trips through the agents document
+- [x] 1.3 Add `PROMPTS_FILE` to `consts.rs`, the `prompts` collection, its path and `persist_prompts`; verify a store with no prompts document loads an empty library and writes none, and that seven collection documents exist after persisting a full store (update the six-document test)
+- [x] 1.4 Add library add/update/remove that persist before returning, keeping insertion order; verify removing a referenced prompt leaves the agents document's bytes unchanged
+- [x] 1.5 Add `remove_bench_agent(id)` if not already present; verify it removes only that entry and persists the bench document
+- [x] 1.6 Verify the bench keeps a library reference as a reference: save an agent referencing P to the bench, reload, and assert the entry holds `Library(P)`, not P's text
 
 ## 2. Prompt variables (`knot-agent-launch`)
 
@@ -32,10 +32,10 @@
 
 ## 5. Agent store and benching (`knot-agents`, `knot`)
 
-- [ ] 5.1 Carry `startup_prompt` through `CreateOptions` and `deploy_bench`; verify a deployed entry's agent holds the entry's startup prompt in the same form, and the entry stays on the bench after two deployments
+- [x] 5.1 Carry `startup_prompt` through `CreateOptions` and `deploy_bench`; verify a deployed entry's agent holds the entry's startup prompt in the same form, and the entry stays on the bench after two deployments
 - [ ] 5.2 Extract `bench_entry_for(&Agent)` from Save to Bench, including the startup prompt, and use it from Save to Bench; verify the existing Save to Bench tests still pass
 - [ ] 5.3 Implement benching: write the entry through `write_persisting`, then remove the agent (and its companions) only on success; verify a failed write leaves the agent in place, and an owner with a companion yields one bench entry and two removals
-- [ ] 5.4 Exclude the startup prompt from launch-affecting edits; verify changing only the startup prompt does not recreate the session
+- [x] 5.4 Exclude the startup prompt from launch-affecting edits; verify changing only the startup prompt does not recreate the session
 - [ ] 5.5 Add `WorkspaceWindow::deploy_bench_entry(entry, cx)`: deploy into the sidebar's workspace and select; on a missing folder remove the entry and post a notification naming it; verify both paths with a window test
 
 ## 6. Sidebar menus (`knot`)

@@ -1,6 +1,7 @@
 mod lifecycle;
 mod persistence;
 mod pull_requests;
+mod startup_prompt;
 mod workspace;
 
 use super::*;

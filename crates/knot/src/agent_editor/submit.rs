@@ -76,6 +76,7 @@ impl AgentEditor {
                     description,
                     capabilities,
                     cost_tier: self.cost_tier,
+                    startup_prompt: self.startup_prompt.clone(),
                 },
             );
             // A fork continues the source's conversation rather than
@@ -136,6 +137,7 @@ impl AgentEditor {
                     description,
                     capabilities,
                     cost_tier: self.cost_tier,
+                    startup_prompt: self.startup_prompt.clone(),
                 },
             );
             if let Err(error) = result {

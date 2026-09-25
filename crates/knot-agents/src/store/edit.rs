@@ -23,6 +23,9 @@ impl AgentStore {
             agent.description = req.description;
             agent.capabilities = req.capabilities;
             agent.cost_tier = req.cost_tier;
+            // Not a launch parameter either: it waits for the next fresh
+            // session rather than interrupting this one.
+            agent.startup_prompt = req.startup_prompt;
             if let Some(agent_type) = &req.agent_type
                && *agent_type != agent.agent_type
             {

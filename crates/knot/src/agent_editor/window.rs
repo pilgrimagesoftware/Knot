@@ -157,6 +157,10 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                      .map(|a| a.activation_mode)
                                                      .unwrap_or(knot_core::ActivationMode::Passive),
                                           original_persona_id: persona_id,
+                                          startup_prompt:
+                                              editing.as_ref()
+                                                     .map(|a| a.startup_prompt.clone())
+                                                     .unwrap_or_else(|| prefill.startup_prompt.clone()),
                                           prefill,
                                           insert_after,
                                           edit_target,
@@ -191,6 +195,9 @@ pub(crate) struct AgentEditor {
     /// (`EditRequest::persona_changed`) rather than always forcing a
     /// restart.
     pub(super) original_persona_id:  Option<Uuid>,
+    /// The startup prompt as it will be submitted. See
+    /// `openspec/specs/agent-editor-ui/spec.md`, "Startup prompt control".
+    pub(super) startup_prompt:       Option<knot_core::StartupPrompt>,
     /// What this editor was opened to derive the new agent from - carries
     /// the owner for a companion and the session for a fork, neither of
     /// which the form itself can express.

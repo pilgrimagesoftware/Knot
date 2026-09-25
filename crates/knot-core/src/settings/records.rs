@@ -13,6 +13,7 @@ use crate::consts::{
     DEFAULT_AGENT_TYPE, DEFAULT_AVATAR, WORKSPACE_LAYOUT_DEFAULT, WORKSPACE_SPLIT_RATIO_DEFAULT,
 };
 use crate::settings::capabilities::Capabilities;
+use crate::settings::prompts::StartupPrompt;
 use crate::settings::vocabulary::CostTier;
 
 // ---------------------------------------------------------------------------
@@ -138,6 +139,12 @@ pub struct SavedAgent {
     /// See `openspec/specs/session-setup-persistence/spec.md`.
     #[serde(default)]
     pub session_config:  BTreeMap<String, String>,
+    /// Sent as its own turn after the initialization prompt on each fresh
+    /// session. See `openspec/specs/prompt-library/spec.md`.
+    #[serde(default,
+            deserialize_with = "super::prompts::de_startup_prompt",
+            skip_serializing_if = "Option::is_none")]
+    pub startup_prompt:  Option<StartupPrompt>,
 }
 
 impl SavedAgent {
@@ -165,7 +172,8 @@ impl SavedAgent {
                description: String::new(),
                capabilities: Capabilities::new(),
                cost_tier: CostTier::default(),
-               session_config: BTreeMap::new() }
+               session_config: BTreeMap::new(),
+               startup_prompt: None }
     }
 }
 
@@ -177,25 +185,31 @@ impl SavedAgent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BenchAgent {
-    pub id:            Uuid,
-    pub name:          String,
+    pub id:             Uuid,
+    pub name:           String,
     #[serde(default = "default_avatar")]
-    pub avatar:        String,
-    pub folder:        String,
+    pub avatar:         String,
+    pub folder:         String,
     #[serde(default = "default_agent_type")]
-    pub agent_type:    String,
+    pub agent_type:     String,
     #[serde(default)]
-    pub shell_command: Option<String>,
+    pub shell_command:  Option<String>,
     #[serde(default)]
-    pub persona_id:    Option<Uuid>,
+    pub persona_id:     Option<Uuid>,
     /// Registry metadata carried onto the agent this template deploys, so a
     /// saved template records a role and not just a folder.
     #[serde(default)]
-    pub description:   String,
+    pub description:    String,
     #[serde(default)]
-    pub capabilities:  Capabilities,
+    pub capabilities:   Capabilities,
     #[serde(default)]
-    pub cost_tier:     CostTier,
+    pub cost_tier:      CostTier,
+    /// Deployed onto the agent in the form held here: a library reference
+    /// stays a reference.
+    #[serde(default,
+            deserialize_with = "super::prompts::de_startup_prompt",
+            skip_serializing_if = "Option::is_none")]
+    pub startup_prompt: Option<StartupPrompt>,
 }
 
 impl BenchAgent {
@@ -214,7 +228,8 @@ impl BenchAgent {
                persona_id: None,
                description: String::new(),
                capabilities: Capabilities::new(),
-               cost_tier: CostTier::default() }
+               cost_tier: CostTier::default(),
+               startup_prompt: None }
     }
 }
 

@@ -284,14 +284,15 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
             else {
                 return;
             };
-            let prefill = AgentPrefill { name:         Some(format!("{} (fork)", source.name)),
-                                         avatar:       Some(source.avatar.clone()),
-                                         folder:       Some(source.folder.clone()),
-                                         agent_type:   Some(source.agent_type.clone()),
-                                         persona_id:   source.persona_id,
-                                         created_by:   None,
-                                         is_companion: false,
-                                         session_id:   source.session_id.clone(), };
+            let prefill = AgentPrefill { name:           Some(format!("{} (fork)", source.name)),
+                                         avatar:         Some(source.avatar.clone()),
+                                         folder:         Some(source.folder.clone()),
+                                         agent_type:     Some(source.agent_type.clone()),
+                                         persona_id:     source.persona_id,
+                                         startup_prompt: source.startup_prompt.clone(),
+                                         created_by:     None,
+                                         is_companion:   false,
+                                         session_id:     source.session_id.clone(), };
             open_editor_from_menu(targets, prefill, Some(targets.id), None, app);
         }
         AgentMenuEntry::DuplicateAgent => {
@@ -318,6 +319,8 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                                           shell_command: source.shell_command
                                                                                .clone(),
                                                           persona_id: source.persona_id,
+                                                          startup_prompt: source.startup_prompt
+                                                                                .clone(),
                                                           insert_after: Some(targets.id),
                                                           ..Default::default() })
             };
