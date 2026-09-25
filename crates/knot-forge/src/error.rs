@@ -30,6 +30,13 @@ pub enum ForgeError {
 
     #[error("parsing gh output failed: {0}")]
     Parse(String),
+
+    /// The forge answered, and its answer is that the pull request does not
+    /// exist - or at least not for this `gh` identity. A finished answer, not
+    /// a failure to get one, which is why it is not a [`ForgeError::Command`].
+    /// Carries what the forge said.
+    #[error("gh found no such pull request: {0}")]
+    NotFound(String),
 }
 
 impl ForgeError {
@@ -64,5 +71,7 @@ mod tests {
         assert!(ForgeError::Unauthenticated.is_persistent());
         assert!(!ForgeError::Timeout { command: "pr view".to_owned(), }.is_persistent());
         assert!(!ForgeError::Parse("bad json".to_owned()).is_persistent());
+        assert!(!ForgeError::NotFound("no such pull request".to_owned()).is_persistent(),
+                "one missing pull request says nothing about the others");
     }
 }

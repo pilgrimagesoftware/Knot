@@ -10,7 +10,8 @@ fn counts(open: usize, merged: usize, closed: usize, pending: usize) -> PullRequ
     PullRequestCounts { open,
                         merged,
                         closed,
-                        pending }
+                        pending,
+                        not_found: 0 }
 }
 
 /// Asserts the keys resolve and the values survive substitution, per
@@ -22,7 +23,8 @@ fn every_count_key_resolves_and_carries_its_number() {
                 "pull_requests.count_open",
                 "pull_requests.count_merged",
                 "pull_requests.count_closed",
-                "pull_requests.count_pending"]
+                "pull_requests.count_pending",
+                "pull_requests.count_not_found"]
     {
         let text = l10n::t_with(key, &[("count", "7")]);
         assert_ne!(text, key, "{key} does not resolve");
@@ -90,4 +92,20 @@ fn the_states_keep_their_order() {
     assert!(position("pull_requests.count_open") < position("pull_requests.count_merged"));
     assert!(position("pull_requests.count_merged") < position("pull_requests.count_closed"));
     assert!(position("pull_requests.count_closed") < position("pull_requests.count_pending"));
+}
+
+/// Counted apart, and left out when there are none - the same as every other
+/// state, so a workspace with no missing pull requests never says so.
+#[test]
+fn not_found_is_shown_only_when_there_is_some() {
+    let with = counts_label(PullRequestCounts { not_found: 2,
+                                                ..counts(3, 0, 0, 0) });
+    let without = counts_label(counts(3, 0, 0, 0));
+    let not_found = l10n::t_with("pull_requests.count_not_found", &[("count", "2")]);
+
+    assert!(with.contains(&not_found), "{with}");
+    assert!(!with.contains(&l10n::t_with("pull_requests.count_pending", &[("count", "2")])),
+            "not found counted as pending: {with}");
+    assert!(!without.contains(&l10n::t_with("pull_requests.count_not_found", &[("count", "0")])),
+            "{without}");
 }

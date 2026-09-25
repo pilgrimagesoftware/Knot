@@ -13,19 +13,48 @@ use gpui_kit::{
     ClickEvent, Context, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, div,
 };
-use knot_forge::{
-    CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
-};
+use knot_forge::{CheckRollup, ForgeAvailability, Mergeability, PullRequestStatus};
 use uuid::Uuid;
 
 use crate::consts;
+use crate::pull_request_state::PullRequestLookup;
 use crate::workspace_window::WorkspaceWindow;
 
 /// One row, flattened out of the store and the state cache before any
 /// element is built - so neither lock is held across the element tree.
 pub(crate) struct PullRequestRow {
-    pub(crate) url:   String,
-    pub(crate) state: Option<PullRequestState>,
+    pub(crate) url:    String,
+    /// `None` while nothing has been asked for it yet.
+    pub(crate) lookup: Option<PullRequestLookup>,
+}
+
+/// What a row can say about where its pull request stands.
+///
+/// Derived once from the lookup, so the icon and the detail line cannot
+/// disagree. A failed fetch reads as pending: it is retried, so "checking" is
+/// still true of it. Not found is not: the answer is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowStatus {
+    Known(PullRequestStatus),
+    NotFound,
+    Pending,
+}
+
+impl RowStatus {
+    fn of(lookup: Option<&PullRequestLookup>) -> Self {
+        match lookup {
+            Some(PullRequestLookup::Known(state)) => Self::Known(state.status),
+            Some(PullRequestLookup::NotFound) => Self::NotFound,
+            Some(PullRequestLookup::Failed) | None => Self::Pending,
+        }
+    }
+
+    fn known(self) -> Option<PullRequestStatus> {
+        match self {
+            Self::Known(status) => Some(status),
+            Self::NotFound | Self::Pending => None,
+        }
+    }
 }
 
 /// The rows one set of agents opened, under their names.
@@ -129,20 +158,15 @@ fn render_row(agent_ids: Vec<Uuid>, row: PullRequestRow, cx: &mut Context<Worksp
               -> gpui_kit::AnyElement {
     let url = row.url.clone();
     let remove_url = row.url.clone();
-    let title = row.state
-                   .as_ref()
-                   .and_then(|state| state.title.clone())
-                   .unwrap_or_else(|| row.url.clone());
-    let number = row.state
-                    .as_ref()
-                    .and_then(|state| state.number)
-                    .map(|number| format!("#{number}"));
-    let status = row.state.as_ref().map(|state| state.status);
-    let checks = row.state.as_ref().and_then(|state| state.checks);
-    let mergeable = row.state
-                       .as_ref()
-                       .map_or(Mergeability::Unknown, |state| state.mergeable);
-    let tint = state_color(status, mergeable);
+    let state = row.lookup.as_ref().and_then(PullRequestLookup::state);
+    let title = state.and_then(|state| state.title.clone())
+                     .unwrap_or_else(|| row.url.clone());
+    let number = state.and_then(|state| state.number)
+                      .map(|number| format!("#{number}"));
+    let status = RowStatus::of(row.lookup.as_ref());
+    let checks = state.and_then(|state| state.checks);
+    let mergeable = state.map_or(Mergeability::Unknown, |state| state.mergeable);
+    let tint = state_color(status.known(), mergeable);
 
     h_flex().id(gpui_kit::SharedString::from(format!("pull-request-{}", row.url)))
             .w_full()
@@ -258,15 +282,19 @@ pub(super) const REMOVE_ICON: &str = "icons/trash.svg";
 
 /// The icon for a row's state. Draft has its own, because the whole point of
 /// a draft is that it is not ready - which a plain open icon does not say.
-fn status_icon(status: Option<PullRequestStatus>) -> &'static str {
+fn status_icon(status: RowStatus) -> &'static str {
     match status {
-        Some(PullRequestStatus::Draft) => "icons/git-pull-request-draft.svg",
-        Some(PullRequestStatus::Merged) => "icons/git-merge.svg",
-        Some(PullRequestStatus::Closed) => "icons/git-pull-request-closed.svg",
-        Some(PullRequestStatus::Open) => "icons/git-pull-request.svg",
+        RowStatus::Known(PullRequestStatus::Draft) => "icons/git-pull-request-draft.svg",
+        RowStatus::Known(PullRequestStatus::Merged) => "icons/git-merge.svg",
+        RowStatus::Known(PullRequestStatus::Closed) => "icons/git-pull-request-closed.svg",
+        RowStatus::Known(PullRequestStatus::Open) => "icons/git-pull-request.svg",
+        // Looked for and not there. Not a pull request icon, since the forge
+        // says there is no pull request, and not an error icon, since
+        // nothing failed.
+        RowStatus::NotFound => "icons/search-x.svg",
         // No state fetched: the row still lists and still opens, so it gets
         // the neutral icon rather than one that claims a state.
-        None => "icons/git-pull-request-arrow.svg",
+        RowStatus::Pending => "icons/git-pull-request-arrow.svg",
     }
 }
 
@@ -275,21 +303,29 @@ fn status_icon(status: Option<PullRequestStatus>) -> &'static str {
 ///
 /// Checks only while the pull request is open. Once it is merged or closed
 /// they say nothing anyone will act on.
-fn detail_line(number: Option<&str>, status: Option<PullRequestStatus>,
-               checks: Option<CheckRollup>)
-               -> String {
+fn detail_line(number: Option<&str>, status: RowStatus, checks: Option<CheckRollup>) -> String {
     let mut parts: Vec<String> = Vec::new();
     if let Some(number) = number {
         parts.push(number.to_string());
     }
     parts.push(match status {
-                   Some(PullRequestStatus::Draft) => knot_core::l10n::t("pull_requests.draft"),
-                   Some(PullRequestStatus::Open) => knot_core::l10n::t("pull_requests.open"),
-                   Some(PullRequestStatus::Merged) => knot_core::l10n::t("pull_requests.merged"),
-                   Some(PullRequestStatus::Closed) => knot_core::l10n::t("pull_requests.closed"),
-                   None => knot_core::l10n::t("pull_requests.pending"),
+                   RowStatus::Known(PullRequestStatus::Draft) => {
+                       knot_core::l10n::t("pull_requests.draft")
+                   }
+                   RowStatus::Known(PullRequestStatus::Open) => {
+                       knot_core::l10n::t("pull_requests.open")
+                   }
+                   RowStatus::Known(PullRequestStatus::Merged) => {
+                       knot_core::l10n::t("pull_requests.merged")
+                   }
+                   RowStatus::Known(PullRequestStatus::Closed) => {
+                       knot_core::l10n::t("pull_requests.closed")
+                   }
+                   RowStatus::NotFound => knot_core::l10n::t("pull_requests.not_found"),
+                   RowStatus::Pending => knot_core::l10n::t("pull_requests.pending"),
                });
-    if let Some(checks) = checks.filter(|_| status.is_some_and(PullRequestStatus::is_open)) {
+    if let Some(checks) = checks.filter(|_| status.known().is_some_and(PullRequestStatus::is_open))
+    {
         parts.push(match checks {
                        CheckRollup::Passing => knot_core::l10n::t("pull_requests.checks_passing"),
                        CheckRollup::Failing => knot_core::l10n::t("pull_requests.checks_failing"),

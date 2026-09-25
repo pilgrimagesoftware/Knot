@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use knot_forge::{ForgeAvailability, PullRequestState, PullRequestStatus};
+use knot_forge::{ForgeAvailability, ForgeError, PullRequestState, PullRequestStatus};
 use parking_lot::Mutex;
 
 use crate::consts;
@@ -33,10 +33,58 @@ use crate::refresh_cache::RefreshCache;
 
 /// Last known state per pull request URL, and when each was last requested.
 ///
-/// The value's `Option` is the *lookup*: `None` means the fetch finished and
-/// failed, which is a finished answer and not a pending one. A URL absent
-/// from the cache is the pending case - nothing has been asked for it yet.
-pub(crate) type PullRequestStateCache = RefreshCache<String, Option<PullRequestState>>;
+/// A URL absent from the cache is the pending case - nothing has been asked
+/// for it yet. Every value is a finished answer; see [`PullRequestLookup`].
+pub(crate) type PullRequestStateCache = RefreshCache<String, PullRequestLookup>;
+
+/// What one fetch of a pull request's state came back with.
+///
+/// Three finished answers, kept apart because each means something different
+/// to the row: a state to show; the forge saying there is no such pull
+/// request; or a fetch that failed and will be tried again. Collapsing the
+/// last two is how a pull request that does not exist sat on "Checking…"
+/// forever, re-fetched every cycle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PullRequestLookup {
+    Known(PullRequestState),
+    /// The forge has no such pull request - or none this `gh` identity can
+    /// read, which it answers the same way. Shown, never acted on.
+    NotFound,
+    /// The fetch did not produce an answer: a timeout, a network error, a
+    /// response that would not parse.
+    Failed,
+}
+
+impl PullRequestLookup {
+    /// The state, when there is one.
+    pub(crate) fn state(&self) -> Option<&PullRequestState> {
+        match self {
+            Self::Known(state) => Some(state),
+            Self::NotFound | Self::Failed => None,
+        }
+    }
+
+    /// Whether asking again in this window would be wasted.
+    ///
+    /// Only not found is final. A state can change and a failure can clear;
+    /// a pull request that does not exist will not start existing, and the
+    /// one case where it seems to - a repository readable once `gh` is signed
+    /// in to the right account - is recovered by a relaunch, since nothing
+    /// here is persisted.
+    pub(crate) fn is_final(&self) -> bool {
+        matches!(self, Self::NotFound)
+    }
+}
+
+impl From<knot_forge::Result<PullRequestState>> for PullRequestLookup {
+    fn from(result: knot_forge::Result<PullRequestState>) -> Self {
+        match result {
+            Ok(state) => Self::Known(state),
+            Err(ForgeError::NotFound(_)) => Self::NotFound,
+            Err(_) => Self::Failed,
+        }
+    }
+}
 
 /// How stale a pull request's state may be before it is fetched again.
 pub(crate) const MAX_AGE: Duration = consts::PULL_REQUEST_STATE_MAX_AGE;
@@ -50,22 +98,23 @@ pub(crate) const MERGED_RETENTION: Duration = consts::PULL_REQUEST_MERGED_RETENT
 /// Which of `urls` have been merged long enough to stop listing.
 ///
 /// Every case where the evidence is missing keeps the record, and there are
-/// four of them: the URL is not in the cache (nothing asked yet), its entry is
-/// `None` (the fetch finished and failed), it is merged with no merge time the
-/// forge reported, or it is not merged at all. Knot drops what it has observed
+/// four of them: the URL is not in the cache (nothing asked yet), its entry
+/// has no state (the fetch failed, or the forge found no such pull request),
+/// it is merged with no merge time the forge reported, or it is not merged at
+/// all. Knot drops what it has observed
 /// and declines to guess at the rest - a wrongly kept record is a row the user
 /// can remove, a wrongly dropped one is work that silently vanished.
 ///
 /// Pure, and takes `now` rather than reading the clock, so the window's edges
 /// are testable without waiting a day at either end. The comparison itself
 /// lives on [`PullRequestState`], where the merge time does.
-pub(crate) fn expired_urls(cache: &BTreeMap<String, Option<PullRequestState>>, urls: &[String],
+pub(crate) fn expired_urls(cache: &BTreeMap<String, PullRequestLookup>, urls: &[String],
                            retention: Duration, now: SystemTime)
                            -> Vec<String> {
     urls.iter()
         .filter(|url| {
             cache.get(*url)
-                 .and_then(Option::as_ref)
+                 .and_then(PullRequestLookup::state)
                  .is_some_and(|state| state.merged_longer_than(retention, now))
         })
         .cloned()
@@ -79,20 +128,24 @@ pub(crate) fn expired_urls(cache: &BTreeMap<String, Option<PullRequestState>>, u
 /// rather than a fourth state.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct PullRequestCounts {
-    pub(crate) open:    usize,
-    pub(crate) merged:  usize,
-    pub(crate) closed:  usize,
+    pub(crate) open:      usize,
+    pub(crate) merged:    usize,
+    pub(crate) closed:    usize,
     /// Recorded, but with no state fetched: either nothing has been asked
     /// for it yet, or the fetch failed. Counted separately rather than
     /// folded into a state, because the row must not imply a state Knot has
     /// not fetched.
-    pub(crate) pending: usize,
+    pub(crate) pending:   usize,
+    /// Recorded, and the forge says it does not exist. Its own count rather
+    /// than pending, since the answer is in, and rather than any state, since
+    /// there is none.
+    pub(crate) not_found: usize,
 }
 
 impl PullRequestCounts {
     /// How many records there are in total.
     pub(crate) fn total(self) -> usize {
-        self.open + self.merged + self.closed + self.pending
+        self.open + self.merged + self.closed + self.pending + self.not_found
     }
 
     /// Whether nothing at all is known yet, so the row shows the total
@@ -101,8 +154,10 @@ impl PullRequestCounts {
     /// True before the view has been shown for the first time, and on a
     /// machine where `gh` is unavailable - in both cases a breakdown would
     /// read as "all four of these are pending", which says less than "four".
+    /// Not found counts as known: it is an answer, and "2 not found" says
+    /// more than "2 recorded".
     pub(crate) fn nothing_known(self) -> bool {
-        self.open == 0 && self.merged == 0 && self.closed == 0
+        self.open == 0 && self.merged == 0 && self.closed == 0 && self.not_found == 0
     }
 }
 
@@ -110,16 +165,19 @@ impl PullRequestCounts {
 ///
 /// Takes the URLs rather than the records so the caller decides the scope -
 /// one workspace's, in every current use.
-pub(crate) fn counts_for(cache: &BTreeMap<String, Option<PullRequestState>>, urls: &[String])
+pub(crate) fn counts_for(cache: &BTreeMap<String, PullRequestLookup>, urls: &[String])
                          -> PullRequestCounts {
     let mut counts = PullRequestCounts::default();
     for url in urls {
-        match cache.get(url).and_then(Option::as_ref) {
-            Some(state) if state.status == PullRequestStatus::Merged => counts.merged += 1,
-            Some(state) if state.status == PullRequestStatus::Closed => counts.closed += 1,
-            // Draft and open both; see `PullRequestCounts`.
-            Some(_) => counts.open += 1,
-            None => counts.pending += 1,
+        match cache.get(url) {
+            Some(PullRequestLookup::Known(state)) => match state.status {
+                PullRequestStatus::Merged => counts.merged += 1,
+                PullRequestStatus::Closed => counts.closed += 1,
+                // Draft and open both; see `PullRequestCounts`.
+                PullRequestStatus::Draft | PullRequestStatus::Open => counts.open += 1,
+            },
+            Some(PullRequestLookup::NotFound) => counts.not_found += 1,
+            Some(PullRequestLookup::Failed) | None => counts.pending += 1,
         }
     }
     counts

@@ -5,7 +5,7 @@ use knot_forge::{
     CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
 };
 
-use super::{REMOVE_ICON, detail_line, forge_notice_text, state_color, status_icon};
+use super::{REMOVE_ICON, RowStatus, detail_line, forge_notice_text, state_color, status_icon};
 
 fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestState {
     PullRequestState { number: Some(42),
@@ -22,7 +22,7 @@ fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestS
 fn a_full_row_names_its_number_state_and_checks() {
     let state = state(PullRequestStatus::Open, Some(CheckRollup::Passing));
 
-    let line = detail_line(Some("#42"), Some(state.status), state.checks);
+    let line = detail_line(Some("#42"), RowStatus::Known(state.status), state.checks);
 
     assert!(line.contains("#42"), "{line}");
     assert!(line.contains(&knot_core::l10n::t("pull_requests.open")),
@@ -35,7 +35,7 @@ fn a_full_row_names_its_number_state_and_checks() {
 /// part that is absent is left out rather than shown as a blank.
 #[test]
 fn absent_parts_are_left_out_rather_than_blanked() {
-    let line = detail_line(None, Some(PullRequestStatus::Merged), None);
+    let line = detail_line(None, RowStatus::Known(PullRequestStatus::Merged), None);
 
     assert_eq!(line, knot_core::l10n::t("pull_requests.merged"));
 }
@@ -48,7 +48,7 @@ fn a_merged_or_closed_row_leaves_its_checks_out() {
                        CheckRollup::Failing,
                        CheckRollup::Pending]
         {
-            let line = detail_line(Some("#42"), Some(status), Some(checks));
+            let line = detail_line(Some("#42"), RowStatus::Known(status), Some(checks));
 
             assert_eq!(line.split(" · ").count(),
                        2,
@@ -61,7 +61,7 @@ fn a_merged_or_closed_row_leaves_its_checks_out() {
 #[test]
 fn a_draft_row_keeps_its_checks() {
     let line = detail_line(None,
-                           Some(PullRequestStatus::Draft),
+                           RowStatus::Known(PullRequestStatus::Draft),
                            Some(CheckRollup::Failing));
 
     assert!(line.contains(&knot_core::l10n::t("pull_requests.checks_failing")),
@@ -72,10 +72,36 @@ fn a_draft_row_keeps_its_checks() {
 /// checked rather than claiming a state.
 #[test]
 fn a_row_with_no_state_says_so_rather_than_guessing() {
-    let line = detail_line(None, None, None);
+    let line = detail_line(None, RowStatus::Pending, None);
 
     assert_eq!(line, knot_core::l10n::t("pull_requests.pending"));
     assert_ne!(line, knot_core::l10n::t("pull_requests.open"));
+}
+
+/// The forge's answer is in, so the row says what it said rather than that
+/// it is still checking.
+#[test]
+fn a_row_the_forge_cannot_find_says_not_found() {
+    let line = detail_line(None, RowStatus::NotFound, None);
+
+    assert_eq!(line, knot_core::l10n::t("pull_requests.not_found"));
+    assert_ne!(line, knot_core::l10n::t("pull_requests.pending"));
+}
+
+/// A failed fetch is retried, so "checking" is still true of it; only an
+/// answer of "does not exist" moves a row off pending.
+#[test]
+fn the_row_status_follows_the_lookup() {
+    use crate::pull_request_state::PullRequestLookup;
+
+    assert_eq!(RowStatus::of(None), RowStatus::Pending);
+    assert_eq!(RowStatus::of(Some(&PullRequestLookup::Failed)),
+               RowStatus::Pending);
+    assert_eq!(RowStatus::of(Some(&PullRequestLookup::NotFound)),
+               RowStatus::NotFound);
+    assert_eq!(RowStatus::of(Some(&PullRequestLookup::Known(state(PullRequestStatus::Closed,
+                                                                  None)))),
+               RowStatus::Known(PullRequestStatus::Closed));
 }
 
 /// Every key the row can show has to resolve, and none may leave a
@@ -87,6 +113,7 @@ fn every_state_and_check_key_resolves() {
                 "pull_requests.merged",
                 "pull_requests.closed",
                 "pull_requests.pending",
+                "pull_requests.not_found",
                 "pull_requests.checks_passing",
                 "pull_requests.checks_failing",
                 "pull_requests.checks_pending",
@@ -121,11 +148,12 @@ fn the_keys_with_values_substitute_them() {
 /// which a plain open icon does not say.
 #[test]
 fn each_state_has_its_own_icon() {
-    let icons = [status_icon(Some(PullRequestStatus::Draft)),
-                 status_icon(Some(PullRequestStatus::Open)),
-                 status_icon(Some(PullRequestStatus::Merged)),
-                 status_icon(Some(PullRequestStatus::Closed)),
-                 status_icon(None)];
+    let icons = [status_icon(RowStatus::Known(PullRequestStatus::Draft)),
+                 status_icon(RowStatus::Known(PullRequestStatus::Open)),
+                 status_icon(RowStatus::Known(PullRequestStatus::Merged)),
+                 status_icon(RowStatus::Known(PullRequestStatus::Closed)),
+                 status_icon(RowStatus::NotFound),
+                 status_icon(RowStatus::Pending)];
 
     let mut unique = icons.to_vec();
     unique.sort_unstable();
@@ -214,11 +242,12 @@ fn the_background_tint_is_lighter_than_the_border() {
 /// pull request", the one thing Knot will never do.
 #[test]
 fn the_remove_control_does_not_wear_a_status_icon() {
-    let statuses = [status_icon(Some(PullRequestStatus::Draft)),
-                    status_icon(Some(PullRequestStatus::Open)),
-                    status_icon(Some(PullRequestStatus::Merged)),
-                    status_icon(Some(PullRequestStatus::Closed)),
-                    status_icon(None)];
+    let statuses = [status_icon(RowStatus::Known(PullRequestStatus::Draft)),
+                    status_icon(RowStatus::Known(PullRequestStatus::Open)),
+                    status_icon(RowStatus::Known(PullRequestStatus::Merged)),
+                    status_icon(RowStatus::Known(PullRequestStatus::Closed)),
+                    status_icon(RowStatus::NotFound),
+                    status_icon(RowStatus::Pending)];
 
     assert!(!statuses.contains(&REMOVE_ICON),
             "the remove control wears a status icon");
