@@ -181,20 +181,16 @@ fn resetting_puts_the_default_back(cx: &mut TestAppContext) {
 fn toggling_a_family_modifier_moves_all_nine(cx: &mut TestAppContext) {
     let fixture = settings_window(cx);
     cx.update(|cx| {
-          // ⌥⌘ to ⌥⌃⌘ ...
+          // ⌘ to ⌃⌘ ...
           fixture.view.update(cx, |view, cx| {
                           view.toggle_family_modifier(Shortcut::SelectAgent,
                                                       |m| m.control = !m.control,
                                                       cx);
                       });
-          assert!(top_action_is(cx, "ctrl-alt-cmd-2", &SelectAgent2));
-          assert!(!top_action_is(cx, "alt-cmd-2", &SelectAgent2));
-          // ... and dropping ⌥ and ⌘ from that leaves ⌃ alone, which is
-          // allowed.
+          assert!(top_action_is(cx, "ctrl-cmd-2", &SelectAgent2));
+          assert!(!top_action_is(cx, "cmd-2", &SelectAgent2));
+          // ... and dropping ⌘ from that leaves ⌃ alone, which is allowed.
           fixture.view.update(cx, |view, cx| {
-                          view.toggle_family_modifier(Shortcut::SelectAgent,
-                                                      |m| m.alt = !m.alt,
-                                                      cx);
                           view.toggle_family_modifier(Shortcut::SelectAgent,
                                                       |m| m.command = !m.command,
                                                       cx);

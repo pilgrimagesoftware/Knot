@@ -43,8 +43,8 @@ fn the_defaults_are_the_documented_chords() {
                 .map(Chord::label)
                 .collect::<Vec<_>>()
     };
-    assert_eq!(labels(Shortcut::SelectWorkspace)[2], "⌘3");
-    assert_eq!(labels(Shortcut::SelectAgent)[1], "⌥⌘2");
+    assert_eq!(labels(Shortcut::SelectWorkspace)[2], "⌥⌘3");
+    assert_eq!(labels(Shortcut::SelectAgent)[1], "⌘2");
     assert_eq!(labels(Shortcut::SelectAgent).len(), 9);
     assert_eq!(labels(Shortcut::FocusAgentInput), ["⌘L"]);
     assert_eq!(labels(Shortcut::ToggleDashboard), ["⌥⌘O"]);
@@ -112,31 +112,31 @@ fn a_text_editing_key_cannot_be_taken() {
 
 #[test]
 fn the_two_families_cannot_share_a_modifier() {
-    let candidate = Resolved::defaults().with_modifiers(Shortcut::SelectAgent, command_only());
-    assert_eq!(validate(&candidate, Shortcut::SelectAgent),
+    let candidate = Resolved::defaults().with_modifiers(Shortcut::SelectWorkspace, command_only());
+    assert_eq!(validate(&candidate, Shortcut::SelectWorkspace),
                Err(Rejection::Conflict { chord:  chord("cmd-1"),
-                                         holder: Shortcut::SelectWorkspace.label(), }));
+                                         holder: Shortcut::SelectAgent.label(), }));
 }
 
 #[test]
 fn a_single_chord_cannot_take_a_familys_digit() {
-    let candidate = Resolved::defaults().with_chord(Shortcut::FocusAgentInput, chord("cmd-alt-4"));
+    let candidate = Resolved::defaults().with_chord(Shortcut::FocusAgentInput, chord("cmd-4"));
     assert_eq!(validate(&candidate, Shortcut::FocusAgentInput),
-               Err(Rejection::Conflict { chord:  chord("cmd-alt-4"),
+               Err(Rejection::Conflict { chord:  chord("cmd-4"),
                                          holder: Shortcut::SelectAgent.label(), }));
 }
 
 #[test]
-fn the_workspace_family_cannot_take_the_agent_familys_modifier() {
+fn the_agent_family_cannot_take_the_workspace_familys_modifier() {
     // The same collision as above from the other side: the check runs for
     // whichever family changed.
-    let candidate = Resolved::defaults().with_modifiers(Shortcut::SelectWorkspace,
+    let candidate = Resolved::defaults().with_modifiers(Shortcut::SelectAgent,
                                                         ShortcutModifiers { command: true,
                                                                             alt: true,
                                                                             ..Default::default() });
-    assert_eq!(validate(&candidate, Shortcut::SelectWorkspace),
+    assert_eq!(validate(&candidate, Shortcut::SelectAgent),
                Err(Rejection::Conflict { chord:  chord("cmd-alt-1"),
-                                         holder: Shortcut::SelectAgent.label(), }));
+                                         holder: Shortcut::SelectWorkspace.label(), }));
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn resetting_restores_the_default() {
 fn a_stored_binding_that_breaks_the_rules_falls_back_to_its_default() {
     let stored = KeybindingSettings { toggle_dashboard: Some("cmd-q".into()),
                                       focus_input: Some("not a chord at all".into()),
-                                      agent_select_modifiers: Some(command_only()),
+                                      workspace_select_modifiers: Some(command_only()),
                                       toggle_pull_requests: Some("ctrl-cmd-u".into()),
                                       ..Default::default() };
     let resolved = Resolved::from_settings(&stored);
@@ -189,8 +189,8 @@ fn a_stored_binding_that_breaks_the_rules_falls_back_to_its_default() {
                Some(&chord("cmd-alt-o")));
     assert_eq!(resolved.chord(Shortcut::FocusAgentInput),
                Some(&chord("cmd-l")));
-    assert_eq!(resolved.modifiers(Shortcut::SelectAgent),
-               Shortcut::SelectAgent.default_modifiers());
+    assert_eq!(resolved.modifiers(Shortcut::SelectWorkspace),
+               Shortcut::SelectWorkspace.default_modifiers());
     assert_eq!(resolved.chord(Shortcut::TogglePullRequests),
                Some(&chord("ctrl-cmd-u")),
                "a valid value beside invalid ones is kept");
@@ -206,6 +206,29 @@ fn two_stored_values_that_collide_keep_the_first() {
                Some(&chord("ctrl-cmd-b")));
     assert_eq!(resolved.chord(Shortcut::TogglePullRequests),
                Some(&chord("cmd-alt-p")));
+}
+
+#[test]
+fn a_stored_workspace_modifier_on_the_agent_default_keeps_both_defaults() {
+    // Only a hand-edited document stores ⌘ for workspaces: it was the
+    // workspace default before the families swapped, so it was never written.
+    let stored = KeybindingSettings { workspace_select_modifiers: Some(command_only()),
+                                      ..Default::default() };
+    assert_eq!(Resolved::from_settings(&stored), Resolved::defaults());
+}
+
+#[test]
+fn a_customized_family_survives_the_swapped_defaults() {
+    let control_command = ShortcutModifiers { command: true,
+                                              control: true,
+                                              ..Default::default() };
+    let stored = KeybindingSettings { agent_select_modifiers: Some(control_command),
+                                      ..Default::default() };
+    let resolved = Resolved::from_settings(&stored);
+    assert_eq!(resolved.modifiers(Shortcut::SelectAgent),
+               Some(control_command));
+    assert_eq!(resolved.modifiers(Shortcut::SelectWorkspace),
+               Shortcut::SelectWorkspace.default_modifiers());
 }
 
 #[test]

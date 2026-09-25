@@ -1,11 +1,4 @@
-# keybindings Specification
-
-## Purpose
-Defines the keyboard shortcuts that navigate Knot - between workspace windows,
-between agents, to an agent's input and latest output, and to a workspace's
-panels - and how a user customizes them.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Navigation shortcuts and their defaults
 
@@ -107,83 +100,6 @@ workspace has fewer than N agents.
 
 - **WHEN** the Command Center is focused and the user presses ⌘1
 - **THEN** nothing happens
-
-### Requirement: Focusing the agent's input
-
-The Focus agent input shortcut SHALL move keyboard focus to the selected
-agent's input in the focused workspace window. That is the composer for an
-agent in panel mode and the terminal for an agent in terminal mode. The
-shortcut SHALL work even when focus is already elsewhere in the window, such
-as in a search field or the git panel. If a Dashboard or Pull Requests panel is
-showing, the window SHALL first return to the agent view. With no agent
-selected, or outside a workspace window, the shortcut SHALL do nothing.
-
-#### Scenario: Returning to the composer
-
-- **WHEN** a panel-mode agent is selected, focus is in the git panel's commit
-  field, and the user presses ⌘L
-- **THEN** the agent's composer has keyboard focus
-
-#### Scenario: From the Dashboard
-
-- **WHEN** the Dashboard is showing and the user presses ⌘L
-- **THEN** the selected agent's view is shown and its input has focus
-
-### Requirement: Jumping to the bottom of the conversation
-
-The Jump to bottom shortcut SHALL scroll the selected agent's conversation in
-the focused workspace window to its latest output, and SHALL resume following
-new output, the same as the conversation's "Scroll to latest" control. It
-applies to an agent in panel mode. A terminal-mode agent's pane always shows
-the bottom of its output, so there the shortcut SHALL do nothing. It SHALL
-also do nothing:
-
-- while a Dashboard or Pull Requests panel is showing;
-- with no agent selected;
-- outside a workspace window.
-
-#### Scenario: Back to the latest output
-
-- **WHEN** the user has scrolled a panel-mode agent's conversation up and
-  presses ⌃⌘↓
-- **THEN** the conversation shows its latest output and follows new output
-  as it arrives
-
-#### Scenario: With a panel showing
-
-- **WHEN** the Dashboard is showing and the user presses ⌃⌘↓
-- **THEN** the Dashboard stays, and the conversation behind it does not move
-
-### Requirement: Toggling the workspace panels
-
-The Toggle Dashboard and Toggle Pull Requests shortcuts SHALL behave like the
-workspace sidebar's Dashboard and Pull Requests rows in the focused workspace
-window. Each shows its panel, and hides it if it is already showing, which
-returns the window to the agent view. Outside a workspace window they SHALL do
-nothing.
-
-#### Scenario: Toggling the Pull Requests panel
-
-- **WHEN** the agent view is showing and the user presses ⌥⌘P twice
-- **THEN** the first press shows the Pull Requests panel and the second
-  returns to the agent view
-
-#### Scenario: Switching panels
-
-- **WHEN** the Dashboard is showing and the user presses ⌥⌘P
-- **THEN** the Pull Requests panel replaces the Dashboard
-
-### Requirement: Opening the Command Center by shortcut
-
-The Open Command Center shortcut SHALL open the Command Center, or raise it if
-it is already open. It SHALL be the key equivalent shown beside Window >
-Command Center (`app-menu`).
-
-#### Scenario: Customized key reaches the menu
-
-- **WHEN** the user rebinds Open Command Center to ⌃⌘K
-- **THEN** Window > Command Center shows ⌃⌘K, ⌃⌘K opens the Command Center,
-  and ⌥⌘0 no longer does
 
 ### Requirement: Customizing the shortcuts
 

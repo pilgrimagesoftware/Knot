@@ -58,10 +58,10 @@ fn the_defaults_reach_their_actions(cx: &mut TestAppContext) {
     let dir = TempDir::new().expect("a temporary settings root");
     cx.update(|cx| {
           install(knot_core::Settings::with_store_root(dir.path()), cx);
-          assert_bound(cx, "cmd-1", &SelectWorkspace1);
-          assert_bound(cx, "cmd-3", &SelectWorkspace3);
-          assert_bound(cx, "cmd-9", &SelectWorkspace9);
-          assert_bound(cx, "cmd-alt-2", &SelectAgent2);
+          assert_bound(cx, "cmd-alt-1", &SelectWorkspace1);
+          assert_bound(cx, "cmd-alt-3", &SelectWorkspace3);
+          assert_bound(cx, "cmd-alt-9", &SelectWorkspace9);
+          assert_bound(cx, "cmd-2", &SelectAgent2);
           assert_bound(cx, "cmd-l", &FocusAgentInput);
           assert_bound(cx, "cmd-alt-o", &ToggleDashboard);
           assert_bound(cx, "cmd-alt-p", &TogglePullRequests);
@@ -90,7 +90,7 @@ fn a_rebinding_moves_the_chord_and_back(cx: &mut TestAppContext) {
           assert_bound(cx, "ctrl-cmd-k", &OpenCommandCenter);
           assert_not_bound_to(cx, "cmd-alt-0", &OpenCommandCenter);
           assert_bound(cx, "ctrl-cmd-2", &SelectAgent2);
-          assert_not_bound_to(cx, "cmd-alt-2", &SelectAgent2);
+          assert_not_bound_to(cx, "cmd-2", &SelectAgent2);
           let shown: Vec<Chord> = cx.key_bindings()
                                     .borrow()
                                     .bindings_for_action(&OpenCommandCenter)
@@ -101,7 +101,7 @@ fn a_rebinding_moves_the_chord_and_back(cx: &mut TestAppContext) {
           apply(&Resolved::defaults(), cx);
           assert_bound(cx, "cmd-alt-0", &OpenCommandCenter);
           assert_not_bound_to(cx, "ctrl-cmd-k", &OpenCommandCenter);
-          assert_bound(cx, "cmd-alt-2", &SelectAgent2);
+          assert_bound(cx, "cmd-2", &SelectAgent2);
       });
 }
 

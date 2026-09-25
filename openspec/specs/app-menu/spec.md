@@ -484,7 +484,7 @@ when no workspace window is focused.
 
 View > Select Agent SHALL list the first nine agents in the focused workspace
 window's sidebar, top to bottom, each by name. The Nth item SHALL show the
-Select agent N shortcut (default ⌥⌘N) and choosing it SHALL do what that
+Select agent N shortcut (default ⌘N) and choosing it SHALL do what that
 shortcut does. The selected agent's item SHALL be checked.
 
 The submenu SHALL reflect the sidebar's current agents, names and order each
@@ -496,8 +496,8 @@ SHALL be disabled.
 
 - **WHEN** a workspace window lists agents X, Y and Z and the user chooses
   View > Select Agent > Y
-- **THEN** Y is selected and shown, the same as pressing ⌥⌘2, and Y's item
-  shows ⌥⌘2
+- **THEN** Y is selected and shown, the same as pressing ⌘2, and Y's item
+  shows ⌘2
 
 #### Scenario: An agent added since the bar was built
 
@@ -514,7 +514,7 @@ SHALL be disabled.
 
 View > Select Workspace SHALL list the first nine workspaces in the order the
 workspace manager lists them, each by name. The Nth item SHALL show the Select
-workspace N shortcut (default ⌘N) and choosing it SHALL do what that shortcut
+workspace N shortcut (default ⌥⌘N) and choosing it SHALL do what that shortcut
 does. The item for the focused workspace window's workspace SHALL be checked.
 
 The submenu SHALL reflect the current workspaces, names and order each time it
@@ -525,7 +525,7 @@ launch.
 
 - **WHEN** workspace C has no open window and the user chooses View > Select
   Workspace > C
-- **THEN** C's window opens, the same as pressing its ⌘N shortcut
+- **THEN** C's window opens, the same as pressing its ⌥⌘N shortcut
 
 #### Scenario: With no window open
 
