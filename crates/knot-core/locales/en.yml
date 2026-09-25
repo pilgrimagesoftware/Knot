@@ -68,6 +68,7 @@ panel:
   copied_code: "Copied code to clipboard"
   queued: "Queued"
   queued_inbox_nudge: "Queued inbox check"
+  queued_startup_prompt: "Queued startup prompt"
   failed: "Failed"
   retry: "Retry"
   retry_queued: "Retry this message"

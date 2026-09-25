@@ -23,11 +23,11 @@
 
 ## 4. ACP delivery (`knot`)
 
-- [ ] 4.1 Add `PromptOrigin::Startup` with its own `panel.queued_startup_prompt` label; verify the queue-row accessible name differs from the user and inbox-nudge names
-- [ ] 4.2 In `ensure_panel_session`, resolve the reference to raw text when a registration prompt is built and pass it into the connect task, which reads `branch`, expands, and stores the result on the session handle before publishing `Ready`; verify a resume (`session_to_load` set) carries none
-- [ ] 4.3 Mark `turn_active` in `connect_into` when the registration message is recorded, before publishing `Ready`; verify with the stalled fake adapter that the startup prompt stays queued while the first turn is unanswered, and is delivered after it ends
-- [ ] 4.4 Take the handle's startup prompt into the queue in `drain_panel_prompt` the first time the slot is `Ready`; verify it is queued exactly once and for an unselected agent too
-- [ ] 4.5 Verify Register Agent sends only the registration prompt and Restart with New Conversation queues the startup prompt again
+- [x] 4.1 Add `PromptOrigin::Startup` with its own `panel.queued_startup_prompt` label; verify the queue-row accessible name differs from the user and inbox-nudge names
+- [x] 4.2 In `ensure_panel_session`, resolve the reference to raw text when a registration prompt is built and pass it into the connect task, which reads `branch`, expands, and stores the result on the session handle before publishing `Ready`; verify a resume (`session_to_load` set) carries none
+- [x] 4.3 Ensure `turn_active` is set before `Ready` (already true: `connect_into` records the registration message first, and `push_user_message` sets it); verify with the stalled fake adapter that the startup prompt stays queued while the first turn is unanswered, and is delivered after it ends
+- [x] 4.4 Take the handle's startup prompt into the queue (`queue_startup_prompts`, first in `deliver_waiting_prompts`) the first time the slot is `Ready`; verify it is queued exactly once and for an unselected agent too
+- [x] 4.5 Verify Register Agent sends only the registration prompt and Restart with New Conversation queues the startup prompt again - by construction: the startup request is built only in `ensure_panel_session` beside a fresh-session registration prompt; `send_registration_prompt` never builds one, and a restart tears the slot down so the next `ensure_panel_session` builds both again
 
 ## 5. Agent store and benching (`knot-agents`, `knot`)
 

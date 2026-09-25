@@ -133,20 +133,19 @@ is a task sent as its own turn, and they are edited in different places.
 
 When `ensure_panel_session` builds a registration prompt (a fresh session),
 the expanded startup prompt travels on the session handle (see "Where the
-context is built"). The first time `drain_panel_prompt` sees that agent's
-slot `Ready`, it takes the handle's startup prompt and pushes it onto the
-agent's queue as `PromptOrigin::Startup`; the existing pump then delivers it
-when the registration turn ends. Taking it in the drain, not in a callback,
-keeps the handoff on the path `repaint_poll_tick` already polls for every
-agent, and a take that happens there cannot be discarded by a skipped
-frame.
+context is built"). `queue_startup_prompts`, run first thing in
+`deliver_waiting_prompts`, takes each `Ready` handle's startup prompt and
+pushes it onto that agent's queue as `PromptOrigin::Startup`; the existing
+pump then delivers it when the registration turn ends. Taking it there, not
+in a callback, keeps the handoff on the path `repaint_poll_tick` already
+polls for every agent, and its result feeds the tick's repaint flag.
 
 There is a window in which the slot is `Ready` but the registration
 `session.prompt` has not yet flipped `turn_active`, and the pump could send
-the startup prompt first. `connect_into` therefore marks the panel state's
-`turn_active` when it records the registration message, before publishing
-`Ready`, so the pump sees a turn in flight from the first frame it can see
-the session at all. A test drives a fake adapter whose first turn never
+the startup prompt first. It cannot: `connect_into` records the
+registration message before publishing `Ready`, and `push_user_message`
+already sets `turn_active`, so the pump sees a turn in flight from the first
+frame it can see the session at all. A test drives a fake adapter whose first turn never
 answers and asserts the startup prompt stays queued.
 
 If the registration turn fails, the startup prompt is still delivered; if it

@@ -2,6 +2,7 @@
 //! is responsible for.
 //!
 //! - [`session`] starts, stops and probes the ACP connection.
+//! - [`startup`] hands a fresh session its startup prompt and queues it.
 //! - [`pane`] draws the conversation and the panes that replace it.
 //! - [`input`] draws the composer.
 //! - [`lookup`] completes slash commands and skills inside the composer.
@@ -23,4 +24,5 @@ mod pane;
 pub(crate) mod prompt;
 mod session;
 pub(super) mod shell;
+mod startup;
 mod styling;

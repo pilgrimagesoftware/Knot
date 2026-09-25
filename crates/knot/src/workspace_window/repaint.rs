@@ -317,6 +317,9 @@ impl WorkspaceWindow {
     /// Sends the next queued prompt to every agent that has one, and says
     /// whether any went out.
     fn deliver_waiting_prompts(&mut self) -> bool {
+        // First, so a startup prompt handed over this tick is in `waiting`
+        // below and on screen this frame.
+        let startup_queued = self.queue_startup_prompts();
         // Every agent with something waiting, not just the selected one.
         // This ran only for `selected_agent`, so a prompt queued behind a
         // background agent's turn sat there until the user happened to
@@ -332,7 +335,7 @@ impl WorkspaceWindow {
         for id in waiting {
             prompt_picked_up |= self.drain_panel_prompt(id);
         }
-        prompt_picked_up
+        startup_queued || prompt_picked_up
     }
 
     /// Whether anything the window draws outside the terminal grid has

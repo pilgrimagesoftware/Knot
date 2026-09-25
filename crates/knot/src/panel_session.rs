@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use knot_acp::{
     ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
 };
-use knot_agent_launch::AdapterConfig;
+use knot_agent_launch::{AdapterConfig, ContextSource};
 use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
 use parking_lot::Mutex;
 
@@ -19,9 +19,13 @@ use crate::panel_state::PanelState;
 use crate::subagent_feed::SubagentSink;
 
 pub struct PanelSessionHandle {
-    session: AcpSession,
-    state:   Arc<Mutex<PanelState>>,
-    dirty:   Arc<AtomicBool>,
+    session:        AcpSession,
+    state:          Arc<Mutex<PanelState>>,
+    dirty:          Arc<AtomicBool>,
+    /// The expanded startup prompt, set by `connect_into` before the slot
+    /// is published and taken once by the window into the agent's prompt
+    /// queue. See `openspec/specs/agent-launch-command/spec.md`.
+    startup_prompt: Option<String>,
 }
 
 impl PanelSessionHandle {
@@ -67,7 +71,8 @@ impl PanelSessionHandle {
 
         Ok(Self { session,
                   state,
-                  dirty })
+                  dirty,
+                  startup_prompt: None })
     }
 
     pub fn state(&self) -> Arc<Mutex<PanelState>> {
@@ -81,6 +86,11 @@ impl PanelSessionHandle {
     /// The adapter subprocess's process id - this agent's session root.
     pub fn process_id(&self) -> Option<u32> {
         self.session.process_id()
+    }
+
+    /// The startup prompt waiting to be queued, handed over at most once.
+    pub fn take_startup_prompt(&mut self) -> Option<String> {
+        self.startup_prompt.take()
     }
 
     /// Whether new events arrived since the last call; clears the flag.
@@ -342,6 +352,17 @@ pub struct ConnectRequest<'a> {
     /// reports none. Built by the caller, which is the only place that knows
     /// both the agent's id and the window's registry.
     pub subagents:           Option<SubagentSink>,
+    /// The startup prompt to expand and queue behind the registration turn;
+    /// `None` when resuming or when the agent has none.
+    pub startup_prompt:      Option<StartupRequest>,
+}
+
+/// A startup prompt's raw text and what its variables expand with. The
+/// branch is read inside `connect_into`, on the runtime rather than the UI
+/// thread, because reading it runs a subprocess.
+pub struct StartupRequest {
+    pub text:    String,
+    pub context: ContextSource,
 }
 
 /// Connects `request`'s adapter and drives `slot` through the connection
@@ -349,12 +370,12 @@ pub struct ConnectRequest<'a> {
 /// caller can persist it for a later resume.
 pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectRequest<'_>,
                           progress: &ConnectProgress, on_session_id: impl FnOnce(&str)) {
-    let handle = match PanelSessionHandle::start(request.config,
-                                                 request.cwd,
-                                                 request.prior_session_id,
-                                                 request.mcp_url,
-                                                 progress,
-                                                 request.subagents).await
+    let mut handle = match PanelSessionHandle::start(request.config,
+                                                     request.cwd,
+                                                     request.prior_session_id,
+                                                     request.mcp_url,
+                                                     progress,
+                                                     request.subagents).await
     {
         Ok(handle) => handle,
         Err(error) => {
@@ -387,6 +408,13 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     // turn needs a permission answer, the answer needs the slot, the
     // slot needs the turn. The registration prompt is recorded first so
     // the panel opens on the turn already in flight rather than blank.
+    // Expanded before `Ready`, so the window only ever sees the handle with
+    // its startup prompt already in place, and queues it behind a
+    // registration turn that `record_user_message` has already marked
+    // active.
+    if let Some(startup) = request.startup_prompt {
+        handle.startup_prompt = expand_startup(startup).await;
+    }
     let session = handle.session();
     let recorder = handle.recorder();
     if let Some(prompt) = &request.registration_prompt {
@@ -405,6 +433,16 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
                                                &[("error", &error.to_string())]));
         eprintln!("failed to send panel registration prompt: {error}");
     }
+}
+
+/// `startup`'s text with its variables expanded, reading the branch on a
+/// blocking thread. `None` only if that thread panicked.
+async fn expand_startup(startup: StartupRequest) -> Option<String> {
+    tokio::task::spawn_blocking(move || {
+        knot_agent_launch::expand(&startup.text,
+                                  &knot_agent_launch::read_context(startup.context))
+    }).await
+      .ok()
 }
 
 #[cfg(test)]
@@ -450,7 +488,8 @@ mod tests {
                                        mcp_url:             None,
                                        registration_prompt: Some("register".to_string()),
                                        session_config:      BTreeMap::new(),
-                                       subagents:           None, };
+                                       subagents:           None,
+                                       startup_prompt:      None, };
 
         let watched = Arc::clone(&slot);
         let became_ready = async move {
