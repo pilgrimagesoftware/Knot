@@ -54,6 +54,9 @@ pub(crate) struct WorkspaceWindow {
     /// Set when a pull request could not be handed to a browser, so the view
     /// can say so. A click that silently did nothing reads as a broken row.
     pub(super) pull_request_open_failed:         bool,
+    /// The Pull Requests view's search, filters and sort, for as long as the
+    /// window is open. Never persisted: a relaunch opens the view clean.
+    pub(super) pull_request_view:                super::pull_requests_actions::PullRequestViewState,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly, the same hand-off

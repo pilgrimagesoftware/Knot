@@ -5,7 +5,10 @@ use knot_forge::{
     CheckRollup, ForgeAvailability, Mergeability, PullRequestState, PullRequestStatus,
 };
 
-use super::{REMOVE_ICON, RowStatus, detail_line, forge_notice_text, state_color, status_icon};
+use super::{
+    EmptyList, REMOVE_ICON, RowStatus, detail_line, empty_message, forge_notice_text, state_color,
+    status_icon,
+};
 
 fn state(status: PullRequestStatus, checks: Option<CheckRollup>) -> PullRequestState {
     PullRequestState { number: Some(42),
@@ -120,7 +123,22 @@ fn every_state_and_check_key_resolves() {
                 "pull_requests.empty",
                 "pull_requests.open_failed",
                 "pull_requests.forge_missing",
-                "pull_requests.forge_unauthenticated"]
+                "pull_requests.forge_unauthenticated",
+                "pull_requests.search_placeholder",
+                "pull_requests.agent_all",
+                "pull_requests.actions",
+                "pull_requests.refresh_now",
+                "pull_requests.copy_urls",
+                "pull_requests.remove_merged",
+                "pull_requests.remove_closed",
+                "pull_requests.remove_not_found",
+                "pull_requests.remove_all",
+                "pull_requests.bulk_remove_title",
+                "pull_requests.bulk_remove_shown",
+                "pull_requests.no_match",
+                "pull_requests.clear_filters",
+                "pull_requests.open_in_browser",
+                "pull_requests.copy_url"]
     {
         let text = knot_core::l10n::t(key);
         assert_ne!(text, key, "{key} does not resolve");
@@ -289,4 +307,22 @@ fn each_unavailable_forge_states_its_own_reason() {
 #[test]
 fn a_ready_forge_says_nothing() {
     assert!(forge_notice_text(&ForgeAvailability::Ready).is_none());
+}
+
+/// A workspace with none says so; one whose filters hide everything says
+/// nothing matches, which has a fix the first does not.
+#[test]
+fn an_empty_list_says_why() {
+    assert_eq!(empty_message(true, true), Some(EmptyList::NoneRecorded));
+    assert_eq!(empty_message(false, true), Some(EmptyList::NoneMatch));
+    assert_eq!(empty_message(false, false), None);
+}
+
+#[test]
+fn the_toolbar_keys_with_values_substitute_them() {
+    let toggle = knot_core::l10n::t_with("pull_requests.filter_toggle",
+                                         &[("label", "Open"), ("count", "3")]);
+    assert!(toggle.contains("Open") && toggle.contains('3'), "{toggle}");
+    let body = knot_core::l10n::t_with("pull_requests.bulk_remove_body", &[("count", "4")]);
+    assert!(body.contains('4') && !body.contains("%{"), "{body}");
 }

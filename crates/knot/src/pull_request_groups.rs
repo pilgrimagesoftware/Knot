@@ -11,6 +11,9 @@
 //! without the store lock or GPUI around it: the view filters out records
 //! whose agent has gone before calling in, and joins names and states after.
 
+use std::collections::BTreeMap;
+
+use knot_agents::AgentStore;
 use knot_core::SavedPullRequest;
 use uuid::Uuid;
 
@@ -42,6 +45,37 @@ pub(crate) fn unique_urls(records: &[&SavedPullRequest]) -> Vec<String> {
         }
     }
     urls
+}
+
+/// The earliest time any agent first saw each recorded URL.
+///
+/// What newest and oldest first order a row by - the same "earliest across
+/// its agents" rule [`group_records`] orders groups by.
+pub(crate) fn first_seen_by_url(records: &[&SavedPullRequest]) -> BTreeMap<String, i64> {
+    let mut seen: BTreeMap<String, i64> = BTreeMap::new();
+    for record in records {
+        seen.entry(record.url.clone())
+            .and_modify(|first| *first = (*first).min(record.first_seen))
+            .or_insert(record.first_seen);
+    }
+    seen
+}
+
+/// Forget each row for every agent it is attributed to, returning whether any
+/// record was removed.
+///
+/// Every attribution rather than one: dropping a single agent's record would
+/// make the row the user just removed reappear under the remaining agent's
+/// heading. Loops rather than `any`, which would stop at the first record it
+/// removed and leave the rest listed.
+pub(crate) fn remove_rows(store: &mut AgentStore, rows: &[(Vec<Uuid>, String)]) -> bool {
+    let mut removed = false;
+    for (agent_ids, url) in rows {
+        for agent_id in agent_ids {
+            removed |= store.remove_pull_request(*agent_id, url);
+        }
+    }
+    removed
 }
 
 /// Group `records` by the set of agents that recorded each URL.

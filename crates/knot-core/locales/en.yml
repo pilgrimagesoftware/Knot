@@ -499,6 +499,35 @@ pull_requests:
   forge_missing: "The gh command is not installed, so no status can be read. The list still opens each pull request."
   forge_unauthenticated: "gh is not signed in, so no status can be read. Run gh auth login."
   forge_failed: "Status could not be read: %{reason}"
+  # The view's toolbar: search, filters, sort and list actions.
+  search_placeholder: "Search title, number, repository or agent"
+  # A status toggle: the status's label and how many rows it would show.
+  filter_toggle: "%{label} %{count}"
+  filter:
+    # Distinct from `pending` above, which is a row's "Checking…": this names
+    # the category on a toggle, which includes rows whose fetch failed.
+    pending: "Pending"
+  agent_all: "All agents"
+  sort:
+    newest: "Newest first"
+    oldest: "Oldest first"
+    attention: "Needs attention"
+    repository: "Repository"
+  actions: "List actions"
+  refresh_now: "Refresh Now"
+  copy_urls: "Copy URLs"
+  remove_merged: "Remove Merged"
+  remove_closed: "Remove Closed"
+  remove_not_found: "Remove Not Found"
+  remove_all: "Remove All"
+  bulk_remove_title: "Remove pull requests from this list?"
+  bulk_remove_body: "Pull requests to remove: %{count}. Nothing on GitHub changes, and each is listed again if an agent prints it again."
+  bulk_remove_shown: "Only the pull requests shown by the current search and filters are removed."
+  no_match: "No pull request matches the search and filters."
+  clear_filters: "Clear Search and Filters"
+  # A row's context menu.
+  open_in_browser: "Open in Browser"
+  copy_url: "Copy URL"
 
 mcp_server:
   failure_title: "Knot - MCP server"

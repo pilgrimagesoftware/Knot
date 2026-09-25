@@ -295,3 +295,42 @@ fn an_expired_pull_request_seen_again_is_recorded_and_expires_again() {
                vec![FIRST.to_string()],
                "and it goes again on the next refresh that resolves it");
 }
+
+/// "Remove all respects the search": a bulk removal takes the shown rows and
+/// no others, for every agent each is attributed to, and what it leaves is
+/// what a relaunch lists.
+#[test]
+fn a_filtered_bulk_removal_leaves_the_hidden_rows() {
+    use crate::pull_request_filter::{self, PullRequestGroup, PullRequestRow, ViewFilter};
+
+    const GADGET: &str = "https://github.com/acme/gadget/pull/7";
+    let dir = tempdir().unwrap();
+    let (mut settings, agent_id, workspace_id) = settings_with_agent(dir.path());
+    let mut store = build_agent_store(&settings);
+    for url in [FIRST, SECOND, GADGET] {
+        store.record_pull_request(agent_id, url);
+    }
+    let rows = [FIRST, SECOND, GADGET].map(|url| PullRequestRow { url:        url.to_string(),
+                                                                  lookup:     None,
+                                                                  first_seen: 0, });
+    let groups = vec![PullRequestGroup { agent_ids: vec![agent_id],
+                                         agents:    "alpha".to_string(),
+                                         rows:      rows.to_vec(), }];
+    let filter = ViewFilter { search: "acme/widget".to_string(),
+                              ..ViewFilter::default() };
+    let shown = pull_request_filter::apply(groups,
+                                           &filter,
+                                           pull_request_filter::PullRequestSort::default());
+
+    let removal = pull_request_filter::shown_rows(&shown, None);
+    assert_eq!(removal.len(), 2);
+    assert!(crate::pull_request_groups::remove_rows(&mut store, &removal));
+    settings.pull_requests = store.pull_requests().to_vec();
+
+    let reloaded = relaunch(&settings, dir.path());
+    let mut restored = build_agent_store(&reloaded);
+    restored.set_pull_requests(reloaded.pull_requests.clone());
+    let listed = restored.pull_requests_for_workspace(workspace_id);
+    assert_eq!(listed.len(), 1, "only the hidden row is left");
+    assert_eq!(listed[0].url, GADGET);
+}

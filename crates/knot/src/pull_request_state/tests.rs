@@ -9,7 +9,8 @@ use knot_forge::{
 };
 
 use super::{
-    ForgeStatus, MAX_AGE, PullRequestLookup, PullRequestStateCache, counts_for, expired_urls,
+    ForgeStatus, MAX_AGE, PullRequestLookup, PullRequestStateCache, claim_refreshes, counts_for,
+    expired_urls,
 };
 
 const ALWAYS: Duration = Duration::ZERO;
@@ -484,4 +485,61 @@ fn re_recording_an_unchanged_merged_state_does_not_flag_the_cache() {
 
     assert!(!cache.take_changed(),
             "an identical answer schedules no frame - so expiry needs its own chain entry");
+}
+
+/// Refresh now asks `gh` again at once, and the view keeps its message until
+/// the new answer lands.
+#[test]
+fn a_stale_probe_is_claimed_again_and_keeps_its_answer() {
+    let mut status = ForgeStatus::default();
+    status.claim_probe(MAX_AGE)
+          .expect("claimed")
+          .record(ForgeAvailability::Unauthenticated);
+    assert!(status.claim_probe(MAX_AGE).is_none());
+
+    status.mark_stale();
+
+    assert_eq!(status.availability(),
+               Some(ForgeAvailability::Unauthenticated));
+    assert!(status.claim_probe(MAX_AGE).is_some());
+}
+
+/// Refresh now asks about a not-found pull request once more, and only once:
+/// the cycle after goes back to treating the answer as final.
+#[test]
+fn refresh_now_asks_a_not_found_url_once_more() {
+    let url = "https://github.com/acme/widget/pull/9".to_string();
+    let urls = vec![url.clone()];
+    let mut cache = PullRequestStateCache::default();
+    let mut asked_again = std::collections::BTreeSet::new();
+    let claimed = claim_refreshes(&mut cache, &urls, &mut asked_again, Duration::ZERO);
+    let (_, writer) = claimed.into_iter().next().expect("first claim");
+    writer.record(PullRequestLookup::NotFound);
+
+    assert!(claim_refreshes(&mut cache, &urls, &mut asked_again, Duration::ZERO).is_empty(),
+            "not found is final");
+
+    cache.mark_all_stale();
+    asked_again.insert(url.clone());
+    let again = claim_refreshes(&mut cache, &urls, &mut asked_again, Duration::ZERO);
+
+    assert_eq!(again.len(), 1, "Refresh now asks again");
+    assert!(asked_again.is_empty(), "and consumes the one-shot");
+    assert!(claim_refreshes(&mut cache, &urls, &mut asked_again, Duration::ZERO).is_empty(),
+            "the cycle after skips it again");
+}
+
+/// A URL the one-shot names but whose claim is still fresh stays named, so a
+/// fetch already in flight does not swallow the user's refresh.
+#[test]
+fn an_unclaimed_url_keeps_its_refresh_now() {
+    let url = "https://github.com/acme/widget/pull/9".to_string();
+    let urls = vec![url.clone()];
+    let mut cache = PullRequestStateCache::default();
+    let mut asked_again = std::collections::BTreeSet::new();
+    let _in_flight = claim_refreshes(&mut cache, &urls, &mut asked_again, MAX_AGE);
+    asked_again.insert(url.clone());
+
+    assert!(claim_refreshes(&mut cache, &urls, &mut asked_again, MAX_AGE).is_empty());
+    assert!(asked_again.contains(&url));
 }
