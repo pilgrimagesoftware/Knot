@@ -225,6 +225,9 @@ settings:
 
 menu:
   agents: "Agents"
+  # The Help menu's own items.
+  help:
+    report_bug: "Report a Bug…"
   # The Window menu's own items. macOS appends and maintains the list of
   # open windows below them.
   window:
@@ -292,6 +295,34 @@ about:
     toolkit: "gpui-kit — Apache-2.0"
     terminal: "Alacritty terminal — Apache-2.0"
     fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"
+
+# The bug-report dialog opened from Help > Report a Bug….
+bug_report:
+  title: "Report a Bug"
+  subject_label: "Subject"
+  subject_placeholder: "A short summary of the problem"
+  description_label: "Description"
+  description_placeholder: "What happened, what you expected, and how to reproduce it"
+  diagnostics_label: "Diagnostics"
+  diagnostics_hint: "Attached to the report. Select the text to copy it."
+  diagnostics_collecting: "Collecting diagnostics…"
+  diagnostics:
+    app: "App"
+    os: "OS"
+    arch: "Architecture"
+    forge: "GitHub CLI"
+  forge:
+    missing: "not installed"
+    unauthenticated: "not authenticated"
+    ready: "ready"
+    failed: "unavailable (%{reason})"
+  submitting: "Filing the issue…"
+  filed: "Issue filed: %{url}"
+  failed: "The issue could not be filed: %{error}"
+  browser_ready: "The report was not filed automatically. It is ready to post in your browser."
+  browser_failed: "The browser could not be opened. Your report is still here."
+  cancel: "Cancel"
+  report: "Report"
 
 agent_editor:
   title_new: "New Agent"

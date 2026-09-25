@@ -17,14 +17,14 @@ const BUILD_DATE: &str = env!("KNOT_BUILD_DATE");
 /// The running binary's released version - the `knot` crate's version, which
 /// is what the release workflow bumps, so the window cannot go stale against
 /// it.
-pub(super) fn version() -> &'static str {
+pub(crate) fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
 /// The build identifier: the date the binary was built, and the commit it
 /// was built from. Two builds of one version made from different commits
 /// differ here, which is the whole point of showing it.
-pub(super) fn build_identifier() -> String {
+pub(crate) fn build_identifier() -> String {
     format_build(BUILD_DATE, BUILD_COMMIT)
 }
 
@@ -42,7 +42,7 @@ fn format_build(date: &str, commit: &str) -> String {
 
 /// What the copy action puts on the clipboard - everything a bug report
 /// needs about which binary was running, in one line.
-pub(super) fn build_details() -> String {
+pub(crate) fn build_details() -> String {
     format!("{} {} ({})",
             knot_core::l10n::t("app.name"),
             version(),

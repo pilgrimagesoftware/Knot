@@ -228,3 +228,13 @@ pub const EXEC_PATH_FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin",
                                                "~/.cargo/bin",
                                                "~/.local/bin",
                                                "~/.npm-global/bin"];
+
+/// The app's own GitHub repository, as `owner/name` - where a bug report
+/// filed from the Help menu goes. The owner and name of the workspace
+/// `Cargo.toml`'s `repository` URL; a test holds the two together, so the
+/// `gh` submission and the browser fallback cannot drift from it or from
+/// each other.
+pub const KNOT_REPO: &str = "pilgrimagesoftware/Knot";
+
+#[cfg(test)]
+mod tests;

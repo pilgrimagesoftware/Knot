@@ -35,6 +35,42 @@ fn about_window_labels_resolve() {
     }
 }
 
+/// Every word the bug-report dialog and its menu item show, per
+/// `bug-reporting`'s localization requirement. A missing key would ship the
+/// key string itself as a label, a forge state or a status message.
+#[test]
+fn bug_report_labels_resolve() {
+    for key in ["menu.help.report_bug",
+                "bug_report.title",
+                "bug_report.subject_label",
+                "bug_report.subject_placeholder",
+                "bug_report.description_label",
+                "bug_report.description_placeholder",
+                "bug_report.diagnostics_label",
+                "bug_report.diagnostics_hint",
+                "bug_report.diagnostics_collecting",
+                "bug_report.diagnostics.app",
+                "bug_report.diagnostics.os",
+                "bug_report.diagnostics.arch",
+                "bug_report.diagnostics.forge",
+                "bug_report.forge.missing",
+                "bug_report.forge.unauthenticated",
+                "bug_report.forge.ready",
+                "bug_report.forge.failed",
+                "bug_report.submitting",
+                "bug_report.filed",
+                "bug_report.failed",
+                "bug_report.browser_ready",
+                "bug_report.browser_failed",
+                "bug_report.cancel",
+                "bug_report.report"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}
+
 /// The queued-row controls carry no visible text of their own, so their
 /// tooltips and accessibility labels are the only thing naming them - a
 /// missing key would ship the key string itself as the button's name.
