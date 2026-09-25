@@ -1,4 +1,33 @@
 
+## 1.19.0 - 2026-09-25
+
+### Added
+- Add search, filters, sort and list actions to the Pull Requests view
+- List the navigation shortcuts in the View menu
+- Separate Enter Full Screen from the View menu's submenus
+- Keep the View menu's workspace list current from the manager
+- Add the prompt library and startup prompts to settings
+- Expand prompt variables and resolve startup prompts
+- Queue the startup prompt behind a fresh session's registration turn
+- Bench an agent and deploy bench entries from the sidebar
+- Port the bench dropdown to the New Agent button
+- Add the Startup Prompt control to the agent editor
+- Add Prompts and Bench tabs to Settings
+- Offer library prompts in the slash lookup
+- Write the log as JSON Lines with the writer's pid
+- Add a New Agent shortcut and File menu item
+- Show the sidebar's shortcuts while ⌘ is held
+- Remove a queued prompt from the queue when it is taken
+- Make ⌘1-⌘9 select agents and ⌥⌘1-⌥⌘9 select workspaces
+
+
+### Fixed
+- Draw git panel diffs in monospace with hunk headers
+- Theme the git panel's commit window
+- Carry a bench entry's startup prompt through create-agent
+
+
+
 ## 1.18.0 - 2026-09-25
 
 ### Added
