@@ -15,7 +15,7 @@
 
 ## 3. Window state and actions
 
-- [ ] 3.1 Add `PullRequestViewState` to `WorkspaceWindow`, create the search `InputState` on first render with a `Change` subscription that notifies; verify manually that typing narrows the list per keystroke and the state survives leaving and returning to the view
+- [x] 3.1 Add `PullRequestViewState` to `WorkspaceWindow`, create the search `InputState` on first render with a `Change` subscription that notifies; verify manually that typing narrows the list per keystroke and the state survives leaving and returning to the view
 - [x] 3.2 Replace `remove_pull_request` with `remove_pull_requests(rows)` over a pure `pull_request_groups::remove_rows` (one lock pass, one persist, one prune) and route the single-row path through it; verify the existing removal tests pass
 - [x] 3.3 Add the bulk removal confirmations (merged, closed, not found, all) over the shown rows, with count and shown-only wording; verify a test that a filtered Remove all leaves hidden rows in the store
 - [x] 3.4 Add Refresh now (`mark_all_stale`, `mark_stale`, the one-shot `refresh_final` set honoured by a pure `claim_refreshes`); verify a test that a not-found URL is claimed again after Refresh now and not on the following cycle
@@ -31,4 +31,4 @@
 ## 5. Verification
 
 - [x] 5.1 Run `make` (fmt-check, size-check, lint, test, build) and verify it passes
-- [ ] 5.2 Manually verify in the app: search, each filter, each sort, Refresh now recovering a not-found row, Copy URLs, a filtered bulk removal and Remove all, the launcher row unaffected by filters, and the state reset after a relaunch
+- [x] 5.2 Manually verify in the app: search, each filter, each sort, Refresh now recovering a not-found row, Copy URLs, a filtered bulk removal and Remove all, the launcher row unaffected by filters, and the state reset after a relaunch
