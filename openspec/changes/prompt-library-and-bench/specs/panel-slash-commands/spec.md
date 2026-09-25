@@ -57,9 +57,11 @@ command's or skill's token; a library prompt has no token the agent would
 recognise, so its text is what is inserted.
 
 #### Scenario: A prompt expands in place
-- **WHEN** the user has typed `note: /gat` and inserts the library prompt
-  "Run the gate" whose text is `make, then commit`
-- **THEN** the buffer reads `note: make, then commit`
+- **WHEN** the buffer holds `note:` on one line and `/gat` at the start of
+  the next, and the user inserts the library prompt "Run the gate" whose
+  text is `make, then commit`
+- **THEN** the buffer holds `note:` on the first line and
+  `make, then commit` on the second
 
 #### Scenario: Variables are expanded on insertion
 - **WHEN** the user inserts a library prompt whose text is

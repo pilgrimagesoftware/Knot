@@ -7,6 +7,7 @@
 //! - [`input`] draws the composer.
 //! - [`lookup`] completes slash commands and skills inside the composer.
 //! - [`prompt`] moves text from the composer to the agent.
+//! - [`prompt_expansion`] inserts a library prompt chosen from the lookup.
 //! - [`styling`] keeps the composer's styled runs in step with it.
 //! - [`mentions`] lists the agent's files for the `@` lookup.
 //! - [`attachments`] keeps a chip in the buffer in step with its row.
@@ -22,6 +23,7 @@ pub(crate) mod lookup;
 pub(crate) mod mentions;
 mod pane;
 pub(crate) mod prompt;
+mod prompt_expansion;
 mod session;
 pub(super) mod shell;
 mod startup;

@@ -17,12 +17,27 @@ pub(crate) struct LookupEntry {
     pub(crate) token:       String,
     /// One line saying what the entry is, shown beside the token.
     pub(crate) description: String,
+    /// The library prompt this entry stands for, when it is one. Inserting
+    /// a prompt writes its expanded text rather than its token - see
+    /// `openspec/specs/panel-slash-commands/spec.md`, "Inserting a library
+    /// prompt expands its text".
+    pub(crate) prompt:      Option<uuid::Uuid>,
 }
 
 impl LookupEntry {
     pub(crate) fn new(token: impl Into<String>, description: impl Into<String>) -> Self {
         Self { token:       token.into(),
-               description: description.into(), }
+               description: description.into(),
+               prompt:      None, }
+    }
+
+    /// An entry for library prompt `prompt`: its name as the token, a
+    /// one-line preview of its text as the description.
+    pub(crate) fn library_prompt(prompt: &knot_core::Prompt) -> Self {
+        let preview = prompt.text.split_whitespace().collect::<Vec<_>>().join(" ");
+        Self { token:       prompt.name.clone(),
+               description: preview,
+               prompt:      Some(prompt.id), }
     }
 }
 

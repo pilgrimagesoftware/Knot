@@ -35,6 +35,7 @@ mod tests;
 pub(crate) use entry::LookupEntry;
 pub(crate) use entry::LookupMatch;
 pub(crate) use entry::LookupSource;
+pub(crate) use entry::Matcher;
 pub(crate) use files::FolderFiles;
 pub(crate) use registry::LookupRegistry;
 pub(crate) use shell::{can_send, has_shell_trigger, is_shell_command, shell_command};

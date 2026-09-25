@@ -92,6 +92,7 @@ panel:
   retry_connect: "Try again"
   context_usage: "Context usage"
   lookup_hint: "Type to filter, Enter to insert, Esc to dismiss"
+  lookup_prompt_tag: "Prompt"
   mentions_gathering: "Listing files…"
   mentions_capped: "This folder is too large to list in full — showing what was found"
   # The input area's session-config dropdowns. One render path serves the

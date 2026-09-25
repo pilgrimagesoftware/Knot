@@ -68,9 +68,9 @@
 
 ## 10. Slash lookup (`knot`)
 
-- [ ] 10.1 Add a library-prompt source to the lookup registry, read from the settings global at lookup time, with entries marked as prompts; verify `/gate` lists "Run the gate" and a prompt added while a composer is open appears on the next lookup
-- [ ] 10.2 On inserting a prompt, capture the token range and buffer revision and expand on `spawn_blocking` against the selected agent's context; verify the composer is not blocked
-- [ ] 10.3 Deliver the expansion through a slot in `repaint_poll_tick`'s `if` chain, applied only when the revision still matches; verify the `note: /gat` and `Review {{folder.name}}` scenarios, and that editing the token first drops the expansion
+- [x] 10.1 Add library prompts to the slash matches, read from the settings global at lookup time, with entries marked as prompts; verify `/gate` lists "Run the gate" and a prompt added while a composer is open appears on the next lookup
+- [x] 10.2 On inserting a prompt, capture the token range and buffer text and expand on the background executor against the selected agent's context; verify the composer is not blocked
+- [x] 10.3 Deliver the expansion through `update_in`, applied only when the buffer still matches; verify the second-line `/gat` and `Review {{folder.name}}` scenarios, and that editing the token first drops the expansion
 
 ## 11. Conventions and close-out
 

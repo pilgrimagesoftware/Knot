@@ -107,12 +107,13 @@ render path.
   already runs the connect. That task reads `branch`, expands, and stores
   the result on the session handle before publishing `Ready`. See "ACP
   delivery" for how it reaches the queue.
-- **Slash insertion.** The lookup captures the token's range and the buffer
-  revision, then expands on `spawn_blocking`. The result lands in a
-  per-window slot drained from `repaint_poll_tick`'s `if` chain; it is
-  applied only if the composer's revision still matches, otherwise dropped.
-  The slot is drained with a non-clearing check first so a discarded frame
-  cannot swallow it (the failure named in `.claude/rules/rust-structure.md`).
+- **Slash insertion.** The lookup captures the token's range and the
+  buffer's text, then expands on gpui's background executor from a
+  `spawn_in` task and lands the result through `update_in` - the pattern
+  the bug-report dialog uses. `update_in` wakes the window itself, so there
+  is no flag for `repaint_poll_tick` to poll and no clearing read to lose.
+  The text is applied only if the buffer still reads as captured; otherwise
+  it is dropped.
 - **`branch`.** `knot_git::Repository::current_branch`; on `None` (detached
   HEAD) the short `HEAD` hash; on a not-a-repository error, empty.
 - **`date`.** `time::OffsetDateTime::now_local()`, falling back to UTC when
@@ -214,12 +215,12 @@ the parts of the Swift view worth porting.
 
 ### Slash lookup source
 
-A third registry source alongside built-in commands and skills, reading the
-library from the settings global at lookup time (so a library change reaches
-an open composer without wiring a new cache into `repaint_poll_tick`). Its
-entries carry a kind so the popup can mark them, and insertion switches on
-that kind: token replacement for commands and skills, text expansion for
-prompts.
+Library prompts are appended to the slash matches after commands and
+skills, read from the settings global on each ask rather than memoized with
+the per-agent registry (which is cached because skills are read off disk).
+That is an in-memory read, so a library change reaches an open composer
+without a new cache. A prompt entry carries its id, which marks its row and
+switches insertion from token replacement to text expansion.
 
 ### Settings tabs
 

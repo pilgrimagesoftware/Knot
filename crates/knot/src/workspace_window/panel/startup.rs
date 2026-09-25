@@ -30,18 +30,27 @@ impl WorkspaceWindow {
             knot_agent_launch::resolve_startup_prompt(agent.startup_prompt.as_ref(),
                                                       &settings.prompts)?
         };
+        Some(StartupRequest { text,
+                              context: self.prompt_context_source(agent) })
+    }
+
+    /// What `agent` contributes to the context a prompt's variables expand
+    /// with - everything but the branch and the date, which
+    /// `knot_agent_launch::read_context` reads off this thread.
+    pub(in crate::workspace_window) fn prompt_context_source(
+        &self, agent: &Agent)
+        -> knot_agent_launch::ContextSource {
         let workspace = self.store
                             .lock()
                             .workspaces()
                             .iter()
                             .find(|workspace| workspace.agent_ids.contains(&agent.id))
                             .map(|workspace| workspace.name.clone());
-        let context = knot_agent_launch::ContextSource { agent_name: agent.name.clone(),
-                                                         agent_id: agent.id.to_string(),
-                                                         agent_type: agent.agent_type.clone(),
-                                                         folder: agent.folder.clone(),
-                                                         workspace };
-        Some(StartupRequest { text, context })
+        knot_agent_launch::ContextSource { agent_name: agent.name.clone(),
+                                           agent_id: agent.id.to_string(),
+                                           agent_type: agent.agent_type.clone(),
+                                           folder: agent.folder.clone(),
+                                           workspace }
     }
 
     /// Moves every `Ready` session's expanded startup prompt onto its agent's
