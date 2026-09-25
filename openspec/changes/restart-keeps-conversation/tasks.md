@@ -48,7 +48,7 @@
 
 ## 5. Gate
 
-- [ ] 5.1 Run `make`. It must pass.
+- [x] 5.1 Run `make`. It must pass.
 - [ ] 5.2 Run the app with "Restore last conversation" on. Restart a panel
   agent and confirm the conversation, prompts included, is still there, then use Restart with New
   Conversation and confirm it starts over. Quit and relaunch, and confirm
