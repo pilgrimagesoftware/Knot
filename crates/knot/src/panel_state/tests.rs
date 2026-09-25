@@ -1,6 +1,7 @@
 //! Unit tests for [`super`].
 
 mod pull_requests;
+mod replay;
 mod shell;
 
 use knot_acp::ConfigOption;

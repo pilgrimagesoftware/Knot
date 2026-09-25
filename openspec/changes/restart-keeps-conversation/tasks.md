@@ -25,9 +25,16 @@
   start-over bodies and a keep body for Restart All. Verify with the l10n
   key-resolution tests.
 
-## 3. Gate
+## 3. Replayed history
 
-- [ ] 3.1 Run `make`. It must pass.
-- [ ] 3.2 Run the app with "Restore last conversation" on. Restart a panel
-  agent and confirm the conversation is still there, then use Restart with New
+- [x] 3.1 Parse `user_message_chunk` as `SessionUpdate::UserMessageChunk`, and
+  fold it into user messages between turns without starting one. Verify with
+  a `knot-acp` parser test and `panel_state` replay tests: turns stay apart,
+  chunks join, no turn starts, and a mid-turn echo is ignored.
+
+## 4. Gate
+
+- [ ] 4.1 Run `make`. It must pass.
+- [ ] 4.2 Run the app with "Restore last conversation" on. Restart a panel
+  agent and confirm the conversation, prompts included, is still there, then use Restart with New
   Conversation and confirm it starts over.

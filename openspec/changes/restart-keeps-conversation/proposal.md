@@ -19,6 +19,9 @@ conversation.
   context menu and in the menu bar's Agents menu, and always starts a new
   conversation. It is hidden for shell agents, which have no conversation.
 - The restart confirmations say whether the conversation will be kept.
+- A loaded conversation shows its history: the prompts that `session/load`
+  replays (`user_message_chunk`) were dropped, which left the replies run
+  together with no prompts between them.
 - Restarts caused by editing a launch-affecting field (folder, agent type,
   persona) still always start fresh.
 
@@ -40,11 +43,14 @@ None.
 - `agent-list-ui`: the row context menu gains Restart with New Conversation,
   with its visibility rule. Restart Agent and Restart All follow the setting.
 - `app-menu`: the Agents menu's shortcut table gains ⇧⌘R.
+- `acp-client`: user message chunks are delivered as their own update kind.
+- `acp-panel-ui`: a loaded conversation shows its replayed prompts and replies.
 
 ## Impact
 
 - `knot-agents`: a `restart_keeping_conversation` store operation beside
   `restart`, which is unchanged and still starts fresh.
+- `knot-acp`: `SessionUpdate::UserMessageChunk`.
 - `knot`:
   - a new `AgentMenuEntry` and action, with its binding in the Agents menu's
     fixed keys (`keymap::fixed` validates against them);

@@ -41,6 +41,7 @@ impl PanelState {
             }
             SessionUpdate::Usage { .. } => {}
             SessionUpdate::TextDelta { text } => self.append_text(text),
+            SessionUpdate::UserMessageChunk { text } => self.append_user_text(text),
             SessionUpdate::ToolCallStart { tool_call_id,
                                            kind,
                                            title,
@@ -125,6 +126,28 @@ impl PanelState {
                 self.config_options = config_options;
             }
             SessionUpdate::Unknown { .. } => {}
+        }
+    }
+
+    /// Folds a replayed piece of one of the user's messages into the
+    /// conversation, joining it to the user message before it when that is
+    /// the last one (a long prompt arrives in several chunks).
+    ///
+    /// Only between turns. `session/load` replays with no turn in flight,
+    /// and a live prompt is already in the conversation - Knot records what
+    /// it sends, because the stream never echoes it - so an adapter that did
+    /// echo one mid-turn would otherwise show it twice. Nor does it start a
+    /// turn the way `push_user_message` does: a replayed prompt was answered
+    /// long ago.
+    fn append_user_text(&mut self, text: String) {
+        if self.turn_active {
+            return;
+        }
+        if let Some(PanelMessage::User(existing)) = self.messages.last_mut() {
+            existing.push_str(&text);
+        }
+        else {
+            self.messages.push(PanelMessage::User(text));
         }
     }
 
