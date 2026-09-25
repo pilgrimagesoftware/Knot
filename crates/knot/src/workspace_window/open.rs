@@ -125,6 +125,7 @@ impl WorkspaceWindow {
                         crate::pull_request_state::PullRequestStateCache::default(),
                     forge_status: crate::pull_request_state::ForgeStatus::default(),
                     pull_request_open_failed: false,
+                    pull_request_view: Default::default(),
                     open_config_selector: None,
                     bench_popover_open: false,
                     bench_popover_hovered: None,

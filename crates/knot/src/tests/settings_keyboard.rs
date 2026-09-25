@@ -109,6 +109,27 @@ fn a_recorded_chord_is_stored_and_takes_over_the_shortcut(cx: &mut TestAppContex
             "the change was not written");
 }
 
+/// A menu item's key equivalent is read from the keymap when the bar is
+/// built, so a rebinding shows in the View menu only if the bar is rebuilt
+/// after the keymap changes (`app-menu`). The bar is emptied first, so a View
+/// menu afterwards can only come from that rebuild.
+#[gpui_kit::test]
+fn a_rebinding_rebuilds_the_menu_bar(cx: &mut TestAppContext) {
+    let fixture = settings_window(cx);
+    cx.update(|cx| cx.set_menus(Vec::<gpui_kit::Menu>::new()));
+    record(&fixture, Shortcut::FocusAgentInput, "ctrl-cmd-i", cx);
+    cx.update(|cx| {
+          assert!(top_action_is(cx, "ctrl-cmd-i", &FocusAgentInput));
+          let menus = cx.get_menus().unwrap_or_default();
+          let view = menus.iter()
+                          .find(|menu| menu.name == "View")
+                          .expect("the bar was rebuilt after the rebinding");
+          let focus = knot_core::l10n::t("menu.view.focus_agent_input");
+          assert!(view.items.iter().any(|item| matches!(item,
+                      gpui_kit::OwnedMenuItem::Action { name, .. } if *name == focus)));
+      });
+}
+
 #[gpui_kit::test]
 fn escape_cancels_a_recording(cx: &mut TestAppContext) {
     let fixture = settings_window(cx);

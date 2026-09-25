@@ -24,6 +24,7 @@ mod process_actions;
 mod processes;
 pub(crate) mod prompt_queue;
 mod pull_requests;
+mod pull_requests_actions;
 mod pull_requests_view;
 mod render;
 mod repaint;

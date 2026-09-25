@@ -19,8 +19,6 @@ use knot_messaging::QueuedNotifier;
 use parking_lot::Mutex;
 
 use crate::about_window::register_about_action;
-use crate::agent_menu::AgentMenuSnapshot;
-use crate::agent_menu::AgentsMenuState;
 use crate::agent_menu::agents_menu;
 use crate::app_state::build_agent_store;
 use crate::app_state::notification_response_agent_id;
@@ -36,8 +34,11 @@ use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
 use crate::mcp_status;
 use crate::mcp_status::McpServerStatus;
+use crate::menu_bar::MenuBarSnapshot;
+use crate::menu_bar::MenuBarState;
 use crate::quit_guard;
 use crate::settings_window::open_settings_window;
+use crate::view_menu::view_menu;
 use crate::window_options::manager_window_options;
 use crate::workspace_manager::WorkspaceManager;
 
@@ -260,7 +261,7 @@ pub(crate) fn show_all_windows(_: &ShowAllWindows, cx: &mut App) {
 /// submenus cannot re-read the store on their own (`app-menu`). Everything
 /// else in the bar is rebuilt identically, which is cheap and keeps the
 /// whole bar described in one place.
-pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
+pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
     cx.set_menus([
         Menu::new("Knot").items([
             MenuItem::action("About Knot", AboutKnot),
@@ -304,10 +305,10 @@ pub(crate) fn set_app_menus(snapshot: &AgentMenuSnapshot, cx: &mut App) {
             MenuItem::action("Copy", input::Copy),
             MenuItem::action("Paste", input::Paste),
         ]),
-        // No items of Knot's own: macOS creates and populates this menu's
-        // Enter Full Screen itself. See the note beside the `actions!` block.
-        Menu::new("View").items([]),
-        agents_menu(snapshot),
+        // The navigation shortcuts. macOS still appends its own Enter Full
+        // Screen below them; see the note beside the `actions!` block.
+        view_menu(&snapshot.view),
+        agents_menu(&snapshot.agents),
         // Knot's own items first, then a separator, then the list of open
         // windows macOS appends and maintains below them. Without the
         // separator a workspace called "Zoom" is indistinguishable from the
@@ -554,7 +555,7 @@ pub(crate) fn run() {
                                // The MCP server's state, for the settings
                                // pane's row and the failure notification.
                                cx.set_global(mcp_status);
-                               cx.set_global(AgentsMenuState::default());
+                               cx.set_global(MenuBarState::default());
                                // Every window that can be reopened is
                                // registered here, so a second request for
                                // one raises it rather than making another.
@@ -562,7 +563,7 @@ pub(crate) fn run() {
                                register_window_actions(Arc::clone(&store),
                                                        Arc::clone(&messages),
                                                        cx);
-                               set_app_menus(&AgentMenuSnapshot::default(), cx);
+                               set_app_menus(&MenuBarSnapshot::default(), cx);
 
                                cx.on_system_notification_response(|response, cx| {
                                      // Every notification brings Knot

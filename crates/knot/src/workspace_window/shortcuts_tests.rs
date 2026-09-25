@@ -202,9 +202,13 @@ fn scrolled_up_list(fixture: &mut Fixture, id: Uuid) -> gpui_kit::ListState {
     list.scroll_to(gpui_kit::ListOffset { item_ix:        0,
                                           offset_in_item: gpui_kit::px(0.), });
     let installed = list.clone();
-    fixture.view.update(&mut fixture.window, |view, _| {
+    // Notified, the way the render that creates a real list is: the
+    // shortcut's handler is registered from the frame that sees the list.
+    fixture.view.update(&mut fixture.window, |view, cx| {
                     view.panel_lists.insert(id, installed);
+                    cx.notify();
                 });
+    fixture.window.run_until_parked();
     list
 }
 
@@ -230,4 +234,59 @@ fn jump_to_bottom_leaves_a_hidden_conversation_alone(cx: &mut TestAppContext) {
     fixture.press(JumpToBottom);
     assert_eq!(list.logical_scroll_top().item_ix, 0);
     assert_eq!(fixture.view_mode(), WorkspaceViewMode::Dashboard);
+}
+
+/// Whether macOS would draw `action`'s menu item enabled: it asks exactly
+/// this of the focused window's last frame (`app-menu`).
+fn available(fixture: &mut Fixture, action: &dyn gpui_kit::Action) -> bool {
+    fixture.window
+           .update(|window, cx| window.is_action_available(action, cx))
+}
+
+#[gpui_kit::test]
+fn a_shortcut_that_would_do_nothing_is_unavailable(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(0, cx);
+    assert!(available(&mut fixture, &ToggleDashboard));
+    assert!(!available(&mut fixture, &SelectAgent1), "there is no agent");
+    assert!(!available(&mut fixture, &FocusAgentInput),
+            "nothing is selected");
+    assert!(!available(&mut fixture, &JumpToBottom),
+            "nothing is selected");
+}
+
+#[gpui_kit::test]
+fn select_agent_is_available_up_to_the_agent_count(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(2, cx);
+    assert!(available(&mut fixture, &SelectAgent2));
+    assert!(!available(&mut fixture, &SelectAgent3),
+            "there is no third agent");
+    assert!(available(&mut fixture, &FocusAgentInput),
+            "a window opens with an agent selected");
+}
+
+#[gpui_kit::test]
+fn jump_to_bottom_is_unavailable_behind_a_panel(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(1, cx);
+    let id = fixture.agents[0];
+    fixture.press(SelectAgent1);
+    scrolled_up_list(&mut fixture, id);
+    assert!(available(&mut fixture, &JumpToBottom));
+
+    fixture.set_view_mode(WorkspaceViewMode::Dashboard);
+    assert!(!available(&mut fixture, &JumpToBottom));
+}
+
+/// The composer that held focus is not drawn behind a panel. Unless focus
+/// moves to the window's root element, gpui resolves the stale handle to the
+/// tree root - above every shortcut handler - and the menu goes dead.
+#[gpui_kit::test]
+fn the_shortcuts_stay_reachable_behind_a_panel(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(2, cx);
+    let id = fixture.agents[0];
+    fixture.press(SelectAgent1);
+    assert!(composer_focused(&mut fixture, id));
+
+    fixture.press(ToggleDashboard);
+    assert!(available(&mut fixture, &SelectAgent2));
+    assert!(available(&mut fixture, &ToggleDashboard));
 }
