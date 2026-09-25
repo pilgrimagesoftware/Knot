@@ -57,7 +57,7 @@ None.
   `crates/knot/src/tests/settings_keyboard.rs`, and
   `crates/knot/src/workspace_window/shortcuts_tests.rs` if it presses chords
   rather than dispatching actions.
-- The unstarted `sidebar-key-hints` change (#481) names ⌥⌘N as the agent
-  default in its `agent-list-ui` delta and design; this change updates that
-  text in place.
+- The `sidebar-key-hints` change (#481) names the agent default in its
+  `agent-list-ui` delta and design; PR #489
+  (https://github.com/pilgrimagesoftware/Knot/pull/489) updates that text.
 - Stored preferences: no format or migration change.

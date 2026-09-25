@@ -13,7 +13,7 @@
 
 ## 3. Dependent spec text
 
-- [x] 3.1 Update the agent and workspace examples in the `app-menu` View menu requirements (as a delta here) and in the `sidebar-key-hints` change's `agent-list-ui` delta and design; verify `grep -rn "⌥⌘[1-9N]" openspec/specs openspec/changes --exclude-dir=archive` shows no agent-selection example outside the main `keybindings` and `app-menu` specs, which the deltas update at archive
+- [x] 3.1 Update the agent and workspace examples in the `app-menu` View menu requirements (as a delta here); the `sidebar-key-hints` change's `agent-list-ui` delta and design are updated on PR #489; verify `grep -rn "⌥⌘[1-9N]" openspec/specs openspec/changes --exclude-dir=archive` shows no agent-selection example outside the main `keybindings` and `app-menu` specs, which the deltas update at archive
 
 ## 4. Verification
 

@@ -64,7 +64,7 @@ positioned is what keeps row sizes unchanged.
 Alternative: show hints for as long as ⌘ is held, with no delay. Rejected. The
 hints would flash on every ⌘C, ⌘V and ⌘Tab.
 
-Alternative: show hints only while exactly the family's modifier is held (⌘
+Alternative: show hints only while exactly the family's modifier is held (⌥⌘
 for agents). Rejected. Users would have to know the chord before the hint could
 show it to them.
 
