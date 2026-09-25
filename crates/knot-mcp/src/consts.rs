@@ -6,9 +6,10 @@ pub const PROTOCOL_VERSION: &str = "2024-11-05";
 pub const SERVER_NAME: &str = "knot-mcp";
 pub const SERVER_VERSION: &str = "1.0.0";
 
-/// The active log file's name within whatever directory the caller supplies.
+/// The active log file's name within whatever directory the caller supplies,
+/// one JSON object per line.
 /// Rolled files take this name with a `.1`, `.2`, ... suffix.
-pub const LOG_FILE_NAME: &str = "knot-mcp.log";
+pub const LOG_FILE_NAME: &str = "knot-mcp.jsonl";
 
 /// Roll the active log file once it reaches this size. Reached in weeks of
 /// idle heartbeats, or a long session of heavy tool use - which is the

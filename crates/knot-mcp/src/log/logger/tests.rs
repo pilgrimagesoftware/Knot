@@ -2,7 +2,7 @@ use tempfile::TempDir;
 
 use super::Logger;
 use crate::consts;
-use crate::log::entry::Subject;
+use crate::log::entry::{Subject, parse_line};
 
 /// Waits for everything sent so far to reach disk, then closes the channel
 /// and waits for the writer to finish. Both steps are barriers rather than
@@ -28,8 +28,9 @@ async fn entries_reach_the_file_in_order() {
     let lines: Vec<&str> = contents.lines().collect();
     assert_eq!(lines.len(), 25);
     for (index, line) in lines.iter().enumerate() {
-        assert!(line.ends_with(&format!("entry {index}")),
-                "out of order: {line}");
+        assert_eq!(parse_line(line)["message"],
+                   format!("entry {index}"),
+                   "out of order: {line}");
     }
 }
 
@@ -87,9 +88,20 @@ async fn each_level_reaches_the_file_as_itself() {
     drain(logger, task).await;
 
     let contents = std::fs::read_to_string(&path).expect("log file");
-    assert!(contents.contains("INFO lifecycle ordinary"));
-    assert!(contents.contains("WARN lifecycle notable"));
-    assert!(contents.contains("ERROR lifecycle broken"));
+    let fields: Vec<(String, String, String)> =
+        contents.lines()
+                .map(parse_line)
+                .map(|value| {
+                    let field = |key: &str| value[key].as_str().unwrap_or_default().to_owned();
+                    (field("level"), field("subject"), field("message"))
+                })
+                .collect();
+    let expected =
+        |level: &str, message: &str| (level.to_owned(), "lifecycle".to_owned(), message.to_owned());
+    assert_eq!(fields,
+               [expected("INFO", "ordinary"),
+                expected("WARN", "notable"),
+                expected("ERROR", "broken")]);
 }
 
 #[tokio::test]

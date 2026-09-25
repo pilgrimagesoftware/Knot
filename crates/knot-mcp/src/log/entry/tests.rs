@@ -1,10 +1,19 @@
+use serde_json::Value;
 use time::OffsetDateTime;
 use time::macros::datetime;
 
-use super::{Entry, Level, Subject, escape};
+use super::{Entry, Level, Subject};
+
+/// The rendered line, parsed back - which is itself the first assertion:
+/// every line is a JSON object.
+fn parsed(entry: &Entry) -> Value {
+    let line = entry.render();
+    serde_json::from_str(&line).unwrap_or_else(|error| panic!("not JSON ({error}): {line}"))
+}
 
 fn at(message: &str) -> Entry {
     Entry { at:      datetime!(2026-09-22 15:04:05.123456 UTC),
+            pid:     4242,
             level:   Level::Info,
             subject: Subject::Request,
             message: message.to_string(), }
@@ -45,22 +54,27 @@ fn no_two_subjects_share_a_word() {
 }
 
 #[test]
-fn a_line_is_timestamp_then_level_then_subject_then_message() {
+fn a_line_is_time_then_pid_then_level_then_subject_then_message() {
     let line = at("initialize").render();
 
-    let mut fields = line.splitn(4, ' ');
-    assert_eq!(fields.next(), Some("2026-09-22T15:04:05.123456Z"));
-    assert_eq!(fields.next(), Some("INFO"));
-    assert_eq!(fields.next(), Some("request"));
-    assert_eq!(fields.next(), Some("initialize"));
+    assert_eq!(line,
+               r#"{"time":"2026-09-22T15:04:05.123456Z","pid":4242,"level":"INFO","subject":"request","message":"initialize"}"#);
+}
+
+/// Every instance sharing a home directory writes the same file; the ID is
+/// what tells their lines apart.
+#[test]
+fn a_new_entry_carries_this_process_id() {
+    let entry = Entry::now(Level::Info, Subject::Lifecycle, "stopped");
+
+    assert_eq!(entry.pid, std::process::id());
+    assert_eq!(parsed(&entry)["pid"], std::process::id());
 }
 
 #[test]
 fn the_timestamp_carries_a_sub_second_component() {
-    let line = at("initialize").render();
-    let timestamp = line.split(' ')
-                        .next()
-                        .expect("a line always has a first field");
+    let value = parsed(&at("initialize"));
+    let timestamp = value["time"].as_str().expect("time is a string");
 
     assert!(timestamp.contains('.'),
             "a sub-second component is what orders two entries within the same second: \
@@ -83,29 +97,31 @@ fn now_stamps_the_moment_the_event_happened() {
 
 #[test]
 fn an_embedded_newline_does_not_break_the_line() {
-    let line = at("read /tmp/odd\nname failed").render();
+    let entry = at("read /tmp/odd\nname failed");
+    let line = entry.render();
 
     assert_eq!(line.lines().count(), 1, "one entry is one line: {line}");
-    assert!(line.ends_with("read /tmp/odd\\nname failed"));
+    assert_eq!(parsed(&entry)["message"], "read /tmp/odd\nname failed");
 }
 
 #[test]
 fn a_carriage_return_does_not_break_the_line() {
-    let line = at("progress\r100%").render();
+    let entry = at("progress\r100%");
+    let line = entry.render();
 
     assert_eq!(line.lines().count(), 1, "one entry is one line: {line}");
-    assert!(line.ends_with("progress\\r100%"));
+    assert_eq!(parsed(&entry)["message"], "progress\r100%");
 }
 
+/// A message is recovered exactly, however it is spelled - JSON's escaping
+/// is reversible where a hand-rolled one has to be proven so.
 #[test]
-fn a_backslash_is_escaped_so_the_escaping_is_reversible() {
-    // Without this, a message ending in a backslash followed by an `n` is
-    // indistinguishable from one containing a newline.
-    assert_eq!(escape(r"C:\notes"), r"C:\\notes");
-    assert_eq!(escape("a\nb"), "a\\nb");
-}
-
-#[test]
-fn an_ordinary_message_is_left_alone() {
-    assert_eq!(escape("tools/call send-message"), "tools/call send-message");
+fn a_message_round_trips_unchanged() {
+    for message in [r"C:\notes",
+                    "a\\nb",
+                    "quote \" inside",
+                    "tools/call send-message"]
+    {
+        assert_eq!(parsed(&at(message))["message"], message);
+    }
 }

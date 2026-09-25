@@ -8,6 +8,7 @@ use tempfile::TempDir;
 
 use super::{Writer, rolled};
 use crate::consts;
+use crate::log::entry::parse_line;
 use crate::log::entry::{Entry, Level, Subject};
 
 fn entry(message: &str) -> Entry {
@@ -21,7 +22,7 @@ fn read(path: &Path) -> String {
 #[test]
 fn a_missing_directory_is_created() {
     let root = TempDir::new().expect("temp dir");
-    let path = root.path().join("nested/deeper/knot-mcp.log");
+    let path = root.path().join("nested/deeper/knot-mcp.jsonl");
 
     let mut writer = Writer::open(path.clone());
     writer.write(&entry("bound 127.0.0.1:8767"));
@@ -125,8 +126,9 @@ fn rotation_loses_nothing_and_interleaves_nothing() {
                total,
                "every entry appears exactly once across the files");
     for (index, line) in lines.iter().enumerate() {
-        assert!(line.ends_with(&format!("entry {index}")),
-                "entry {index} is out of order or split across a roll: {line}");
+        assert_eq!(parse_line(line)["message"],
+                   format!("entry {index}"),
+                   "entry {index} is out of order or split across a roll: {line}");
     }
 }
 
@@ -181,8 +183,8 @@ fn recovery_ends_the_episode_silently() {
 
 #[test]
 fn a_rolled_path_is_the_active_path_with_an_index() {
-    let path = Path::new("/tmp/knot/knot-mcp.log");
+    let path = Path::new("/tmp/knot/knot-mcp.jsonl");
 
-    assert_eq!(rolled(path, 1), Path::new("/tmp/knot/knot-mcp.log.1"));
-    assert_eq!(rolled(path, 3), Path::new("/tmp/knot/knot-mcp.log.3"));
+    assert_eq!(rolled(path, 1), Path::new("/tmp/knot/knot-mcp.jsonl.1"));
+    assert_eq!(rolled(path, 3), Path::new("/tmp/knot/knot-mcp.jsonl.3"));
 }

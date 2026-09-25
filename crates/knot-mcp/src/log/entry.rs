@@ -1,7 +1,8 @@
-//! One log entry: what it carries, and how it renders to a line.
+//! One log entry: what it carries, and how it renders to a JSON line.
 
 use std::fmt;
 
+use serde::Serialize;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
@@ -65,6 +66,10 @@ impl fmt::Display for Subject {
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub at:      OffsetDateTime,
+    /// The process that logged the entry. Every Knot instance sharing a home
+    /// directory appends to the same file, and without this a line cannot be
+    /// told apart from one a dev or test build wrote beside it.
+    pub pid:     u32,
     pub level:   Level,
     pub subject: Subject,
     pub message: String,
@@ -74,42 +79,48 @@ impl Entry {
     /// Stamps `message` with the current UTC time.
     pub fn now(level: Level, subject: Subject, message: impl Into<String>) -> Self {
         Self { at: OffsetDateTime::now_utc(),
+               pid: std::process::id(),
                level,
                subject,
                message: message.into() }
     }
 
-    /// The entry as it appears in the file and on standard error, with no
+    /// The entry as it appears in the log file: one JSON object, with no
     /// trailing newline - the writer adds that.
     ///
-    /// One entry is always one line. A message carrying a newline (a path
-    /// with one in it, an error whose `Display` spans lines) would otherwise
-    /// split into what looks like two entries, the second with no timestamp,
-    /// and break every line-wise search of the file.
+    /// One entry is always one line. JSON escapes every control character
+    /// inside a string, so a message carrying a newline (a path with one in
+    /// it, an error whose `Display` spans lines) cannot split into what looks
+    /// like two entries and break line-wise reading of the file.
     pub fn render(&self) -> String {
-        let at = self.at
-                     .format(&Rfc3339)
-                     .unwrap_or_else(|_| self.at.unix_timestamp().to_string());
-        format!("{at} {} {} {}",
-                self.level,
-                self.subject,
-                escape(&self.message))
+        let time = self.at
+                       .format(&Rfc3339)
+                       .unwrap_or_else(|_| self.at.unix_timestamp().to_string());
+        let line = Line { time:    &time,
+                          pid:     self.pid,
+                          level:   &self.level.to_string(),
+                          subject: &self.subject.to_string(),
+                          message: &self.message, };
+        // Serializing borrowed strings and an integer cannot fail.
+        serde_json::to_string(&line).unwrap_or_default()
     }
 }
 
-/// Replaces the characters that would end a line, or that would be read as an
-/// escape of one, with their two-character escapes.
-fn escape(message: &str) -> String {
-    let mut out = String::with_capacity(message.len());
-    for character in message.chars() {
-        match character {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            _ => out.push(character),
-        }
-    }
-    out
+/// The file's field order and names. A struct rather than a `json!` map, so
+/// the order is fixed by declaration and a reader can rely on it.
+#[derive(Serialize)]
+struct Line<'a> {
+    time:    &'a str,
+    pid:     u32,
+    level:   &'a str,
+    subject: &'a str,
+    message: &'a str,
+}
+
+/// One line of the file, parsed, for tests that assert on what reached disk.
+#[cfg(test)]
+pub(crate) fn parse_line(line: &str) -> serde_json::Value {
+    serde_json::from_str(line).unwrap_or_else(|error| panic!("not a JSON line ({error}): {line}"))
 }
 
 #[cfg(test)]
