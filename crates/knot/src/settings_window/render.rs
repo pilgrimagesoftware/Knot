@@ -34,6 +34,7 @@ impl SettingsWindow {
             SettingsTab::Voice => px(520.),
             SettingsTab::Mcp => px(600.),
             SettingsTab::Terminal => px(380.),
+            SettingsTab::Keyboard => px(560.),
         }
     }
 
@@ -69,14 +70,17 @@ impl Render for SettingsWindow {
             SettingsTab::Voice => self.render_voice(cx).into_any_element(),
             SettingsTab::Mcp => self.render_mcp(cx).into_any_element(),
             SettingsTab::Terminal => self.render_appearance(cx).into_any_element(),
+            SettingsTab::Keyboard => self.render_keyboard(cx).into_any_element(),
         };
 
-        // Personas manages its own scroll region (only the list scrolls, the
-        // title/action row stays pinned) - scrolling the body too would let
-        // both containers move at once and make the group's title/border
-        // appear to drift.
-        let mut settings_body = div().id("settings-body").flex_1();
-        settings_body = if matches!(self.selected_tab, SettingsTab::Personas) {
+        // Personas and Keyboard manage their own scroll region (only the
+        // list scrolls; the title, blurb and action rows stay pinned) -
+        // scrolling the body too would let both containers move at once and
+        // make the group's title/border appear to drift.
+        let mut settings_body = div().id("settings-body").flex_1().min_h_0();
+        settings_body = if matches!(self.selected_tab,
+                                    SettingsTab::Personas | SettingsTab::Keyboard)
+        {
             settings_body.overflow_hidden()
         }
         else {

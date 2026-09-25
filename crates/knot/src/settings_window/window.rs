@@ -123,7 +123,8 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                       ai_api_key_subscription,
                                                   _autopilot_custom_prompt_subscription:
                                                       autopilot_custom_prompt_subscription,
-                                                  _mcp_port_subscription: mcp_port_subscription }
+                                                  _mcp_port_subscription: mcp_port_subscription,
+                                                  keyboard: Default::default() }
                              });
                 #[cfg(target_os = "macos")]
                 {
@@ -242,6 +243,8 @@ pub(crate) struct SettingsWindow {
     pub(super) _ai_api_key_subscription: Subscription,
     pub(super) _autopilot_custom_prompt_subscription: Subscription,
     pub(super) _mcp_port_subscription: Subscription,
+    /// The Keyboard tab's armed recorder and last rejection.
+    pub(super) keyboard: super::keyboard::KeyboardPaneState,
 }
 
 impl SettingsWindow {

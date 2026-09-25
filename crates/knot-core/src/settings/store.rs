@@ -132,6 +132,9 @@ pub struct Settings {
     /// the per-call rendering. See
     /// `openspec/specs/collapsed-tool-call-summary/spec.md`.
     pub agent_panel_compact_tool_calls: bool,
+    /// The user's customizations of the navigation shortcuts; empty until
+    /// one is changed. See `openspec/specs/keybindings/spec.md`.
+    pub keybindings:                    super::KeybindingSettings,
 
     /// The durable collections, each persisted as its own document rather
     /// than as a key of the preferences document - hence `skip`, which also
@@ -198,6 +201,7 @@ impl Default for Settings {
                voice_auto_insert:              true,
                agent_panel_shift_enter_sends:  false,
                agent_panel_compact_tool_calls: false,
+               keybindings:                    super::KeybindingSettings::default(),
                saved_agents:                   Vec::new(),
                saved_workspaces:               Vec::new(),
                workspace_ui:                   BTreeMap::new(),

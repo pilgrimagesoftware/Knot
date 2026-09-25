@@ -275,8 +275,12 @@ that opens the workspace manager, each with a key equivalent:
 
 | Item | Key |
 | --- | --- |
-| Window > Command Center | ⌥⌘0 |
+| Window > Command Center | the Open Command Center shortcut (default ⌥⌘0) |
 | Window > Workspaces | ⌘0 |
+
+The Command Center's key equivalent is user-configurable (`keybindings`). The
+item SHALL show the current binding, and SHALL update when the user changes
+it, without a restart. Workspaces keeps the fixed ⌘0.
 
 Both SHALL be enabled at all times, including when no window is open at all.
 They are how a user gets back to a window, so an enablement rule that depends
@@ -298,8 +302,13 @@ manager is behind something else.
 
 #### Scenario: Opening the Command Center by keyboard
 
-- **WHEN** the user presses ⌥⌘0
+- **WHEN** the user presses ⌥⌘0 with the default binding in effect
 - **THEN** the same thing happens as choosing Window > Command Center
+
+#### Scenario: The menu follows a rebinding
+
+- **WHEN** the user rebinds Open Command Center to ⌃⌘K and opens the Window menu
+- **THEN** Window > Command Center shows ⌃⌘K
 
 #### Scenario: Getting back to the manager
 

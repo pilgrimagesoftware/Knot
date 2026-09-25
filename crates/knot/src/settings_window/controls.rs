@@ -22,7 +22,7 @@ use crate::settings_window::SettingsWindow;
 impl SettingsWindow {
     /// Right-aligned label column width shared by every settings row, so
     /// labels line up across a pane regardless of their length.
-    const LABEL_WIDTH: f32 = 200.;
+    pub(crate) const LABEL_WIDTH: f32 = 200.;
 
     /// A label + control row with the label right-aligned in a fixed-width
     /// column, matching the alignment convention already used by
