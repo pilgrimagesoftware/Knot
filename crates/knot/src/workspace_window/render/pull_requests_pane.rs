@@ -1,5 +1,5 @@
-//! The Pull Requests pane: this workspace's recorded pull requests, grouped
-//! by the agent that opened them, newest first.
+//! The Pull Requests pane: this workspace's recorded pull requests, one row
+//! per pull request, grouped by the agents that opened them, newest first.
 //!
 //! A content-area takeover like the dashboard, not a popover on each agent
 //! card: the question it answers is "what did this session produce", which is
@@ -28,11 +28,17 @@ pub(crate) struct PullRequestRow {
     pub(crate) state: Option<PullRequestState>,
 }
 
-/// One agent's rows, under that agent's name.
+/// The rows one set of agents opened, under their names.
+///
+/// Several agents rather than one: a pull request several agents recorded is
+/// one row, headed by all of them.
 pub(crate) struct PullRequestGroup {
-    pub(crate) agent_id: Uuid,
-    pub(crate) agent:    String,
-    pub(crate) rows:     Vec<PullRequestRow>,
+    /// Every agent each row here is attributed to, so removing a row
+    /// addresses every record behind it.
+    pub(crate) agent_ids: Vec<Uuid>,
+    /// Their names, joined for the heading.
+    pub(crate) agents:    String,
+    pub(crate) rows:      Vec<PullRequestRow>,
 }
 
 impl WorkspaceWindow {
@@ -107,19 +113,19 @@ fn forge_notice_text(availability: &ForgeAvailability) -> Option<String> {
 
 fn render_group(group: PullRequestGroup, cx: &mut Context<WorkspaceWindow>)
                 -> gpui_kit::AnyElement {
-    let agent_id = group.agent_id;
+    let agent_ids = group.agent_ids;
     v_flex().gap_2()
             .child(div().text_sm()
                         .text_color(cx.theme().muted_foreground)
                         .child(knot_core::l10n::t_with("pull_requests.opened_by",
-                                                       &[("name", &group.agent)])))
+                                                       &[("name", &group.agents)])))
             .children(group.rows
                            .into_iter()
-                           .map(|row| render_row(agent_id, row, cx)))
+                           .map(|row| render_row(agent_ids.clone(), row, cx)))
             .into_any_element()
 }
 
-fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWindow>)
+fn render_row(agent_ids: Vec<Uuid>, row: PullRequestRow, cx: &mut Context<WorkspaceWindow>)
               -> gpui_kit::AnyElement {
     let url = row.url.clone();
     let remove_url = row.url.clone();
@@ -202,7 +208,7 @@ fn render_row(agent_id: Uuid, row: PullRequestRow, cx: &mut Context<WorkspaceWin
                                         // it. The dispatch order it relies on
                                         // is pinned by the row-click tests.
                                         cx.stop_propagation();
-                                        view.confirm_remove_pull_request(agent_id,
+                                        view.confirm_remove_pull_request(agent_ids.clone(),
                                                                          remove_url.clone(),
                                                                          window,
                                                                          cx);
