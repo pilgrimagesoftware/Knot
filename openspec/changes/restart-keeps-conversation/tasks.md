@@ -32,6 +32,10 @@
   a `knot-acp` parser test and `panel_state` replay tests: turns stay apart,
   chunks join, no turn starts, and a mid-turn echo is ignored.
 
+- [x] 3.2 Open a conversation list that fills from empty at its newest row.
+  Verify with a `panel_scroll` test on the real row layout, which fails
+  without the change.
+
 ## 4. Gate
 
 - [ ] 4.1 Run `make`. It must pass.
