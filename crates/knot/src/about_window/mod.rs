@@ -7,10 +7,11 @@
 //! instance, like the settings window - choosing About again raises the one
 //! that is open.
 //!
-//! `build_info` answers which binary is running, `window` opens and owns the
+//! `build_info` answers which binary is running (and is shared with the bug
+//! report, so the two name it identically), `window` opens and owns the
 //! window, `pane` draws it.
 
-mod build_info;
+pub(crate) mod build_info;
 mod pane;
 mod window;
 

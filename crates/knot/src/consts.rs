@@ -227,6 +227,11 @@ pub(crate) const PULL_REQUEST_ROW_BORDER_TINT: f32 = 0.55;
 /// an empty one.
 pub(crate) const WORKSPACE_DIALOG_WIDTH: f32 = 360.;
 
+/// Wider than the dialog host's 448px default: the diagnostics block's
+/// longest line - the app name, version, build date and commit - should fit
+/// without wrapping, so it reads as the one line it is when pasted.
+pub(crate) const BUG_REPORT_DIALOG_WIDTH: f32 = 560.;
+
 /// The colour a workspace gets when it has none, or when the one it has
 /// stored will not parse.
 pub(crate) const COLOR_WORKSPACE_DEFAULT: u32 = 0x1B4FB2;
