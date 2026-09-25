@@ -34,19 +34,28 @@ impl PullRequestStatus {
     }
 }
 
-/// Whether an open pull request can actually be merged.
+/// Whether an open pull request can actually be merged, and if not, why.
 ///
 /// Separate from [`PullRequestStatus`] because it is a different question:
 /// "is it still open" versus "could it land right now". Only meaningful
 /// while a pull request is open - a merged one has nothing left to block.
+///
+/// The reasons stay apart because each has a different next step - resolve
+/// the conflict, update the branch, or wait - and the row's colour is where
+/// the user reads which one it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mergeability {
     /// Nothing in the way.
     Mergeable,
-    /// Something is: a conflict, a failing check, a branch behind its base,
-    /// a review still required, or the pull request being a draft. The
-    /// distinctions matter on GitHub's own page; here they collapse, because
-    /// a row has one colour and they all mean "not yet".
+    /// The branch conflicts with its base.
+    Conflicting,
+    /// The branch is behind its base, and the base's rules require it to be
+    /// up to date.
+    Behind,
+    /// Checks are still running. Nothing is known to be wrong yet.
+    ChecksRunning,
+    /// Something else is in the way: a draft, a failing check, or a review
+    /// still required.
     Blocked,
     /// GitHub has not computed it. It does so lazily, so this is the honest
     /// answer for a moment after the first ask - and a row must not claim a
@@ -165,6 +174,11 @@ struct RawPullRequest {
     is_draft:            Option<bool>,
     #[serde(default)]
     mergeable:           Option<String>,
+    /// `CLEAN`, `DIRTY`, `BEHIND`, `BLOCKED`, `UNSTABLE`, `DRAFT`,
+    /// `HAS_HOOKS` or `UNKNOWN`. The only field that reports a branch behind
+    /// its base; absent on a `gh` too old to report it.
+    #[serde(default)]
+    merge_state_status:  Option<String>,
     #[serde(default)]
     status_check_rollup: Option<Vec<RawCheck>>,
     /// RFC 3339, and absent on a `gh` too old to report it.
@@ -200,7 +214,13 @@ pub fn parse_pull_request_state(json: &str) -> Result<PullRequestState> {
                           title: raw.title,
                           status,
                           checks,
-                          mergeable: mergeability_from(status, raw.mergeable.as_deref(), checks),
+                          mergeable: mergeability_from(status,
+                                                       MergeFields { mergeable:   raw.mergeable
+                                                                                     .as_deref(),
+                                                                     merge_state:
+                                                                         raw.merge_state_status
+                                                                            .as_deref(), },
+                                                       checks),
                           merged_at: merged_at_from(status, raw.merged_at.as_deref()) })
 }
 
@@ -220,25 +240,51 @@ fn merged_at_from(status: PullRequestStatus, merged_at: Option<&str>) -> Option<
     merged_at.and_then(|raw| OffsetDateTime::parse(raw, &Rfc3339).ok())
 }
 
-/// Fold GitHub's answer, the check rollup and draft-ness into the one
-/// question a row asks: could this land right now.
+/// GitHub's two answers about merging, as sent.
 ///
-/// Draft counts as blocked - GitHub refuses to merge a draft, which is the
-/// whole point of marking one. Failing checks count too: a pull request whose
-/// CI is red is not one anybody is about to merge, whatever the API says
-/// about conflicts.
-fn mergeability_from(status: PullRequestStatus, mergeable: Option<&str>,
+/// `mergeable` says only whether there is a conflict; `mergeStateStatus` says
+/// what else stands in the way. Both are read because an older `gh` sends
+/// only the first.
+#[derive(Debug, Clone, Copy)]
+struct MergeFields<'a> {
+    mergeable:   Option<&'a str>,
+    merge_state: Option<&'a str>,
+}
+
+/// Fold GitHub's answers, the check rollup and draft-ness into the one
+/// question a row asks: could this land right now, and if not, why.
+///
+/// Checked in the order of what the user must do first. A conflict needs
+/// resolving before anything else matters. A draft or red CI is not about to
+/// be merged, whatever the API says. A branch behind its base needs updating,
+/// which reruns the checks anyway, so it outranks checks still running.
+/// Running checks outrank `BLOCKED`, because GitHub reports `BLOCKED` while
+/// required checks are still pending - and that is a wait, not a problem.
+fn mergeability_from(status: PullRequestStatus, fields: MergeFields<'_>,
                      checks: Option<CheckRollup>)
                      -> Mergeability {
     if !status.is_open() {
         return Mergeability::Unknown;
     }
+    let mergeable = fields.mergeable.map(str::to_ascii_uppercase);
+    let merge_state = fields.merge_state.map(str::to_ascii_uppercase);
+    if mergeable.as_deref() == Some("CONFLICTING") || merge_state.as_deref() == Some("DIRTY") {
+        return Mergeability::Conflicting;
+    }
     if status == PullRequestStatus::Draft || checks == Some(CheckRollup::Failing) {
         return Mergeability::Blocked;
     }
-    match mergeable.map(str::to_ascii_uppercase).as_deref() {
+    if merge_state.as_deref() == Some("BEHIND") {
+        return Mergeability::Behind;
+    }
+    if checks == Some(CheckRollup::Pending) {
+        return Mergeability::ChecksRunning;
+    }
+    if merge_state.as_deref() == Some("BLOCKED") {
+        return Mergeability::Blocked;
+    }
+    match mergeable.as_deref() {
         Some("MERGEABLE") => Mergeability::Mergeable,
-        Some("CONFLICTING") => Mergeability::Blocked,
         // `UNKNOWN`, an absent field, or a value a newer `gh` invented.
         _ => Mergeability::Unknown,
     }

@@ -40,6 +40,34 @@ fn absent_parts_are_left_out_rather_than_blanked() {
     assert_eq!(line, knot_core::l10n::t("pull_requests.merged"));
 }
 
+/// A decided pull request's checks say nothing anyone will act on.
+#[test]
+fn a_merged_or_closed_row_leaves_its_checks_out() {
+    for status in [PullRequestStatus::Merged, PullRequestStatus::Closed] {
+        for checks in [CheckRollup::Passing,
+                       CheckRollup::Failing,
+                       CheckRollup::Pending]
+        {
+            let line = detail_line(Some("#42"), Some(status), Some(checks));
+
+            assert_eq!(line.split(" · ").count(),
+                       2,
+                       "{status:?} {checks:?}: {line}");
+        }
+    }
+}
+
+/// A draft is still open, so its checks still matter.
+#[test]
+fn a_draft_row_keeps_its_checks() {
+    let line = detail_line(None,
+                           Some(PullRequestStatus::Draft),
+                           Some(CheckRollup::Failing));
+
+    assert!(line.contains(&knot_core::l10n::t("pull_requests.checks_failing")),
+            "{line}");
+}
+
 /// A row whose state could not be fetched still lists; it says it is being
 /// checked rather than claiming a state.
 #[test]
@@ -109,13 +137,15 @@ fn each_state_has_its_own_icon() {
 
 // --- The row's colour -------------------------------------------------------
 
-/// Green open and ready, amber open and blocked, purple merged, red closed -
-/// four states that must never collide, since the colour is the first thing
-/// a row is read by.
+/// Each reason an open pull request can or cannot land, and merged and
+/// closed: states that must never collide, since the colour is the first
+/// thing a row is read by. Conflicting and blocked share orange on purpose.
 #[test]
 fn each_state_wears_its_own_colour() {
     let all = [state_color(Some(PullRequestStatus::Open), Mergeability::Mergeable),
-               state_color(Some(PullRequestStatus::Open), Mergeability::Blocked),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Conflicting),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Behind),
+               state_color(Some(PullRequestStatus::Open), Mergeability::ChecksRunning),
                state_color(Some(PullRequestStatus::Merged), Mergeability::Unknown),
                state_color(Some(PullRequestStatus::Closed), Mergeability::Unknown)];
 
@@ -129,6 +159,23 @@ fn each_state_wears_its_own_colour() {
     }
 }
 
+/// The colours the view's feedback named: green mergeable, orange
+/// conflicting, yellow behind, blue checks running.
+#[test]
+fn open_rows_wear_the_named_colours() {
+    let colour = |mergeable| state_color(Some(PullRequestStatus::Open), mergeable);
+    let rgb = |value| Some(gpui_kit::Hsla::from(gpui_kit::rgb(value)));
+
+    assert_eq!(colour(Mergeability::Mergeable),
+               rgb(crate::consts::COLOR_IDLE));
+    assert_eq!(colour(Mergeability::Conflicting),
+               rgb(crate::consts::COLOR_RUNNING));
+    assert_eq!(colour(Mergeability::Behind),
+               rgb(crate::consts::COLOR_PULL_REQUEST_BEHIND));
+    assert_eq!(colour(Mergeability::ChecksRunning),
+               rgb(crate::consts::COLOR_INPUT));
+}
+
 /// A row must not claim a colour it has not earned: no state fetched, or an
 /// open pull request whose mergeability GitHub has not computed yet.
 #[test]
@@ -140,11 +187,14 @@ fn an_unearned_colour_is_not_claimed() {
 }
 
 /// A draft cannot land, so it wears the blocked colour rather than a green
-/// that would read as ready.
+/// that would read as ready - the same orange as a conflict, since both need
+/// work before they can land.
 #[test]
 fn a_draft_wears_the_blocked_colour() {
     assert_eq!(state_color(Some(PullRequestStatus::Draft), Mergeability::Blocked),
                state_color(Some(PullRequestStatus::Open), Mergeability::Blocked));
+    assert_eq!(state_color(Some(PullRequestStatus::Open), Mergeability::Blocked),
+               state_color(Some(PullRequestStatus::Open), Mergeability::Conflicting));
 }
 
 /// The tint is a state marker behind the row's text, not a fill competing
