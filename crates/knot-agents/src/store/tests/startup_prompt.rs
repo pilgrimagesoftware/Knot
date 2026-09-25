@@ -12,8 +12,10 @@ fn deploying_carries_the_startup_prompt_in_its_stored_form() {
     let mut bench = BenchAgent::new(Uuid::new_v4(), "Worker", None, "/repo");
     bench.startup_prompt = Some(StartupPrompt::Library(prompt));
 
-    let first = store.deploy_bench(&bench, |_| true).expect("folder exists");
-    let second = store.deploy_bench(&bench, |_| true).expect("folder exists");
+    let first = store.deploy_bench(&bench, None, |_| true)
+                     .expect("folder exists");
+    let second = store.deploy_bench(&bench, None, |_| true)
+                      .expect("folder exists");
 
     assert_ne!(first, second, "one entry deploys any number of times");
     for id in [first, second] {

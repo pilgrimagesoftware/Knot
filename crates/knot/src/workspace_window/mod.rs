@@ -8,6 +8,7 @@
 mod agent_row;
 mod agents;
 pub(crate) mod artifact_panel;
+mod bench;
 mod chrome;
 mod creation;
 mod git_panel;

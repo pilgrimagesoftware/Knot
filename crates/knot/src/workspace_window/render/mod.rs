@@ -395,8 +395,8 @@ impl WorkspaceWindow {
                 div().id("workspace-agent-list-background")
                      .flex_1()
                      .min_h(px(32.))
-                     .context_menu(move |menu, _, _| {
-                         sidebar_background_context_menu(&background_targets, menu)
+                     .context_menu(move |menu, window, cx| {
+                         sidebar_background_context_menu(&background_targets, menu, window, cx)
                      }),
             ),
         ),

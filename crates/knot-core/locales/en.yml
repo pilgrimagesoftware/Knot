@@ -33,6 +33,7 @@ workspace:
 sidebar:
   new_agent: "New agent"
   width_error: "Could not save the sidebar width: %{error}"
+  bench_entry_missing: "Removed %{name} from the bench: %{folder} no longer exists."
 
 agent:
   companion: "Shell companion"
@@ -284,6 +285,7 @@ menu:
     duplicate_agent: "Duplicate Agent"
     move_to_workspace: "Move to Workspace"
     save_to_bench: "Save to Bench"
+    bench_agent: "Bench Agent…"
     open_in: "Open In…"
     markdown_files: "Markdown Files"
     register_agent: "Register Agent"
@@ -300,10 +302,14 @@ menu:
       restart_new_body: "Restart \"%{name}\" in a new conversation? Its current conversation will not be resumed."
       remove_title: "Remove Agent"
       remove_body: "Remove \"%{name}\"? This closes its session and cannot be undone."
+      bench_title: "Bench Agent"
+      bench_body: "Save \"%{name}\" to the bench and close it? Its conversation is not kept."
+      bench_body_companions: "Save \"%{name}\" to the bench and close it and its companions? Its conversation is not kept."
   # The agent list's background menu, over the workspace rather than
   # any one agent.
   sidebar:
     new_agent: "New Agent"
+    new_from_bench: "New from Bench"
     restart_all: "Restart All"
     close_all: "Close All"
     deactivate_all: "Deactivate All"

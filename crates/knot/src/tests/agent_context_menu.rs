@@ -33,6 +33,7 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
                     AgentMenuEntry::Separator,
                     AgentMenuEntry::MoveToWorkspace,
                     AgentMenuEntry::SaveToBench,
+                    AgentMenuEntry::BenchAgent,
                     AgentMenuEntry::Separator,
                     AgentMenuEntry::OpenIn,
                     AgentMenuEntry::MarkdownFiles,

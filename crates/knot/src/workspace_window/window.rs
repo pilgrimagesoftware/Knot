@@ -391,7 +391,8 @@ pub(crate) struct WorkspaceWindow {
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can
-    /// act on - currently only a sidebar width that could not be saved.
+    /// act on - a sidebar width that could not be saved, or a bench entry
+    /// pruned because its folder is gone.
     pub(super) error:                            Option<String>,
 }
 

@@ -32,16 +32,16 @@
 ## 5. Agent store and benching (`knot-agents`, `knot`)
 
 - [x] 5.1 Carry `startup_prompt` through `CreateOptions` and `deploy_bench`; verify a deployed entry's agent holds the entry's startup prompt in the same form, and the entry stays on the bench after two deployments
-- [ ] 5.2 Extract `bench_entry_for(&Agent)` from Save to Bench, including the startup prompt, and use it from Save to Bench; verify the existing Save to Bench tests still pass
-- [ ] 5.3 Implement benching: write the entry through `write_persisting`, then remove the agent (and its companions) only on success; verify a failed write leaves the agent in place, and an owner with a companion yields one bench entry and two removals
+- [x] 5.2 Extract `bench_entry_for(&Agent)` from Save to Bench, including the startup prompt, and use it from Save to Bench; verify the existing Save to Bench tests still pass
+- [x] 5.3 Implement benching: write the entry through `write_persisting`, then remove the agent (and its companions) only on success; verify a failed write leaves the agent in place, and an owner with a companion yields one bench entry and two removals
 - [x] 5.4 Exclude the startup prompt from launch-affecting edits; verify changing only the startup prompt does not recreate the session
-- [ ] 5.5 Add `WorkspaceWindow::deploy_bench_entry(entry, cx)`: deploy into the sidebar's workspace and select; on a missing folder remove the entry and post a notification naming it; verify both paths with a window test
+- [x] 5.5 Add `WorkspaceWindow::deploy_bench_entry(entry, cx)`: deploy into the sidebar's workspace and select; on a missing folder remove the entry and post a notification naming it; verify both paths with a window test
 
 ## 6. Sidebar menus (`knot`)
 
-- [ ] 6.1 Add `AgentMenuEntry::BenchAgent` after Save to Bench, shown only for non-companions; verify the agents-menu and context-menu ordering tests and that a companion hides both bench items
-- [ ] 6.2 Confirm before benching, with a body that says the conversation is not kept and, for an owner, that its companions close; verify cancel leaves the agent and bench unchanged
-- [ ] 6.3 Add the New from Bench submenu to the sidebar background menu after New Agent, built from the settings surface's bench at menu-build time, disabled when the bench is empty, calling `deploy_bench_entry`; verify the background-menu ordering and enablement tests
+- [x] 6.1 Add `AgentMenuEntry::BenchAgent` after Save to Bench, shown only for non-companions; verify the agents-menu and context-menu ordering tests and that a companion hides both bench items
+- [x] 6.2 Confirm before benching, with a body that says the conversation is not kept and, for an owner, that its companions close; verify cancel leaves the agent and bench unchanged
+- [x] 6.3 Add the New from Bench submenu to the sidebar background menu after New Agent, built from the settings surface's bench at menu-build time, disabled when the bench is empty, calling `deploy_bench_entry`; verify the background-menu ordering and enablement tests
 
 ## 7. Bench popover - Swift dropdown port (`knot`)
 
