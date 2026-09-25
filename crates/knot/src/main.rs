@@ -30,6 +30,7 @@ mod keymap;
 mod macos;
 mod markdown_view;
 mod mcp_status;
+mod menu_bar;
 mod open_in;
 mod panel_commands;
 mod panel_session;
@@ -47,6 +48,7 @@ mod subagent_feed;
 mod terminal_view;
 #[cfg(test)]
 mod tests;
+mod view_menu;
 mod window_options;
 mod window_registry;
 mod working_indicator;

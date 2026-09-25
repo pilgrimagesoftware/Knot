@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use gpui_kit::ClickEvent;
 use gpui_kit::Context;
+use gpui_kit::Focusable;
 use gpui_kit::FollowMode;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
@@ -167,15 +168,25 @@ impl WorkspaceWindow {
         if self.insert_queued_attachments(id, window, cx) {
             self.restyle_panel_attachments(id, crate::composer_style::Palette::of(cx), cx);
         }
+        // Every placeholder tracks the composer's handle, which the focus
+        // pass focuses as soon as the agent is selected - before the composer
+        // itself is drawn. An untracked focused handle resolves to the
+        // dispatch tree's root, above the root element's shortcut and menu
+        // handlers, so until the session connected no workspace shortcut
+        // worked and the View menu drew disabled.
+        let composer_focus = self.panel_prompt_input(id, window, cx).focus_handle(cx);
         let Some(slot) = self.panel_sessions.get(&id)
         else {
-            return div().into_any_element();
+            return div().size_full()
+                        .track_focus(&composer_focus)
+                        .into_any_element();
         };
         let slot_guard = slot.lock();
         match &*slot_guard {
             panel_session::PanelSessionSlot::Connecting(progress) => {
                 let step = progress.lock().label();
                 v_flex().size_full()
+                        .track_focus(&composer_focus)
                         .items_center()
                         .justify_center()
                         .gap_1()
@@ -193,6 +204,7 @@ impl WorkspaceWindow {
                 // agent to get another attempt.
                 v_flex()
                     .size_full()
+                    .track_focus(&composer_focus)
                     .p_4()
                     .gap_3()
                     .items_start()

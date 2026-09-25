@@ -255,6 +255,22 @@ fn dialog_labels_resolve() {
     }
 }
 
+/// The View menu's labels (`app-menu`).
+#[test]
+fn view_menu_labels_resolve() {
+    for key in ["menu.view.dashboard",
+                "menu.view.pull_requests",
+                "menu.view.focus_agent_input",
+                "menu.view.jump_to_bottom",
+                "menu.view.select_agent",
+                "menu.view.select_workspace"]
+    {
+        let value = knot_core::l10n::t(key);
+        assert_ne!(value, key, "{key} is missing from the catalog");
+        assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+}
+
 /// Driven by `ALL` rather than a written-out key list, so a variant added
 /// without a catalog entry fails here instead of drawing its own key in the
 /// menu. Separators have no label and are skipped.

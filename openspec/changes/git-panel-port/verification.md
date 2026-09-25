@@ -83,8 +83,15 @@ staged-and-modified path that should draw two rows, `u UU` the conflict:
 git -C /tmp/knot-verify-repo status --porcelain=v2 | grep -v '^# branch.oid'
 ```
 
-Point an agent at `/tmp/knot-verify-repo`. A terminal-mode agent is enough —
-the panel does not need a live ACP session.
+Point a Claude (or any non-shell) agent at `/tmp/knot-verify-repo`; its
+default panel mode is fine. Not a Shell agent: its header has no diff-stat
+row, and that row is the only control that opens the git panel. The scratch
+`HOME` has no Claude credentials, so the agent reports "authentication
+required" — harmless, because the stats and the panel read the repository,
+not the session.
+
+To open the panel, select the agent (not the Dashboard), wait for the
+header's top-right to change from "pending" to `+N −N`, and click it.
 
 ## Task 3.5 — no git command runs from a render
 

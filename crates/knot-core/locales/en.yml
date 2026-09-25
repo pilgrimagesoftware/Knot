@@ -268,6 +268,15 @@ menu:
   # The Help menu's own items.
   help:
     report_bug: "Report a Bug…"
+  # The View menu's navigation items. macOS appends Enter Full Screen below
+  # them.
+  view:
+    dashboard: "Dashboard"
+    pull_requests: "Pull Requests"
+    focus_agent_input: "Focus Agent Input"
+    jump_to_bottom: "Jump to Bottom"
+    select_agent: "Select Agent"
+    select_workspace: "Select Workspace"
   # The Window menu's own items. macOS appends and maintains the list of
   # open windows below them.
   window:

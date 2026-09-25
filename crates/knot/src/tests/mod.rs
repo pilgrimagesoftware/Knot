@@ -44,6 +44,7 @@ mod single_line;
 mod startup;
 mod subagent_repaint;
 mod terminal_font;
+mod view_menu;
 mod window_bounds;
 mod window_registry;
 mod workspace_dialog;

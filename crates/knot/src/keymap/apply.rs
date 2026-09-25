@@ -59,11 +59,12 @@ pub(crate) fn apply(resolved: &Resolved, cx: &mut App) {
     cx.set_global(AppliedKeymap(installed));
 }
 
-/// [`apply`], then rebuilds the menu bar from the Agents menu's current
-/// snapshot so Window > Command Center shows the chord now in effect.
+/// [`apply`], then rebuilds the menu bar from its current snapshot so every
+/// item on a configurable shortcut - Window > Command Center, the View
+/// menu's - shows the chord now in effect.
 pub(crate) fn apply_and_refresh_menus(resolved: &Resolved, cx: &mut App) {
     apply(resolved, cx);
-    let snapshot = cx.try_global::<crate::agent_menu::AgentsMenuState>()
+    let snapshot = cx.try_global::<crate::menu_bar::MenuBarState>()
                      .map(|state| state.snapshot.clone())
                      .unwrap_or_default();
     crate::app_bootstrap::set_app_menus(&snapshot, cx);

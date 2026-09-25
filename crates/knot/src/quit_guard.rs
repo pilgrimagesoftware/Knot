@@ -29,7 +29,7 @@ use crate::working_indicator;
 /// confirmation sets.
 ///
 /// A global because an action handler is a plain `fn(&Quit, &mut App)`
-/// with nowhere to carry the store, the same reason `AgentsMenuState` is
+/// with nowhere to carry the store, the same reason `MenuBarState` is
 /// one. Defaults to no store: a quit arriving before `run` installs one
 /// has nothing to protect and must not be blocked.
 #[derive(Default)]
