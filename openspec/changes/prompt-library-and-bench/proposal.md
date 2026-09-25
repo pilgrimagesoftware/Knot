@@ -111,5 +111,7 @@ bench dropdown on the New Agent button was never ported.
   turn; agent editor control; row and background menu entries; the New
   Agent split button and bench popover; Settings Prompts and Bench tabs;
   slash-lookup source for library prompts with off-thread expansion.
-- `knot-mcp-tools`: none beyond `deploy_bench` carrying the new field.
+- `knot-mcp-tools`: `create-agent` with `benchAgentId` builds the agent itself
+  rather than through `deploy_bench`, so it copies the entry's startup prompt
+  too.
 - No new dependencies.
