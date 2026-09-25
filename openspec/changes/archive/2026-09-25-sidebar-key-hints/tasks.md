@@ -15,4 +15,4 @@
 ## 3. Gate and manual check
 
 - [x] 3.1 Run `make` and verify the whole gate passes
-- [ ] 3.2 Manually verify in the running app: ⌘T and File > New Agent… open the agent editor, including behind a panel; holding ⌘ shows the sidebar hints at both widths, a quick ⌘C does not flash them, and they clear after ⌘Tab
+- [x] 3.2 Manually verify in the running app (reviewed by the user, 2026-09-25): ⌘T and File > New Agent… open the agent editor, including behind a panel; holding ⌘ shows the sidebar hints at both widths, a quick ⌘C does not flash them, and they clear after ⌘Tab
