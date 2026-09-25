@@ -1,5 +1,7 @@
 # Proposal
 
+Issue: #481
+
 ## Why
 
 The sidebar's controls all have keyboard shortcuts now, but nothing on screen
