@@ -2,7 +2,7 @@
 //! they are validated against.
 //!
 //! Contract: `openspec/specs/keybindings/spec.md`. Design:
-//! `openspec/changes/keybindings/design.md` until archived.
+//! `openspec/changes/archive/2026-09-25-keybindings/design.md`.
 //!
 //! [`Resolved`] is the effective set, built from the stored preferences with
 //! a default substituted for anything that does not parse or validate.
