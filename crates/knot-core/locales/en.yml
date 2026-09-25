@@ -418,6 +418,12 @@ agent_editor:
   cancel: "Cancel"
   no_folder: "No folder selected"
   persona_none: "None"
+  startup_prompt: "Startup prompt"
+  startup_prompt_none: "None"
+  startup_prompt_custom: "Custom"
+  startup_prompt_missing: "Missing prompt"
+  startup_prompt_placeholder: "What to ask the agent to do first"
+  startup_prompt_hint: "Sent after the agent registers, on each new conversation - not when a conversation is resumed."
   error_choose_folder: "Choose a folder."
   error_enter_name: "Enter a name."
 
@@ -719,3 +725,17 @@ artifact_panel:
   # since a lone section has no other to give its height to.
   collapse_section: "Collapse section"
   expand_section: "Expand section"
+
+# The variables a library prompt or custom startup prompt can use, as the
+# prompt editors list them.
+prompt_variables:
+  insert: "Insert variable"
+  unknown: "Unknown variable: %{names}"
+  agent_name: "the agent's name"
+  agent_id: "the agent's knot ID"
+  agent_type: "the agent's type"
+  folder: "the agent's folder"
+  folder_name: "the folder's name"
+  workspace: "the workspace's name"
+  branch: "the folder's current branch"
+  date: "today's date"

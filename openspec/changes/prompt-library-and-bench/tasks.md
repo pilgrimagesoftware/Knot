@@ -54,9 +54,9 @@
 
 ## 8. Agent editor (`knot`)
 
-- [ ] 8.1 Add the Startup Prompt control (None, library prompts by name, Custom with a multi-line field) for non-`shell` agents, with the caption; verify a new agent defaults to None and Custom reveals the text field
-- [ ] 8.2 Add the variable list and unknown-variable warnings to the custom field, without blocking submit; verify `{{brnach}}` is flagged and the form still submits
-- [ ] 8.3 Show a dangling reference as a missing prompt and keep it when unchanged; clear the startup prompt when the type becomes `shell`; verify both on submit
+- [x] 8.1 Add the Startup Prompt control (None, library prompts by name, Custom with a multi-line field) for non-`shell` agents, with the caption; verify a new agent defaults to None and Custom reveals the text field
+- [x] 8.2 Add the variable list and unknown-variable warnings to the custom field, without blocking submit; verify `{{brnach}}` is flagged and the form still submits
+- [x] 8.3 Show a dangling reference as a missing prompt and keep it when unchanged; clear the startup prompt when the type becomes `shell`; verify both on submit
 
 ## 9. Settings window (`knot`)
 

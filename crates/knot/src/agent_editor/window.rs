@@ -14,6 +14,7 @@ use gpui_kit::Window;
 use gpui_kit::component::Root;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::TextareaState;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
@@ -109,6 +110,16 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                     .unwrap_or_else(|| consts::DEFAULT_AGENT_AVATAR.to_string()),
             )
                                    });
+              let stored_startup = editing.as_ref()
+                                          .map(|a| a.startup_prompt.clone())
+                                          .unwrap_or_else(|| prefill.startup_prompt.clone());
+              let (startup_choice, startup_text) =
+                  super::startup_prompt::initial_choice(stored_startup.as_ref());
+              let startup_custom_input = cx.new(|cx| {
+                  TextareaState::new(window, cx)
+                      .placeholder(knot_core::l10n::t("agent_editor.startup_prompt_placeholder"))
+                      .default_value(startup_text)
+              });
               let view = cx.new(|cx| {
                                let avatar_subscription = cx.subscribe_in(
                 &avatar_input,
@@ -121,6 +132,13 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
             );
                                let name_subscription =
                                    cx.subscribe(&name_input,
+                                                |_: &mut AgentEditor, _, event, cx| {
+                                                    if matches!(event, InputEvent::Change) {
+                                                        cx.notify();
+                                                    }
+                                                });
+                               let startup_subscription =
+                                   cx.subscribe(&startup_custom_input,
                                                 |_: &mut AgentEditor, _, event, cx| {
                                                     if matches!(event, InputEvent::Change) {
                                                         cx.notify();
@@ -157,10 +175,9 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                      .map(|a| a.activation_mode)
                                                      .unwrap_or(knot_core::ActivationMode::Passive),
                                           original_persona_id: persona_id,
-                                          startup_prompt:
-                                              editing.as_ref()
-                                                     .map(|a| a.startup_prompt.clone())
-                                                     .unwrap_or_else(|| prefill.startup_prompt.clone()),
+                                          startup_choice,
+                                          startup_custom_input,
+                                          _startup_subscription: startup_subscription,
                                           prefill,
                                           insert_after,
                                           edit_target,
@@ -172,43 +189,48 @@ pub(crate) fn open_agent_editor(store: Arc<Mutex<knot_agents::AgentStore>>,
 }
 
 pub(crate) struct AgentEditor {
-    pub(super) store:                Arc<Mutex<knot_agents::AgentStore>>,
-    pub(super) workspace_id:         Uuid,
-    pub(super) name_input:           Entity<InputState>,
-    pub(super) shell_command_input:  Entity<InputState>,
-    pub(super) avatar_input:         Entity<InputState>,
-    pub(super) description_input:    Entity<InputState>,
-    pub(super) capabilities_input:   Entity<InputState>,
-    pub(super) cost_tier:            knot_core::CostTier,
-    pub(super) _avatar_subscription: Subscription,
-    pub(super) _name_subscription:   Subscription,
-    pub(super) folder_path:          String,
-    pub(super) agent_type:           String,
-    pub(super) persona_id:           Option<Uuid>,
+    pub(super) store:                 Arc<Mutex<knot_agents::AgentStore>>,
+    pub(super) workspace_id:          Uuid,
+    pub(super) name_input:            Entity<InputState>,
+    pub(super) shell_command_input:   Entity<InputState>,
+    pub(super) avatar_input:          Entity<InputState>,
+    pub(super) description_input:     Entity<InputState>,
+    pub(super) capabilities_input:    Entity<InputState>,
+    pub(super) cost_tier:             knot_core::CostTier,
+    pub(super) _avatar_subscription:  Subscription,
+    pub(super) _name_subscription:    Subscription,
+    pub(super) folder_path:           String,
+    pub(super) agent_type:            String,
+    pub(super) persona_id:            Option<Uuid>,
     /// When the agent starts on its own. `Passive` when creating - the
     /// deliberate disagreement with the `Active` a record carrying no
     /// stored mode loads as (see `knot_core::SavedAgent::activation_mode`)
     /// - and the agent's own mode when editing.
-    pub(super) activation_mode:      knot_core::ActivationMode,
+    pub(super) activation_mode:       knot_core::ActivationMode,
     /// Snapshot of `persona_id` when the dialog opened, so `save_edit` can
     /// tell `AgentStore::edit` whether the persona actually changed
     /// (`EditRequest::persona_changed`) rather than always forcing a
     /// restart.
-    pub(super) original_persona_id:  Option<Uuid>,
-    /// The startup prompt as it will be submitted. See
+    pub(super) original_persona_id:   Option<Uuid>,
+    /// Which form of startup prompt is selected. See
     /// `openspec/specs/agent-editor-ui/spec.md`, "Startup prompt control".
-    pub(super) startup_prompt:       Option<knot_core::StartupPrompt>,
+    pub(super) startup_choice:        super::startup_prompt::StartupChoice,
+    /// The custom startup prompt's text, kept while another choice is
+    /// selected so switching back does not lose it.
+    pub(super) startup_custom_input:  Entity<TextareaState>,
+    /// Re-renders on each edit so the unknown-variable warning keeps up.
+    pub(super) _startup_subscription: Subscription,
     /// What this editor was opened to derive the new agent from - carries
     /// the owner for a companion and the session for a fork, neither of
     /// which the form itself can express.
-    pub(super) prefill:              AgentPrefill,
-    pub(super) insert_after:         Option<Uuid>,
+    pub(super) prefill:               AgentPrefill,
+    pub(super) insert_after:          Option<Uuid>,
     /// `Some(id)` when editing an existing agent instead of creating one -
     /// gates prefill, the submit button's label/handler, and whether the
     /// (edit-unsupported) shell-command field shows at all.
-    pub(super) edit_target:          Option<Uuid>,
-    pub(super) on_created:           Box<AgentCreatedCallback>,
-    pub(super) error:                Option<String>,
+    pub(super) edit_target:           Option<Uuid>,
+    pub(super) on_created:            Box<AgentCreatedCallback>,
+    pub(super) error:                 Option<String>,
 }
 
 pub(crate) type AgentCreatedCallback = dyn Fn(Uuid, &mut Window, &mut App);
