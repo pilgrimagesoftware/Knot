@@ -479,7 +479,6 @@ agent_editor:
 
 workspace_manager:
   title: "Workspaces"
-  workspace: "Workspace"
   new: "New workspace"
   open: "Open workspace"
   rename: "Rename workspace"

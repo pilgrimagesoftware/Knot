@@ -7,21 +7,56 @@ fn workspace(name: &str) -> knot_core::Workspace {
                            agent_ids: Vec::new(), }
 }
 
-#[test]
-fn workspace_reordering_moves_before_target() {
-    let first = workspace("first");
-    let second = workspace("second");
-    let third = workspace("third");
+/// Three workspaces, `first`, `second`, `third`, in that order.
+fn three() -> (AgentStore, [Uuid; 3]) {
     let mut store = AgentStore::new();
-    store.add_workspace(first.clone());
-    store.add_workspace(second.clone());
-    store.add_workspace(third.clone());
-    assert!(store.move_workspace_before(third.id, first.id));
-    assert_eq!(store.workspaces()
-                    .iter()
-                    .map(|workspace| workspace.id)
-                    .collect::<Vec<_>>(),
-               vec![third.id, first.id, second.id]);
+    let ids = ["first", "second", "third"].map(|name| {
+                                              let workspace = workspace(name);
+                                              let id = workspace.id;
+                                              store.add_workspace(workspace);
+                                              id
+                                          });
+    (store, ids)
+}
+
+fn order(store: &AgentStore) -> Vec<Uuid> {
+    store.workspaces()
+         .iter()
+         .map(|workspace| workspace.id)
+         .collect()
+}
+
+#[test]
+fn a_workspace_moves_up_into_the_gap_before_a_row() {
+    let (mut store, [first, second, third]) = three();
+    assert!(store.move_workspace_to_gap(third, 0));
+    assert_eq!(order(&store), vec![third, first, second]);
+}
+
+#[test]
+fn a_workspace_moves_down_into_the_gap_before_a_row() {
+    let (mut store, [first, second, third]) = three();
+    assert!(store.move_workspace_to_gap(first, 2));
+    assert_eq!(order(&store), vec![second, first, third]);
+}
+
+#[test]
+fn a_workspace_moves_into_the_gap_after_the_last_row() {
+    let (mut store, [first, second, third]) = three();
+    assert!(store.move_workspace_to_gap(first, 3));
+    assert_eq!(order(&store), vec![second, third, first]);
+}
+
+#[test]
+fn the_gaps_either_side_of_a_workspace_leave_the_order_alone() {
+    let (mut store, ids) = three();
+    assert!(!store.move_workspace_to_gap(ids[1], 1), "the gap above it");
+    assert!(!store.move_workspace_to_gap(ids[1], 2), "the gap below it");
+    assert!(!store.move_workspace_to_gap(ids[1], 4),
+            "a gap past the end");
+    assert!(!store.move_workspace_to_gap(Uuid::new_v4(), 0),
+            "a workspace it does not have");
+    assert_eq!(order(&store), ids.to_vec());
 }
 
 #[test]
