@@ -48,7 +48,7 @@ of one repository) and `git remote get-url origin`. `knot-forge` gains a pure
 
 The result is a `WorkspaceRepo { common_dir, worktrees: Vec<PathBuf>, slug:
 Option<RepoSlug>, label }`, keyed by common dir. Resolution runs in one
-`spawn_blocking` job whenever the Issues or Changes tab fetches, so a moved or
+`spawn_blocking` job whenever the Issues or OpenSpec tab fetches, so a moved or
 new agent folder is picked up without extra invalidation.
 
 Alternative: run `gh issue list` with the agent's folder as its working
@@ -83,11 +83,11 @@ repository discovery; OpenSpec is an application concern.
 
 ### Tabs and per-window state
 
-`PullRequestViewState` stays as is. A new `WorkViewState { tab: WorkTab,
-pull_requests, issues: IssueViewState, changes: ChangeViewState }` holds each
-tab's search entity and filters. `WorkTab` is a closed enum with
+`PullRequestViewState` stays as is. A new `ChangesViewState { tab: ChangesTab,
+pull_requests, issues: IssueViewState, openspec: OpenSpecViewState }` holds each
+tab's search entity and filters. `ChangesTab` is a closed enum with
 `Display`/`FromStr`. The launcher row and `WorkspaceViewMode::PullRequests`
-are renamed to `Work`; the Pull Requests fetch gate becomes "view is Work and
+are renamed to `Changes`; the Pull Requests fetch gate becomes "view is Changes and
 tab is PullRequests".
 
 ### Single-agent delivery shared with broadcast
@@ -101,8 +101,8 @@ Change(name)}`, shared by both menus of both tabs.
 
 ### Rendering and file layout
 
-New files under `workspace_window/render/`: `work_tabs.rs`, `issues_pane.rs`,
-`issues_toolbar.rs`, `changes_pane.rs`, `changes_toolbar.rs`,
+New files under `workspace_window/render/`: `changes_tabs.rs`, `issues_pane.rs`,
+`issues_toolbar.rs`, `openspec_pane.rs`, `openspec_toolbar.rs`,
 `send_prompt_menu.rs`. Pure logic: `issue_filter.rs`, `openspec_changes.rs`,
 `workspace_repos.rs`. Each new cache goes into `repaint_poll_tick`'s `if`
 chain, per `.claude/rules/rust-structure.md`.

@@ -3,7 +3,7 @@
 ## Purpose
 
 Lists the OpenSpec changes not yet archived in a workspace's repositories, in
-the Work view's Changes tab, so the user can see the planned work and hand a
+the Changes view's OpenSpec tab, so the user can see the planned work and hand a
 change to an agent.
 
 ## ADDED Requirements
@@ -27,7 +27,7 @@ remote, and for repositories with no remote at all. A change SHALL be grouped
 under its repository's `<owner>/<repo>` when the repository is on GitHub, and
 under the name of the repository's top-level folder otherwise.
 
-Knot SHALL look only while the Changes tab is shown: when it is first shown in
+Knot SHALL look only while the OpenSpec tab is shown: when it is first shown in
 a window, when it is shown again more than 30 seconds after the last look, and
 when the user chooses Refresh now. Looking SHALL NOT block the window.
 
@@ -37,7 +37,7 @@ The Swift reference has no such notion.
 
 - **WHEN** an agent's repository has `openspec/changes/add-login/` and
   `openspec/changes/archive/2026-09-01-old-work/`
-- **THEN** the Changes tab lists `add-login` and not `old-work`
+- **THEN** the OpenSpec tab lists `add-login` and not `old-work`
 
 #### Scenario: A change in two worktrees
 
@@ -59,12 +59,12 @@ The Swift reference has no such notion.
 #### Scenario: A newly proposed change appears
 
 - **WHEN** an agent creates `openspec/changes/add-export/` and the user chooses
-  Refresh now in the Changes tab
+  Refresh now in the OpenSpec tab
 - **THEN** `add-export` is listed
 
-### Requirement: The Changes tab lists changes by repository
+### Requirement: The OpenSpec tab lists changes by repository
 
-The Changes tab SHALL group changes by repository, groups ordered by their
+The OpenSpec tab SHALL group changes by repository, groups ordered by their
 heading, rows ordered by change name. Each row SHALL show the change's name
 and, when the change has a `proposal.md`, the first line of its `## Why`
 section.
@@ -83,9 +83,9 @@ empty list.
 - **WHEN** no workspace repository has an un-archived change
 - **THEN** the tab says there are no OpenSpec changes
 
-### Requirement: The user can search and filter the Changes tab
+### Requirement: The user can search and filter the OpenSpec tab
 
-The Changes tab SHALL offer a toolbar holding a search field, a repository
+The OpenSpec tab SHALL offer a toolbar holding a search field, a repository
 picker and a list actions menu with Refresh now.
 
 While the search field holds text, the tab SHALL show only changes whose name

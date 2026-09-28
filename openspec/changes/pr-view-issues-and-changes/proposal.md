@@ -12,8 +12,8 @@ into its prompt by hand.
 
 ## What Changes
 
-- The Pull Requests view becomes the **Work** view, with three tabs: Pull
-  Requests (today's list, unchanged), Issues and Changes. The sidebar launcher
+- The Pull Requests view becomes the **Changes** view, with three tabs: Pull
+  Requests (today's list, unchanged), Issues and OpenSpec. The sidebar launcher
   row is renamed to match; its open/merged/closed breakdown still counts pull
   requests only.
 - **Workspace repositories:** the repositories the view reads are derived from
@@ -22,7 +22,7 @@ into its prompt by hand.
 - **Issues tab:** lists the open issues of every workspace repository whose
   `origin` remote is on GitHub, fetched through `gh`, grouped by repository.
   It has a search field, a repository filter, a sort order and Refresh now.
-- **Changes tab:** lists the un-archived OpenSpec changes found under
+- **OpenSpec tab:** lists the un-archived OpenSpec changes found under
   `openspec/changes/` in the workspace's agent folders, grouped by repository.
   A change present in several worktrees of one repository is listed once.
   It has a search field and a repository filter.
@@ -52,13 +52,13 @@ into its prompt by hand.
   issues are fetched and refreshed, and the Issues tab's list, controls and
   row actions.
 - `workspace-openspec-changes`: how un-archived OpenSpec changes are found in
-  a workspace's folders, and the Changes tab's list, controls and row actions.
+  a workspace's folders, and the OpenSpec tab's list, controls and row actions.
 - `work-item-prompts`: the "Send prompt to" submenu, the prompt text it sends,
   and how it is delivered to the chosen agent.
 
 ### Modified Capabilities
 
-- `pull-request-tracking`: the view and its launcher row become the Work view
+- `pull-request-tracking`: the view and its launcher row become the Changes view
   with tabs, the Pull Requests list being the first; the view's per-window
   state gains the chosen tab.
 
@@ -72,8 +72,8 @@ into its prompt by hand.
   `repaint_poll_tick`; a single-agent prompt delivery helper shared with
   `broadcast_to_agents`.
 - `crates/knot/src/workspace_window/render/` - a tab bar, the Issues and
-  Changes panes, toolbars and row menus, in new sibling files so no file
+  OpenSpec panes, toolbars and row menus, in new sibling files so no file
   crosses 700 lines.
-- `crates/knot-core/locales/en.yml` - new `work.*`, `issues.*`, `changes.*`
+- `crates/knot-core/locales/en.yml` - new `changes_view.*`, `issues.*`, `openspec_changes.*`
   keys; the launcher and view title keys change.
 - No change to the persisted pull request records.

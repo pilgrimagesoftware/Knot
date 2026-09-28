@@ -3,7 +3,7 @@
 ## Purpose
 
 Lists the open GitHub issues of the repositories a workspace's agents work in,
-in the Work view's Issues tab, so the user can see what is waiting and hand an
+in the Changes view's Issues tab, so the user can see what is waiting and hand an
 issue to an agent.
 
 ## ADDED Requirements

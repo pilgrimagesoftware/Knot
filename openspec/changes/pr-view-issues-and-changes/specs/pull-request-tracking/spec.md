@@ -4,10 +4,10 @@
 
 ### Requirement: The workspace window lists its pull requests
 
-The workspace window SHALL offer a Work view, reached from a launcher row
-labelled Work in the agent sidebar shaped like the Dashboard row described in
+The workspace window SHALL offer a Changes view, reached from a launcher row
+labelled Changes in the agent sidebar shaped like the Dashboard row described in
 `dashboard`, and shown in place of the window's content the way the dashboard
-view is. The Work view's Pull Requests tab SHALL list the pull requests
+view is. The Changes view's Pull Requests tab SHALL list the pull requests
 recorded against that workspace's agents; this capability's references to the
 Pull Requests view mean that tab.
 
@@ -49,19 +49,19 @@ the forge says does not exist SHALL be counted as not found - neither as a state
 nor as pending - and the not-found count SHALL be shown only when it is not
 zero.
 
-The row SHALL show a selected background while the Work view is the one being
+The row SHALL show a selected background while the Changes view is the one being
 shown, whichever of its tabs is chosen.
 
 #### Scenario: The launcher sits in the sidebar
 
 - **WHEN** a workspace window is open
-- **THEN** a row labelled Work is visible in the agent sidebar, shaped like
+- **THEN** a row labelled Changes is visible in the agent sidebar, shaped like
   the Dashboard row
 
 #### Scenario: Showing the list
 
-- **WHEN** the user clicks the Work row for the first time in a window
-- **THEN** the window's content is replaced by the Work view on its Pull
+- **WHEN** the user clicks the Changes row for the first time in a window
+- **THEN** the window's content is replaced by the Changes view on its Pull
   Requests tab, grouped by agent, newest first
 - **AND** clicking the row again returns to the previous view
 
@@ -91,7 +91,7 @@ shown, whichever of its tabs is chosen.
 
 #### Scenario: No state has been fetched yet
 
-- **WHEN** the workspace window is opened after a restart and the Work view's
+- **WHEN** the workspace window is opened after a restart and the Changes view's
   Pull Requests tab has not been shown
 - **THEN** the launcher row shows the total count of records rather than a
   breakdown
@@ -125,10 +125,10 @@ shown, whichever of its tabs is chosen.
 
 ## ADDED Requirements
 
-### Requirement: The Work view is divided into tabs
+### Requirement: The Changes view is divided into tabs
 
-The Work view SHALL show a tab bar above its content with three tabs, in this
-order: Pull Requests, Issues and Changes. Choosing a tab SHALL replace the
+The Changes view SHALL show a tab bar above its content with three tabs, in this
+order: Pull Requests, Issues and OpenSpec. Choosing a tab SHALL replace the
 content below the bar with that tab's list and toolbar. Each tab SHALL keep its
 own search, filters and sort, so switching tabs neither clears nor shares
 them.
@@ -139,14 +139,14 @@ and a relaunched window SHALL open the view on Pull Requests.
 
 Fetching SHALL follow the tab being shown: pull request state is fetched only
 while the Pull Requests tab is shown, as "A recorded pull request's state is
-fetched and refreshed" requires of the view, and the Issues and Changes tabs
+fetched and refreshed" requires of the view, and the Issues and OpenSpec tabs
 fetch as `workspace-issues` and `workspace-openspec-changes` describe.
 
 The Swift reference has no such view.
 
 #### Scenario: Switching tabs
 
-- **WHEN** the Work view is on Pull Requests and the user chooses Issues
+- **WHEN** the Changes view is on Pull Requests and the user chooses Issues
 - **THEN** the issues list and its toolbar replace the pull request list
 
 #### Scenario: Each tab keeps its own search
@@ -158,9 +158,9 @@ The Swift reference has no such view.
 
 #### Scenario: Returning to the view keeps the tab
 
-- **WHEN** the user chooses Changes, switches to an agent's pane and clicks the
-  Work row again
-- **THEN** the view opens on Changes
+- **WHEN** the user chooses OpenSpec, switches to an agent's pane and clicks the
+  Changes row again
+- **THEN** the view opens on OpenSpec
 
 #### Scenario: A relaunch opens on Pull Requests
 
