@@ -151,29 +151,24 @@ impl AgentStore {
         true
     }
 
-    pub fn move_workspace_before(&mut self, id: Uuid, target_id: Uuid) -> bool {
-        if id == target_id {
-            return false;
-        }
+    /// Moves a workspace into `gap`, counted in the current order: gap `n`
+    /// is just above the `n`th workspace, and gap `len` is below the last.
+    /// A gap rather than a target row, so the end of the list is a place a
+    /// workspace can go. Returns whether the order changed - the two gaps
+    /// either side of the workspace leave it where it is.
+    pub fn move_workspace_to_gap(&mut self, id: Uuid, gap: usize) -> bool {
         let Some(source_index) = self.workspaces
                                      .iter()
                                      .position(|workspace| workspace.id == id)
         else {
             return false;
         };
-        let Some(target_index) = self.workspaces
-                                     .iter()
-                                     .position(|workspace| workspace.id == target_id)
-        else {
+        if gap == source_index || gap == source_index + 1 || gap > self.workspaces.len() {
             return false;
-        };
-        let workspace = self.workspaces.remove(source_index);
-        let insertion_index = if source_index < target_index {
-            target_index - 1
         }
-        else {
-            target_index
-        };
+        let workspace = self.workspaces.remove(source_index);
+        // Everything below the source moved up one when it was removed.
+        let insertion_index = if gap > source_index { gap - 1 } else { gap };
         self.workspaces.insert(insertion_index, workspace);
         true
     }

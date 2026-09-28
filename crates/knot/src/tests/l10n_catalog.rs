@@ -261,8 +261,7 @@ fn dialog_labels_resolve() {
                 "workspace_manager.new",
                 "workspace_manager.open",
                 "workspace_manager.rename",
-                "workspace_manager.title",
-                "workspace_manager.workspace"]
+                "workspace_manager.title"]
     {
         let value = knot_core::l10n::t(key);
         assert_ne!(value, key, "{key} is missing from the catalog");
