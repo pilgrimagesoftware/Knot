@@ -1,4 +1,14 @@
 
+## 1.19.1 - 2026-09-28
+
+### Fixed
+- Scroll the workspace manager's workspace list
+- Use a ghost trash button to delete a workspace
+- Show where a dragged workspace row will land
+- Use a text-cursor icon for renaming a workspace
+
+
+
 ## 1.19.0 - 2026-09-25
 
 ### Added
