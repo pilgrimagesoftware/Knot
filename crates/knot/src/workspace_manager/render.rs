@@ -156,7 +156,10 @@ impl WorkspaceManager {
                 )
                 .child(
                     Button::new(format!("rename-workspace-{id}"))
-                        .icon(IconName::FileText)
+                        // A text field with an I-beam: renaming is editing
+                        // the name, which a document icon did not say.
+                        // Not in `IconName`; `AllAssets` embeds it.
+                        .icon(Icon::default().path("icons/text-cursor-input.svg"))
                         .ghost()
                         .tooltip(knot_core::l10n::t("workspace_manager.rename"))
                         .on_click(cx.listener(move |manager, _: &ClickEvent, window, cx| {
