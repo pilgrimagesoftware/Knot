@@ -67,7 +67,7 @@ impl WorkspaceWindow {
             .entry(id)
             .or_insert_with(|| Arc::new(Mutex::new(panel_state::PanelState::new())));
         let settings = crate::settings_global::read(cx);
-        let persona = settings.persona(id);
+        let persona = settings.persona_for(agent.persona_id);
         let config = SessionConfig { settings: &settings,
                                      agent: &agent,
                                      persona,
