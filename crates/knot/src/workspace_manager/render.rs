@@ -119,8 +119,11 @@ impl WorkspaceManager {
                 )
                 .child(
                     Button::new(format!("delete-workspace-{id}"))
-                        .icon(IconName::Delete)
-                        .danger()
+                        // Ghost like its neighbours, with only the icon red:
+                        // `.danger()` is a variant that would replace
+                        // `.ghost()` and fill the button.
+                        .icon(Icon::new(IconName::Trash).text_color(cx.theme().danger))
+                        .ghost()
                         .tooltip(knot_core::l10n::t("workspace_manager.delete"))
                         .on_click(cx.listener(move |manager, _: &ClickEvent, window, cx| {
                             manager.request_delete(id, window, cx);
