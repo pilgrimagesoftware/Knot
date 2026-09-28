@@ -178,6 +178,7 @@ impl Render for WorkspaceManager {
             .child(
                 v_flex()
                     .flex_1()
+                    .min_h_0()
                     .gap_4()
                     .p_4()
                     .child(
@@ -213,7 +214,17 @@ impl Render for WorkspaceManager {
                                     )),
                             ),
                     )
-                    .child(v_flex().gap_2().children(rows))
+                    // The roster grows with every workspace, so it scrolls
+                    // rather than running past the window; the toolbar above
+                    // it stays put. `min_h_0` here and on the parent is what
+                    // lets it shrink below its content's height at all.
+                    .child(v_flex().id("workspace-manager-list")
+                                   .debug_selector(|| "workspace-manager-list".into())
+                                   .flex_1()
+                                   .min_h_0()
+                                   .gap_2()
+                                   .overflow_y_scroll()
+                                   .children(rows))
                     .children(self.error.as_ref().map(|error| div().child(error.clone())))
             )
             .children(crate::app_support::root_overlays(window, cx))

@@ -33,7 +33,7 @@ use crate::workspace_manager::workspace_name_is_blank;
 
 /// A manager wired to a throwaway settings file, so `persist` writes into
 /// the temp directory rather than the developer's real config.
-fn manager(
+pub(super) fn manager(
     cx: &mut TestAppContext)
     -> (Arc<Mutex<knot_agents::AgentStore>>, VisualTestContext, Entity<WorkspaceManager>) {
     let dir = tempfile::tempdir().expect("failed to make a temp settings directory");
