@@ -475,7 +475,8 @@ fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                     workspace_dialog_id: None,
                                                     error: None,
                                                     _name_subscription: name_subscription,
-                                                    _mcp_stop: mcp_stop }
+                                                    _mcp_stop: mcp_stop,
+                                                    drag: Default::default() }
                              });
                 cx.new(|cx| Root::new(view, window, cx))
             }) {

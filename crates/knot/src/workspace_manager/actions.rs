@@ -1,5 +1,6 @@
 //! What the workspace manager's rows and toolbar do: persisting the roster,
-//! saving a name, deleting, reordering, selecting and opening.
+//! saving a name, deleting, selecting and opening. Reordering is in
+//! [`crate::workspace_manager::drag`], with the drag that drives it.
 //!
 //! The name dialog's own three methods live in
 //! [`crate::workspace_manager::dialog`], with the dialog they drive.
@@ -117,13 +118,6 @@ impl WorkspaceManager {
                        })
               });
         cx.notify();
-    }
-
-    pub(super) fn move_before(&mut self, id: Uuid, target_id: Uuid, cx: &mut Context<Self>) {
-        if self.store.lock().move_workspace_before(id, target_id) {
-            self.persist(cx);
-            cx.notify();
-        }
     }
 
     pub(super) fn select(&mut self, id: Uuid, cx: &mut Context<Self>) {
