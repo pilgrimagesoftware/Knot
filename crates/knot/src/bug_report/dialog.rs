@@ -42,15 +42,18 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::radio::{Radio, RadioGroup};
 use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::px;
 use knot_forge::ForgeAvailability;
 
 use super::diagnostics::Diagnostics;
 use super::form::{Phase, can_report};
+use super::kind::IssueKind;
 use super::logs::{self, Attachment, LogKind};
 use super::submit::{self, Outcome, Report};
-use crate::app_bootstrap::ReportBug;
+use crate::app_bootstrap::ReportIssue;
 use crate::consts::{BUG_REPORT_DESCRIPTION_ROWS, BUG_REPORT_DIALOG_WIDTH};
 
 type Collect = dyn Fn() -> Diagnostics + Send + Sync;
@@ -93,17 +96,17 @@ struct OpenReport {
 
 impl gpui_kit::Global for OpenReport {}
 
-/// Registers the `ReportBug` handler over the live services.
-pub(crate) fn register_report_bug_action(cx: &mut App) {
-    register_report_bug_action_with(ReportServices::live(), cx);
+/// Registers the `ReportIssue` handler over the live services.
+pub(crate) fn register_report_issue_action(cx: &mut App) {
+    register_report_issue_action_with(ReportServices::live(), cx);
 }
 
-/// [`register_report_bug_action`], over supplied services.
-pub(crate) fn register_report_bug_action_with(services: ReportServices, cx: &mut App) {
+/// [`register_report_issue_action`], over supplied services.
+pub(crate) fn register_report_issue_action_with(services: ReportServices, cx: &mut App) {
     cx.set_global(OpenReport { services,
                                window: None,
                                report: None });
-    cx.on_action(|_: &ReportBug, cx| open_report_dialog(cx));
+    cx.on_action(|_: &ReportIssue, cx| open_report_dialog(cx));
 }
 
 /// Raises the open dialog's window, or opens the dialog on the active one.
@@ -167,6 +170,8 @@ fn open_on(services: ReportServices, window: &mut Window, cx: &mut App) -> Entit
 /// What the dialog holds while it is open. Created with it and dropped with
 /// it, so a report never outlives its dialog and the next one starts empty.
 pub(crate) struct BugReport {
+    /// Bug or feature request. Starts as a bug, the more common report.
+    pub(crate) kind:        IssueKind,
     pub(crate) subject:     Entity<InputState>,
     pub(crate) description: Entity<TextareaState>,
     pub(crate) diagnostics: Entity<TextareaState>,
@@ -210,7 +215,8 @@ impl BugReport {
                                            cx.notify();
                                        }
                                    })];
-        Self { subject,
+        Self { kind: IssueKind::default(),
+               subject,
                description,
                diagnostics,
                attached: Vec::new(),
@@ -224,6 +230,21 @@ impl BugReport {
         can_report(&self.subject.read(cx).value(),
                    &self.description.read(cx).value(),
                    &self.phase)
+    }
+
+    /// Switches what the report files as, and the fields' hints with it.
+    /// What was typed stays: a user who picked the wrong kind first should
+    /// not have to type it again.
+    pub(crate) fn set_kind(&mut self, kind: IssueKind, window: &mut Window,
+                           cx: &mut Context<Self>) {
+        self.kind = kind;
+        self.subject.update(cx, |input, cx| {
+                        input.set_placeholder(kind.subject_placeholder(), window, cx)
+                    });
+        self.description.update(cx, |input, cx| {
+                            input.set_placeholder(kind.description_placeholder(), window, cx)
+                        });
+        cx.notify();
     }
 
     /// Adds `kind` to the attached logs, or takes it off.
@@ -273,7 +294,15 @@ impl BugReport {
         cx.notify();
         let subject = self.subject.read(cx).value().to_string();
         let description = self.description.read(cx).value().to_string();
-        let attached = self.attached.clone();
+        let kind = self.kind;
+        // A log checked before switching to a feature request is not sent:
+        // the section is hidden, so the user can no longer see it is chosen.
+        let attached = if kind.offers_logs() {
+            self.attached.clone()
+        }
+        else {
+            Vec::new()
+        };
         let services = self.services.clone();
         cx.spawn_in(window, async move |this, cx| {
               let (diagnostics, outcome) =
@@ -283,7 +312,8 @@ impl BugReport {
                         let attachments = attached.into_iter()
                                                   .map(|kind| (services.read_log)(kind))
                                                   .collect();
-                        let report = Report { subject,
+                        let report = Report { kind,
+                                              subject,
                                               description,
                                               diagnostics: diagnostics.text(),
                                               attachments };
@@ -355,6 +385,8 @@ fn dialog_content(entity: &Entity<BugReport>, app: &App) -> impl IntoElement {
     };
 
     v_flex().gap_2()
+            .child(label("bug_report.kind_label"))
+            .child(kind_selector(entity, report.kind))
             .child(label("bug_report.subject_label"))
             .child(Input::new(&report.subject))
             .child(label("bug_report.description_label"))
@@ -368,12 +400,16 @@ fn dialog_content(entity: &Entity<BugReport>, app: &App) -> impl IntoElement {
             .child(Textarea::new(&report.diagnostics).readonly(true)
                                                      .w_full()
                                                      .text_xs())
-            .child(label("bug_report.logs.label"))
-            .child(div().text_xs()
-                        .text_color(theme.muted_foreground)
-                        .child(knot_core::l10n::t("bug_report.logs.hint")))
-            .child(h_flex().gap_4()
-                           .children(LogKind::ALL.map(|kind| log_checkbox(entity, report, kind))))
+            .when(report.kind.offers_logs(), |content| {
+                content.child(label("bug_report.logs.label"))
+                       .child(div().text_xs()
+                                   .text_color(theme.muted_foreground)
+                                   .child(knot_core::l10n::t("bug_report.logs.hint")))
+                       .child(h_flex().gap_4()
+                                      .children(LogKind::ALL.map(|kind| {
+                                                                log_checkbox(entity, report, kind)
+                                                            })))
+            })
             .children(report.phase.message().map(|message| {
                                                 div().text_sm()
                                                      .text_color(if report.phase.is_error() {
@@ -384,6 +420,18 @@ fn dialog_content(entity: &Entity<BugReport>, app: &App) -> impl IntoElement {
                                                                  })
                                                      .child(message)
                                             }))
+}
+
+fn kind_selector(entity: &Entity<BugReport>, selected: IssueKind) -> RadioGroup {
+    let entity = entity.clone();
+    RadioGroup::horizontal("issue-kind")
+        .children(IssueKind::ALL.map(|kind| Radio::new(kind.to_string()).label(kind.label())))
+        .selected_index(IssueKind::ALL.iter().position(|kind| *kind == selected))
+        .on_click(move |index, window, app| {
+            if let Some(&kind) = IssueKind::ALL.get(*index) {
+                entity.update(app, |report, cx| report.set_kind(kind, window, cx));
+            }
+        })
 }
 
 fn log_checkbox(entity: &Entity<BugReport>, report: &BugReport, kind: LogKind) -> Checkbox {

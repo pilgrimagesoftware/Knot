@@ -1,4 +1,4 @@
-//! Help > Report a Bug opens one dialog on the active window, and the dialog
+//! Help > Report an Issue opens one dialog on the active window, and the dialog
 //! keeps or files the report as `bug-reporting`'s spec says.
 //!
 //! The menu path is driven through `TestAppContext::dispatch_action`, which
@@ -17,10 +17,10 @@ use gpui_kit::{
 use knot_forge::ForgeAvailability;
 use parking_lot::Mutex;
 
-use crate::app_bootstrap::ReportBug;
+use crate::app_bootstrap::ReportIssue;
 use crate::bug_report::{
-    Attachment, BugReport, Diagnostics, LogKind, Outcome, Report, ReportServices, open_report,
-    register_report_bug_action_with,
+    Attachment, BugReport, Diagnostics, IssueKind, LogKind, Outcome, Report, ReportServices,
+    open_report, register_report_issue_action_with,
 };
 
 /// A root view with no content but the overlay layers, which every Knot root
@@ -70,7 +70,7 @@ impl Stub {
 fn app_with_one_window(cx: &mut TestAppContext, stub: &Stub) -> AnyWindowHandle {
     cx.update(|cx| {
           gpui_kit::init(cx);
-          register_report_bug_action_with(stub.services(), cx);
+          register_report_issue_action_with(stub.services(), cx);
           cx.open_window(WindowOptions::default(), |window, cx| {
                 let view = cx.new(|_| Blank);
                 cx.new(|cx| Root::new(view, window, cx))
@@ -82,10 +82,10 @@ fn app_with_one_window(cx: &mut TestAppContext, stub: &Stub) -> AnyWindowHandle 
 
 fn open_dialog(cx: &mut TestAppContext, stub: &Stub) -> (VisualTestContext, Entity<BugReport>) {
     let handle = app_with_one_window(cx, stub);
-    cx.dispatch_action(handle, ReportBug);
+    cx.dispatch_action(handle, ReportIssue);
     cx.run_until_parked();
     let report = cx.update(|cx| open_report(cx))
-                   .expect("Report a Bug opened no dialog");
+                   .expect("Report an Issue opened no dialog");
     (VisualTestContext::from_window(handle, cx), report)
 }
 
@@ -115,7 +115,7 @@ fn the_menu_opens_the_dialog_on_the_active_window(cx: &mut TestAppContext) {
     let (mut cx, _report) = open_dialog(cx, &Stub::answering(Outcome::BrowserReady));
 
     assert!(dialog_is_open(&mut cx),
-            "Report a Bug put nothing on the window");
+            "Report an Issue put nothing on the window");
     assert!(cx.debug_bounds("dialog-layer").is_some(),
             "the dialog layer never reached the screen");
 }
@@ -124,11 +124,11 @@ fn the_menu_opens_the_dialog_on_the_active_window(cx: &mut TestAppContext) {
 fn choosing_the_item_again_keeps_the_one_dialog(cx: &mut TestAppContext) {
     let stub = Stub::answering(Outcome::BrowserReady);
     let handle = app_with_one_window(cx, &stub);
-    cx.dispatch_action(handle, ReportBug);
+    cx.dispatch_action(handle, ReportIssue);
     cx.run_until_parked();
     let first = cx.update(|cx| open_report(cx)).expect("no dialog opened");
 
-    cx.dispatch_action(handle, ReportBug);
+    cx.dispatch_action(handle, ReportIssue);
     cx.run_until_parked();
 
     let second = cx.update(|cx| open_report(cx))
@@ -245,8 +245,8 @@ fn with_no_window_the_item_does_nothing(cx: &mut TestAppContext) {
     let stub = Stub::answering(Outcome::BrowserReady);
     cx.update(|cx| {
           gpui_kit::init(cx);
-          register_report_bug_action_with(stub.services(), cx);
-          cx.dispatch_action(&ReportBug);
+          register_report_issue_action_with(stub.services(), cx);
+          cx.dispatch_action(&ReportIssue);
       });
     cx.run_until_parked();
 
@@ -286,4 +286,53 @@ fn a_chosen_log_rides_along_and_an_unchosen_one_does_not(cx: &mut TestAppContext
     assert_eq!(kinds, [LogKind::Mcp]);
     assert_eq!(submitted[0].attachments[0].tail.as_deref(),
                Some("Mcp log tail"));
+}
+
+#[gpui_kit::test]
+fn a_report_starts_as_a_bug(cx: &mut TestAppContext) {
+    let stub = Stub::answering(Outcome::BrowserReady);
+    let (mut cx, report) = open_dialog(cx, &stub);
+    fill(&mut cx, &report, "Crash", "It crashed.");
+
+    submit(&mut cx, &report);
+
+    assert_eq!(stub.submitted.lock()[0].kind, IssueKind::Bug);
+}
+
+/// A feature request files as one, and carries no log - not even one checked
+/// before the switch, which the hidden section no longer shows.
+#[gpui_kit::test]
+fn a_feature_request_files_as_one_without_logs(cx: &mut TestAppContext) {
+    let stub = Stub::answering(Outcome::BrowserReady);
+    let (mut cx, report) = open_dialog(cx, &stub);
+    fill(&mut cx, &report, "Tabs", "Let agents live in tabs.");
+    report.update_in(&mut cx, |report, window, cx| {
+              report.set_attached(LogKind::Mcp, true, cx);
+              report.set_kind(IssueKind::FeatureRequest, window, cx);
+          });
+
+    submit(&mut cx, &report);
+
+    let submitted = stub.submitted.lock();
+    assert_eq!(submitted[0].kind, IssueKind::FeatureRequest);
+    assert!(submitted[0].attachments.is_empty());
+}
+
+#[gpui_kit::test]
+fn switching_the_kind_keeps_what_was_typed(cx: &mut TestAppContext) {
+    let (mut cx, report) = open_dialog(cx, &Stub::answering(Outcome::BrowserReady));
+    fill(&mut cx, &report, "Tabs", "Let agents live in tabs.");
+
+    report.update_in(&mut cx, |report, window, cx| {
+              report.set_kind(IssueKind::FeatureRequest, window, cx);
+              report.set_kind(IssueKind::Bug, window, cx);
+          });
+
+    let (subject, description) = cx.update(|_, cx| {
+                                       let report = report.read(cx);
+                                       (report.subject.read(cx).value().to_string(),
+                                        report.description.read(cx).value().to_string())
+                                   });
+    assert_eq!((subject.as_str(), description.as_str()),
+               ("Tabs", "Let agents live in tabs."));
 }

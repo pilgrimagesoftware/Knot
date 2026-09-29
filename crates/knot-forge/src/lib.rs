@@ -33,7 +33,7 @@ pub mod runner;
 
 pub use availability::{ForgeAvailability, probe, probe_with};
 pub use error::{ForgeError, Result};
-pub use issue::{create_issue, create_issue_with};
+pub use issue::{create_issue, create_issue_with, create_labeled_issue_with};
 pub use pull_request::{
     CheckRollup, Mergeability, PullRequestState, PullRequestStatus, pull_request_state,
     pull_request_state_with,
