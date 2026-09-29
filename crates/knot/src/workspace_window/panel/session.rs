@@ -60,7 +60,7 @@ impl WorkspaceWindow {
         let registration_prompt =
             knot_agent_launch::acp_registration_prompt(agent.id,
                                                        prior_session_id.is_some(),
-                                                       crate::settings_global::read(cx).persona(id));
+                                                       crate::settings_global::read(cx).persona_for(agent.persona_id));
         // Only alongside a registration prompt, which is what marks a fresh
         // session: a resumed conversation gets neither.
         let startup_prompt = registration_prompt.as_ref()

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Checkout and `make` only: the token is never used to write anything.
+permissions:
+  contents: read
+
 jobs:
   workspace:
     strategy:

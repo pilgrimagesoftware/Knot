@@ -509,6 +509,13 @@ impl Settings {
         self.active_personas().into_iter().find(|p| p.id == id)
     }
 
+    /// The persona an agent is assigned, from its `persona_id`. Takes the
+    /// field rather than an id so a launch path cannot hand it the agent's
+    /// own id, which is what dropped every persona from every launch (#519).
+    pub fn persona_for(&self, persona_id: Option<Uuid>) -> Option<&Persona> {
+        persona_id.and_then(|id| self.persona(id))
+    }
+
     /// Remove a persona: soft delete (state becomes `deleted`, record kept)
     /// for a system persona, hard delete (record removed) for a user persona.
     /// A no-op if `id` is not present.
