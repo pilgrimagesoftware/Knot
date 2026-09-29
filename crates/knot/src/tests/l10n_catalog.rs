@@ -602,3 +602,20 @@ fn artifact_panel_actions_resolve() {
     assert!(note.contains("/tmp/plan.md") && note.contains("not found"),
             "{note}");
 }
+
+/// What a replayed conversation shows in place of a harness-injected message
+/// (#551). The summary is the row's whole point, so it has to survive.
+#[test]
+fn harness_notices_resolve_and_keep_their_summary() {
+    for key in ["panel.harness.task_finished_unnamed",
+                "panel.harness.automated"]
+    {
+        let value = knot_core::l10n::t(key);
+        assert_ne!(value, key, "{key} is missing from the catalog");
+        assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+    let finished = knot_core::l10n::t_with("panel.harness.task_finished",
+                                           &[("summary", "Tests passed")]);
+    assert_ne!(finished, "panel.harness.task_finished");
+    assert!(finished.contains("Tests passed"), "{finished}");
+}
