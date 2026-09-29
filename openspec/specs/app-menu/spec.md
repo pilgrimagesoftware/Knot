@@ -68,9 +68,9 @@ reads as one the application does not have at all.
 
 #### Scenario: An unimplemented item still shows its key
 
-- **WHEN** the user opens the Window menu, whose Minimize item has no
+- **WHEN** the user opens the File menu, whose New Workspace item has no
   behavior wired to it yet
-- **THEN** Minimize is disabled and ⌘M is drawn greyed beside it
+- **THEN** New Workspace is disabled and ⌘N is drawn greyed beside it
 
 #### Scenario: No invented shortcuts
 
@@ -360,6 +360,28 @@ Zoom command, and the menu's fixed items shift down every time a window opens.
   menu again
 - **THEN** Command Center, Workspaces, Minimize and Zoom are in the same
   positions, and the three new windows are listed below the last separator
+
+### Requirement: Close Window, Minimize and Zoom act on the focused window
+
+File > Close Window, Window > Minimize and Window > Zoom SHALL be enabled and
+SHALL act on whichever Knot window is focused - a workspace window, the
+workspace manager, Settings or any dialog - the same way that window's
+stoplight buttons do. Their key equivalents (⌘W, ⌘M) SHALL do the same.
+
+They SHALL be answered app-wide rather than by each window, so a window
+cannot be opened that the items fail to act on.
+
+#### Scenario: Closing a workspace window from the menu
+
+- **WHEN** a workspace window is focused and the user chooses File > Close
+  Window, or presses ⌘W
+- **THEN** that window closes, as it would from its close button
+
+#### Scenario: Minimize and Zoom answer
+
+- **WHEN** a Knot window is focused and the user opens the Window menu
+- **THEN** Minimize and Zoom are enabled, and choosing one minimizes or zooms
+  that window
 
 ### Requirement: The Help menu carries a Report a Bug item
 
