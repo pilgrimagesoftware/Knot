@@ -290,6 +290,7 @@ keymap:
     toggle_pull_requests: "Toggle Pull Requests"
     open_command_center: "Open Command Center"
     jump_to_bottom: "Jump to bottom"
+    toggle_artifacts: "Show or hide artifacts"
   fixed:
     quit: "Quit Knot"
     settings: "Settings"
@@ -328,6 +329,9 @@ menu:
     pull_requests: "Pull Requests"
     focus_agent_input: "Focus Agent Input"
     jump_to_bottom: "Jump to Bottom"
+    # Shows or hides the selected agent's artifact panel; checked while it is
+    # shown.
+    artifacts: "Artifacts"
     select_agent: "Select Agent"
     select_workspace: "Select Workspace"
   # The Window menu's own items. macOS appends and maintains the list of

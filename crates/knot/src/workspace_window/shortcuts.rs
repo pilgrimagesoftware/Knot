@@ -17,9 +17,12 @@ use crate::workspace_window::WorkspaceWindow;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ShortcutAvailability {
     /// How many Select agent N shortcuts have an agent to select.
-    pub(crate) agents:         usize,
-    pub(crate) focus_input:    bool,
-    pub(crate) jump_to_bottom: bool,
+    pub(crate) agents:           usize,
+    pub(crate) focus_input:      bool,
+    pub(crate) jump_to_bottom:   bool,
+    /// The selected agent has an artifact panel shown, or one closed that
+    /// can be reopened - the two states Toggle Artifacts moves between.
+    pub(crate) toggle_artifacts: bool,
 }
 
 impl WorkspaceWindow {
@@ -35,9 +38,14 @@ impl WorkspaceWindow {
         // The same test `jump_to_bottom` applies: a conversation list exists
         // only for an agent showing one, which a Terminal-mode agent is not.
         let has_conversation = selected.is_some_and(|id| self.panel_lists.contains_key(&id));
+        drop(store);
+        // Not gated on the view mode: the panel stays beside the dashboard
+        // and pull requests (`artifact-panel`), so it can be toggled there.
+        let toggle_artifacts = selected.is_some_and(|id| self.artifact_panel_toggleable(id));
         ShortcutAvailability { agents,
                                focus_input: selected.is_some(),
-                               jump_to_bottom: !self.view_mode.is_takeover() && has_conversation }
+                               jump_to_bottom: !self.view_mode.is_takeover() && has_conversation,
+                               toggle_artifacts }
     }
 
     /// Registers the window's shortcut handlers on `el`, the root element,
@@ -83,8 +91,16 @@ impl WorkspaceWindow {
         else {
             el
         };
-        if available.jump_to_bottom {
+        let el = if available.jump_to_bottom {
             el.on_action(cx.listener(|view, _: &JumpToBottom, _, cx| view.jump_to_bottom(cx)))
+        }
+        else {
+            el
+        };
+        if available.toggle_artifacts {
+            el.on_action(cx.listener(|view, _: &ToggleArtifacts, _, cx| {
+                               view.toggle_selected_artifact_panel(cx)
+                           }))
         }
         else {
             el

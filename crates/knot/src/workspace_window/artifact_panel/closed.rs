@@ -124,6 +124,34 @@ impl WorkspaceWindow {
             .unwrap_or_default()
     }
 
+    /// Whether Toggle Artifacts has anything to do for `id`: a panel to hide,
+    /// or a closed one to bring back.
+    pub(in crate::workspace_window) fn artifact_panel_toggleable(&self, id: Uuid) -> bool {
+        self.artifact_panel_open(id) || !self.reopenable_artifacts(id).is_empty()
+    }
+
+    /// Hides the selected agent's artifact panel if it is shown, or reopens
+    /// what the user closed if it is not - the View menu's Artifacts item and
+    /// its shortcut.
+    ///
+    /// Hiding is close-all, so it is remembered like any close and the next
+    /// toggle brings back exactly what was hidden.
+    pub(in crate::workspace_window) fn toggle_selected_artifact_panel(&mut self,
+                                                                      cx: &mut gpui_kit::Context<Self>)
+    {
+        let Some(id) = self.selected_agent
+        else {
+            return;
+        };
+        if self.artifact_panel_open(id) {
+            self.close_artifact_sections(id, CloseTarget::Both);
+        }
+        else {
+            self.reopen_artifacts(id);
+        }
+        cx.notify();
+    }
+
     /// Puts back what the user closed in `id`'s panel.
     ///
     /// Through the store's own setters, so the panel reappears by the same

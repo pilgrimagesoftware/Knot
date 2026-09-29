@@ -12,7 +12,10 @@ use gpui_kit::TestAppContext;
 use super::CloseTarget;
 use super::ClosedArtifacts;
 use super::ClosedDiagram;
+use crate::keymap::SelectAgent1;
+use crate::keymap::ToggleArtifacts;
 use crate::workspace_window::artifact_panel::state::ArtifactSnapshot;
+use crate::workspace_window::shortcuts_tests::available;
 use crate::workspace_window::shortcuts_tests::window_with_agents;
 
 fn file(name: &str) -> PathBuf {
@@ -58,14 +61,19 @@ fn a_section_the_agent_has_refilled_is_not_reopened() {
 
 fn show_both(fixture: &mut crate::workspace_window::shortcuts_tests::Fixture) -> uuid::Uuid {
     let id = fixture.agents[0];
-    fixture.view.update(&mut fixture.window, |view, _| {
-                    let mut store = view.store.lock();
-                    store.set_markdown_panel(id, file("plan"), true)
-                         .expect("the agent exists");
-                    store.set_mermaid_panel(id,
-                                            "graph TD; A-->B;".to_string(),
-                                            Some("Plan".to_string()))
-                         .expect("the agent exists");
+    fixture.view.update(&mut fixture.window, |view, cx| {
+                    {
+                        let mut store = view.store.lock();
+                        store.set_markdown_panel(id, file("plan"), true)
+                             .expect("the agent exists");
+                        store.set_mermaid_panel(id,
+                                                "graph TD; A-->B;".to_string(),
+                                                Some("Plan".to_string()))
+                             .expect("the agent exists");
+                    }
+                    // A frame, so the window's handlers reflect the artifact
+                    // - what the repaint poll's notify would do in the app.
+                    cx.notify();
                 });
     id
 }
@@ -129,4 +137,41 @@ fn forgetting_the_agent_forgets_what_it_closed(cx: &mut TestAppContext) {
 
                     assert!(view.reopenable_artifacts(id).is_empty());
                 });
+}
+
+/// View > Artifacts and its shortcut have nothing to do for an agent that has
+/// never had an artifact, so the item is drawn disabled.
+#[gpui_kit::test]
+fn toggle_artifacts_is_unavailable_without_an_artifact(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(1, cx);
+    fixture.press(SelectAgent1);
+
+    assert!(!available(&mut fixture, &ToggleArtifacts));
+}
+
+/// The shortcut hides a shown panel and brings the same panel back, through
+/// the window's own handler - the path the menu item dispatches to.
+#[gpui_kit::test]
+fn toggle_artifacts_hides_and_reshows_the_panel(cx: &mut TestAppContext) {
+    let mut fixture = window_with_agents(1, cx);
+    fixture.press(SelectAgent1);
+    let id = show_both(&mut fixture);
+    fixture.window.run_until_parked();
+    let open = |fixture: &mut crate::workspace_window::shortcuts_tests::Fixture| {
+        fixture.view
+               .read_with(&fixture.window, |view, _| view.artifact_panel_open(id))
+    };
+    assert!(available(&mut fixture, &ToggleArtifacts));
+
+    fixture.press(ToggleArtifacts);
+    assert!(!open(&mut fixture), "the shortcut hides a shown panel");
+    assert!(available(&mut fixture, &ToggleArtifacts),
+            "a hidden panel can still be brought back");
+
+    fixture.press(ToggleArtifacts);
+    assert!(open(&mut fixture), "and brings it back");
+    let snapshot = fixture.view
+                          .read_with(&fixture.window, |view, _| view.artifact_snapshot(id));
+    assert_eq!(snapshot.markdown, Some(file("plan")));
+    assert_eq!(snapshot.mermaid.as_deref(), Some("graph TD; A-->B;"));
 }

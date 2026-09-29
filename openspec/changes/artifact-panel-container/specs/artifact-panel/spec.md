@@ -581,3 +581,51 @@ the reasons given, until a change adds them:
 
 - **WHEN** a mermaid section is expanded
 - **THEN** its header offers copy and close, and no zoom or theme control
+
+### Requirement: The panel can be shown and hidden from the menu bar and the keyboard
+
+The View menu SHALL carry an **Artifacts** item, labelled through localization,
+that toggles the selected agent's artifact panel. It dispatches the configurable
+Toggle Artifacts shortcut's action, default ⌥⌘A, so the item shows the binding
+beside its label and the item and the key do the same thing.
+
+- While the selected agent's panel is shown, the toggle SHALL hide it, the same
+  as close-all. What it hid is remembered like any close, so the next toggle
+  brings back exactly what was hidden.
+- While the panel is hidden and something closed can be reopened, the toggle
+  SHALL reopen it, the same as the header's reopen control.
+- The item SHALL be checked while the panel is shown.
+- The item and the shortcut SHALL be disabled when the selected agent has no
+  artifact shown and none to reopen, and when no agent is selected.
+- Neither SHALL depend on the view mode. The panel stays beside the dashboard
+  and pull requests, so it can be toggled while they are showing.
+
+The header's reopen control SHALL remain. It is visible where the panel was,
+and needs no knowledge of the menu or the key.
+
+#### Scenario: Reopening from the header
+
+- **WHEN** the user closes the selected agent's panel and activates the reopen
+  control beside the agent's status
+- **THEN** the panel is shown again with what it held
+
+#### Scenario: Toggling from the View menu
+
+- **WHEN** the selected agent's panel is shown and the user chooses View >
+  Artifacts, and then chooses it again
+- **THEN** the panel is hidden, and then shown again with the same sections
+
+#### Scenario: Toggling from the keyboard
+
+- **WHEN** the selected agent's panel is shown and the user presses ⌥⌘A twice
+- **THEN** the panel is hidden, and then shown again with the same sections
+
+#### Scenario: Nothing to toggle
+
+- **WHEN** the selected agent has never had an artifact
+- **THEN** View > Artifacts is disabled and ⌥⌘A does nothing
+
+#### Scenario: The item shows the panel's state
+
+- **WHEN** the selected agent's panel is shown
+- **THEN** View > Artifacts is checked

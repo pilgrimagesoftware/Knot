@@ -1,4 +1,4 @@
-//! The six configurable shortcuts, as a closed vocabulary.
+//! The configurable shortcuts, as a closed vocabulary.
 
 use knot_core::ShortcutModifiers;
 
@@ -13,16 +13,18 @@ pub(crate) enum Shortcut {
     TogglePullRequests,
     OpenCommandCenter,
     JumpToBottom,
+    ToggleArtifacts,
 }
 
 impl Shortcut {
     /// In the order the Keyboard settings pane lists them.
-    pub(crate) const ALL: [Shortcut; 7] = [Shortcut::SelectWorkspace,
+    pub(crate) const ALL: [Shortcut; 8] = [Shortcut::SelectWorkspace,
                                            Shortcut::SelectAgent,
                                            Shortcut::FocusAgentInput,
                                            Shortcut::ToggleDashboard,
                                            Shortcut::TogglePullRequests,
                                            Shortcut::JumpToBottom,
+                                           Shortcut::ToggleArtifacts,
                                            Shortcut::OpenCommandCenter];
 
     pub(crate) fn label_key(self) -> &'static str {
@@ -34,6 +36,7 @@ impl Shortcut {
             Shortcut::TogglePullRequests => "keymap.shortcut.toggle_pull_requests",
             Shortcut::OpenCommandCenter => "keymap.shortcut.open_command_center",
             Shortcut::JumpToBottom => "keymap.shortcut.jump_to_bottom",
+            Shortcut::ToggleArtifacts => "keymap.shortcut.toggle_artifacts",
         }
     }
 
@@ -69,6 +72,9 @@ impl Shortcut {
             // cmd-alt-down in its own context, and a context binding
             // out-ranks this context-less one while the composer is focused.
             Shortcut::JumpToBottom => "ctrl-cmd-down",
+            // A for Artifacts, on the ⌥⌘ the other panel toggles use. Not
+            // cmd-shift-a, which is the permission prompt's fixed Allow.
+            Shortcut::ToggleArtifacts => "cmd-alt-a",
             Shortcut::SelectWorkspace | Shortcut::SelectAgent => return None,
         };
         Chord::parse(source)

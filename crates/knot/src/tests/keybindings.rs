@@ -67,6 +67,7 @@ fn the_defaults_reach_their_actions(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-alt-p", &TogglePullRequests);
           assert_bound(cx, "cmd-alt-0", &OpenCommandCenter);
           assert_bound(cx, "ctrl-cmd-down", &JumpToBottom);
+          assert_bound(cx, "cmd-alt-a", &ToggleArtifacts);
       });
 }
 

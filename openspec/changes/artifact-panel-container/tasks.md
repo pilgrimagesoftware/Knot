@@ -211,6 +211,12 @@
 - [x] 8.5 Add copy and reveal-in-Finder to the markdown section and copy to the
       mermaid section; verify the catalogue keys resolve in
       `tests/l10n_catalog.rs`.
-- [ ] 8.6 Verify in the running app: close a panel with both sections, reopen
-      it from the header, approve a file from a Panel-mode agent, and review one
-      from a Terminal-mode agent.
+- [x] 8.6 Add View > Artifacts and the configurable Toggle Artifacts shortcut
+      (default ⌥⌘A) through `keymap`, stored as `toggleArtifacts`, with the
+      handler registered only while there is a panel to hide or reopen; verify
+      with `closed/tests.rs`, `tests/view_menu.rs` and the keymap binding tests.
+- [ ] 8.7 Verify in the running app: close a panel with both sections, reopen
+      it from the header, hide and reshow it with View > Artifacts and with
+      ⌥⌘A, see the item checked while shown and disabled for an agent with no
+      artifact, approve a file from a Panel-mode agent, and review one from a
+      Terminal-mode agent.

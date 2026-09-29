@@ -47,6 +47,8 @@ pub struct KeybindingSettings {
     pub open_command_center:        Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jump_to_bottom:             Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub toggle_artifacts:           Option<String>,
 }
 
 impl<'de> Deserialize<'de> for KeybindingSettings {
@@ -63,7 +65,8 @@ impl<'de> Deserialize<'de> for KeybindingSettings {
                   toggle_dashboard:           chord("toggleDashboard"),
                   toggle_pull_requests:       chord("togglePullRequests"),
                   open_command_center:        chord("openCommandCenter"),
-                  jump_to_bottom:             chord("jumpToBottom"), })
+                  jump_to_bottom:             chord("jumpToBottom"),
+                  toggle_artifacts:           chord("toggleArtifacts"), })
     }
 }
 

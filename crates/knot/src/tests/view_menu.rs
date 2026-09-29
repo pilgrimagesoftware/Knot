@@ -40,7 +40,8 @@ fn store_with(workspaces: usize, agents: usize) -> (knot_agents::AgentStore, Vec
 fn owning(workspace_id: Uuid) -> OwningWindow {
     OwningWindow { workspace_id,
                    view_mode: WorkspaceViewMode::Terminal,
-                   selected_agent: None }
+                   selected_agent: None,
+                   artifacts_shown: false }
 }
 
 /// Each item's label, separators as `"-"` and submenus by their title.
@@ -91,6 +92,7 @@ fn the_items_are_in_the_specified_order() {
                 "-".to_string(),
                 t("menu.view.focus_agent_input"),
                 t("menu.view.jump_to_bottom"),
+                t("menu.view.artifacts"),
                 "-".to_string(),
                 t("menu.view.select_agent"),
                 t("menu.view.select_workspace"),
@@ -116,7 +118,8 @@ fn each_item_dispatches_its_shortcuts_action() {
     for (key, expected) in [("menu.view.dashboard", &ToggleDashboard as &dyn Action),
                             ("menu.view.pull_requests", &TogglePullRequests),
                             ("menu.view.focus_agent_input", &FocusAgentInput),
-                            ("menu.view.jump_to_bottom", &JumpToBottom)]
+                            ("menu.view.jump_to_bottom", &JumpToBottom),
+                            ("menu.view.artifacts", &ToggleArtifacts)]
     {
         assert!(action_of(item(&menu, key)).partial_eq(expected),
                 "{key} dispatches the wrong action");
@@ -240,4 +243,23 @@ fn a_workspace_change_reaches_the_menu_bar(cx: &mut gpui_kit::TestAppContext) {
           let listed = &cx.global::<MenuBarState>().snapshot.view.workspaces;
           assert_eq!(listed[1], (ids[1], "Backend".to_string()));
       });
+}
+
+/// Artifacts is checked while the selected agent's panel is shown, the way
+/// Dashboard is while the dashboard is.
+#[test]
+fn artifacts_is_checked_while_the_panel_is_shown() {
+    let (store, ids) = store_with(1, 0);
+    let checked = |shown| {
+        let window = OwningWindow { artifacts_shown: shown,
+                                    ..owning(ids[0]) };
+        match item(&view_menu(&view_menu_snapshot(&store, Some(window))),
+                   "menu.view.artifacts")
+        {
+            MenuItem::Action { checked, .. } => *checked,
+            _ => panic!("Artifacts is an action item"),
+        }
+    };
+    assert!(checked(true));
+    assert!(!checked(false));
 }

@@ -578,6 +578,8 @@ fn the_two_group_labels_are_distinguishable() {
 #[test]
 fn artifact_panel_actions_resolve() {
     for key in ["artifact_panel.reopen",
+                "menu.view.artifacts",
+                "keymap.shortcut.toggle_artifacts",
                 "artifact_panel.loading",
                 "artifact_panel.approve",
                 "artifact_panel.approve_tooltip",
