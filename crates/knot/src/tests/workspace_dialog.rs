@@ -69,7 +69,6 @@ pub(super) fn manager(
                                                         workspace_dialog_id: None,
                                                         error: None,
                                                         _name_subscription: name_subscription,
-                                                        _mcp_stop: None,
                                                         drag: Default::default() }
                                  });
                     *created = Some(view.clone());
