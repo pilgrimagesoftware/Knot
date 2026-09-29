@@ -1,4 +1,17 @@
 
+## 1.21.0 - 2026-09-29
+
+### Added
+- Send knot instructions and persona through each agent's system channel
+- Toggle the artifact panel from View > Artifacts and ⌥⌘A
+
+
+### Fixed
+- Reopen a closed artifact panel and act on its artifacts
+- Keep the newest markdown read and drop a lone section's close
+
+
+
 ## 1.20.0 - 2026-09-29
 
 ### Added
