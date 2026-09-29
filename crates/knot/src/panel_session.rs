@@ -11,12 +11,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use knot_acp::{
     ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
 };
-use knot_agent_launch::{AdapterConfig, ContextSource};
+use knot_agent_launch::{AdapterConfig, ContextSource, DefaultMode};
 use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
 use parking_lot::Mutex;
 
 use crate::panel_state::PanelState;
 use crate::subagent_feed::SubagentSink;
+
+mod default_mode;
 
 pub struct PanelSessionHandle {
     session:        AcpSession,
@@ -348,6 +350,10 @@ pub struct ConnectRequest<'a> {
     /// defaults in place. See
     /// `openspec/specs/session-setup-persistence/spec.md`.
     pub session_config:      BTreeMap<String, String>,
+    /// The mode to select when `session_config` chose none, for an adapter
+    /// whose own default differs from its CLI's; see
+    /// `knot_agent_launch::unconfigured_default_mode`.
+    pub default_mode:        Option<DefaultMode>,
     /// Where this agent's delegations are recorded, or `None` when its type
     /// reports none. Built by the caller, which is the only place that knows
     /// both the agent's id and the window's registry.
@@ -395,6 +401,18 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
         if let Ok(options) = handle.session().set_config_option(config_id, value).await {
             restored_options = Some(options);
         }
+    }
+    // Then the CLI's default, where nothing above chose the option: the
+    // adapter would otherwise start Claude in Manual where its CLI starts in
+    // Auto (#516). A rejection leaves the adapter's default, as above.
+    let options = handle.state().lock().config_options.clone();
+    if let Some(default) =
+        default_mode::default_mode_to_apply(request.default_mode, &request.session_config, &options)
+       && let Ok(options) = handle.session()
+                                  .set_config_option(default.config_id, default.value)
+                                  .await
+    {
+        restored_options = Some(options);
     }
     if let Some(options) = restored_options {
         handle.state().lock().config_options = options;
@@ -488,6 +506,7 @@ mod tests {
                                        mcp_url:             None,
                                        registration_prompt: Some("register".to_string()),
                                        session_config:      BTreeMap::new(),
+                                       default_mode:        None,
                                        subagents:           None,
                                        startup_prompt:      None, };
 

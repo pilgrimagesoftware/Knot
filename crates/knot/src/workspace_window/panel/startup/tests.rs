@@ -64,6 +64,7 @@ fn registering_slot(runtime: &tokio::runtime::Runtime, text: &str) -> Arc<Mutex<
                                                              registration_prompt:
                                                                  Some("register".into()),
                                                              session_config:      BTreeMap::new(),
+                                                             default_mode:        None,
                                                              subagents:           None,
                                                              startup_prompt:      Some(startup), };
                panel_session::connect_into(&connecting, request, &progress, |_| {}).await;
