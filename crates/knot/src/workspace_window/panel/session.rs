@@ -66,8 +66,21 @@ impl WorkspaceWindow {
             agent.id,
             crate::settings_global::read(cx).persona_for(agent.persona_id),
         );
+        // The Coding tab's options for this type, in the shape its adapter
+        // takes them. Pure string work, so here rather than on the runtime.
+        let options = knot_agent_launch::adapter_options(&agent.agent_type,
+                                                         crate::settings_global::read(cx)
+                                                             .agent_options
+                                                             .get(&agent.agent_type)
+                                                             .map_or("", String::as_str));
+        if !options.ignored.is_empty() {
+            eprintln!("agent {id}: {} options not passed to its adapter: {:?}",
+                      agent.agent_type, options.ignored);
+        }
         let cache_dir = knot_core::cache_dir();
-        let inherited = |name: &str| std::env::var(name).ok();
+        // The options' config goes into the same variable as the
+        // instructions, under them, so an option cannot displace them.
+        let inherited = |name: &str| options.layered_env(name, std::env::var(name).ok());
         let delivery = knot_agent_launch::instruction_delivery(knot_agent_launch::DeliveryRequest {
             carrier: knot_agent_launch::instruction_carrier(&agent.agent_type),
             agent_id: agent.id,
@@ -80,17 +93,6 @@ impl WorkspaceWindow {
         let startup_prompt = (!is_resume).then(|| self.startup_request(&agent, cx))
                                          .flatten();
         let session_config = agent.session_config.clone();
-        // The Coding tab's options for this type, in the shape its adapter
-        // takes them. Pure string work, so here rather than on the runtime.
-        let options = knot_agent_launch::adapter_options(&agent.agent_type,
-                                                         crate::settings_global::read(cx)
-                                                             .agent_options
-                                                             .get(&agent.agent_type)
-                                                             .map_or("", String::as_str));
-        if !options.ignored.is_empty() {
-            eprintln!("agent {id}: {} options not passed to its adapter: {:?}",
-                      agent.agent_type, options.ignored);
-        }
         // Built here because this is the only place that knows both the
         // agent's id and its type; `None` for a type with no recognizer,
         // which costs the session nothing.
@@ -152,6 +154,7 @@ impl WorkspaceWindow {
                                                             default_mode,
                                                             option_mode: options.mode,
                                                             session_meta,
+                                                            args: options.args,
                                                             env: delivery.env,
                                                             subagents,
                                                             startup_prompt };

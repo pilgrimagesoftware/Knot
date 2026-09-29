@@ -155,10 +155,13 @@ fn opencode_without_a_cache_dir_falls_back_to_the_first_turn() {
 /// instructions at all, and nothing would say so.
 #[test]
 fn an_unwritten_file_moves_the_instructions_to_the_first_turn() {
-    let delivery = deliver(InstructionCarrier::OpencodeConfigEnv).into_first_turn();
-    assert_eq!(delivery,
-               InstructionDelivery { first_turn: Some("KNOT".to_owned()),
-                                     ..InstructionDelivery::default() });
+    let written = deliver(InstructionCarrier::OpencodeConfigEnv);
+    let delivery = written.clone().into_first_turn();
+    assert_eq!(delivery.first_turn.as_deref(), Some("KNOT"));
+    assert_eq!(delivery.file, None);
+    // The variable also carries the user's options; opencode skips an
+    // entry that matches no file.
+    assert_eq!(delivery.env, written.env);
     let claude = deliver(InstructionCarrier::SessionMeta);
     assert_eq!(claude.clone().into_first_turn(),
                claude,
@@ -186,4 +189,37 @@ fn session_meta_keeps_both_the_options_and_the_instructions() {
     assert_eq!(merge_session_meta(None, Some(instructions.clone())),
                Some(instructions));
     assert_eq!(merge_session_meta(None, None), None);
+}
+
+/// Nowhere to write the file must not cost the user their options: the
+/// variable is still set, with what it was layered from.
+#[test]
+fn opencode_without_a_cache_dir_keeps_the_options_in_its_env() {
+    let inherited =
+        |name: &str| (name == "OPENCODE_CONFIG_CONTENT").then(|| r#"{"model":"a/b"}"#.to_owned());
+    let delivery = instruction_delivery(DeliveryRequest { carrier:
+                                                              InstructionCarrier::OpencodeConfigEnv,
+                                                          agent_id:     id(),
+                                                          instructions: "KNOT".to_owned(),
+                                                          cache_dir:    None,
+                                                          inherited:    &inherited, });
+    assert_eq!(env_json(&delivery, "OPENCODE_CONFIG_CONTENT"),
+               json!({ "model": "a/b" }));
+    assert_eq!(delivery.first_turn.as_deref(), Some("KNOT"));
+}
+
+/// The user's options are layered in first and the instructions after, so
+/// a `-c developer_instructions=...` of their own keeps Knot's as well.
+#[test]
+fn an_option_cannot_displace_the_instructions() {
+    let options = crate::adapter_options("codex", "-c developer_instructions=Mine -m o3");
+    let inherited = |name: &str| options.layered_env(name, None);
+    let delivery = instruction_delivery(DeliveryRequest { carrier:
+                                                              InstructionCarrier::CodexConfigEnv,
+                                                          agent_id:     id(),
+                                                          instructions: "KNOT".to_owned(),
+                                                          cache_dir:    None,
+                                                          inherited:    &inherited, });
+    assert_eq!(env_json(&delivery, "CODEX_CONFIG"),
+               json!({ "model": "o3", "developer_instructions": "Mine\n\nKNOT" }));
 }

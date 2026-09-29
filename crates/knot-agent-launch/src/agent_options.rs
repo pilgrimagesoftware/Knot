@@ -13,9 +13,20 @@
 //! always passes its own `--permission-mode`, so they become the mode the
 //! session is moved to once it opens, as the Coding tab's user expects of a
 //! CLI flag.
+//!
+//! The other adapters take options their own way: Codex and opencode as the
+//! config object they read from an environment variable, Gemini on its
+//! command line. Each accepts only the flags its table names (see
+//! [`flags`]). Copilot's CLI has not been checked, so its options are
+//! reported as not passed.
+
+mod argv;
+mod config_env;
+mod flags;
 
 use serde_json::{Map, Value, json};
 
+pub(crate) use self::flags::FlagSpec;
 use crate::DefaultMode;
 use crate::consts::{
     CLAUDE_ADAPTER_FLAGS, CLAUDE_BYPASS_MODE, CLAUDE_MODE_CONFIG_ID, CLAUDE_PERMISSION_MODE_FLAG,
@@ -30,6 +41,12 @@ pub struct AdapterOptions {
     pub session_meta: Option<Value>,
     /// The permission mode the options ask the session to start in.
     pub mode:         Option<DefaultMode>,
+    /// Arguments for the adapter's command line, after its own.
+    pub args:         Vec<String>,
+    /// Config overrides for an adapter that reads a JSON object from an
+    /// environment variable: the variable, and the keys to set in it. See
+    /// [`Self::layered_env`].
+    pub env_config:   Option<(&'static str, Map<String, Value>)>,
     /// Words that were not forwarded, for the caller to report: a type
     /// whose adapter takes no options, a flag the adapter owns, a short
     /// flag or a stray word, or the whole text when its quoting is
@@ -45,11 +62,53 @@ pub fn adapter_options(agent_type: &str, options: &str) -> AdapterOptions {
     }
     match agent_type {
         "claude" => claude_options(options),
-        // No adapter here has a confirmed way in yet; say so rather than
-        // drop the options silently.
-        _ => AdapterOptions { ignored: vec![options.trim().to_owned()],
-                              ..AdapterOptions::default() },
+        "codex" => with_words(options, config_env::codex_options),
+        "opencode" => with_words(options, config_env::opencode_options),
+        "gemini" => with_words(options, argv::gemini_options),
+        // No confirmed way in - Copilot's CLI is not checked yet - so say
+        // so rather than drop the options silently.
+        _ => all_ignored(options),
     }
+}
+
+impl AdapterOptions {
+    /// `name`'s value in the adapter's environment, before the standing
+    /// instructions are added: `inherited`, Knot's own value, with these
+    /// options' config merged over it. `inherited` as it is for any other
+    /// variable.
+    ///
+    /// Options sit between the two on purpose. They override what the
+    /// environment set, as a CLI flag overrides a config file, and the
+    /// instructions merge into the result afterwards, so no option can
+    /// displace them.
+    pub fn layered_env(&self, name: &str, inherited: Option<String>) -> Option<String> {
+        let Some((_, config)) = self.env_config
+                                    .as_ref()
+                                    .filter(|(variable, _)| *variable == name)
+        else {
+            return inherited;
+        };
+        let mut merged = match inherited.and_then(|text| serde_json::from_str(&text).ok()) {
+            Some(Value::Object(object)) => object,
+            _ => Map::new(),
+        };
+        config_env::merge_deep(&mut merged, config.clone());
+        Some(Value::Object(merged).to_string())
+    }
+}
+
+/// `options` split into words for `parse`, or all of it ignored when its
+/// quoting is unbalanced.
+fn with_words(options: &str, parse: fn(Vec<String>) -> AdapterOptions) -> AdapterOptions {
+    match shell_words::split(options) {
+        Ok(words) => parse(words),
+        Err(_) => all_ignored(options),
+    }
+}
+
+fn all_ignored(options: &str) -> AdapterOptions {
+    AdapterOptions { ignored: vec![options.trim().to_owned()],
+                     ..AdapterOptions::default() }
 }
 
 /// Claude's options: permission flags to a mode, the rest to `extraArgs`,
@@ -58,8 +117,7 @@ pub fn adapter_options(agent_type: &str, options: &str) -> AdapterOptions {
 fn claude_options(options: &str) -> AdapterOptions {
     let Ok(words) = shell_words::split(options)
     else {
-        return AdapterOptions { ignored: vec![options.trim().to_owned()],
-                                ..AdapterOptions::default() };
+        return all_ignored(options);
     };
     let mut extra_args = Map::new();
     let mut mode = None;
@@ -98,7 +156,8 @@ fn claude_options(options: &str) -> AdapterOptions {
         .then(|| json!({ "claudeCode": { "options": { "extraArgs": extra_args } } }));
     AdapterOptions { session_meta,
                      mode,
-                     ignored }
+                     ignored,
+                     ..AdapterOptions::default() }
 }
 
 /// The adapter's mode id for a `--permission-mode` value, in any spelling
