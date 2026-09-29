@@ -40,7 +40,6 @@ pub(crate) struct WorkspaceManager {
     /// unrelated re-render, so an empty field could stay greyed after the
     /// first character.
     pub(crate) _name_subscription:  Subscription,
-    pub(crate) _mcp_stop:           Option<tokio::sync::oneshot::Sender<()>>,
     /// Where a dragged row would land, and where each row was last painted.
     pub(crate) drag:                RowDrag,
 }

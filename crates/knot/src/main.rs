@@ -29,6 +29,7 @@ mod import_window;
 mod keymap;
 mod macos;
 mod markdown_view;
+mod mcp_lifetime;
 mod mcp_status;
 mod menu_bar;
 mod open_in;

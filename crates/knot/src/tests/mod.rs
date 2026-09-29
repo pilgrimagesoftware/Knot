@@ -20,6 +20,7 @@ mod keybindings;
 mod l10n_catalog;
 mod layout_model;
 mod markdown_view;
+mod mcp_lifetime;
 mod mcp_state_row;
 mod mcp_supervision;
 mod menu_key_equivalents;

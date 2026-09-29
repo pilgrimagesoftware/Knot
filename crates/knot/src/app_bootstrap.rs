@@ -32,6 +32,7 @@ use crate::app_support::observe_system_appearance;
 use crate::bug_report::register_report_bug_action;
 use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
+use crate::mcp_lifetime::hold_mcp_server;
 use crate::mcp_status;
 use crate::mcp_status::McpServerStatus;
 use crate::menu_bar::MenuBarSnapshot;
@@ -350,9 +351,6 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
 struct WorkspaceManagerWindow {
     store:    Arc<Mutex<knot_agents::AgentStore>>,
     messages: Arc<Mutex<knot_messaging::MessageStore>>,
-    /// Dropped with the window, which is what stops the MCP server when
-    /// the last window closes.
-    mcp_stop: tokio::sync::oneshot::Sender<()>,
 }
 
 /// The application-menu actions and their key bindings.
@@ -402,9 +400,6 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
 /// Registered here rather than in `install_actions_and_keys` because these
 /// need the message store as well, and because what they do - raise a window
 /// or open one - is this module's business rather than the keymap's.
-///
-/// Reopening the manager after it has been closed passes no `mcp_stop`; see
-/// [`open_workspace_manager`].
 fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
                            messages: Arc<Mutex<knot_messaging::MessageStore>>, cx: &mut App) {
     {
@@ -420,7 +415,7 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
               crate::window_registry::WindowKey::WorkspaceManager,
               cx,
               |cx| {
-                  open_manager_window(Arc::clone(&store), Arc::clone(&messages), None, cx)
+                  open_manager_window(Arc::clone(&store), Arc::clone(&messages), cx)
               },
           );
       });
@@ -429,29 +424,18 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
 /// Opens the workspace manager, or raises it when one is already open.
 ///
 /// One manager window, like the Command Center
-/// (`openspec/specs/window-lifecycle`). Reopening after a close passes no
-/// `mcp_stop`: the oneshot that keeps the MCP server alive went with the
-/// window that held it, and this does not resurrect it - closing the manager
-/// has always stopped the server, and that is a separate question from how
-/// many manager windows there are.
+/// (`openspec/specs/window-lifecycle`). Closing it leaves the MCP server
+/// running: the app holds that, not this window (`mcp_lifetime`).
 fn open_workspace_manager(parts: WorkspaceManagerWindow, cx: &mut App) {
-    let WorkspaceManagerWindow { store,
-                                 messages,
-                                 mcp_stop, } = parts;
+    let WorkspaceManagerWindow { store, messages } = parts;
     crate::window_registry::activate_or_open(crate::window_registry::WindowKey::WorkspaceManager,
                                              cx,
-                                             move |cx| {
-                                                 open_manager_window(store,
-                                                                     messages,
-                                                                     Some(mcp_stop),
-                                                                     cx)
-                                             });
+                                             move |cx| open_manager_window(store, messages, cx));
 }
 
 /// The manager window itself, reporting its handle.
 fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
-                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                       mcp_stop: Option<tokio::sync::oneshot::Sender<()>>, cx: &mut App)
+                       messages: Arc<Mutex<knot_messaging::MessageStore>>, cx: &mut App)
                        -> Option<gpui_kit::AnyWindowHandle> {
     let options = manager_window_options(cx);
     match cx.open_window(options, |window, cx| {
@@ -480,7 +464,6 @@ fn open_manager_window(store: Arc<Mutex<knot_agents::AgentStore>>,
                                                     workspace_dialog_id: None,
                                                     error: None,
                                                     _name_subscription: name_subscription,
-                                                    _mcp_stop: mcp_stop,
                                                     drag: Default::default() }
                              });
                 cx.new(|cx| Root::new(view, window, cx))
@@ -568,6 +551,10 @@ pub(crate) fn run() {
                                // The MCP server's state, for the settings
                                // pane's row and the failure notification.
                                cx.set_global(mcp_status);
+                               // The app keeps the server running, not the
+                               // manager window: closing that window used
+                               // to stop it under every running agent.
+                               hold_mcp_server(mcp_stop, cx);
                                cx.set_global(MenuBarState::default());
                                // Every window that can be reopened is
                                // registered here, so a second request for
@@ -595,8 +582,7 @@ pub(crate) fn run() {
                                open_workspace_manager(WorkspaceManagerWindow { store:
                                                                                    Arc::clone(&store),
                                                                                messages:
-                                                                                   Arc::clone(&messages),
-                                                                               mcp_stop },
+                                                                                   Arc::clone(&messages) },
                                                       cx);
                                // macOS launches a non-bundled binary without
                                // making it frontmost, so without this the
