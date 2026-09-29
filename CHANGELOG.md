@@ -1,4 +1,21 @@
 
+## 1.20.0 - 2026-09-29
+
+### Added
+- Attach logs to a bug report and keep its description fixed
+- Report a bug or a feature request from Help > Report an Issue
+
+
+### Fixed
+- Wire Close Window, Minimize and Zoom
+- Keep the MCP server running when the manager window closes
+- Start Claude panel sessions in Auto mode like the CLI
+- Wire Help > Knot Help to the app's page
+- Outline the Pull Requests search field in the separator color
+- Pass Claude's agent options to its ACP adapter
+
+
+
 ## 1.19.2 - 2026-09-29
 
 ### Fixed
