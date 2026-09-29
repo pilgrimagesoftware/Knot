@@ -10,6 +10,7 @@ mod agent_editor;
 mod agent_menu;
 mod agent_processes;
 mod app_bootstrap;
+mod app_log;
 mod app_state;
 mod app_support;
 mod appearance;
@@ -29,6 +30,7 @@ mod import_window;
 mod keymap;
 mod macos;
 mod markdown_view;
+mod mcp_lifetime;
 mod mcp_status;
 mod menu_bar;
 mod open_in;
@@ -51,6 +53,7 @@ mod terminal_view;
 #[cfg(test)]
 mod tests;
 mod view_menu;
+mod window_actions;
 mod window_options;
 mod window_registry;
 mod working_indicator;
@@ -58,6 +61,8 @@ mod workspace_manager;
 mod workspace_window;
 
 fn main() {
+    // Before anything writes to stderr, so nothing is lost to `/dev/null`.
+    app_log::redirect_stderr_to_log();
     // Before anything builds a git runner: a Finder-launched app's PATH
     // names none of the places git may actually live.
     external_tools::configure();

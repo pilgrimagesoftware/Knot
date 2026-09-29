@@ -3756,7 +3756,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "knot"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "alacritty_terminal",
  "gpui-kit",
@@ -3778,6 +3778,7 @@ dependencies = [
  "knot-tasks",
  "knot-terminal",
  "knot-watch",
+ "libc",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
@@ -3794,7 +3795,7 @@ dependencies = [
 
 [[package]]
 name = "knot-acp"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "parking_lot",
  "serde",
@@ -3806,7 +3807,7 @@ dependencies = [
 
 [[package]]
 name = "knot-activity"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-agents",
  "knot-core",
@@ -3817,11 +3818,13 @@ dependencies = [
 
 [[package]]
 name = "knot-agent-launch"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-acp",
  "knot-core",
  "knot-git",
+ "serde_json",
+ "shell-words",
  "tempfile",
  "time",
  "uuid",
@@ -3829,7 +3832,7 @@ dependencies = [
 
 [[package]]
 name = "knot-agents"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-core",
  "serde",
@@ -3840,7 +3843,7 @@ dependencies = [
 
 [[package]]
 name = "knot-core"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "arc-swap",
  "directories",
@@ -3855,7 +3858,7 @@ dependencies = [
 
 [[package]]
 name = "knot-discovery"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "notify 8.2.0",
  "parking_lot",
@@ -3866,7 +3869,7 @@ dependencies = [
 
 [[package]]
 name = "knot-forge"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-core",
  "serde",
@@ -3878,7 +3881,7 @@ dependencies = [
 
 [[package]]
 name = "knot-git"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "insta",
  "tempfile",
@@ -3887,7 +3890,7 @@ dependencies = [
 
 [[package]]
 name = "knot-history"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "directories",
  "parking_lot",
@@ -3901,7 +3904,7 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -3920,7 +3923,7 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp-probe"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-core",
  "tempfile",
@@ -3929,7 +3932,7 @@ dependencies = [
 
 [[package]]
 name = "knot-mcp-tools"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "async-trait",
  "knot-activity",
@@ -3954,7 +3957,7 @@ dependencies = [
 
 [[package]]
 name = "knot-messaging"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-agents",
  "parking_lot",
@@ -3965,7 +3968,7 @@ dependencies = [
 
 [[package]]
 name = "knot-processes"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "parking_lot",
  "tempfile",
@@ -3974,7 +3977,7 @@ dependencies = [
 
 [[package]]
 name = "knot-subagents"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "serde_json",
  "thiserror 2.0.20",
@@ -3983,7 +3986,7 @@ dependencies = [
 
 [[package]]
 name = "knot-tasks"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "knot-core",
  "serde",
@@ -3994,7 +3997,7 @@ dependencies = [
 
 [[package]]
 name = "knot-terminal"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "alacritty_terminal",
  "knot-acp",
@@ -4004,6 +4007,7 @@ dependencies = [
  "knot-core",
  "parking_lot",
  "portable-pty",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -4012,7 +4016,7 @@ dependencies = [
 
 [[package]]
 name = "knot-watch"
-version = "1.19.2"
+version = "1.20.0"
 dependencies = [
  "notify 8.2.0",
  "parking_lot",

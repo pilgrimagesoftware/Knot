@@ -26,6 +26,26 @@ are scheduled and no port is opened.
 - **WHEN** the MCP server is disabled in settings
 - **THEN** no socket is opened and agents receive no registration prompt
 
+### Requirement: The server runs for the life of the application
+
+Once started, the MCP server SHALL keep running until the application quits.
+Closing any window, including the workspace manager and the last window
+open, SHALL NOT stop it: agents in other windows, and agents whose window is
+reopened later, are still its clients. On quit the server SHALL be stopped
+intentionally, releasing its port and logging that it stopped.
+
+#### Scenario: Closing the workspace manager
+
+- **WHEN** the user closes the workspace manager while agents run in a
+  workspace window
+- **THEN** the server keeps serving, and those agents' `knot` tools keep
+  answering
+
+#### Scenario: Quitting
+
+- **WHEN** the user quits Knot
+- **THEN** the server stops and the log records it stopping
+
 ### Requirement: Health and info endpoints
 
 The system SHALL expose `GET /health` returning a success indicator and

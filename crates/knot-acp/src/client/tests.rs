@@ -182,6 +182,44 @@ async fn session_new_omits_the_mcp_server_when_the_agent_does_not_support_http()
     assert!(request_line.contains(r#""mcpServers":[]"#));
 }
 
+/// The `session/new` request line `client` sent, as `logging_fake_agent`
+/// logged it.
+async fn logged_session_new(client: &AcpClient, log: &std::path::Path) -> Value {
+    client.session_new("/tmp/project", None)
+          .await
+          .expect("session");
+    let log = std::fs::read_to_string(log).unwrap();
+    let line = log.lines()
+                  .find(|line| line.contains("session/new"))
+                  .expect("session/new request logged");
+    serde_json::from_str(line).expect("a JSON request")
+}
+
+#[tokio::test]
+async fn session_new_carries_the_session_meta() {
+    let log = tempfile::NamedTempFile::new().unwrap();
+    let meta = json!({ "claudeCode": { "options": { "extraArgs": { "remote-control": null } } } });
+    let (client, _events) =
+        AcpClient::connect(logging_fake_agent(log.path(), false)).await
+                                                                 .expect("connect");
+    let client = client.with_session_meta(Some(meta.clone()));
+
+    let request = logged_session_new(&client, log.path()).await;
+    assert_eq!(request["params"]["_meta"], meta);
+    assert_eq!(request["params"]["cwd"], "/tmp/project");
+}
+
+#[tokio::test]
+async fn session_new_sends_no_meta_without_one() {
+    let log = tempfile::NamedTempFile::new().unwrap();
+    let (client, _events) =
+        AcpClient::connect(logging_fake_agent(log.path(), false)).await
+                                                                 .expect("connect");
+
+    let request = logged_session_new(&client, log.path()).await;
+    assert!(request["params"].get("_meta").is_none());
+}
+
 #[tokio::test]
 async fn session_new_sends_no_mcp_servers_when_disabled() {
     let log = tempfile::NamedTempFile::new().unwrap();

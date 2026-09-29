@@ -232,6 +232,30 @@ pub(crate) const WORKSPACE_DIALOG_WIDTH: f32 = 360.;
 /// without wrapping, so it reads as the one line it is when pasted.
 pub(crate) const BUG_REPORT_DIALOG_WIDTH: f32 = 560.;
 
+/// Where Help > Knot Help goes: the app's page, which is also the
+/// repository's listed homepage. There is no bundled help book.
+pub(crate) const KNOT_HELP_URL: &str = "https://pilgrimagesoftware.com/apps/knot";
+
+/// The bug report's description, in rows. Fixed rather than growing with its
+/// content: the dialog scrolls its body once it outgrows the window, so a
+/// description that grew with a long paste pushed the diagnostics out of
+/// sight under it (#515). The field scrolls instead.
+pub(crate) const BUG_REPORT_DESCRIPTION_ROWS: usize = 8;
+
+/// How much of each log a bug report attaches: its last this-many lines...
+pub(crate) const BUG_REPORT_LOG_TAIL_LINES: usize = 200;
+
+/// ...and at most this many bytes of them. GitHub caps an issue body at
+/// 65,536 characters, and two logs have to fit beside the description.
+pub(crate) const BUG_REPORT_LOG_TAIL_BYTES: usize = 24 * 1024;
+
+/// The application log, in `knot_core::log_dir()`: whatever the process
+/// wrote to stderr, when that was not a terminal (`app_log`).
+pub(crate) const APP_LOG_FILE_NAME: &str = "knot.log";
+
+/// The previous run's application log, kept beside the current one.
+pub(crate) const APP_LOG_PREVIOUS_FILE_NAME: &str = "knot.log.1";
+
 /// The colour a workspace gets when it has none, or when the one it has
 /// stored will not parse.
 pub(crate) const COLOR_WORKSPACE_DEFAULT: u32 = 0x1B4FB2;

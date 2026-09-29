@@ -1,6 +1,6 @@
 //! Unit tests for [`super`].
 
-use super::create_issue_with;
+use super::{create_issue_with, create_labeled_issue_with};
 use crate::error::ForgeError;
 use crate::runner::stub::StubRunner;
 
@@ -68,4 +68,45 @@ fn a_timeout_maps_through_unchanged() {
 fn a_missing_binary_maps_through_unchanged() {
     assert!(matches!(create_issue_with(&StubRunner::missing(), REPO, "t", "b"),
                      Err(ForgeError::Missing)));
+}
+
+#[test]
+fn a_label_is_passed_as_its_own_argument() {
+    let runner = StubRunner::new(|args| {
+        assert_eq!(&args[args.len() - 2..], ["--label", "enhancement"]);
+        Ok(URL.to_owned())
+    });
+
+    assert_eq!(create_labeled_issue_with(&runner, REPO, "t", "b", "enhancement").unwrap(),
+               URL);
+    assert_eq!(runner.calls().len(), 1);
+}
+
+#[test]
+fn a_rejected_label_is_dropped_rather_than_the_report() {
+    let runner = StubRunner::new(|args| {
+        if args.contains(&"--label") {
+            Err(ForgeError::Command { command: "issue create".to_owned(),
+                                      output:  "could not add label".to_owned(),
+                                      code:    1, })
+        }
+        else {
+            Ok(URL.to_owned())
+        }
+    });
+
+    assert_eq!(create_labeled_issue_with(&runner, REPO, "t", "b", "bug").unwrap(),
+               URL);
+    assert_eq!(runner.calls().len(), 2);
+}
+
+#[test]
+fn a_timeout_is_not_retried() {
+    let runner = StubRunner::new(|args| Err(ForgeError::Timeout { command: args.join(" "), }));
+
+    assert!(matches!(create_labeled_issue_with(&runner, REPO, "t", "b", "bug"),
+                     Err(ForgeError::Timeout { .. })));
+    assert_eq!(runner.calls().len(),
+               1,
+               "a timeout may have filed the issue already");
 }

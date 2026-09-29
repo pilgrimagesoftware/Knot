@@ -68,9 +68,9 @@ reads as one the application does not have at all.
 
 #### Scenario: An unimplemented item still shows its key
 
-- **WHEN** the user opens the Window menu, whose Minimize item has no
+- **WHEN** the user opens the File menu, whose New Workspace item has no
   behavior wired to it yet
-- **THEN** Minimize is disabled and ⌘M is drawn greyed beside it
+- **THEN** New Workspace is disabled and ⌘N is drawn greyed beside it
 
 #### Scenario: No invented shortcuts
 
@@ -361,27 +361,58 @@ Zoom command, and the menu's fixed items shift down every time a window opens.
 - **THEN** Command Center, Workspaces, Minimize and Zoom are in the same
   positions, and the three new windows are listed below the last separator
 
-### Requirement: The Help menu carries a Report a Bug item
+### Requirement: Close Window, Minimize and Zoom act on the focused window
+
+File > Close Window, Window > Minimize and Window > Zoom SHALL be enabled and
+SHALL act on whichever Knot window is focused - a workspace window, the
+workspace manager, Settings or any dialog - the same way that window's
+stoplight buttons do. Their key equivalents (⌘W, ⌘M) SHALL do the same.
+
+They SHALL be answered app-wide rather than by each window, so a window
+cannot be opened that the items fail to act on.
+
+#### Scenario: Closing a workspace window from the menu
+
+- **WHEN** a workspace window is focused and the user chooses File > Close
+  Window, or presses ⌘W
+- **THEN** that window closes, as it would from its close button
+
+#### Scenario: Minimize and Zoom answer
+
+- **WHEN** a Knot window is focused and the user opens the Window menu
+- **THEN** Minimize and Zoom are enabled, and choosing one minimizes or zooms
+  that window
+
+### Requirement: The Help menu carries a Report an Issue item
 
 In addition to the standard mac-wide table, the Help menu SHALL carry a
-"Report a Bug…" item that opens the bug report window per `bug-reporting`.
+"Report an Issue…" item that opens the bug report window per `bug-reporting`.
 
 The item SHALL have no key equivalent: GitHub gives the action none, and the
 platform gives none to hand it. It SHALL always be enabled - a report can be
 filed from a window in any state, and this is one of the two ways the user can
 ask for help.
 
-#### Scenario: Report a Bug opens the bug report window
+#### Scenario: Report an Issue opens the bug report window
 
-- **WHEN** the user chooses Help > Report a Bug…
+- **WHEN** the user chooses Help > Report an Issue…
 - **THEN** the bug report window opens attached to the active window per
   `bug-reporting`, and the item has no key equivalent displayed
 
 #### Scenario: The item is not a placeholder
 
 - **WHEN** the user opens the Help menu
-- **THEN** Report a Bug… is enabled and answers, unlike the standard Knot Help
-  item, which stays a disabled placeholder until it is wired
+- **THEN** Report an Issue… is enabled and answers, as Knot Help does
+
+### Requirement: Knot Help opens the app's help page
+
+Help > Knot Help SHALL be enabled whatever window is focused, and choosing it
+or pressing ⌘? SHALL open Knot's page in the user's default browser.
+
+#### Scenario: Choosing Knot Help
+
+- **WHEN** the user chooses Help > Knot Help
+- **THEN** Knot's help page opens in the default browser
 
 ### Requirement: The View menu lists the navigation shortcuts
 

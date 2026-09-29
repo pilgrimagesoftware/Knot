@@ -25,11 +25,13 @@ use gpui_kit::WeakEntity;
 use gpui_kit::Window;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::StyledExt;
+use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::dialog::Cancel;
 use gpui_kit::component::dialog::Confirm;
 use gpui_kit::component::dialog::Dialog;
@@ -40,37 +42,44 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::radio::{Radio, RadioGroup};
 use gpui_kit::div;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::px;
 use knot_forge::ForgeAvailability;
 
 use super::diagnostics::Diagnostics;
 use super::form::{Phase, can_report};
+use super::kind::IssueKind;
+use super::logs::{self, Attachment, LogKind};
 use super::submit::{self, Outcome, Report};
-use crate::app_bootstrap::ReportBug;
-use crate::consts::BUG_REPORT_DIALOG_WIDTH;
+use crate::app_bootstrap::ReportIssue;
+use crate::consts::{BUG_REPORT_DESCRIPTION_ROWS, BUG_REPORT_DIALOG_WIDTH};
 
 type Collect = dyn Fn() -> Diagnostics + Send + Sync;
 type Submit = dyn Fn(&Report, &ForgeAvailability) -> Outcome + Send + Sync;
+type ReadLog = dyn Fn(LogKind) -> Attachment + Send + Sync;
 
-/// The two blocking operations the dialog calls, behind a seam so the window
-/// tests neither shell out to `gh` nor open a browser.
+/// The blocking operations the dialog calls, behind a seam so the window
+/// tests neither shell out to `gh`, open a browser, nor read the user's logs.
 #[derive(Clone)]
 pub(crate) struct ReportServices {
-    pub(crate) collect: Arc<Collect>,
-    pub(crate) submit:  Arc<Submit>,
+    pub(crate) collect:  Arc<Collect>,
+    pub(crate) submit:   Arc<Submit>,
+    pub(crate) read_log: Arc<ReadLog>,
 }
 
 impl ReportServices {
     /// The real host, the real `gh`, the real browser.
     fn live() -> Self {
-        Self { collect: Arc::new(Diagnostics::collect),
-               submit:  Arc::new(|report, forge| {
+        Self { collect:  Arc::new(Diagnostics::collect),
+               submit:   Arc::new(|report, forge| {
                    submit::submit(report,
                                   forge,
                                   &knot_forge::GhRunner::new(),
                                   crate::open_in::open_url)
-               }), }
+               }),
+               read_log: Arc::new(logs::read), }
     }
 }
 
@@ -87,17 +96,17 @@ struct OpenReport {
 
 impl gpui_kit::Global for OpenReport {}
 
-/// Registers the `ReportBug` handler over the live services.
-pub(crate) fn register_report_bug_action(cx: &mut App) {
-    register_report_bug_action_with(ReportServices::live(), cx);
+/// Registers the `ReportIssue` handler over the live services.
+pub(crate) fn register_report_issue_action(cx: &mut App) {
+    register_report_issue_action_with(ReportServices::live(), cx);
 }
 
-/// [`register_report_bug_action`], over supplied services.
-pub(crate) fn register_report_bug_action_with(services: ReportServices, cx: &mut App) {
+/// [`register_report_issue_action`], over supplied services.
+pub(crate) fn register_report_issue_action_with(services: ReportServices, cx: &mut App) {
     cx.set_global(OpenReport { services,
                                window: None,
                                report: None });
-    cx.on_action(|_: &ReportBug, cx| open_report_dialog(cx));
+    cx.on_action(|_: &ReportIssue, cx| open_report_dialog(cx));
 }
 
 /// Raises the open dialog's window, or opens the dialog on the active one.
@@ -161,9 +170,14 @@ fn open_on(services: ReportServices, window: &mut Window, cx: &mut App) -> Entit
 /// What the dialog holds while it is open. Created with it and dropped with
 /// it, so a report never outlives its dialog and the next one starts empty.
 pub(crate) struct BugReport {
+    /// Bug or feature request. Starts as a bug, the more common report.
+    pub(crate) kind:        IssueKind,
     pub(crate) subject:     Entity<InputState>,
     pub(crate) description: Entity<TextareaState>,
     pub(crate) diagnostics: Entity<TextareaState>,
+    /// The logs to attach, in the order they are offered. None by default:
+    /// a log is the user's to share.
+    pub(crate) attached:    Vec<LogKind>,
     phase:                  Phase,
     services:               ReportServices,
     _subscriptions:         Vec<Subscription>,
@@ -178,7 +192,8 @@ impl BugReport {
         let description = cx.new(|cx| {
                                 TextareaState::new(window, cx)
                     .placeholder(knot_core::l10n::t("bug_report.description_placeholder"))
-                    .auto_grow(5, 12)
+                    // Fixed height, scrolling within: see the constant.
+                    .auto_grow(BUG_REPORT_DESCRIPTION_ROWS, BUG_REPORT_DESCRIPTION_ROWS)
                             });
         let diagnostics =
             cx.new(|cx| {
@@ -200,9 +215,11 @@ impl BugReport {
                                            cx.notify();
                                        }
                                    })];
-        Self { subject,
+        Self { kind: IssueKind::default(),
+               subject,
                description,
                diagnostics,
+               attached: Vec::new(),
                phase: Phase::Editing,
                services,
                _subscriptions: subscriptions }
@@ -213,6 +230,32 @@ impl BugReport {
         can_report(&self.subject.read(cx).value(),
                    &self.description.read(cx).value(),
                    &self.phase)
+    }
+
+    /// Switches what the report files as, and the fields' hints with it.
+    /// What was typed stays: a user who picked the wrong kind first should
+    /// not have to type it again.
+    pub(crate) fn set_kind(&mut self, kind: IssueKind, window: &mut Window,
+                           cx: &mut Context<Self>) {
+        self.kind = kind;
+        self.subject.update(cx, |input, cx| {
+                        input.set_placeholder(kind.subject_placeholder(), window, cx)
+                    });
+        self.description.update(cx, |input, cx| {
+                            input.set_placeholder(kind.description_placeholder(), window, cx)
+                        });
+        cx.notify();
+    }
+
+    /// Adds `kind` to the attached logs, or takes it off.
+    pub(crate) fn set_attached(&mut self, kind: LogKind, attached: bool, cx: &mut Context<Self>) {
+        self.attached.retain(|&chosen| chosen != kind);
+        if attached {
+            self.attached.push(kind);
+            self.attached
+                .sort_by_key(|chosen| LogKind::ALL.iter().position(|kind| kind == chosen));
+        }
+        cx.notify();
     }
 
     /// Fills the diagnostics pane off the main thread.
@@ -251,15 +294,29 @@ impl BugReport {
         cx.notify();
         let subject = self.subject.read(cx).value().to_string();
         let description = self.description.read(cx).value().to_string();
+        let kind = self.kind;
+        // A log checked before switching to a feature request is not sent:
+        // the section is hidden, so the user can no longer see it is chosen.
+        let attached = if kind.offers_logs() {
+            self.attached.clone()
+        }
+        else {
+            Vec::new()
+        };
         let services = self.services.clone();
         cx.spawn_in(window, async move |this, cx| {
               let (diagnostics, outcome) =
                   cx.background_executor()
                     .spawn(async move {
                         let diagnostics = (services.collect)();
-                        let report = Report { subject,
+                        let attachments = attached.into_iter()
+                                                  .map(|kind| (services.read_log)(kind))
+                                                  .collect();
+                        let report = Report { kind,
+                                              subject,
                                               description,
-                                              diagnostics: diagnostics.text() };
+                                              diagnostics: diagnostics.text(),
+                                              attachments };
                         let outcome = (services.submit)(&report, &diagnostics.forge);
                         (diagnostics, outcome)
                     })
@@ -318,8 +375,8 @@ fn build_dialog(dialog: Dialog, report: &Entity<BugReport>, app: &mut App) -> Di
           .on_cancel(|_, _, _| true)
 }
 
-fn dialog_content(report: &Entity<BugReport>, app: &App) -> impl IntoElement {
-    let report = report.read(app);
+fn dialog_content(entity: &Entity<BugReport>, app: &App) -> impl IntoElement {
+    let report = entity.read(app);
     let theme = app.theme();
     let label = |key: &str| {
         div().text_sm()
@@ -328,6 +385,8 @@ fn dialog_content(report: &Entity<BugReport>, app: &App) -> impl IntoElement {
     };
 
     v_flex().gap_2()
+            .child(label("bug_report.kind_label"))
+            .child(kind_selector(entity, report.kind))
             .child(label("bug_report.subject_label"))
             .child(Input::new(&report.subject))
             .child(label("bug_report.description_label"))
@@ -341,6 +400,16 @@ fn dialog_content(report: &Entity<BugReport>, app: &App) -> impl IntoElement {
             .child(Textarea::new(&report.diagnostics).readonly(true)
                                                      .w_full()
                                                      .text_xs())
+            .when(report.kind.offers_logs(), |content| {
+                content.child(label("bug_report.logs.label"))
+                       .child(div().text_xs()
+                                   .text_color(theme.muted_foreground)
+                                   .child(knot_core::l10n::t("bug_report.logs.hint")))
+                       .child(h_flex().gap_4()
+                                      .children(LogKind::ALL.map(|kind| {
+                                                                log_checkbox(entity, report, kind)
+                                                            })))
+            })
             .children(report.phase.message().map(|message| {
                                                 div().text_sm()
                                                      .text_color(if report.phase.is_error() {
@@ -351,6 +420,31 @@ fn dialog_content(report: &Entity<BugReport>, app: &App) -> impl IntoElement {
                                                                  })
                                                      .child(message)
                                             }))
+}
+
+fn kind_selector(entity: &Entity<BugReport>, selected: IssueKind) -> RadioGroup {
+    let entity = entity.clone();
+    RadioGroup::horizontal("issue-kind")
+        .children(IssueKind::ALL.map(|kind| Radio::new(kind.to_string()).label(kind.label())))
+        .selected_index(IssueKind::ALL.iter().position(|kind| *kind == selected))
+        .on_click(move |index, window, app| {
+            if let Some(&kind) = IssueKind::ALL.get(*index) {
+                entity.update(app, |report, cx| report.set_kind(kind, window, cx));
+            }
+        })
+}
+
+fn log_checkbox(entity: &Entity<BugReport>, report: &BugReport, kind: LogKind) -> Checkbox {
+    let id = match kind {
+        LogKind::App => "attach-app-log",
+        LogKind::Mcp => "attach-mcp-log",
+    };
+    let entity = entity.clone();
+    Checkbox::new(id).label(kind.label())
+                     .checked(report.attached.contains(&kind))
+                     .on_click(move |checked, _, app| {
+                         entity.update(app, |report, cx| report.set_attached(kind, *checked, cx));
+                     })
 }
 
 /// Cancel and Report dispatch the host's own actions, so the buttons, Return

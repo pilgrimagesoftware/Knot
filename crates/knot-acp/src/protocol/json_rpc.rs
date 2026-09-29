@@ -36,6 +36,23 @@ pub struct JsonRpcErrorPayload {
     pub data:    Option<Value>,
 }
 
+impl JsonRpcErrorPayload {
+    /// `message`, followed by `data.details` when the agent sent one.
+    /// `claude-agent-acp` answers a failed `session/new` with a bare
+    /// "Internal error" and puts the reason - the CLI's own stderr, such as
+    /// an option it did not know - in `details`.
+    pub fn described(&self) -> String {
+        match self.data
+                  .as_ref()
+                  .and_then(|data| data.get("details"))
+                  .and_then(Value::as_str)
+        {
+            Some(details) if !details.is_empty() => format!("{}: {details}", self.message),
+            _ => self.message.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct IncomingMessage {
     #[serde(default)]
@@ -61,5 +78,31 @@ impl IncomingMessage {
 
     pub fn is_response(&self) -> bool {
         self.id.is_some() && self.method.is_none()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn payload(data: Option<Value>) -> JsonRpcErrorPayload {
+        JsonRpcErrorPayload { code: -32603,
+                              message: "Internal error".to_owned(),
+                              data }
+    }
+
+    #[test]
+    fn details_follow_the_message() {
+        let error = payload(Some(json!({ "details": "unknown option '--typo'" })));
+        assert_eq!(error.described(), "Internal error: unknown option '--typo'");
+    }
+
+    #[test]
+    fn without_details_the_message_stands_alone() {
+        assert_eq!(payload(None).described(), "Internal error");
+        assert_eq!(payload(Some(json!({ "other": 1 }))).described(),
+                   "Internal error");
     }
 }

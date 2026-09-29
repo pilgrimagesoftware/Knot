@@ -69,6 +69,19 @@ pub struct AcpSession {
     session_id: String,
 }
 
+/// Which session to open on a started adapter, and what to open it with.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SessionTarget<'a> {
+    pub cwd:              &'a str,
+    /// The session to `session/load` first, when the adapter can resume.
+    pub prior_session_id: Option<&'a str>,
+    /// Knot's own MCP HTTP server, when MCP is enabled.
+    pub mcp_url:          Option<&'a str>,
+    /// The `_meta` the session opens with - the agent's user options, for
+    /// an adapter that takes them there.
+    pub meta:             Option<&'a serde_json::Value>,
+}
+
 /// How long to wait for the adapter to answer `initialize` and open a
 /// session before failing closed, per design.md's "Panel mode fails
 /// closed to Terminal mode with a visible error" requirement - a hung
@@ -77,44 +90,38 @@ pub struct AcpSession {
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 impl AcpSession {
-    /// Spawns `config`'s adapter and opens a session for `cwd`, wiring
-    /// `mcp_url` (Knot's own MCP HTTP server, when MCP is enabled) into the
-    /// session through the ACP protocol's own `mcpServers` mechanism. If
-    /// `prior_session_id` is given and the adapter supports resume,
-    /// attempts `session/load` first; on any failure (unsupported or an
-    /// error response) falls back to a fresh `session/new` rather than
-    /// surfacing an error, per the `agent-lifecycle` layout-restore
-    /// fallback requirement. Fails with `AcpError::Timeout` rather than
-    /// hanging if the adapter never responds.
+    /// Spawns `config`'s adapter and opens `target`'s session, wiring its
+    /// MCP URL (Knot's own MCP HTTP server, when MCP is enabled) into the
+    /// session through the ACP protocol's own `mcpServers` mechanism and its
+    /// `meta` in as the session's `_meta`. If the target names a prior
+    /// session and the adapter supports resume, attempts `session/load`
+    /// first; on any failure (unsupported or an error response) falls back
+    /// to a fresh `session/new` rather than surfacing an error, per the
+    /// `agent-lifecycle` layout-restore fallback requirement. Fails with
+    /// `AcpError::Timeout` rather than hanging if the adapter never
+    /// responds.
     pub async fn start(
-        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress)
+        config: &AdapterConfig, target: SessionTarget<'_>, progress: &ConnectProgress)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        Self::start_with_timeout(config,
-                                 cwd,
-                                 prior_session_id,
-                                 mcp_url,
-                                 progress,
-                                 CONNECT_TIMEOUT).await
+        Self::start_with_timeout(config, target, progress, CONNECT_TIMEOUT).await
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn start_with_timeout(
-        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress, timeout: Duration)
+        config: &AdapterConfig, target: SessionTarget<'_>, progress: &ConnectProgress,
+        timeout: Duration)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
-        tokio::time::timeout(
-            timeout,
-            Self::start_inner(config, cwd, prior_session_id, mcp_url, progress),
-        )
-        .await
-        .unwrap_or(Err(AcpError::Timeout))
+        tokio::time::timeout(timeout, Self::start_inner(config, target, progress))
+            .await
+            .unwrap_or(Err(AcpError::Timeout))
     }
 
     async fn start_inner(
-        config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>, mcp_url: Option<&str>,
-        progress: &ConnectProgress)
+        config: &AdapterConfig, target: SessionTarget<'_>, progress: &ConnectProgress)
         -> AcpResult<(Self, Vec<ConfigOption>, mpsc::UnboundedReceiver<SessionEvent>)> {
+        let SessionTarget { cwd,
+                            prior_session_id,
+                            mcp_url,
+                            meta, } = target;
         let build_command = || {
             let mut command = Command::new(config.command);
             command.args(config.args);
@@ -147,6 +154,7 @@ impl AcpSession {
             }
             other => other?,
         };
+        let client = client.with_session_meta(meta.cloned());
 
         let session = match prior_session_id {
             Some(prior) if client.capabilities().supports_resume => {
@@ -264,6 +272,58 @@ mod tests {
         Arc::new(Mutex::new(ConnectStep::Starting { program: "test" }))
     }
 
+    /// A fresh session in the tests' project folder, with nothing else set.
+    fn project() -> SessionTarget<'static> {
+        SessionTarget { cwd: "/tmp/project",
+                        ..SessionTarget::default() }
+    }
+
+    /// A fake adapter that names its session for whether `session/new`
+    /// arrived with a `_meta`.
+    fn meta_reporting_adapter_launch() -> AdapterConfig {
+        AdapterConfig { command:                   "sh",
+                        args:                      &[
+                                                     "-c",
+                                                     r#"while IFS= read -r line; do
+  id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+  method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+  case "$method" in
+    initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}" ;;
+    session/new)
+      case "$line" in
+        *'"_meta":{"claudeCode"'*) name=sess-meta ;;
+        *) name=sess-plain ;;
+      esac
+      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"$name\"}}"
+      ;;
+  esac
+done"#,
+        ],
+                        supports_resume:           false,
+                        supports_permission_modes: false,
+                        install:                   None, }
+    }
+
+    #[tokio::test]
+    async fn the_target_meta_opens_the_session() {
+        let meta = serde_json::json!({ "claudeCode": { "options": { "extraArgs": {} } } });
+        let target = SessionTarget { meta: Some(&meta),
+                                     ..project() };
+        let (session, _options, _events) = AcpSession::start(&meta_reporting_adapter_launch(),
+                                                             target,
+                                                             &no_progress()).await
+                                                                            .expect("connect");
+        assert_eq!(session.session_id(), "sess-meta");
+        session.stop().await;
+
+        let (session, _options, _events) = AcpSession::start(&meta_reporting_adapter_launch(),
+                                                             project(),
+                                                             &no_progress()).await
+                                                                            .expect("connect");
+        assert_eq!(session.session_id(), "sess-plain");
+        session.stop().await;
+    }
+
     #[derive(Default)]
     struct FakeTransport {
         sent: Arc<Mutex<Vec<String>>>,
@@ -335,11 +395,7 @@ done"#,
     #[tokio::test]
     async fn the_adapter_subprocess_is_spawned_with_the_merged_adapter_path() {
         let (session, _config_options, mut events) =
-            AcpSession::start(&path_reporting_adapter_launch(),
-                              "/tmp/project",
-                              None,
-                              None,
-                              &no_progress()).await
+            AcpSession::start(&path_reporting_adapter_launch(), project(), &no_progress()).await
                                              .expect("connect");
         assert_eq!(session.session_id(), "sess-path");
 
@@ -383,12 +439,8 @@ done"#,
         terminal_session.send_text("terminal is alive").unwrap();
 
         let (session, _config_options, mut events) =
-            AcpSession::start(&fake_adapter_launch(),
-                              "/tmp/project",
-                              None,
-                              None,
-                              &no_progress()).await
-                                             .expect("connect");
+            AcpSession::start(&fake_adapter_launch(), project(), &no_progress()).await
+                                                                                .expect("connect");
         assert_eq!(session.session_id(), "sess-1");
 
         // The ACP update the fake adapter streamed right after session/new
@@ -422,9 +474,7 @@ done"#,
     #[tokio::test]
     async fn start_fails_closed_with_a_visible_error_instead_of_hanging() {
         let result = AcpSession::start_with_timeout(&hanging_adapter_launch(),
-                                                    "/tmp/project",
-                                                    None,
-                                                    None,
+                                                    project(),
                                                     &no_progress(),
                                                     std::time::Duration::from_millis(50)).await;
 
@@ -455,7 +505,7 @@ done"#,
                                                                    args:    install_args, }) };
 
         let (session, _config_options, _events) =
-            AcpSession::start(&launch, "/tmp/project", None, None, &no_progress())
+            AcpSession::start(&launch, project(), &no_progress())
                 .await
                 .expect("connect after auto-install");
 

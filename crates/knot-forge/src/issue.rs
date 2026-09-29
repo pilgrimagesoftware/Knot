@@ -24,6 +24,30 @@ pub fn create_issue_with(runner: &impl ForgeRunner, repo: &str, title: &str, bod
     let stdout =
         runner.run(&["issue", "create", "--repo", repo, "--title", title, "--body", body])?;
 
+    issue_url(&stdout)
+}
+
+/// [`create_issue_with`], filed under `label` where the forge allows it.
+///
+/// GitHub lets only users with triage access label an issue, and a reporter
+/// is usually not one, so a rejected filing is tried once more without the
+/// label: an unlabeled report beats none. Only a command failure is retried -
+/// a timeout may have filed the issue already, and a missing binary would
+/// fail the same way twice.
+pub fn create_labeled_issue_with(runner: &impl ForgeRunner, repo: &str, title: &str, body: &str,
+                                 label: &str)
+                                 -> Result<String> {
+    let stdout = runner.run(&["issue", "create", "--repo", repo, "--title", title, "--body",
+                              body, "--label", label]);
+    match stdout {
+        Ok(stdout) => issue_url(&stdout),
+        Err(ForgeError::Command { .. }) => create_issue_with(runner, repo, title, body),
+        Err(error) => Err(error),
+    }
+}
+
+/// `gh issue create` prints the new issue's URL on its last line.
+fn issue_url(stdout: &str) -> Result<String> {
     stdout.lines()
           .map(str::trim)
           .rfind(|line| line.starts_with("https://"))

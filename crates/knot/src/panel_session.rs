@@ -11,12 +11,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use knot_acp::{
     ConfigOption, PermissionDecision, PermissionRequest, Result as AcpResult, SessionEvent,
 };
-use knot_agent_launch::{AdapterConfig, ContextSource};
-use knot_terminal::{AcpSession, ConnectProgress, ConnectStep};
+use knot_agent_launch::{AdapterConfig, ContextSource, DefaultMode};
+use knot_terminal::{AcpSession, ConnectProgress, ConnectStep, SessionTarget};
 use parking_lot::Mutex;
 
 use crate::panel_state::PanelState;
 use crate::subagent_feed::SubagentSink;
+
+mod default_mode;
 
 pub struct PanelSessionHandle {
     session:        AcpSession,
@@ -33,12 +35,11 @@ impl PanelSessionHandle {
     /// current tokio runtime) draining its event stream into `state` until
     /// the session ends. `mcp_url` is Knot's own MCP HTTP server URL, wired
     /// into the session when MCP is enabled.
-    pub async fn start(config: &AdapterConfig, cwd: &str, prior_session_id: Option<&str>,
-                       mcp_url: Option<&str>, progress: &ConnectProgress,
-                       subagents: Option<SubagentSink>)
+    pub async fn start(config: &AdapterConfig, target: SessionTarget<'_>,
+                       progress: &ConnectProgress, subagents: Option<SubagentSink>)
                        -> AcpResult<Self> {
         let (session, config_options, mut events) =
-            AcpSession::start(config, cwd, prior_session_id, mcp_url, progress).await?;
+            AcpSession::start(config, target, progress).await?;
         let mut initial_state = PanelState::new();
         initial_state.config_options = config_options;
         let state = Arc::new(Mutex::new(initial_state));
@@ -348,6 +349,16 @@ pub struct ConnectRequest<'a> {
     /// defaults in place. See
     /// `openspec/specs/session-setup-persistence/spec.md`.
     pub session_config:      BTreeMap<String, String>,
+    /// The mode to select when `session_config` chose none, for an adapter
+    /// whose own default differs from its CLI's; see
+    /// `knot_agent_launch::unconfigured_default_mode`.
+    pub default_mode:        Option<DefaultMode>,
+    /// The mode the agent's user options ask for, which wins over both of
+    /// the above; see `knot_agent_launch::adapter_options`.
+    pub option_mode:         Option<DefaultMode>,
+    /// The `_meta` the session opens with, carrying the agent's user
+    /// options to an adapter that takes them there.
+    pub session_meta:        Option<serde_json::Value>,
     /// Where this agent's delegations are recorded, or `None` when its type
     /// reports none. Built by the caller, which is the only place that knows
     /// both the agent's id and the window's registry.
@@ -370,10 +381,12 @@ pub struct StartupRequest {
 /// caller can persist it for a later resume.
 pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectRequest<'_>,
                           progress: &ConnectProgress, on_session_id: impl FnOnce(&str)) {
+    let target = SessionTarget { cwd:              request.cwd,
+                                 prior_session_id: request.prior_session_id,
+                                 mcp_url:          request.mcp_url,
+                                 meta:             request.session_meta.as_ref(), };
     let mut handle = match PanelSessionHandle::start(request.config,
-                                                     request.cwd,
-                                                     request.prior_session_id,
-                                                     request.mcp_url,
+                                                     target,
                                                      progress,
                                                      request.subagents).await
     {
@@ -395,6 +408,23 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
         if let Ok(options) = handle.session().set_config_option(config_id, value).await {
             restored_options = Some(options);
         }
+    }
+    // Then the mode the user's options ask for (#501), or else the CLI's
+    // default where nothing above chose the option: the adapter would
+    // otherwise start Claude in Manual where its CLI starts in Auto (#516).
+    // Judged against the options the replay left, so "already on it" is
+    // what the session is on now. A rejection leaves the mode as it is.
+    let options = restored_options.clone()
+                                  .unwrap_or_else(|| handle.state().lock().config_options.clone());
+    if let Some(mode) = default_mode::mode_to_apply(request.option_mode,
+                                                    request.default_mode,
+                                                    &request.session_config,
+                                                    &options)
+       && let Ok(options) = handle.session()
+                                  .set_config_option(mode.config_id, mode.value)
+                                  .await
+    {
+        restored_options = Some(options);
     }
     if let Some(options) = restored_options {
         handle.state().lock().config_options = options;
@@ -488,6 +518,9 @@ mod tests {
                                        mcp_url:             None,
                                        registration_prompt: Some("register".to_string()),
                                        session_config:      BTreeMap::new(),
+                                       default_mode:        None,
+                                       option_mode:         None,
+                                       session_meta:        None,
                                        subagents:           None,
                                        startup_prompt:      None, };
 

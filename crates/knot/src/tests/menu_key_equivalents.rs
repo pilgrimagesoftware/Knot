@@ -39,7 +39,7 @@ use crate::app_bootstrap::OpenCommandCenter;
 use crate::app_bootstrap::OpenSettings;
 use crate::app_bootstrap::OpenWorkspaces;
 use crate::app_bootstrap::Quit;
-use crate::app_bootstrap::ReportBug;
+use crate::app_bootstrap::ReportIssue;
 use crate::app_bootstrap::install_actions_and_keys;
 use crate::keymap::*;
 
@@ -100,21 +100,21 @@ fn standard_menu_items_carry_their_platform_shortcut(cx: &mut TestAppContext) {
 }
 
 /// The Window menu's two openers, which unlike the items above are wired.
-/// Report a Bug has no key equivalent: macOS gives the item none, so any key
+/// Report an Issue has no key equivalent: macOS gives the item none, so any key
 /// Knot bound to it would be one taken from somewhere else.
 #[gpui_kit::test]
-fn report_a_bug_has_no_shortcut(cx: &mut TestAppContext) {
+fn report_an_issue_has_no_shortcut(cx: &mut TestAppContext) {
     app_with_bindings(cx);
 
     cx.update(|cx| {
-          assert!(cx.all_action_names().contains(&ReportBug.name()),
-                  "ReportBug is not a registered action");
+          assert!(cx.all_action_names().contains(&ReportIssue.name()),
+                  "ReportIssue is not a registered action");
           assert!(cx.key_bindings()
                     .borrow()
-                    .bindings_for_action(&ReportBug)
+                    .bindings_for_action(&ReportIssue)
                     .next()
                     .is_none(),
-                  "Report a Bug was given a key equivalent");
+                  "Report an Issue was given a key equivalent");
       });
 }
 
@@ -204,4 +204,17 @@ fn new_agent_carries_the_reference_shortcut(cx: &mut TestAppContext) {
           assert_bound(cx, "cmd-t", &NewAgent);
           assert!(!cx.is_action_available(&NewAgent));
       });
+}
+
+/// Help > Knot Help was a placeholder with no handler, so AppKit drew it
+/// disabled (#517). It is handled app-wide now, and opens the help page.
+#[gpui_kit::test]
+fn knot_help_is_enabled_and_opens_the_help_page(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert!(cx.is_action_available(&KnotHelp), "Knot Help is disabled");
+          cx.dispatch_action(&KnotHelp);
+      });
+    assert_eq!(cx.opened_url().as_deref(),
+               Some(crate::consts::KNOT_HELP_URL));
 }

@@ -11,7 +11,7 @@ browser page otherwise.
 
 ### Requirement: The bug report window is opened from the Help menu
 
-The Help menu SHALL carry a "Report a Bug…" item that opens the bug report
+The Help menu SHALL carry a "Report an Issue…" item that opens the bug report
 window as a dialog attached to the active window.
 
 Choosing the item while the window is already open SHALL bring the existing
@@ -20,13 +20,13 @@ choosing the item SHALL open it again.
 
 #### Scenario: Opening the window
 
-- **WHEN** the user chooses Help > Report a Bug…
+- **WHEN** the user chooses Help > Report an Issue…
 - **THEN** the bug report window opens attached to the active window
 
 #### Scenario: One window at a time
 
 - **WHEN** the bug report window is already open and the user chooses Help >
-  Report a Bug… again
+  Report an Issue… again
 - **THEN** the existing window comes forward and no second window opens
 
 ### Requirement: The window collects subject, description and diagnostics
@@ -60,6 +60,88 @@ can copy them into a report filed out of band without transcribing them.
 - **WHEN** the user opens the window and selects the diagnostics text
 - **THEN** the text can be copied, so it can be pasted into a report filed by
   other means
+
+### Requirement: A report is a bug or a feature request
+
+The window SHALL let the user choose what the report is - a bug or a feature
+request - with bug chosen when the window opens. The choice SHALL:
+
+- file the issue under the repository's matching label (`bug` or
+  `enhancement`), falling back to filing it unlabeled if the forge refuses
+  the label, since a reporter usually cannot label issues;
+- pre-select the same label on the browser fallback's compose page;
+- change the subject and description hints to suit the kind;
+- offer the logs only for a bug. A feature request still carries the
+  diagnostics, and SHALL NOT carry a log even if one was checked before the
+  kind was switched.
+
+Switching the kind SHALL keep what the user has typed.
+
+#### Scenario: Filing a feature request
+
+- **WHEN** the user chooses Feature request, fills both fields and chooses
+  Report with the forge ready
+- **THEN** an issue labeled `enhancement` is filed, carrying the description
+  and diagnostics and no log
+
+#### Scenario: Changing one's mind
+
+- **WHEN** the user has typed a subject and description and switches from Bug
+  to Feature request
+- **THEN** the subject and description are unchanged and the logs are no
+  longer offered
+
+### Requirement: The diagnostics stay in view whatever is typed
+
+The description text area SHALL keep a fixed height and scroll its own
+content, rather than growing with it. Pasting or typing a long description
+SHALL NOT push the diagnostics section, or the controls below it, out of the
+window.
+
+#### Scenario: A long paste
+
+- **WHEN** the user pastes several hundred lines into the description
+- **THEN** the description scrolls within its field, and the diagnostics and
+  the Cancel and Report controls stay where they were
+
+### Requirement: A report can attach the application and MCP logs
+
+The window SHALL offer to attach the application log and the MCP server log,
+each chosen on its own and neither chosen by default: a log is the user's to
+share.
+
+A chosen log SHALL be attached as its most recent lines, bounded in size so
+the issue body stays within the forge's limit, in a collapsed block after the
+diagnostics. A chosen log that cannot be read SHALL be named with its path
+rather than failing the report.
+
+The browser fallback SHALL NOT carry log content, which would make the
+compose URL too long to open; it SHALL instead name each chosen log's file so
+the user can attach it on the page.
+
+The application log SHALL be whatever the application wrote to standard
+error, kept in the platform log directory whenever standard error is not a
+terminal - a packaged app's standard error otherwise goes nowhere. The
+previous run's log SHALL be kept beside it, and older ones discarded.
+
+#### Scenario: Attaching the MCP log
+
+- **WHEN** the user checks the MCP server log and files a report with the
+  forge ready
+- **THEN** the issue body carries the log's last lines in a collapsed block
+  after the diagnostics
+
+#### Scenario: Nothing is attached unasked
+
+- **WHEN** the user files a report without checking either log
+- **THEN** the issue carries no log
+
+#### Scenario: The browser fallback names the files
+
+- **WHEN** the forge is not ready and the user files a report with a log
+  checked
+- **THEN** the compose page's body names that log's file, and carries none of
+  its content
 
 ### Requirement: Report requires a subject and a description
 
