@@ -217,7 +217,14 @@ impl AcpClient {
         let params = self.session_params(json!({ "sessionId": session_id, "cwd": cwd,
                                                  "mcpServers": self.mcp_servers(mcp_url) }));
         let raw = self.transport.request("session/load", Some(params)).await?;
-        let session_id = session_id_from(&raw)?;
+        // ACP's `LoadSessionResponse` carries no `sessionId`: a loaded
+        // session keeps the id it was asked for. `codex-acp` 2.0.0 answers
+        // exactly that way, and treating the absence as an error made every
+        // Codex load fall back to a fresh session. An adapter that does name
+        // one (Claude's does) is taken at its word.
+        let session_id = raw.get("sessionId")
+                            .and_then(Value::as_str)
+                            .map_or_else(|| session_id.to_owned(), str::to_owned);
         let config_options = config_options_from(&raw, &self.init_config_options);
         Ok(NewSession { session_id,
                         config_options })
