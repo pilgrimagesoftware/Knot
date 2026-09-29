@@ -18,6 +18,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use gpui_kit::SharedString;
@@ -31,17 +32,41 @@ use crate::workspace_window::WorkspaceWindow;
 /// Where a read's result goes: the text, and the flag that says it is new.
 ///
 /// Cloned into every read - the first one and each one the watch starts - so
-/// all of them report through the same pair.
+/// all of them report through the same slot.
+///
+/// Reads run on separate blocking threads, so they can finish out of order:
+/// one the watch started just before the agent rewrote the file can land
+/// after the one started by the rewrite, and would put the old contents
+/// back. Each read therefore takes a ticket when it starts, and a result is
+/// kept only if no later-started read has already landed. The newest-started
+/// read is the one that saw the newest file.
 #[derive(Clone, Default)]
 struct Landing {
-    body:   Arc<Mutex<Option<SharedString>>>,
+    /// The text, with the ticket of the read that produced it.
+    body:   Arc<Mutex<Option<(u64, SharedString)>>>,
+    issued: Arc<AtomicU64>,
     landed: Arc<AtomicBool>,
 }
 
 impl Landing {
     fn read(&self, path: &Path) {
-        let text = read_markdown(path);
-        *self.body.lock() = Some(text.into());
+        let ticket = self.begin();
+        self.land(ticket, read_markdown(path).into());
+    }
+
+    /// A ticket for a read about to start, later than every one before it.
+    fn begin(&self) -> u64 {
+        self.issued.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    /// Keeps `text` unless a later-started read has already landed.
+    fn land(&self, ticket: u64, text: SharedString) {
+        let mut body = self.body.lock();
+        if body.as_ref().is_some_and(|(kept, _)| *kept > ticket) {
+            return;
+        }
+        *body = Some((ticket, text));
+        drop(body);
         self.landed.store(true, Ordering::Release);
     }
 }
@@ -101,7 +126,11 @@ impl MarkdownDocument {
 
     /// The file's contents, or `None` while the first read is in flight.
     pub(in crate::workspace_window) fn body(&self) -> Option<SharedString> {
-        self.landing.body.lock().clone()
+        self.landing
+            .body
+            .lock()
+            .as_ref()
+            .map(|(_, text)| text.clone())
     }
 
     /// Whether a read has landed since this was last asked. Clears as it

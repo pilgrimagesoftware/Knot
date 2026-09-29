@@ -159,9 +159,15 @@ Every control in the toolbar SHALL carry a localized tooltip naming what it
 does, and the title and tooltips SHALL be resolved through localization rather
 than carried as literal English.
 
-Each section SHALL carry its own close control in its header, closing that
-section's artifact and leaving the other's alone. This is what close-all does to
-both at once. Every section control SHALL be localized on the same terms as the
+While both sections are open, each section SHALL carry its own close control in
+its header. It closes that section's artifact and leaves the other's alone,
+which close-all cannot do. While only one section is open, that section SHALL
+NOT carry a close control of its own. The toolbar's close-all, one row above,
+already closes exactly that section, and two controls for one action are one too
+many.
+
+This diverges from the Swift reference, whose `singleSectionLayout` keeps the
+section's close beside the toolbar's. Every section control SHALL be localized on the same terms as the
 toolbar's: the diagram section's close control is literal English today and SHALL
 NOT stay so.
 
@@ -176,6 +182,18 @@ NOT stay so.
 - **WHEN** the user activates the markdown section's own close control on a
   panel showing both
 - **THEN** the markdown file is closed and the diagram is still shown
+
+#### Scenario: A lone section has no close of its own
+
+- **WHEN** the panel holds only a markdown file, or only a diagram
+- **THEN** that section's header has no close control, and the toolbar's
+  close-all closes it
+
+#### Scenario: Both sections keep their own close
+
+- **WHEN** the panel holds both a markdown file and a diagram
+- **THEN** each section's header has its own close control, and the toolbar
+  still has close-all
 
 #### Scenario: The panel is localized
 
@@ -373,7 +391,9 @@ tool-call collapse state.
 
 When only one section is open, it SHALL fill the panel's height. No divider
 SHALL be drawn and that section SHALL NOT carry a collapse control: there is
-nothing to split and no other section to give height to.
+nothing to split and no other section to give height to. Nor SHALL it carry a
+close control of its own, per "The panel toolbar names the panel and closes
+it".
 
 Closing one of two open sections SHALL leave the other filling the panel, and
 SHALL discard the collapsed state of the section that closed, so reopening it
@@ -382,8 +402,8 @@ shows it expanded.
 #### Scenario: Only a diagram is open
 
 - **WHEN** an agent has a diagram open and no markdown file
-- **THEN** the mermaid section fills the panel, with no divider and no collapse
-  control
+- **THEN** the mermaid section fills the panel, with no divider, no collapse
+  control and no close control of its own
 
 #### Scenario: Closing one of two sections
 

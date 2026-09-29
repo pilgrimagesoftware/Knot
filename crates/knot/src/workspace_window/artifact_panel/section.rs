@@ -52,13 +52,33 @@ impl Section {
 
 /// What a section's header needs to know about its own state.
 ///
-/// `collapsible` is false whenever the section is the only one open: there is
-/// nothing to trade height with, so a chevron would offer a gesture that
-/// cannot do anything.
-#[derive(Debug, Clone, Copy, Default)]
+/// Built by [`section_chrome`], the one place that decides it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(in crate::workspace_window) struct SectionChrome {
     pub(in crate::workspace_window) collapsible: bool,
     pub(in crate::workspace_window) collapsed:   bool,
+    /// Whether the header carries its own close control.
+    pub(in crate::workspace_window) closable:    bool,
+}
+
+/// A section's chrome, given whether the other section is open too and
+/// whether the user collapsed this one.
+///
+/// A lone section has neither a chevron nor a close of its own. There is no
+/// other section to give its height to, so a chevron would offer a gesture
+/// that cannot do anything. And the toolbar's close-all, one row above,
+/// already closes exactly this section, so a second close beside it would be
+/// two controls for one action. With both open each keeps both: its chevron
+/// trades height with the other, and its close takes it alone, which
+/// close-all cannot.
+///
+/// The close is a departure from `ArtifactPanelView.singleSectionLayout`,
+/// which keeps the section's close beside the toolbar's.
+pub(in crate::workspace_window) fn section_chrome(both_open: bool, collapsed: bool)
+                                                  -> SectionChrome {
+    SectionChrome { collapsible: both_open,
+                    collapsed:   both_open && collapsed,
+                    closable:    both_open, }
 }
 
 impl WorkspaceWindow {
@@ -131,7 +151,8 @@ impl WorkspaceWindow {
                                .items_center()
                                .gap_1()
                                .children(actions))
-                .child(Button::new((section.close_id(), id.as_u128() as u64))
+                .children(chrome.closable.then(|| {
+                    Button::new((section.close_id(), id.as_u128() as u64))
                     .icon(IconName::Close)
                     .ghost()
                     .small()
@@ -143,7 +164,11 @@ impl WorkspaceWindow {
                         };
                         view.close_artifact_sections(id, target);
                         cx.notify();
-                    })))
+                    }))
+                }))
                 .into_any_element()
     }
 }
+
+#[cfg(test)]
+mod tests;

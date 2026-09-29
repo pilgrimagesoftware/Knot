@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use tempfile::TempDir;
 
+use super::Landing;
 use super::MarkdownDocument;
 use super::read_markdown;
 
@@ -70,6 +71,12 @@ fn opening_a_document_reads_it_off_the_calling_thread_and_flags_it() {
 
 /// What re-reading per frame used to give for free: an agent editing the
 /// file it showed has the edit reach the screen.
+///
+/// Polls for the new contents rather than asserting on the next landing. A
+/// platform event source may still deliver events from the first write after
+/// the rewrite - FSEvents does - and the read those trigger can see the old
+/// contents. That is not wrong; what must hold is that the rewrite's own read
+/// arrives and is what the section ends up showing.
 #[test]
 fn an_edit_to_the_file_is_read_again() {
     let dir = TempDir::new().expect("a temporary directory");
@@ -79,12 +86,40 @@ fn an_edit_to_the_file_is_read_again() {
     let document = MarkdownDocument::open(path.clone(), &runtime);
     assert!(wait_for_landing(&document, Duration::from_secs(5)));
 
-    // Past the watch's debounce and any coalescing the platform's event
-    // source does, so the write is not folded into the first read's events.
-    std::thread::sleep(Duration::from_millis(500));
     std::fs::write(&path, "second").expect("the file is rewritten");
 
-    assert!(wait_for_landing(&document, Duration::from_secs(10)),
-            "the watch schedules a second read");
-    assert_eq!(document.body().as_deref(), Some("second"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while document.body().as_deref() != Some("second") && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(document.body().as_deref(),
+               Some("second"),
+               "the watch schedules a read that sees the rewrite");
+}
+
+/// The race that polling above would otherwise hide: a read that started
+/// before the rewrite finishing after one that started after it.
+#[test]
+fn a_read_that_started_earlier_cannot_overwrite_a_later_one() {
+    let landing = Landing::default();
+    let before_rewrite = landing.begin();
+    let after_rewrite = landing.begin();
+
+    landing.land(after_rewrite, "second".into());
+    landing.land(before_rewrite, "first".into());
+
+    let body = landing.body.lock().clone().map(|(_, text)| text);
+    assert_eq!(body.as_deref(), Some("second"));
+}
+
+#[test]
+fn a_later_read_replaces_an_earlier_one() {
+    let landing = Landing::default();
+    let first = landing.begin();
+    landing.land(first, "first".into());
+    let second = landing.begin();
+    landing.land(second, "second".into());
+
+    let body = landing.body.lock().clone().map(|(_, text)| text);
+    assert_eq!(body.as_deref(), Some("second"));
 }
