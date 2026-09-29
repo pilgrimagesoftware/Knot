@@ -75,7 +75,19 @@ impl WorkspaceWindow {
         let store = Arc::clone(&self.store);
         let settings = crate::settings_global::handle(cx);
         let _runtime_guard = self.runtime.enter();
+        let agent_type = agent.agent_type.clone();
         self.runtime.spawn(async move {
+                        // Reads the agent CLI's settings files, so off the
+                        // UI thread and off the runtime's workers. A join
+                        // failure costs only the default, not the session.
+                        let default_mode = {
+                            let cwd = std::path::PathBuf::from(&cwd);
+                            tokio::task::spawn_blocking(move || {
+                                knot_agent_launch::unconfigured_default_mode(&agent_type, &cwd)
+                            }).await
+                              .ok()
+                              .flatten()
+                        };
                         let request =
                             panel_session::ConnectRequest { config: &adapter_config,
                                                             cwd: &cwd,
@@ -84,6 +96,7 @@ impl WorkspaceWindow {
                                                             mcp_url: mcp_url.as_deref(),
                                                             registration_prompt,
                                                             session_config,
+                                                            default_mode,
                                                             subagents,
                                                             startup_prompt };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {

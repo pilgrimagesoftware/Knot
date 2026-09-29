@@ -44,6 +44,38 @@ drop config options between versions.
 - **WHEN** a saved session has no persisted setup fields
 - **THEN** it opens successfully with the configured defaults
 
+### Requirement: A Claude session starts in the mode its CLI would
+
+When a Claude panel session starts and the agent has no persisted permission
+mode, the session SHALL be put in the mode the Claude CLI itself starts in -
+Auto - rather than the adapter's own default, Manual. The adapter reads only
+`permissions.defaultMode` and does not apply the CLI's default, so without
+this the same user got Auto in a terminal and Manual in a panel.
+
+This SHALL NOT apply when any settings file Claude Code reads for that
+folder - managed, project-local, project-shared or user - sets
+`permissions.defaultMode`: that is the user's choice, and the adapter already
+applies it. It SHALL NOT apply when the adapter does not offer Auto, and it
+SHALL NOT override a persisted choice.
+
+#### Scenario: A fresh install
+
+- **WHEN** a Claude agent with no persisted mode starts in a folder where no
+  Claude settings file sets `permissions.defaultMode`
+- **THEN** its session starts in Auto
+
+#### Scenario: A configured default
+
+- **WHEN** `~/.claude/settings.json` sets `permissions.defaultMode` to
+  `"manual"`
+- **THEN** the session starts in the mode the adapter chose from it, and Knot
+  selects nothing
+
+#### Scenario: A remembered choice
+
+- **WHEN** the user chose Plan for the agent in an earlier session
+- **THEN** the new session starts in Plan
+
 ### Requirement: Setup changes apply to later turns
 
 Changing a persisted setup value SHALL apply to the next message and later

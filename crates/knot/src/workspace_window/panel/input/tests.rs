@@ -55,6 +55,7 @@ fn ready_slot(runtime: &tokio::runtime::Runtime) -> Arc<Mutex<panel_session::Pan
                                                   mcp_url:             None,
                                                   registration_prompt: None,
                                                   session_config:      BTreeMap::new(),
+                                                  default_mode:        None,
                                                   subagents:           None,
                                                   startup_prompt:      None, };
     runtime.block_on(panel_session::connect_into(&slot, request, &progress, |_| {}));

@@ -11,6 +11,8 @@ uuid.workspace = true
 knot-core = { path = "../knot-core" }
 knot-acp = { path = "../knot-acp" }
 knot-git = { path = "../knot-git" }
+# Reads `permissions.defaultMode` from Claude Code's settings files.
+serde_json.workspace = true
 # `local-offset` for `{{date}}` in the local time zone.
 time = { workspace = true, features = ["local-offset"] }
 

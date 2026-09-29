@@ -9,6 +9,7 @@ mod adapter;
 mod builders;
 mod capabilities;
 mod consts;
+mod default_mode;
 mod escape;
 mod registration;
 mod startup;
@@ -20,6 +21,7 @@ pub use builders::{
     mcp_url_for_port, plan_launch,
 };
 pub use capabilities::supports_inline_registration;
+pub use default_mode::{DefaultMode, unconfigured_default_mode};
 pub use escape::persona_prompt;
 pub use registration::{
     acp_registration_prompt, knot_instructions, registration_prompt, registration_user_prompt,
