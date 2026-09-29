@@ -48,9 +48,12 @@ impl WorkspaceWindow {
             // to fall through to the Terminal path.
             return;
         };
-        let mcp_url = crate::settings_global::read(cx)
-                          .mcp_server_enabled
-                          .then(|| knot_agent_launch::mcp_url(&crate::settings_global::read(cx)));
+        // The agent's own URL, so the server binds the connection to it and
+        // refuses a call that names another agent (#539).
+        let mcp_url = crate::settings_global::read(cx).mcp_server_enabled.then(|| {
+                          knot_agent_launch::agent_mcp_url(&crate::settings_global::read(cx),
+                                                           agent.id)
+                      });
 
         let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
         let slot = Arc::new(Mutex::new(connecting));

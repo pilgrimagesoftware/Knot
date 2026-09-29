@@ -241,3 +241,9 @@ pub const KNOT_REPO: &str = "pilgrimagesoftware/Knot";
 
 #[cfg(test)]
 mod tests;
+
+/// The query parameter naming the agent an MCP URL was given to. Knot hands
+/// each launched agent `…/mcp?agent=<id>`, and the server binds the
+/// connection to that agent, so a call naming another agent is refused
+/// rather than acted on (#539).
+pub const MCP_AGENT_QUERY: &str = "agent";

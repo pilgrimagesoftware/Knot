@@ -59,3 +59,13 @@ async fn the_lent_handle_completes_with_an_error_when_the_serve_task_is_aborted(
     assert!(error.is_cancelled(),
             "the abort must be reported as a cancellation: {error:?}");
 }
+
+#[test]
+fn the_agent_is_read_from_the_query() {
+    let id = Uuid::new_v4();
+    assert_eq!(agent_from_query(Some(&format!("agent={id}"))), Some(id));
+    assert_eq!(agent_from_query(Some(&format!("x=1&agent={id}"))), Some(id));
+    assert_eq!(agent_from_query(Some("agent=nonsense")), None);
+    assert_eq!(agent_from_query(Some("other=1")), None);
+    assert_eq!(agent_from_query(None), None);
+}

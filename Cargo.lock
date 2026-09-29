@@ -3909,6 +3909,7 @@ dependencies = [
  "async-trait",
  "axum",
  "knot-agents",
+ "knot-core",
  "parking_lot",
  "reqwest",
  "serde",

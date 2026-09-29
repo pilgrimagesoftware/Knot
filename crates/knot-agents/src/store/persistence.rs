@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use knot_core::SavedAgent;
 use uuid::Uuid;
@@ -99,15 +99,47 @@ impl AgentStore {
             .collect()
     }
 
+    /// Sets each agent's session to resume on launch: the one `persisted`
+    /// recorded for it, else the newest one `resolver` finds in its CLI's
+    /// history for its folder and type.
+    ///
+    /// A session goes to one agent at most. The history knows folders, not
+    /// agents, so the fallback serves only an agent alone with its type in
+    /// its folder, and never hands out a session another agent persisted. An
+    /// agent that shared a folder with another of its type was otherwise
+    /// given that agent's newest conversation, and with it that agent's knot
+    /// ID in the transcript and no registration to correct it (#539).
     pub fn resolve_resume_sessions<F>(&mut self, persisted: &BTreeMap<Uuid, String>,
                                       mut resolver: F)
         where F: FnMut(&str, &str) -> Option<String> {
+        let mut claimed = self.agents
+                              .iter()
+                              .filter_map(|agent| agent.resume_session_id.clone())
+                              .collect::<HashSet<_>>();
+        // Roster order decides a session two records both name: the earlier
+        // agent keeps it.
         for agent in &mut self.agents {
-            if agent.resume_session_id.is_none() {
-                agent.resume_session_id =
-                    persisted.get(&agent.id)
-                             .cloned()
-                             .or_else(|| resolver(&agent.folder, &agent.agent_type));
+            if agent.resume_session_id.is_none()
+               && let Some(session) = persisted.get(&agent.id)
+               && claimed.insert(session.clone())
+            {
+                agent.resume_session_id = Some(session.clone());
+            }
+        }
+        claimed.extend(persisted.values().cloned());
+        let mut sharing = HashMap::<(String, String), usize>::new();
+        for agent in &self.agents {
+            *sharing.entry((agent.folder.clone(), agent.agent_type.clone()))
+                    .or_default() += 1;
+        }
+        for agent in &mut self.agents {
+            let alone = sharing.get(&(agent.folder.clone(), agent.agent_type.clone())) == Some(&1);
+            if agent.resume_session_id.is_none()
+               && alone
+               && let Some(session) = resolver(&agent.folder, &agent.agent_type)
+               && claimed.insert(session.clone())
+            {
+                agent.resume_session_id = Some(session);
             }
         }
     }

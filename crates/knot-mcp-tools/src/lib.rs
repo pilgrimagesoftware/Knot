@@ -7,6 +7,7 @@ mod args;
 mod catalog;
 mod consts;
 mod error;
+mod identity;
 mod lookup;
 mod messaging;
 mod panels;
