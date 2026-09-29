@@ -118,6 +118,13 @@ pub trait ToolCatalog: Send + Sync {
                      -> ToolCallResult {
         self.call(name, arguments).await
     }
+
+    /// A request arrived on a connection whose URL names `agent_id`. Called
+    /// on every such request, so it must be cheap and idempotent; the
+    /// catalog that keeps a registry counts it as that agent's
+    /// registration, which is how a resumed agent - sent no registration
+    /// turn - is registered at all (#552).
+    fn connected(&self, _agent_id: Uuid) {}
 }
 
 /// A `ToolCatalog` with no tools; every call fails with "unknown tool".

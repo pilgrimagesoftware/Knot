@@ -49,19 +49,20 @@ fn declaring_adapter() -> AdapterConfig {
 fn ready_slot(runtime: &tokio::runtime::Runtime) -> Arc<Mutex<panel_session::PanelSessionSlot>> {
     let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
     let slot = Arc::new(Mutex::new(connecting));
-    let request = panel_session::ConnectRequest { config:              &declaring_adapter(),
-                                                  cwd:                 "/tmp",
-                                                  prior_session_id:    None,
-                                                  mcp_url:             None,
-                                                  registration_prompt: None,
-                                                  session_config:      BTreeMap::new(),
-                                                  default_mode:        None,
-                                                  option_mode:         None,
-                                                  session_meta:        None,
-                                                  env:                 Vec::new(),
-                                                  args:                Vec::new(),
-                                                  subagents:           None,
-                                                  startup_prompt:      None, };
+    let request = panel_session::ConnectRequest { config:                     &declaring_adapter(),
+                                                  cwd:                        "/tmp",
+                                                  prior_session_id:           None,
+                                                  mcp_url:                    None,
+                                                  registration_prompt:        None,
+                                                  resume_registration_prompt: None,
+                                                  session_config:             BTreeMap::new(),
+                                                  default_mode:               None,
+                                                  option_mode:                None,
+                                                  session_meta:               None,
+                                                  env:                        Vec::new(),
+                                                  args:                       Vec::new(),
+                                                  subagents:                  None,
+                                                  startup_prompt:             None, };
     runtime.block_on(panel_session::connect_into(&slot, request, &progress, |_| {}));
     assert_eq!(slot.lock().phase(),
                panel_session::PanelPhase::Ready,

@@ -11,6 +11,13 @@ pub fn supports_inline_registration(agent_type: &str) -> bool {
     knot_core::agent_type::supports_inline_registration(agent_type)
 }
 
+/// Whether `agent_type`'s adapter keeps its MCP URL's `?agent=` query, so
+/// the server registers the agent from its connection. An unlisted type is
+/// not assumed to: it is sent a registration turn on resume instead.
+pub fn keeps_mcp_query(agent_type: &str) -> bool {
+    crate::consts::MCP_QUERY_KEEPING_TYPES.contains(&agent_type)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -22,5 +29,14 @@ mod tests {
                     "{t} should support inline registration");
         }
         assert!(!supports_inline_registration("unknown-type"));
+    }
+
+    #[test]
+    fn only_checked_adapters_are_trusted_to_keep_the_query() {
+        assert!(keeps_mcp_query("claude"));
+        assert!(keeps_mcp_query("codex"));
+        for t in ["opencode", "gemini", "copilot", "unknown-type"] {
+            assert!(!keeps_mcp_query(t), "{t}");
+        }
     }
 }
