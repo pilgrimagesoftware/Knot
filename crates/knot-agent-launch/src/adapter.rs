@@ -25,6 +25,12 @@ pub struct AdapterConfig {
     /// Extra fixed arguments the adapter command needs before Knot's own
     /// per-session args (cwd, MCP config).
     pub args:                      &'static [&'static str],
+    /// Whether Knot should try to resume this type's prior session.
+    ///
+    /// A claim about the adapter family, reported to other agents as the
+    /// `resume` tag. It is not what decides a resume: a connected adapter
+    /// is asked for `session/load` only if its `initialize` advertises
+    /// `loadSession`, so a version that predates loading stays fresh.
     pub supports_resume:           bool,
     pub supports_permission_modes: bool,
     /// How to install `command` if it isn't found, or `None` if this
@@ -58,10 +64,12 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
                                                                                                     "@agentclientprotocol/claude-agent-acp"], }), }),
         // The npm adapter includes a compatible Codex CLI dependency and
         // installs the `codex-acp` executable alongside Claude's adapter.
-        // Resume support is undocumented, so this remains disabled.
+        // `codex-acp` 2.0.0 implements `session/load` and advertises
+        // `loadSession` (#540); an older one that does not is never asked,
+        // since the resume is gated on what the adapter advertises.
         "codex" => Some(AdapterConfig { command:                   "codex-acp",
                                         args:                      &[],
-                                        supports_resume:           false,
+                                        supports_resume:           true,
                                         supports_permission_modes: true,
                                         install:                   Some(InstallMethod { command: "npm",
                                                                                         args:    &["install",
@@ -167,11 +175,23 @@ mod tests {
         }
     }
 
+    /// `codex-acp` 2.0.0 loads sessions (#540). Whether a given install
+    /// does is its advertised `loadSession`, checked at connect; this is
+    /// only what Knot tries and reports.
     #[test]
-    fn codex_resume_is_conservatively_unsupported() {
-        // Per the findings note: resume support for the codex-acp adapter
-        // is undocumented, so this fails closed rather than guessing.
-        assert!(!acp_adapter("codex").unwrap().supports_resume);
+    fn codex_resume_is_supported() {
+        assert!(acp_adapter("codex").unwrap().supports_resume);
+    }
+
+    /// Every registered adapter is now resume-capable, so the `resume` tag
+    /// no longer tells types apart - but a new adapter added without it
+    /// should be a decision, not an accident.
+    #[test]
+    fn every_registered_adapter_supports_resume() {
+        for agent_type in ["claude", "codex", "opencode", "gemini", "copilot"] {
+            assert!(acp_adapter(agent_type).unwrap().supports_resume,
+                    "{agent_type} should try to resume");
+        }
     }
 
     #[test]

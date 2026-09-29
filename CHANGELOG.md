@@ -1,4 +1,18 @@
 
+## 1.22.0 - 2026-09-29
+
+### Added
+- Pass agent options to the Codex, OpenCode and Gemini adapters
+
+
+### Fixed
+- Hold each agent to its own knot ID
+- Never refuse a connection its own agent ID
+- Resume Codex agents, and register when a resume falls back
+- Keep non-string developer_instructions ahead of Knot's
+
+
+
 ## 1.21.0 - 2026-09-29
 
 ### Added

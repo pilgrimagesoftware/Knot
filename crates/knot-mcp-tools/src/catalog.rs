@@ -10,7 +10,9 @@
 //! Implements `openspec/specs/mcp-tools/spec.md`.
 
 use async_trait::async_trait;
-use knot_mcp::{PropertySchema, ToolCallResult, ToolCatalog, ToolDefinition, ToolInputSchema};
+use knot_mcp::{
+    Caller, PropertySchema, ToolCallResult, ToolCatalog, ToolDefinition, ToolInputSchema,
+};
 
 use crate::{McpToolCatalog, agents, consts, messaging, panels, repos, tasks};
 
@@ -186,6 +188,31 @@ fn tool_catalog() -> Vec<ToolDefinition> {
 impl ToolCatalog for McpToolCatalog {
     fn list(&self) -> Vec<ToolDefinition> {
         tool_catalog()
+    }
+
+    /// [`Self::call`], refused when the arguments name an agent `caller`
+    /// may not act as. An unbound connection that registers is bound to the
+    /// agent it registered as, so a second session registering the same
+    /// agent is refused rather than silently sharing its inbox (#539).
+    async fn call_as(&self, name: &str, arguments: serde_json::Value, caller: &Caller)
+                     -> ToolCallResult {
+        let (refused, claimed) = {
+            let store = self.agents.lock();
+            (crate::identity::refusal(&store, name, &arguments, caller),
+             crate::identity::claimed_agent(&store, name, &arguments))
+        };
+        if let Some(refused) = refused {
+            return refused;
+        }
+        let result = self.call(name, arguments).await;
+        if name == consts::REGISTER_AGENT
+           && result.is_error.is_none()
+           && caller.agent.is_none()
+           && let Some(agent) = claimed
+        {
+            caller.bind(agent);
+        }
+        result
     }
 
     async fn call(&self, name: &str, arguments: serde_json::Value) -> ToolCallResult {

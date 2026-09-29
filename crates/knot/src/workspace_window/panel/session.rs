@@ -48,16 +48,18 @@ impl WorkspaceWindow {
             // to fall through to the Terminal path.
             return;
         };
-        let mcp_url = crate::settings_global::read(cx)
-                          .mcp_server_enabled
-                          .then(|| knot_agent_launch::mcp_url(&crate::settings_global::read(cx)));
+        // The agent's own URL, so the server binds the connection to it and
+        // refuses a call that names another agent (#539).
+        let mcp_url = crate::settings_global::read(cx).mcp_server_enabled.then(|| {
+                          knot_agent_launch::agent_mcp_url(&crate::settings_global::read(cx),
+                                                           agent.id)
+                      });
 
         let (connecting, progress) = panel_session::PanelSessionSlot::connecting();
         let slot = Arc::new(Mutex::new(connecting));
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
         let prior_session_id = agent.session_to_load().map(str::to_owned);
-        let is_resume = prior_session_id.is_some();
         // How the knot instructions and persona reach this agent (#534):
         // its adapter's system channel where it has one, on every launch,
         // so the first turn is the registration request alone. Environment
@@ -66,20 +68,6 @@ impl WorkspaceWindow {
             agent.id,
             crate::settings_global::read(cx).persona_for(agent.persona_id),
         );
-        let cache_dir = knot_core::cache_dir();
-        let inherited = |name: &str| std::env::var(name).ok();
-        let delivery = knot_agent_launch::instruction_delivery(knot_agent_launch::DeliveryRequest {
-            carrier: knot_agent_launch::instruction_carrier(&agent.agent_type),
-            agent_id: agent.id,
-            instructions,
-            cache_dir: cache_dir.as_deref(),
-            inherited: &inherited,
-        });
-        // Only on a fresh session, which is what the registration prompt
-        // marks: a resumed conversation gets neither.
-        let startup_prompt = (!is_resume).then(|| self.startup_request(&agent, cx))
-                                         .flatten();
-        let session_config = agent.session_config.clone();
         // The Coding tab's options for this type, in the shape its adapter
         // takes them. Pure string work, so here rather than on the runtime.
         let options = knot_agent_launch::adapter_options(&agent.agent_type,
@@ -91,6 +79,22 @@ impl WorkspaceWindow {
             eprintln!("agent {id}: {} options not passed to its adapter: {:?}",
                       agent.agent_type, options.ignored);
         }
+        let cache_dir = knot_core::cache_dir();
+        // The options' config goes into the same variable as the
+        // instructions, under them, so an option cannot displace them.
+        let inherited = |name: &str| options.layered_env(name, std::env::var(name).ok());
+        let delivery = knot_agent_launch::instruction_delivery(knot_agent_launch::DeliveryRequest {
+            carrier: knot_agent_launch::instruction_carrier(&agent.agent_type),
+            agent_id: agent.id,
+            instructions,
+            cache_dir: cache_dir.as_deref(),
+            inherited: &inherited,
+        });
+        // Built for a fresh session even when a prior one is named: whether
+        // the adapter actually resumes is known only once it is connected,
+        // and `connect_into` withholds both prompts then (#540).
+        let startup_prompt = self.startup_request(&agent, cx);
+        let session_config = agent.session_config.clone();
         // Built here because this is the only place that knows both the
         // agent's id and its type; `None` for a type with no recognizer,
         // which costs the session nothing.
@@ -135,7 +139,7 @@ impl WorkspaceWindow {
                             None => delivery,
                         };
                         let registration_prompt =
-                            knot_agent_launch::acp_registration_prompt(is_resume,
+                            knot_agent_launch::acp_registration_prompt(false,
                                                                        delivery.first_turn
                                                                                .as_deref());
                         let session_meta =
@@ -152,6 +156,7 @@ impl WorkspaceWindow {
                                                             default_mode,
                                                             option_mode: options.mode,
                                                             session_meta,
+                                                            args: options.args,
                                                             env: delivery.env,
                                                             subagents,
                                                             startup_prompt };

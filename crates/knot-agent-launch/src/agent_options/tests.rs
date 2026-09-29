@@ -86,3 +86,129 @@ fn another_type_reports_its_options_unforwarded() {
     assert_eq!(options.mode, None);
     assert_eq!(options.ignored, vec!["--full-auto".to_owned()]);
 }
+
+fn config(options: &AdapterOptions) -> Value {
+    options.env_config
+           .as_ref()
+           .map_or(Value::Null, |(_, config)| Value::Object(config.clone()))
+}
+
+fn words(list: &[&str]) -> Vec<String> {
+    list.iter().map(|word| (*word).to_owned()).collect()
+}
+
+#[test]
+fn codex_flags_become_config_overrides() {
+    let options = adapter_options("codex",
+                                  "-m o3 --profile work -c model_reasoning_effort=high \
+                                   -c features.web_search=true --enable plan_tool");
+    assert_eq!(options.env_config.as_ref().map(|(name, _)| *name),
+               Some("CODEX_CONFIG"));
+    assert_eq!(config(&options),
+               json!({ "model": "o3",
+                       "profile": "work",
+                       "model_reasoning_effort": "high",
+                       "features": { "web_search": true, "plan_tool": true } }));
+    assert!(options.args.is_empty(),
+            "codex-acp never passes argv to Codex");
+    assert!(options.ignored.is_empty());
+}
+
+#[test]
+fn a_codex_override_value_is_read_as_toml_where_it_can_be() {
+    let options = adapter_options("codex",
+                                  r#"-c retries=3 -c 'sandbox_workspace_write.writable_roots=["/tmp"]'"#);
+    assert_eq!(config(&options),
+               json!({ "retries": 3,
+                       "sandbox_workspace_write": { "writable_roots": ["/tmp"] } }));
+}
+
+/// The adapter sets approval and sandbox policy itself on every turn, so
+/// these would be overwritten before they took effect.
+#[test]
+fn codex_flags_the_adapter_owns_are_ignored() {
+    let options = adapter_options("codex", "-s read-only --full-auto -c noequals -m o3");
+    assert_eq!(config(&options), json!({ "model": "o3" }));
+    assert_eq!(options.ignored,
+               words(&["-s", "read-only", "--full-auto", "-c noequals"]));
+}
+
+#[test]
+fn opencode_model_and_agent_go_to_its_config_and_switches_to_its_argv() {
+    let options = adapter_options("opencode",
+                                  "--model anthropic/claude-sonnet-5 --agent plan --print-logs \
+                                   --log-level DEBUG --continue");
+    assert_eq!(options.env_config.as_ref().map(|(name, _)| *name),
+               Some("OPENCODE_CONFIG_CONTENT"));
+    assert_eq!(config(&options),
+               json!({ "model": "anthropic/claude-sonnet-5", "default_agent": "plan" }));
+    assert_eq!(options.args,
+               words(&["--print-logs", "--log-level", "DEBUG"]));
+    assert_eq!(options.ignored, words(&["--continue"]));
+}
+
+#[test]
+fn gemini_takes_its_accepted_flags_on_its_command_line() {
+    let options = adapter_options("gemini",
+                                  "-m gemini-2.5-pro --approval-mode=auto_edit -y \
+                                   --include-directories /tmp/a");
+    assert_eq!(options.args,
+               words(&["--model",
+                       "gemini-2.5-pro",
+                       "--approval-mode",
+                       "auto_edit",
+                       "--yolo",
+                       "--include-directories",
+                       "/tmp/a"]));
+    assert_eq!(options.env_config, None);
+    assert!(options.ignored.is_empty());
+}
+
+/// `-p` would turn the ACP session into a one-shot headless run, and a word
+/// after a switch would reach Gemini as its first prompt.
+#[test]
+fn gemini_flags_that_change_the_session_and_stray_words_are_ignored() {
+    let options = adapter_options("gemini", "-p hello --resume latest --sandbox stray --debug");
+    assert_eq!(options.args, words(&["--sandbox"]));
+    assert_eq!(options.ignored,
+               words(&["-p", "hello", "--resume", "latest", "stray", "--debug"]));
+}
+
+#[test]
+fn copilot_options_are_reported_not_passed() {
+    let options = adapter_options("copilot", "--model gpt-5");
+    assert_eq!(options.ignored, words(&["--model gpt-5"]));
+    assert!(options.args.is_empty());
+    assert_eq!(options.env_config, None);
+}
+
+#[test]
+fn unbalanced_quotes_forward_nothing_for_any_adapter() {
+    for agent_type in ["codex", "opencode", "gemini"] {
+        let options = adapter_options(agent_type, r#"--model "o3"#);
+        assert_eq!(options.ignored, words(&[r#"--model "o3"#]), "{agent_type}");
+        assert_eq!(options.env_config, None, "{agent_type}");
+        assert!(options.args.is_empty(), "{agent_type}");
+    }
+}
+
+/// A flag overrides a config file; the instructions are merged in after,
+/// so no option can displace them.
+#[test]
+fn options_layer_over_the_inherited_environment() {
+    let options = adapter_options("codex", "-m o3 -c features.b=true");
+    let inherited = r#"{"model":"gpt-5","features":{"a":true},"approval_policy":"never"}"#;
+    let layered: Value = serde_json::from_str(&options.layered_env("CODEX_CONFIG",
+                                                                   Some(inherited.to_owned()))
+                                                      .expect("set")).expect("json");
+    assert_eq!(layered,
+               json!({ "model": "o3",
+                       "features": { "a": true, "b": true },
+                       "approval_policy": "never" }));
+    assert_eq!(options.layered_env("OTHER", Some("x".to_owned()))
+                      .as_deref(),
+               Some("x"),
+               "another variable passes through untouched");
+    assert_eq!(AdapterOptions::default().layered_env("CODEX_CONFIG", None),
+               None);
+}

@@ -85,6 +85,41 @@ impl McpSessionManager {
         table.sessions.get(id).cloned()
     }
 
+    /// Binds session `id` to `agent_id`, as creating it for that agent
+    /// would have: a session the agent held before is dropped, and the
+    /// session stops speaking for any agent it was bound to. Does nothing
+    /// for an unknown session.
+    pub fn bind(&self, id: &str, agent_id: Uuid) {
+        let mut table = self.table.lock();
+        let Some(previous) = table.sessions.get(id).map(|session| session.agent_id)
+        else {
+            return;
+        };
+        if previous != Uuid::nil()
+           && table.agent_to_session.get(&previous).map(String::as_str) == Some(id)
+        {
+            table.agent_to_session.remove(&previous);
+        }
+        if let Some(old_id) = table.agent_to_session.insert(agent_id, id.to_owned())
+           && old_id != id
+        {
+            table.sessions.remove(&old_id);
+        }
+        if let Some(session) = table.sessions.get_mut(id) {
+            session.agent_id = agent_id;
+        }
+    }
+
+    /// Whether a live session other than `id` is bound to `agent_id`.
+    pub fn held_elsewhere(&self, agent_id: Uuid, id: Option<&str>) -> bool {
+        let table = self.table.lock();
+        table.agent_to_session
+             .get(&agent_id)
+             .is_some_and(|holder| {
+                 Some(holder.as_str()) != id && table.sessions.contains_key(holder)
+             })
+    }
+
     pub fn touch(&self, id: &str) {
         if let Some(session) = self.table.lock().sessions.get_mut(id) {
             session.last_activity = Instant::now();
@@ -141,6 +176,42 @@ mod tests {
         assert!(manager.session(&first.id).is_none());
         assert!(manager.session(&second.id).is_some());
         assert_eq!(manager.session_for_agent(agent_id).unwrap().id, second.id);
+    }
+
+    #[test]
+    fn binding_a_session_names_its_agent() {
+        let manager = McpSessionManager::new();
+        let agent = Uuid::new_v4();
+        let session = manager.create_session(Uuid::nil());
+
+        manager.bind(&session.id, agent);
+
+        assert_eq!(manager.session_for_agent(agent).unwrap().id, session.id);
+        assert!(!manager.held_elsewhere(agent, Some(&session.id)));
+        assert!(manager.held_elsewhere(agent, None));
+        assert!(manager.held_elsewhere(agent, Some("another")));
+    }
+
+    #[test]
+    fn rebinding_a_session_releases_its_old_agent() {
+        let manager = McpSessionManager::new();
+        let (old, new) = (Uuid::new_v4(), Uuid::new_v4());
+        let session = manager.create_session(old);
+
+        manager.bind(&session.id, new);
+
+        assert!(manager.session_for_agent(old).is_none());
+        assert!(!manager.held_elsewhere(old, None));
+        assert_eq!(manager.session(&session.id).unwrap().agent_id, new);
+    }
+
+    #[test]
+    fn a_removed_session_holds_nothing() {
+        let manager = McpSessionManager::new();
+        let agent = Uuid::new_v4();
+        let session = manager.create_session(agent);
+        manager.remove(&session.id);
+        assert!(!manager.held_elsewhere(agent, None));
     }
 
     #[test]
