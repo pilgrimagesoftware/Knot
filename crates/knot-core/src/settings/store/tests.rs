@@ -438,6 +438,20 @@ fn persona_lookup_excludes_deleted() {
     assert!(s.persona(s.personas[0].id).is_none());
 }
 
+/// Both launch paths once passed the agent's own id here, so every
+/// assigned persona resolved to nothing (#519).
+#[test]
+fn persona_for_resolves_an_agents_assignment_not_its_id() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    let persona_id = s.add_persona("Rust Pro", "borrow first").unwrap().id;
+    let agent = agent_id();
+
+    assert_eq!(s.persona_for(Some(persona_id)).unwrap().name, "Rust Pro");
+    assert!(s.persona_for(None).is_none());
+    assert!(s.persona_for(Some(agent)).is_none());
+}
+
 #[test]
 fn remove_persona_soft_deletes_system_and_hard_deletes_user() {
     let dir = tempdir().unwrap();
