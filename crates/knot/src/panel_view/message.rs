@@ -30,6 +30,7 @@ use crate::panel_state::PanelState;
 use crate::panel_view::callbacks::PanelCallbacks;
 use crate::panel_view::shell_card::render_shell_card;
 use crate::panel_view::style::ERROR_COLOR;
+use crate::panel_view::style::MUTED;
 use crate::panel_view::style::PanelStyle;
 use crate::panel_view::tool_call::render_tool_call_card;
 
@@ -187,6 +188,18 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                                           .border_color(rgb(ERROR_COLOR))
                                           .child(text.clone())
                                           .into_any_element(),
+        // Small and muted, on one line, so it reads as a note in the margin
+        // of the conversation - neither a prompt nor an answer.
+        PanelMessage::Notice(text) => div().w_full()
+                                           .min_w_0()
+                                           .text_xs()
+                                           .text_color(rgb(MUTED))
+                                           .px_3()
+                                           .overflow_hidden()
+                                           .whitespace_nowrap()
+                                           .text_ellipsis()
+                                           .child(crate::app_support::single_line(text))
+                                           .into_any_element(),
     }
 }
 

@@ -60,6 +60,12 @@ panel:
   # Failures the panel records into the conversation itself, where the
   # user reads them beside the turn they belong to.
   error_first_turn: "The agent could not start its first turn: %{error}"
+  # What a replayed conversation shows in place of a message the agent's
+  # harness injected, rather than rendering it as the user's prompt.
+  harness:
+    task_finished: "Background task finished: %{summary}"
+    task_finished_unnamed: "Background task finished"
+    automated: "Automated message"
   error_registration: "The agent could not be registered: %{error}"
   error_answer: "The agent could not answer: %{error}"
   allow: "Allow"

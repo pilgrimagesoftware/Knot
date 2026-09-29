@@ -39,6 +39,11 @@ pub enum PanelMessage {
     /// records them - without this entry the only trace of, say, an
     /// exhausted model quota was a line on stderr the user never sees.
     Error(String),
+    /// Something the agent's harness put in the conversation that is neither
+    /// the user's nor the agent's - a background task finishing - shown as
+    /// a compact row. Carries the row's text, already localized. Only ever
+    /// built from a replayed user chunk: see `panel_state::harness`.
+    Notice(String),
 }
 
 /// Where a finished command's output stands on its way to the agent.

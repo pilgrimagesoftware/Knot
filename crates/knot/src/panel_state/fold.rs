@@ -5,6 +5,8 @@ use knot_acp::SessionEvent;
 use knot_acp::SessionUpdate;
 use knot_acp::ToolCallContent;
 
+use super::harness::UserChunk;
+use super::harness::classify_user_chunk;
 use super::message::PanelMessage;
 use super::message::ToolCallCard;
 use super::message::render_json;
@@ -41,7 +43,9 @@ impl PanelState {
             }
             SessionUpdate::Usage { .. } => {}
             SessionUpdate::TextDelta { text } => self.append_text(text),
-            SessionUpdate::UserMessageChunk { text } => self.append_user_text(text),
+            SessionUpdate::UserMessageChunk { text, meta } => {
+                self.append_user_chunk(text, meta.as_ref());
+            }
             SessionUpdate::ToolCallStart { tool_call_id,
                                            kind,
                                            title,
@@ -139,10 +143,21 @@ impl PanelState {
     /// echo one mid-turn would otherwise show it twice. Nor does it start a
     /// turn the way `push_user_message` does: a replayed prompt was answered
     /// long ago.
-    fn append_user_text(&mut self, text: String) {
+    /// A replayed user chunk: the user's words join the current prompt
+    /// bubble, and what the agent's harness injected does not - it becomes a
+    /// compact notice, or nothing (see `harness`).
+    fn append_user_chunk(&mut self, text: String, meta: Option<&serde_json::Value>) {
         if self.turn_active {
             return;
         }
+        match classify_user_chunk(&text, meta) {
+            UserChunk::Human => self.append_user_text(text),
+            UserChunk::Hidden => {}
+            UserChunk::Notice(notice) => self.messages.push(PanelMessage::Notice(notice)),
+        }
+    }
+
+    fn append_user_text(&mut self, text: String) {
         if let Some(PanelMessage::User(existing)) = self.messages.last_mut() {
             existing.push_str(&text);
         }

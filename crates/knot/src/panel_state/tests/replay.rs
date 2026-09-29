@@ -9,7 +9,8 @@ use crate::panel_state::PanelMessage;
 use crate::panel_state::PanelState;
 
 fn user(text: &str) -> SessionEvent {
-    SessionEvent::Update(SessionUpdate::UserMessageChunk { text: text.to_string(), })
+    SessionEvent::Update(SessionUpdate::UserMessageChunk { text: text.to_string(),
+                                                           meta: None, })
 }
 
 fn agent(text: &str) -> SessionEvent {
@@ -70,4 +71,69 @@ fn an_echoed_prompt_during_a_live_turn_is_not_recorded_again() {
     assert_eq!(state.messages,
                vec![PanelMessage::User("fix the build".to_string()),
                     PanelMessage::Assistant("fixed".to_string())]);
+}
+
+fn injected(text: &str, kind: &str) -> SessionEvent {
+    SessionEvent::Update(SessionUpdate::UserMessageChunk { text: text.to_string(),
+                                                           meta: Some(serde_json::json!({ "_claude/origin": { "kind": kind } })), })
+}
+
+/// The #551 case: a background task finished between two turns, and the
+/// replay shows it as a note, not as a prompt the user typed.
+#[test]
+fn a_replayed_task_notification_is_a_notice_not_a_prompt() {
+    let mut state = PanelState::new();
+
+    for event in [user("run the tests"),
+                  agent("running them in the background"),
+                  user("<task-notification><summary>Tests passed</summary></task-notification>"),
+                  agent("all green")]
+    {
+        state.apply(event);
+    }
+
+    let notice = knot_core::l10n::t_with("panel.harness.task_finished",
+                                         &[("summary", "Tests passed")]);
+    assert_eq!(state.messages,
+               vec![PanelMessage::User("run the tests".to_string()),
+                    PanelMessage::Assistant("running them in the background".to_string()),
+                    PanelMessage::Notice(notice),
+                    PanelMessage::Assistant("all green".to_string())]);
+}
+
+/// Claude Code appends reminders to a prompt as their own block, which
+/// replays as its own chunk: the prompt stays whole and the reminder goes.
+#[test]
+fn a_reminder_replayed_after_a_prompt_does_not_join_it() {
+    let mut state = PanelState::new();
+
+    state.apply(user("fix the build"));
+    state.apply(user("<system-reminder>Be brief.</system-reminder>"));
+
+    assert_eq!(state.messages,
+               vec![PanelMessage::User("fix the build".to_string())]);
+}
+
+#[test]
+fn an_origin_tagged_chunk_is_not_a_prompt() {
+    let mut state = PanelState::new();
+
+    state.apply(injected("<task-notification><summary>Done</summary></task-notification>",
+                         "task-notification"));
+
+    assert!(!state.messages
+                  .iter()
+                  .any(|message| matches!(message, PanelMessage::User(_))),
+            "{:?}",
+            state.messages);
+}
+
+#[test]
+fn a_prompt_mentioning_a_harness_tag_is_still_a_prompt() {
+    let mut state = PanelState::new();
+
+    state.apply(user("what is a <task-notification>?"));
+
+    assert_eq!(state.messages,
+               vec![PanelMessage::User("what is a <task-notification>?".to_string())]);
 }
