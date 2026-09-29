@@ -29,7 +29,7 @@ use crate::app_support::AwaitingInput;
 use crate::app_support::AwaitingInputQueue;
 use crate::app_support::apply_visual_identity;
 use crate::app_support::observe_system_appearance;
-use crate::bug_report::register_report_bug_action;
+use crate::bug_report::register_report_issue_action;
 use crate::command_center::CommandCenterWindow;
 use crate::import_window::register_import_action;
 use crate::mcp_lifetime::hold_mcp_server;
@@ -153,7 +153,7 @@ actions!(knot_app,
           HideOthers,
           ShowAllWindows,
           AboutKnot,
-          ReportBug,
+          ReportIssue,
           OpenSettings,
           OpenImport,
           PanelPermissionAllow,
@@ -348,11 +348,11 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
             MenuItem::action("Zoom", ZoomWindow),
             MenuItem::separator(),
         ]),
-        // Report a Bug has no key equivalent: macOS gives it none, and the
+        // Report an Issue has no key equivalent: macOS gives it none, and the
         // item is enabled everywhere because it is how a user asks for help.
         Menu::new("Help").items([
             MenuItem::action("Knot Help", KnotHelp),
-            MenuItem::action(knot_core::l10n::t("menu.help.report_bug"), ReportBug),
+            MenuItem::action(knot_core::l10n::t("menu.help.report_issue"), ReportIssue),
         ]),
     ]);
 }
@@ -379,8 +379,8 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
     // `import_window::register_import_action`.
     register_import_action(Arc::clone(&store), cx);
     // Holds its own single-instance handle; see
-    // `bug_report::register_report_bug_action`.
-    register_report_bug_action(cx);
+    // `bug_report::register_report_issue_action`.
+    register_report_issue_action(cx);
     cx.on_action(knot_help);
     register_focused_window_actions(cx);
     cx.on_action(hide_app);

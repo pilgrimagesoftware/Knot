@@ -320,7 +320,7 @@ menu:
     new_agent: "New Agent…"
   # The Help menu's own items.
   help:
-    report_bug: "Report a Bug…"
+    report_issue: "Report an Issue…"
   # The View menu's navigation items. macOS appends Enter Full Screen below
   # them.
   view:
@@ -408,11 +408,17 @@ about:
     terminal: "Alacritty terminal — Apache-2.0"
     fonts: "Adamina, Manrope and JetBrains Mono — SIL Open Font License 1.1"
 
-# The bug-report dialog opened from Help > Report a Bug….
+# The issue-report dialog opened from Help > Report an Issue….
 bug_report:
-  title: "Report a Bug"
+  title: "Report an Issue"
   subject_label: "Subject"
+  kind_label: "Type"
+  kind:
+    bug: "Bug"
+    feature: "Feature request"
   subject_placeholder: "A short summary of the problem"
+  feature_subject_placeholder: "A short summary of the idea"
+  feature_description_placeholder: "What you would like Knot to do, and why it would help"
   description_label: "Description"
   description_placeholder: "What happened, what you expected, and how to reproduce it"
   diagnostics_label: "Diagnostics"

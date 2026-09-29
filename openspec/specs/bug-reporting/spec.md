@@ -11,7 +11,7 @@ browser page otherwise.
 
 ### Requirement: The bug report window is opened from the Help menu
 
-The Help menu SHALL carry a "Report a Bug…" item that opens the bug report
+The Help menu SHALL carry a "Report an Issue…" item that opens the bug report
 window as a dialog attached to the active window.
 
 Choosing the item while the window is already open SHALL bring the existing
@@ -20,13 +20,13 @@ choosing the item SHALL open it again.
 
 #### Scenario: Opening the window
 
-- **WHEN** the user chooses Help > Report a Bug…
+- **WHEN** the user chooses Help > Report an Issue…
 - **THEN** the bug report window opens attached to the active window
 
 #### Scenario: One window at a time
 
 - **WHEN** the bug report window is already open and the user chooses Help >
-  Report a Bug… again
+  Report an Issue… again
 - **THEN** the existing window comes forward and no second window opens
 
 ### Requirement: The window collects subject, description and diagnostics
@@ -60,6 +60,36 @@ can copy them into a report filed out of band without transcribing them.
 - **WHEN** the user opens the window and selects the diagnostics text
 - **THEN** the text can be copied, so it can be pasted into a report filed by
   other means
+
+### Requirement: A report is a bug or a feature request
+
+The window SHALL let the user choose what the report is - a bug or a feature
+request - with bug chosen when the window opens. The choice SHALL:
+
+- file the issue under the repository's matching label (`bug` or
+  `enhancement`), falling back to filing it unlabeled if the forge refuses
+  the label, since a reporter usually cannot label issues;
+- pre-select the same label on the browser fallback's compose page;
+- change the subject and description hints to suit the kind;
+- offer the logs only for a bug. A feature request still carries the
+  diagnostics, and SHALL NOT carry a log even if one was checked before the
+  kind was switched.
+
+Switching the kind SHALL keep what the user has typed.
+
+#### Scenario: Filing a feature request
+
+- **WHEN** the user chooses Feature request, fills both fields and chooses
+  Report with the forge ready
+- **THEN** an issue labeled `enhancement` is filed, carrying the description
+  and diagnostics and no log
+
+#### Scenario: Changing one's mind
+
+- **WHEN** the user has typed a subject and description and switches from Bug
+  to Feature request
+- **THEN** the subject and description are unchanged and the logs are no
+  longer offered
 
 ### Requirement: The diagnostics stay in view whatever is typed
 

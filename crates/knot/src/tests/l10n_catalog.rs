@@ -40,8 +40,9 @@ fn about_window_labels_resolve() {
 /// key string itself as a label, a forge state or a status message.
 #[test]
 fn bug_report_labels_resolve() {
-    for key in ["menu.help.report_bug",
+    for key in ["menu.help.report_issue",
                 "bug_report.title",
+                "bug_report.kind_label",
                 "bug_report.subject_label",
                 "bug_report.subject_placeholder",
                 "bug_report.description_label",

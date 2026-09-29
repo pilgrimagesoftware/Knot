@@ -6,6 +6,7 @@ use knot_core::consts::KNOT_REPO;
 use knot_forge::{ForgeAvailability, ForgeError, ForgeRunner};
 
 use super::*;
+use crate::bug_report::kind::IssueKind;
 use crate::bug_report::logs::LogKind;
 
 /// Answers every `gh` call with one result, recording the arguments.
@@ -33,7 +34,8 @@ impl ForgeRunner for Gh {
 const FILED: &str = "https://github.com/pilgrimagesoftware/Knot/issues/7";
 
 fn report() -> Report {
-    Report { subject:     "  Crash on launch ".to_owned(),
+    Report { kind:        IssueKind::Bug,
+             subject:     "  Crash on launch ".to_owned(),
              description: "It crashed.\nEvery time.".to_owned(),
              diagnostics: "App: Knot 1.0.0 (2026-09-25, abc)".to_owned(),
              attachments: Vec::new(), }
@@ -67,7 +69,9 @@ fn a_ready_forge_files_the_issue() {
                 "--title",
                 "Crash on launch",
                 "--body",
-                &issue_body(&report())]);
+                &issue_body(&report()),
+                "--label",
+                "bug"]);
 }
 
 #[test]
@@ -84,7 +88,9 @@ fn a_failed_filing_says_why_and_can_be_retried() {
     assert!(matches!(&first, Outcome::FileFailed(why) if why.contains("HTTP 403")),
             "{first:?}");
     assert_eq!(first, second);
-    assert_eq!(gh.calls.borrow().len(), 2, "the retry did not reach gh");
+    // Two calls per attempt: labeled, then again without the label, which
+    // is how a filing refused over the label still goes through.
+    assert_eq!(gh.calls.borrow().len(), 4, "the retry did not reach gh");
 }
 
 #[test]
@@ -176,4 +182,23 @@ fn encoding_escapes_spaces_slashes_and_query_syntax() {
 #[test]
 fn encoding_escapes_unicode_as_utf8_bytes() {
     assert_eq!(percent_encode("é…"), "%C3%A9%E2%80%A6");
+}
+
+#[test]
+fn a_feature_request_is_filed_as_an_enhancement() {
+    let gh = Gh::new(|| Ok(FILED.to_owned()));
+    let request = Report { kind: IssueKind::FeatureRequest,
+                           ..report() };
+
+    submit(&request, &ForgeAvailability::Ready, &gh, never_opens);
+
+    let calls = gh.calls.borrow();
+    assert_eq!(&calls[0][calls[0].len() - 2..], ["--label", "enhancement"]);
+}
+
+#[test]
+fn the_compose_url_carries_the_label() {
+    let request = Report { kind: IssueKind::FeatureRequest,
+                           ..report() };
+    assert!(compose_url(&request).ends_with("&labels=enhancement"));
 }

@@ -8,11 +8,13 @@
 use knot_core::consts::KNOT_REPO;
 use knot_forge::{ForgeAvailability, ForgeRunner};
 
+use super::kind::IssueKind;
 use super::logs::{Attachment, attachments_by_path, attachments_markdown};
 
 /// What the user filed, plus the diagnostics that accompany it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Report {
+    pub(crate) kind:        IssueKind,
     pub(crate) subject:     String,
     pub(crate) description: String,
     pub(crate) diagnostics: String,
@@ -43,10 +45,11 @@ pub(crate) fn submit(report: &Report, forge: &ForgeAvailability, runner: &impl F
                      open_url: impl Fn(&str) -> bool)
                      -> Outcome {
     if forge.is_ready() {
-        return match knot_forge::create_issue_with(runner,
-                                                   KNOT_REPO,
-                                                   report.subject.trim(),
-                                                   &issue_body(report))
+        return match knot_forge::create_labeled_issue_with(runner,
+                                                           KNOT_REPO,
+                                                           report.subject.trim(),
+                                                           &issue_body(report),
+                                                           report.kind.github_label())
         {
             Ok(url) => Outcome::Filed(url),
             Err(error) => Outcome::FileFailed(error.to_string()),
@@ -84,11 +87,14 @@ fn body_with_logs(report: &Report, logs: String) -> String {
     body
 }
 
-/// The repository's new-issue page, with the title and body pre-filled.
+/// The repository's new-issue page, with the title, body and label
+/// pre-filled. GitHub applies the label only for a user allowed to set one,
+/// and ignores it otherwise.
 pub(super) fn compose_url(report: &Report) -> String {
-    format!("https://github.com/{KNOT_REPO}/issues/new?title={}&body={}",
+    format!("https://github.com/{KNOT_REPO}/issues/new?title={}&body={}&labels={}",
             percent_encode(report.subject.trim()),
-            percent_encode(&compose_body(report)))
+            percent_encode(&compose_body(report)),
+            percent_encode(report.kind.github_label()))
 }
 
 /// Percent-encodes everything but RFC 3986's unreserved characters, so a

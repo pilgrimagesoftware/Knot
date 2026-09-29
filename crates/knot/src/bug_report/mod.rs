@@ -1,4 +1,4 @@
-//! Help > Report a Bug: the dialog that collects a report and files it as a
+//! Help > Report an Issue: the dialog that collects a report and files it as a
 //! GitHub issue (`openspec/specs/bug-reporting`).
 //!
 //! A modal dialog rather than a window like About: it collects and submits,
@@ -13,14 +13,19 @@
 mod diagnostics;
 mod dialog;
 mod form;
+mod kind;
 mod logs;
 mod submit;
 
 #[cfg(test)]
 pub(crate) use diagnostics::Diagnostics;
-pub(crate) use dialog::register_report_bug_action;
+pub(crate) use dialog::register_report_issue_action;
 #[cfg(test)]
-pub(crate) use dialog::{BugReport, ReportServices, open_report, register_report_bug_action_with};
+pub(crate) use dialog::{
+    BugReport, ReportServices, open_report, register_report_issue_action_with,
+};
+#[cfg(test)]
+pub(crate) use kind::IssueKind;
 #[cfg(test)]
 pub(crate) use logs::{Attachment, LogKind};
 #[cfg(test)]
