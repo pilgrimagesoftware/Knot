@@ -9,12 +9,15 @@
 //! toggle counts and what a bulk action removes are the rows on screen.
 
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Selectable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
-use gpui_kit::{App, ClickEvent, Context, Entity, IntoElement, ParentElement, Styled, Window, px};
+use gpui_kit::{
+    App, ClickEvent, Context, Entity, Hsla, IntoElement, ParentElement, Styled, Window, px,
+};
 use uuid::Uuid;
 
 use crate::pull_request_filter::{self, PullRequestGroup, PullRequestSort, RowCategory};
@@ -56,7 +59,7 @@ impl WorkspaceWindow {
         v_flex().gap_2()
                 .child(h_flex().gap_2()
                                .items_center()
-                               .child(search_field(&search))
+                               .child(search_field(&search, cx.theme().border))
                                .child(self.agent_picker(agents, cx))
                                .child(self.sort_picker(cx))
                                .child(actions_menu(removals, copied, cx)))
@@ -132,9 +135,16 @@ impl WorkspaceWindow {
     }
 }
 
-fn search_field(search: &Entity<gpui_kit::component::input::InputState>) -> impl IntoElement {
+/// The search field, outlined in `border` rather than the theme's input
+/// border. On macOS that input color is `controlBackgroundColor`, close to the
+/// field's fill and the toolbar's, so the field read as a label. Only this
+/// field overrides it: `Input` applies the caller's style after its own
+/// border and before its focus ring, so focus still draws the accent ring.
+fn search_field(search: &Entity<gpui_kit::component::input::InputState>, border: Hsla)
+                -> impl IntoElement {
     Input::new(search).small()
                       .cleanable(true)
+                      .border_color(border)
                       .w(px(SEARCH_WIDTH))
 }
 
