@@ -110,11 +110,15 @@ impl InstructionDelivery {
     /// The same instructions moved to the first turn, for when `file`
     /// could not be written: an adapter pointed at a missing file would
     /// start with no instructions at all.
+    ///
+    /// `env` stays: it carries the user's options too, and opencode skips
+    /// an `instructions` entry that matches no file.
     #[must_use]
     pub fn into_first_turn(self) -> Self {
         match self.file {
             Some(file) => Self { first_turn: Some(file.contents),
-                                 ..Self::default() },
+                                 file: None,
+                                 ..self },
             None => self,
         }
     }
@@ -130,8 +134,10 @@ pub struct DeliveryRequest<'a> {
     /// when there is none, which sends a file carrier's text on the first
     /// turn instead.
     pub cache_dir:    Option<&'a Path>,
-    /// The value an environment variable already has in Knot's own
-    /// environment, which the adapter would otherwise inherit.
+    /// The value an environment variable starts from before the
+    /// instructions are merged in: Knot's own, which the adapter would
+    /// otherwise inherit, with the user's options layered over it (see
+    /// `AdapterOptions::layered_env`).
     pub inherited:    &'a dyn Fn(&str) -> Option<String>,
 }
 
@@ -164,14 +170,20 @@ pub fn instruction_delivery(request: DeliveryRequest<'_>) -> InstructionDelivery
                                   ..InstructionDelivery::default() }
         }
         InstructionCarrier::OpencodeConfigEnv => {
+            let mut config = inherited_object(inherited(OPENCODE_CONFIG_ENV));
             let Some(cache_dir) = cache_dir
             else {
-                return InstructionDelivery { first_turn: Some(instructions),
+                // The variable still carries the user's options.
+                let env = (!config.is_empty()).then(|| {
+                                                  (OPENCODE_CONFIG_ENV.to_owned(),
+                                                   Value::Object(config).to_string())
+                                              });
+                return InstructionDelivery { env: env.into_iter().collect(),
+                                             first_turn: Some(instructions),
                                              ..InstructionDelivery::default() };
             };
             let path = cache_dir.join(INSTRUCTIONS_FILES_DIR)
                                 .join(format!("{agent_id}.md"));
-            let mut config = inherited_object(inherited(OPENCODE_CONFIG_ENV));
             let mut files = match config.remove(OPENCODE_INSTRUCTIONS_KEY) {
                 Some(Value::Array(files)) => files,
                 _ => Vec::new(),

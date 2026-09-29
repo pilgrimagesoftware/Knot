@@ -84,6 +84,9 @@ pub struct SessionTarget<'a> {
     /// instructions, for an adapter that reads them from there. Applied on
     /// every spawn, so a resumed session gets them too.
     pub env:              &'a [(String, String)],
+    /// Arguments after the adapter's own - the agent's user options, for an
+    /// adapter that takes them on its command line.
+    pub args:             &'a [String],
 }
 
 /// How long to wait for the adapter to answer `initialize` and open a
@@ -126,10 +129,12 @@ impl AcpSession {
                             prior_session_id,
                             mcp_url,
                             meta,
-                            env, } = target;
+                            env,
+                            args, } = target;
         let build_command = || {
             let mut command = Command::new(config.command);
             command.args(config.args);
+            command.args(args);
             // A Finder-launched macOS app has launchd's minimal PATH, not
             // the user's shell PATH - resolve adapters against the merged
             // path so registered binaries in the standard install

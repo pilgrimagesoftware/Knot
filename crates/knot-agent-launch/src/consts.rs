@@ -1,6 +1,8 @@
 //! Fixed strings the registration prompts embed. Kept in one place per the
 //! workspace's constants convention.
 
+use crate::agent_options::FlagSpec;
+
 /// Sent on first launch (ACP protocol prompt, or the deferred shell-agent
 /// registration prompt) to trigger the agent list table and status set.
 ///
@@ -85,3 +87,51 @@ pub const OPENCODE_INSTRUCTIONS_KEY: &str = "instructions";
 /// Where under the app's cache directory each agent's opencode instructions
 /// file is written, one `<agent id>.md` per agent.
 pub const INSTRUCTIONS_FILES_DIR: &str = "agent-instructions";
+
+/// The Codex CLI flags whose effect `codex-acp` lets through, as config
+/// overrides in [`CODEX_CONFIG_ENV`]. Its argv never reaches Codex, and it
+/// sets approval and sandbox policy itself on every turn from the session's
+/// mode, so `-s`, `-a` and the flags built on them are not here.
+pub(crate) const CODEX_OPTION_FLAGS: [FlagSpec; 5] = [FlagSpec::value("config", Some('c')),
+                                                      FlagSpec::value("model", Some('m')),
+                                                      FlagSpec::value("profile", Some('p')),
+                                                      FlagSpec::value("enable", None),
+                                                      FlagSpec::value("disable", None)];
+
+/// The opencode flags `opencode acp` can honor: `--model` and `--agent` as
+/// the `model` and `default_agent` of [`OPENCODE_CONFIG_ENV`], the rest as
+/// arguments the `acp` subcommand itself accepts.
+pub(crate) const OPENCODE_OPTION_FLAGS: [FlagSpec; 5] = [FlagSpec::value("model", Some('m')),
+                                                         FlagSpec::value("agent", None),
+                                                         FlagSpec::switch("print-logs", None),
+                                                         FlagSpec::value("log-level", None),
+                                                         FlagSpec::switch("pure", None)];
+
+/// The Gemini CLI flags forwarded to `gemini --acp`. Left out: the prompt,
+/// output, session, worktree and listing flags, which would turn an ACP
+/// session into something else, and `--debug`, which opens a console.
+pub(crate) const GEMINI_OPTION_FLAGS: [FlagSpec; 12] =
+    [FlagSpec::value("model", Some('m')),
+     FlagSpec::switch("sandbox", Some('s')),
+     FlagSpec::switch("yolo", Some('y')),
+     FlagSpec::value("approval-mode", None),
+     FlagSpec::value("policy", None),
+     FlagSpec::value("admin-policy", None),
+     FlagSpec::value("allowed-mcp-server-names", None),
+     FlagSpec::value("allowed-tools", None),
+     FlagSpec::value("extensions", Some('e')),
+     FlagSpec::value("include-directories", None),
+     FlagSpec::switch("raw-output", None),
+     FlagSpec::switch("accept-raw-output-risk", None)];
+
+/// The opencode config key naming the agent a session starts in.
+pub const OPENCODE_DEFAULT_AGENT_KEY: &str = "default_agent";
+
+/// The config key, in both Codex and opencode, naming the model.
+pub const MODEL_CONFIG_KEY: &str = "model";
+
+/// The Codex config table `--enable`/`--disable` switch features in.
+pub const CODEX_FEATURES_KEY: &str = "features";
+
+/// The Codex config key `--profile` names.
+pub const CODEX_PROFILE_KEY: &str = "profile";

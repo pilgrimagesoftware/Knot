@@ -364,6 +364,9 @@ pub struct ConnectRequest<'a> {
     /// instructions, for an adapter whose carrier is its environment. See
     /// `knot_agent_launch::instruction_delivery`.
     pub env:                 Vec<(String, String)>,
+    /// Arguments after the adapter's own: the agent's user options, for an
+    /// adapter that takes them on its command line.
+    pub args:                Vec<String>,
     /// Where this agent's delegations are recorded, or `None` when its type
     /// reports none. Built by the caller, which is the only place that knows
     /// both the agent's id and the window's registry.
@@ -390,7 +393,8 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
                                  prior_session_id: request.prior_session_id,
                                  mcp_url:          request.mcp_url,
                                  meta:             request.session_meta.as_ref(),
-                                 env:              &request.env, };
+                                 env:              &request.env,
+                                 args:             &request.args, };
     let mut handle = match PanelSessionHandle::start(request.config,
                                                      target,
                                                      progress,
@@ -528,6 +532,7 @@ mod tests {
                                        option_mode:         None,
                                        session_meta:        None,
                                        env:                 Vec::new(),
+                                       args:                Vec::new(),
                                        subagents:           None,
                                        startup_prompt:      None, };
 
