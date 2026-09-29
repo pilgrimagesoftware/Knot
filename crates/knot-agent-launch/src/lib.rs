@@ -23,7 +23,7 @@ pub use builders::{
     LaunchPlan, LaunchRequest, agent_mcp_url, build_agent_command, build_initialization_command,
     mcp_url, mcp_url_for_port, plan_launch,
 };
-pub use capabilities::supports_inline_registration;
+pub use capabilities::{keeps_mcp_query, supports_inline_registration};
 pub use default_mode::{DefaultMode, unconfigured_default_mode};
 pub use escape::persona_prompt;
 pub use instructions::{
@@ -32,6 +32,7 @@ pub use instructions::{
 };
 pub use registration::{
     acp_registration_prompt, knot_instructions, registration_prompt, registration_user_prompt,
+    resume_registration_prompt,
 };
 pub use startup::{ContextSource, read_context, resolve_startup_prompt};
 pub use variables::{PromptContext, PromptVariable, UnknownVariable, expand, unknown_variables};

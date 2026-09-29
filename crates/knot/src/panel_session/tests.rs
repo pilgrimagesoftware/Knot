@@ -36,19 +36,20 @@ fn stalling_prompt_adapter() -> AdapterConfig {
 async fn the_slot_goes_ready_before_the_registration_turn_finishes() {
     let (connecting, progress) = PanelSessionSlot::connecting();
     let slot = Arc::new(Mutex::new(connecting));
-    let request = ConnectRequest { config:              &stalling_prompt_adapter(),
-                                   cwd:                 "/tmp/project",
-                                   prior_session_id:    None,
-                                   mcp_url:             None,
-                                   registration_prompt: Some("register".to_string()),
-                                   session_config:      BTreeMap::new(),
-                                   default_mode:        None,
-                                   option_mode:         None,
-                                   session_meta:        None,
-                                   env:                 Vec::new(),
-                                   args:                Vec::new(),
-                                   subagents:           None,
-                                   startup_prompt:      None, };
+    let request = ConnectRequest { config:                     &stalling_prompt_adapter(),
+                                   cwd:                        "/tmp/project",
+                                   prior_session_id:           None,
+                                   mcp_url:                    None,
+                                   registration_prompt:        Some("register".to_string()),
+                                   resume_registration_prompt: None,
+                                   session_config:             BTreeMap::new(),
+                                   default_mode:               None,
+                                   option_mode:                None,
+                                   session_meta:               None,
+                                   env:                        Vec::new(),
+                                   args:                       Vec::new(),
+                                   subagents:                  None,
+                                   startup_prompt:             None, };
 
     let watched = Arc::clone(&slot);
     let became_ready = async move {
@@ -107,27 +108,29 @@ done"#,
 /// Connects to [`logging_loading_adapter`] naming prior session `thread-7`,
 /// with a registration prompt ready, and returns the methods it was sent
 /// and the session id the caller was handed to persist.
-async fn connect_naming_a_prior_session(load: &str) -> (Vec<String>, String) {
+async fn connect_naming_a_prior_session(load: &str, resume_prompt: Option<&str>)
+                                        -> (Vec<String>, String) {
     let dir = tempfile::TempDir::new().expect("a temporary directory");
     let log = dir.path().join("methods.log");
     let (connecting, progress) = PanelSessionSlot::connecting();
     let slot = Arc::new(Mutex::new(connecting));
-    let request = ConnectRequest { config:              &logging_loading_adapter(),
-                                   cwd:                 "/tmp/project",
-                                   prior_session_id:    Some("thread-7"),
-                                   mcp_url:             None,
-                                   registration_prompt: Some("register".to_string()),
-                                   session_config:      BTreeMap::new(),
-                                   default_mode:        None,
-                                   option_mode:         None,
-                                   session_meta:        None,
-                                   env:                 vec![("KNOT_TEST_LOG".to_string(),
-                                                              log.display().to_string()),
-                                                             ("KNOT_TEST_LOAD".to_string(),
-                                                              load.to_string())],
-                                   args:                Vec::new(),
-                                   subagents:           None,
-                                   startup_prompt:      None, };
+    let request = ConnectRequest { config:                     &logging_loading_adapter(),
+                                   cwd:                        "/tmp/project",
+                                   prior_session_id:           Some("thread-7"),
+                                   mcp_url:                    None,
+                                   registration_prompt:        Some("register".to_string()),
+                                   resume_registration_prompt: resume_prompt.map(str::to_owned),
+                                   session_config:             BTreeMap::new(),
+                                   default_mode:               None,
+                                   option_mode:                None,
+                                   session_meta:               None,
+                                   env:                        vec![("KNOT_TEST_LOG".to_string(),
+                                                                     log.display().to_string()),
+                                                                    ("KNOT_TEST_LOAD".to_string(),
+                                                                     load.to_string())],
+                                   args:                       Vec::new(),
+                                   subagents:                  None,
+                                   startup_prompt:             None, };
     let mut persisted = String::new();
     connect_into(&slot, request, &progress, |id| persisted = id.to_string()).await;
     if let PanelSessionSlot::Ready(handle) = &*slot.lock() {
@@ -146,7 +149,7 @@ async fn connect_naming_a_prior_session(load: &str) -> (Vec<String>, String) {
 /// loaded one, so the conversation stays resumable.
 #[tokio::test]
 async fn a_loaded_session_sends_no_registration_turn() {
-    let (methods, persisted) = connect_naming_a_prior_session("load").await;
+    let (methods, persisted) = connect_naming_a_prior_session("load", None).await;
 
     assert!(methods.contains(&"session/load".to_string()), "{methods:?}");
     assert!(!methods.contains(&"session/new".to_string()), "{methods:?}");
@@ -159,10 +162,24 @@ async fn a_loaded_session_sends_no_registration_turn() {
 /// load it, so the session is fresh and must be registered like any other.
 #[tokio::test]
 async fn a_refused_load_registers_the_fresh_session_it_falls_back_to() {
-    let (methods, persisted) = connect_naming_a_prior_session("refuse").await;
+    let (methods, persisted) = connect_naming_a_prior_session("refuse", None).await;
 
     assert!(methods.contains(&"session/new".to_string()), "{methods:?}");
     assert!(methods.contains(&"session/prompt".to_string()),
             "the fallback session is sent the registration turn: {methods:?}");
     assert_eq!(persisted, "sess-new");
+}
+
+/// #552: an adapter whose connection cannot register the agent is sent the
+/// one-line registration request once the session has resumed - and only
+/// then, so the conversation gains one turn, not a repeat of the first.
+#[tokio::test]
+async fn a_loaded_session_is_sent_the_resume_registration_where_needed() {
+    let (methods, persisted) = connect_naming_a_prior_session("load", Some("re-register")).await;
+
+    assert!(methods.contains(&"session/load".to_string()), "{methods:?}");
+    assert_eq!(methods.iter().filter(|m| *m == "session/prompt").count(),
+               1,
+               "one registration turn: {methods:?}");
+    assert_eq!(persisted, "thread-7");
 }

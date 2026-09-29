@@ -378,10 +378,16 @@ async fn mcp_rpc(State(state): State<AppState>, RawQuery(query): RawQuery, heade
         Err(e) => return json_rpc_error_response(-32700, format!("Parse error: {e}")),
     };
 
-    let (caller, response_session_id) = connection(&state,
-                                                   request.method == "initialize",
-                                                   session_id,
-                                                   agent_from_query(query.as_deref()));
+    let named = agent_from_query(query.as_deref());
+    let (caller, response_session_id) =
+        connection(&state, request.method == "initialize", session_id, named);
+    // The URL is Knot's own statement of who this is, so it registers the
+    // agent with no turn of its own. Repeated on every request rather than
+    // once, so an agent the registry did not hold yet is registered as soon
+    // as it does.
+    if let Some(agent) = named {
+        state.catalog.connected(agent);
+    }
 
     if request.method.starts_with("notifications/") {
         return StatusCode::ACCEPTED.into_response();

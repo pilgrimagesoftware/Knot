@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use knot_mcp::{
     Caller, PropertySchema, ToolCallResult, ToolCatalog, ToolDefinition, ToolInputSchema,
 };
+use uuid::Uuid;
 
 use crate::{McpToolCatalog, agents, consts, messaging, panels, repos, tasks};
 
@@ -213,6 +214,20 @@ impl ToolCatalog for McpToolCatalog {
             caller.bind(agent);
         }
         result
+    }
+
+    /// A connection on `agent_id`'s own URL registers it: the URL is how
+    /// Knot launched it, so it needs no `register-agent` turn. A resumed
+    /// agent is sent none, and registration does not survive a restart, so
+    /// without this every resumed agent stayed unregistered (#552). Nothing
+    /// is persisted - registration is runtime state.
+    fn connected(&self, agent_id: Uuid) {
+        let mut store = self.agents.lock();
+        if store.agent(agent_id)
+                .is_some_and(|agent| !agent.is_registered)
+        {
+            store.set_registered(agent_id, true);
+        }
     }
 
     async fn call(&self, name: &str, arguments: serde_json::Value) -> ToolCallResult {

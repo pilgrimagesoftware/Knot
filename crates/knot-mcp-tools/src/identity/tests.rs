@@ -148,3 +148,29 @@ async fn a_duplicate_live_registration_is_refused_through_the_catalog() {
                          .await;
     assert_eq!(refused.is_error, Some(true));
 }
+
+/// #552: a connection on an agent's own URL registers it, with no turn -
+/// how a resumed agent, or one whose first registration turn failed, is
+/// registered after a restart.
+#[test]
+fn a_bound_connection_registers_its_agent() {
+    use std::sync::Arc;
+
+    use knot_mcp::ToolCatalog;
+    use knot_messaging::NoopNotifier;
+    use parking_lot::Mutex;
+
+    let (store, orchestrator, builder) = knot();
+    let store = Arc::new(Mutex::new(store));
+    let (_repos, rx) = tokio::sync::watch::channel(Vec::new());
+    let catalog = crate::McpToolCatalog::new(Arc::clone(&store), rx, Arc::new(NoopNotifier));
+
+    catalog.connected(builder);
+    catalog.connected(builder);
+    catalog.connected(Uuid::new_v4());
+
+    let store = store.lock();
+    assert!(store.agent(builder).unwrap().is_registered);
+    assert!(!store.agent(orchestrator).unwrap().is_registered,
+            "only the agent the URL names");
+}
