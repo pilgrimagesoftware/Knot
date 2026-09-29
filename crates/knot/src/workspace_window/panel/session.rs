@@ -66,6 +66,17 @@ impl WorkspaceWindow {
         let startup_prompt = registration_prompt.as_ref()
                                                 .and_then(|_| self.startup_request(&agent, cx));
         let session_config = agent.session_config.clone();
+        // The Coding tab's options for this type, in the shape its adapter
+        // takes them. Pure string work, so here rather than on the runtime.
+        let options = knot_agent_launch::adapter_options(&agent.agent_type,
+                                                         crate::settings_global::read(cx)
+                                                             .agent_options
+                                                             .get(&agent.agent_type)
+                                                             .map_or("", String::as_str));
+        if !options.ignored.is_empty() {
+            eprintln!("agent {id}: {} options not passed to its adapter: {:?}",
+                      agent.agent_type, options.ignored);
+        }
         // Built here because this is the only place that knows both the
         // agent's id and its type; `None` for a type with no recognizer,
         // which costs the session nothing.
@@ -80,7 +91,12 @@ impl WorkspaceWindow {
                         // Reads the agent CLI's settings files, so off the
                         // UI thread and off the runtime's workers. A join
                         // failure costs only the default, not the session.
-                        let default_mode = {
+                        // Only when the options chose no mode: theirs wins
+                        // regardless of what the settings files say.
+                        let default_mode = if options.mode.is_some() {
+                            None
+                        }
+                        else {
                             let cwd = std::path::PathBuf::from(&cwd);
                             tokio::task::spawn_blocking(move || {
                                 knot_agent_launch::unconfigured_default_mode(&agent_type, &cwd)
@@ -97,6 +113,8 @@ impl WorkspaceWindow {
                                                             registration_prompt,
                                                             session_config,
                                                             default_mode,
+                                                            option_mode: options.mode,
+                                                            session_meta: options.session_meta,
                                                             subagents,
                                                             startup_prompt };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {

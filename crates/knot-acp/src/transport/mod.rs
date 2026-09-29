@@ -273,10 +273,11 @@ impl Transport {
                 Ok(value)
             }
             Ok(Err(error)) => {
-                eprintln!("knot-acp: [{program}] <- {method} (id {id}) error: {} {}",
-                          error.code, error.message);
-                Err(AcpError::Rpc { code:    error.code,
-                                    message: error.message, })
+                let message = error.described();
+                eprintln!("knot-acp: [{program}] <- {method} (id {id}) error: {} {message}",
+                          error.code);
+                Err(AcpError::Rpc { code: error.code,
+                                    message })
             }
             Err(_) => {
                 eprintln!("knot-acp: [{program}] <- {method} (id {id}) connection closed before a response");

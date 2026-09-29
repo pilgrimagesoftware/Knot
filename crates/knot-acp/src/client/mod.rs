@@ -38,6 +38,10 @@ pub struct AcpClient {
     /// with a stop reason rather than sending a `session/update`, so the
     /// turn-end event has to be synthesized from that response.
     events:              mpsc::UnboundedSender<SessionEvent>,
+    /// The `_meta` sent with `session/new` and `session/load`: how an
+    /// adapter takes per-session options it has no ACP field for - the
+    /// user's CLI flags, for `claude-agent-acp`. `None` sends none.
+    session_meta:        Option<Value>,
 }
 
 impl AcpClient {
@@ -168,7 +172,8 @@ impl AcpClient {
                    capabilities: init_result.capabilities,
                    init_config_options: init_result.config_options,
                    permission_pending,
-                   events: events_for_client },
+                   events: events_for_client,
+                   session_meta: None },
             events_rx))
     }
 
@@ -184,12 +189,17 @@ impl AcpClient {
         self.transport.process_id()
     }
 
+    /// Opens every later session with `meta` as its `_meta`.
+    #[must_use]
+    pub fn with_session_meta(mut self, meta: Option<Value>) -> Self {
+        self.session_meta = meta;
+        self
+    }
+
     pub async fn session_new(&self, cwd: &str, mcp_url: Option<&str>) -> Result<NewSession> {
-        let raw = self.transport
-                      .request("session/new",
-                               Some(json!({ "cwd": cwd,
-                                          "mcpServers": self.mcp_servers(mcp_url) })))
-                      .await?;
+        let params = self.session_params(json!({ "cwd": cwd,
+                                                 "mcpServers": self.mcp_servers(mcp_url) }));
+        let raw = self.transport.request("session/new", Some(params)).await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
         Ok(NewSession { session_id,
@@ -204,15 +214,21 @@ impl AcpClient {
         if !self.capabilities.supports_resume {
             return Err(AcpError::ResumeNotSupported);
         }
-        let raw = self.transport
-                      .request("session/load",
-                               Some(json!({ "sessionId": session_id, "cwd": cwd,
-                                          "mcpServers": self.mcp_servers(mcp_url) })))
-                      .await?;
+        let params = self.session_params(json!({ "sessionId": session_id, "cwd": cwd,
+                                                 "mcpServers": self.mcp_servers(mcp_url) }));
+        let raw = self.transport.request("session/load", Some(params)).await?;
         let session_id = session_id_from(&raw)?;
         let config_options = config_options_from(&raw, &self.init_config_options);
         Ok(NewSession { session_id,
                         config_options })
+    }
+
+    /// `params` with the session's `_meta`, when it has one.
+    fn session_params(&self, mut params: Value) -> Value {
+        if let (Some(meta), Some(object)) = (&self.session_meta, params.as_object_mut()) {
+            object.insert("_meta".to_owned(), meta.clone());
+        }
+        params
     }
 
     /// The `mcpServers` array for a `session/new`/`session/load` request:
