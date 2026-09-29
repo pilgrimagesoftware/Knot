@@ -60,7 +60,6 @@ impl WorkspaceWindow {
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
         let prior_session_id = agent.session_to_load().map(str::to_owned);
-        let is_resume = prior_session_id.is_some();
         // How the knot instructions and persona reach this agent (#534):
         // its adapter's system channel where it has one, on every launch,
         // so the first turn is the registration request alone. Environment
@@ -91,10 +90,10 @@ impl WorkspaceWindow {
             cache_dir: cache_dir.as_deref(),
             inherited: &inherited,
         });
-        // Only on a fresh session, which is what the registration prompt
-        // marks: a resumed conversation gets neither.
-        let startup_prompt = (!is_resume).then(|| self.startup_request(&agent, cx))
-                                         .flatten();
+        // Built for a fresh session even when a prior one is named: whether
+        // the adapter actually resumes is known only once it is connected,
+        // and `connect_into` withholds both prompts then (#540).
+        let startup_prompt = self.startup_request(&agent, cx);
         let session_config = agent.session_config.clone();
         // Built here because this is the only place that knows both the
         // agent's id and its type; `None` for a type with no recognizer,
@@ -140,7 +139,7 @@ impl WorkspaceWindow {
                             None => delivery,
                         };
                         let registration_prompt =
-                            knot_agent_launch::acp_registration_prompt(is_resume,
+                            knot_agent_launch::acp_registration_prompt(false,
                                                                        delivery.first_turn
                                                                                .as_deref());
                         let session_meta =

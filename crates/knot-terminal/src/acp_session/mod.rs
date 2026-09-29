@@ -67,6 +67,10 @@ fn report(progress: &ConnectProgress, step: ConnectStep) {
 pub struct AcpSession {
     client:     AcpClient,
     session_id: String,
+    /// Whether `session/load` opened this session. False for a fresh
+    /// `session/new`, including the fallback taken when a prior session was
+    /// named but the adapter does not advertise loading or refused it.
+    resumed:    bool,
 }
 
 /// Which session to open on a started adapter, and what to open it with.
@@ -167,31 +171,46 @@ impl AcpSession {
         };
         let client = client.with_session_meta(meta.cloned());
 
-        let session = match prior_session_id {
+        // Gated on what the connected adapter advertises, not on the
+        // registry's `supports_resume`: an adapter older than the one the
+        // registry was written against may not load, and asking would only
+        // cost a round trip before the same fallback.
+        let (session, resumed) = match prior_session_id {
             Some(prior) if client.capabilities().supports_resume => {
                 report(progress, ConnectStep::Resuming);
                 match client.session_load(prior, cwd, mcp_url).await {
-                    Ok(session) => session,
+                    Ok(session) => (session, true),
                     Err(_) => {
                         report(progress, ConnectStep::OpeningSession);
-                        client.session_new(cwd, mcp_url).await?
+                        (client.session_new(cwd, mcp_url).await?, false)
                     }
                 }
             }
             _ => {
                 report(progress, ConnectStep::OpeningSession);
-                client.session_new(cwd, mcp_url).await?
+                (client.session_new(cwd, mcp_url).await?, false)
             }
         };
 
         Ok((Self { client,
-                   session_id: session.session_id },
+                   session_id: session.session_id,
+                   resumed },
             session.config_options,
             events))
     }
 
     pub fn session_id(&self) -> &str {
         &self.session_id
+    }
+
+    /// Whether this session continues a prior conversation, loaded with
+    /// `session/load`, rather than starting a fresh one.
+    ///
+    /// What decides whether the agent needs registering: asking whether a
+    /// prior session was *named* is not enough, since an adapter that cannot
+    /// load it opens a fresh session that nothing has registered.
+    pub fn resumed(&self) -> bool {
+        self.resumed
     }
 
     /// The adapter subprocess's process id - a panel agent's session root,
@@ -313,6 +332,92 @@ done"#,
                         supports_resume:           false,
                         supports_permission_modes: false,
                         install:                   None, }
+    }
+
+    /// A fake adapter that advertises `loadSession` and answers `session/load`
+    /// the way `codex-acp` 2.0.0 does - an empty result, no `sessionId`.
+    fn loading_adapter_launch() -> AdapterConfig {
+        AdapterConfig { args: &[
+                                "-c",
+                                r#"while IFS= read -r line; do
+  id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+  method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+  case "$method" in
+    initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"agentCapabilities\":{\"loadSession\":true}}}" ;;
+    session/load) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{}}" ;;
+    session/new) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-new\"}}" ;;
+  esac
+done"#,
+        ],
+                        ..fake_adapter_launch() }
+    }
+
+    /// Advertises `loadSession` and then refuses the load, as an adapter
+    /// does for a session it no longer has.
+    fn refusing_adapter_launch() -> AdapterConfig {
+        AdapterConfig { args: &[
+                                "-c",
+                                r#"while IFS= read -r line; do
+  id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+  method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+  case "$method" in
+    initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"agentCapabilities\":{\"loadSession\":true}}}" ;;
+    session/load) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"error\":{\"code\":-32602,\"message\":\"no such session\"}}" ;;
+    session/new) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-new\"}}" ;;
+  esac
+done"#,
+        ],
+                        ..fake_adapter_launch() }
+    }
+
+    fn resuming(prior: &'static str) -> SessionTarget<'static> {
+        SessionTarget { prior_session_id: Some(prior),
+                        ..project() }
+    }
+
+    #[tokio::test]
+    async fn a_loaded_session_is_resumed_under_its_own_id() {
+        let (session, _options, _events) = AcpSession::start(&loading_adapter_launch(),
+                                                             resuming("thread-7"),
+                                                             &no_progress()).await
+                                                                            .expect("connect");
+        assert!(session.resumed());
+        assert_eq!(session.session_id(), "thread-7");
+        session.stop().await;
+    }
+
+    /// An older adapter that does not advertise loading: the prior session is
+    /// not asked for, and the fresh one is not a resume.
+    #[tokio::test]
+    async fn a_prior_session_on_an_adapter_that_cannot_load_is_not_a_resume() {
+        let (session, _options, _events) = AcpSession::start(&fake_adapter_launch(),
+                                                             resuming("thread-7"),
+                                                             &no_progress()).await
+                                                                            .expect("connect");
+        assert!(!session.resumed());
+        assert_eq!(session.session_id(), "sess-1");
+        session.stop().await;
+    }
+
+    #[tokio::test]
+    async fn a_refused_load_falls_back_to_a_fresh_session_that_is_not_a_resume() {
+        let (session, _options, _events) = AcpSession::start(&refusing_adapter_launch(),
+                                                             resuming("thread-7"),
+                                                             &no_progress()).await
+                                                                            .expect("connect");
+        assert!(!session.resumed());
+        assert_eq!(session.session_id(), "sess-new");
+        session.stop().await;
+    }
+
+    #[tokio::test]
+    async fn a_fresh_session_is_not_a_resume() {
+        let (session, _options, _events) = AcpSession::start(&loading_adapter_launch(),
+                                                             project(),
+                                                             &no_progress()).await
+                                                                            .expect("connect");
+        assert!(!session.resumed());
+        session.stop().await;
     }
 
     #[tokio::test]

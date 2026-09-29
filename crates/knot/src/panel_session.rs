@@ -340,8 +340,11 @@ pub struct ConnectRequest<'a> {
     pub cwd:                 &'a str,
     pub prior_session_id:    Option<&'a str>,
     pub mcp_url:             Option<&'a str>,
-    /// The registration prompt for a fresh session, or `None` when
-    /// resuming (a resumed agent is already registered).
+    /// The registration prompt a fresh session opens on. Built whether or
+    /// not a prior session is named: only the adapter can say whether it
+    /// resumed, so [`connect_into`] withholds this once it has - a resumed
+    /// agent is already registered - and sends it on the fresh session an
+    /// adapter falls back to when it cannot load.
     pub registration_prompt: Option<String>,
     /// The agent's persisted session setup - config-option id -> value -
     /// replayed onto the new session before its first turn. Empty for an
@@ -372,7 +375,8 @@ pub struct ConnectRequest<'a> {
     /// both the agent's id and the window's registry.
     pub subagents:           Option<SubagentSink>,
     /// The startup prompt to expand and queue behind the registration turn;
-    /// `None` when resuming or when the agent has none.
+    /// `None` when the agent has none. Withheld with the registration prompt
+    /// when the session resumed.
     pub startup_prompt:      Option<StartupRequest>,
 }
 
@@ -407,6 +411,15 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
         }
     };
     on_session_id(handle.session_id());
+    // Decided on what happened, not on what was asked for: a prior session
+    // that could not be loaded left a fresh one that nothing has registered.
+    let resumed = handle.session().resumed();
+    let (registration_prompt, startup_prompt) = if resumed {
+        (None, None)
+    }
+    else {
+        (request.registration_prompt, request.startup_prompt)
+    };
 
     // Replay the persisted setup before the first turn, so the turn runs
     // with the model, permission mode and effort the user last chose. An
@@ -452,17 +465,17 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     // its startup prompt already in place, and queues it behind a
     // registration turn that `record_user_message` has already marked
     // active.
-    if let Some(startup) = request.startup_prompt {
+    if let Some(startup) = startup_prompt {
         handle.startup_prompt = expand_startup(startup).await;
     }
     let session = handle.session();
     let recorder = handle.recorder();
-    if let Some(prompt) = &request.registration_prompt {
+    if let Some(prompt) = &registration_prompt {
         handle.record_user_message(prompt.clone());
     }
     *slot.lock() = PanelSessionSlot::Ready(handle);
 
-    if let Some(prompt) = request.registration_prompt
+    if let Some(prompt) = registration_prompt
        && let Err(error) = session.prompt(&prompt).await
     {
         // Into the conversation, not just the console: the registration
@@ -486,76 +499,4 @@ async fn expand_startup(startup: StartupRequest) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use knot_agent_launch::AdapterConfig;
-
-    use super::*;
-
-    /// A fake adapter that completes the handshake but never answers
-    /// `session/prompt` - standing in for an agent whose first turn is
-    /// blocked (Gemini stalls its registration turn on a
-    /// `session/request_permission` for the first Knot MCP tool call,
-    /// which only a `Ready` slot can show and answer).
-    fn stalling_prompt_adapter() -> AdapterConfig {
-        AdapterConfig { command:                   "sh",
-                        args:                      &[
-                                                     "-c",
-                                                     r#"while IFS= read -r line; do
-                          id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
-                          method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
-                          case "$method" in
-                            initialize) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}" ;;
-                            session/new) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-1\"}}" ;;
-                          esac
-                        done"#,
-        ],
-                        supports_resume:           false,
-                        supports_permission_modes: false,
-                        install:                   None, }
-    }
-
-    /// The registration turn must not gate the slot: an agent that asks
-    /// permission mid-registration can only be answered through a `Ready`
-    /// slot, so publishing the handle after the turn finishes deadlocks
-    /// the connection.
-    #[tokio::test]
-    async fn the_slot_goes_ready_before_the_registration_turn_finishes() {
-        let (connecting, progress) = PanelSessionSlot::connecting();
-        let slot = Arc::new(Mutex::new(connecting));
-        let request = ConnectRequest { config:              &stalling_prompt_adapter(),
-                                       cwd:                 "/tmp/project",
-                                       prior_session_id:    None,
-                                       mcp_url:             None,
-                                       registration_prompt: Some("register".to_string()),
-                                       session_config:      BTreeMap::new(),
-                                       default_mode:        None,
-                                       option_mode:         None,
-                                       session_meta:        None,
-                                       env:                 Vec::new(),
-                                       args:                Vec::new(),
-                                       subagents:           None,
-                                       startup_prompt:      None, };
-
-        let watched = Arc::clone(&slot);
-        let became_ready = async move {
-            for _ in 0..200 {
-                let phase = watched.lock().phase();
-                if phase == PanelPhase::Ready {
-                    return true;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-            false
-        };
-
-        tokio::select! {
-            ready = became_ready => assert!(
-                ready,
-                "the slot must reach Ready while the registration turn is still in flight"
-            ),
-            () = connect_into(&slot, request, &progress, |_| {}) => {
-                panic!("the stalled registration turn should never finish")
-            }
-        }
-    }
-}
+mod tests;

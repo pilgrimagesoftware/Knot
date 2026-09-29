@@ -248,6 +248,45 @@ async fn session_load_fails_closed_when_resume_unsupported() {
     assert!(matches!(result, Err(AcpError::ResumeNotSupported)));
 }
 
+/// ACP's load response has no `sessionId`, and `codex-acp` sends none: the
+/// session keeps the id it was loaded by. `fake_agent` answers `session/load`
+/// with an empty result, which is that shape.
+#[tokio::test]
+async fn a_load_response_without_a_session_id_keeps_the_requested_one() {
+    let (client, _events) =
+        AcpClient::connect(fake_agent(PROTOCOL_VERSION, true)).await
+                                                              .expect("connect");
+
+    let session = client.session_load("thread-7", "/tmp/project", None)
+                        .await
+                        .expect("an empty load result is a successful load");
+
+    assert_eq!(session.session_id, "thread-7");
+}
+
+/// An adapter that does name the loaded session is taken at its word.
+#[tokio::test]
+async fn a_load_response_naming_a_session_id_is_used() {
+    let script = format!(
+                         r#"while IFS= read -r line; do
+          id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+          method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+          case "$method" in
+            initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{PROTOCOL_VERSION},\"agentCapabilities\":{{\"loadSession\":true}}}}}}" ;;
+            session/load) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"sessionId\":\"renamed\"}}}}" ;;
+            *) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}" ;;
+          esac
+        done"#
+    );
+    let (client, _events) = AcpClient::connect(sh_agent(script)).await.expect("connect");
+
+    let session = client.session_load("thread-7", "/tmp/project", None)
+                        .await
+                        .expect("load");
+
+    assert_eq!(session.session_id, "renamed");
+}
+
 #[tokio::test]
 async fn subprocess_exit_ends_session_and_resolves_pending_request_with_error() {
     // A subprocess that answers `initialize` then exits immediately,
