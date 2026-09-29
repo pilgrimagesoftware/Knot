@@ -159,9 +159,13 @@ pub fn instruction_delivery(request: DeliveryRequest<'_>) -> InstructionDelivery
         }
         InstructionCarrier::CodexConfigEnv => {
             let mut config = inherited_object(inherited(CODEX_CONFIG_ENV));
+            // Someone else's instructions come first, whatever JSON type
+            // they arrived as: `-c developer_instructions=42` reads as a
+            // number, and it is still text the user meant Codex to see.
             let text = match config.get(CODEX_DEVELOPER_INSTRUCTIONS_KEY) {
                 Some(Value::String(own)) if !own.is_empty() => format!("{own}\n\n{instructions}"),
-                _ => instructions,
+                Some(Value::String(_) | Value::Null) | None => instructions,
+                Some(other) => format!("{other}\n\n{instructions}"),
             };
             config.insert(CODEX_DEVELOPER_INSTRUCTIONS_KEY.to_owned(),
                           Value::String(text));
