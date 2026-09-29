@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 
 use crate::app_bootstrap::ReportBug;
 use crate::bug_report::{
-    BugReport, Diagnostics, Outcome, Report, ReportServices, open_report,
+    Attachment, BugReport, Diagnostics, LogKind, Outcome, Report, ReportServices, open_report,
     register_report_bug_action_with,
 };
 
@@ -51,16 +51,19 @@ impl Stub {
     fn services(&self) -> ReportServices {
         let outcome = Arc::clone(&self.outcome);
         let submitted = Arc::clone(&self.submitted);
-        ReportServices { collect: Arc::new(|| {
+        ReportServices { collect:  Arc::new(|| {
                              Diagnostics { app:   "Knot 1.0.0 (2026-09-25, abc)".to_owned(),
                                            os:    "macOS 26.0".to_owned(),
                                            arch:  "aarch64".to_owned(),
                                            forge: ForgeAvailability::Ready, }
                          }),
-                         submit:  Arc::new(move |report, _| {
+                         submit:   Arc::new(move |report, _| {
                              submitted.lock().push(report.clone());
                              outcome.lock().clone()
-                         }), }
+                         }),
+                         read_log: Arc::new(|kind| Attachment { kind,
+                                                                path: None,
+                                                                tail: Some(format!("{kind:?} log tail")) }), }
     }
 }
 
@@ -248,4 +251,39 @@ fn with_no_window_the_item_does_nothing(cx: &mut TestAppContext) {
     cx.run_until_parked();
 
     assert!(cx.update(|cx| open_report(cx)).is_none());
+}
+
+/// A log is the user's to share: none rides along unless it is chosen.
+#[gpui_kit::test]
+fn no_log_is_attached_by_default(cx: &mut TestAppContext) {
+    let stub = Stub::answering(Outcome::BrowserReady);
+    let (mut cx, report) = open_dialog(cx, &stub);
+    fill(&mut cx, &report, "Crash", "It crashed.");
+
+    submit(&mut cx, &report);
+
+    assert!(stub.submitted.lock()[0].attachments.is_empty());
+}
+
+#[gpui_kit::test]
+fn a_chosen_log_rides_along_and_an_unchosen_one_does_not(cx: &mut TestAppContext) {
+    let stub = Stub::answering(Outcome::BrowserReady);
+    let (mut cx, report) = open_dialog(cx, &stub);
+    fill(&mut cx, &report, "Crash", "It crashed.");
+    report.update(&mut cx, |report, cx| {
+              report.set_attached(LogKind::Mcp, true, cx);
+              report.set_attached(LogKind::App, true, cx);
+              report.set_attached(LogKind::App, false, cx);
+          });
+
+    submit(&mut cx, &report);
+
+    let submitted = stub.submitted.lock();
+    let kinds: Vec<_> = submitted[0].attachments
+                                    .iter()
+                                    .map(|attachment| attachment.kind)
+                                    .collect();
+    assert_eq!(kinds, [LogKind::Mcp]);
+    assert_eq!(submitted[0].attachments[0].tail.as_deref(),
+               Some("Mcp log tail"));
 }

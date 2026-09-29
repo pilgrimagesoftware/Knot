@@ -8,12 +8,16 @@
 use knot_core::consts::KNOT_REPO;
 use knot_forge::{ForgeAvailability, ForgeRunner};
 
+use super::logs::{Attachment, attachments_by_path, attachments_markdown};
+
 /// What the user filed, plus the diagnostics that accompany it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Report {
     pub(crate) subject:     String,
     pub(crate) description: String,
     pub(crate) diagnostics: String,
+    /// The logs the user chose to attach, already read.
+    pub(crate) attachments: Vec<Attachment>,
 }
 
 /// How a submission ended.
@@ -57,19 +61,34 @@ pub(crate) fn submit(report: &Report, forge: &ForgeAvailability, runner: &impl F
 }
 
 /// The description, then the diagnostics under a heading, fenced so GitHub
-/// keeps their lines as they are.
+/// keeps their lines as they are, then any attached logs.
 pub(super) fn issue_body(report: &Report) -> String {
-    format!("{}\n\n### {}\n\n```\n{}\n```\n",
-            report.description.trim(),
-            knot_core::l10n::t("bug_report.diagnostics_label"),
-            report.diagnostics)
+    body_with_logs(report, attachments_markdown(&report.attachments))
+}
+
+/// [`issue_body`] for the browser fallback, which names the log files
+/// rather than carrying them: a compose URL that long is refused.
+pub(super) fn compose_body(report: &Report) -> String {
+    body_with_logs(report, attachments_by_path(&report.attachments))
+}
+
+fn body_with_logs(report: &Report, logs: String) -> String {
+    let mut body = format!("{}\n\n### {}\n\n```\n{}\n```\n",
+                           report.description.trim(),
+                           knot_core::l10n::t("bug_report.diagnostics_label"),
+                           report.diagnostics);
+    if !report.attachments.is_empty() {
+        body.push_str(&format!("\n### {}\n\n{logs}",
+                               knot_core::l10n::t("bug_report.logs.label")));
+    }
+    body
 }
 
 /// The repository's new-issue page, with the title and body pre-filled.
 pub(super) fn compose_url(report: &Report) -> String {
     format!("https://github.com/{KNOT_REPO}/issues/new?title={}&body={}",
             percent_encode(report.subject.trim()),
-            percent_encode(&issue_body(report)))
+            percent_encode(&compose_body(report)))
 }
 
 /// Percent-encodes everything but RFC 3986's unreserved characters, so a

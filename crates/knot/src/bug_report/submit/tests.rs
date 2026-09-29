@@ -6,6 +6,7 @@ use knot_core::consts::KNOT_REPO;
 use knot_forge::{ForgeAvailability, ForgeError, ForgeRunner};
 
 use super::*;
+use crate::bug_report::logs::LogKind;
 
 /// Answers every `gh` call with one result, recording the arguments.
 struct Gh {
@@ -34,7 +35,15 @@ const FILED: &str = "https://github.com/pilgrimagesoftware/Knot/issues/7";
 fn report() -> Report {
     Report { subject:     "  Crash on launch ".to_owned(),
              description: "It crashed.\nEvery time.".to_owned(),
-             diagnostics: "App: Knot 1.0.0 (2026-09-25, abc)".to_owned(), }
+             diagnostics: "App: Knot 1.0.0 (2026-09-25, abc)".to_owned(),
+             attachments: Vec::new(), }
+}
+
+fn report_with_log() -> Report {
+    Report { attachments: vec![Attachment { kind: LogKind::Mcp,
+                                            path: Some("/tmp/Knot/knot-mcp.jsonl".into()),
+                                            tail: Some("{\"subject\":\"lifecycle\"}".to_owned()), }],
+             ..report() }
 }
 
 fn never_opens(_: &str) -> bool {
@@ -126,6 +135,30 @@ fn the_compose_url_targets_the_same_repo_as_gh() {
             "{url}");
     assert!(url.contains("title=Crash%20on%20launch&"), "{url}");
     assert!(url.contains(&format!("body={}", percent_encode(&issue_body(&report())))),
+            "{url}");
+}
+
+#[test]
+fn an_attached_log_follows_the_diagnostics() {
+    let body = issue_body(&report_with_log());
+
+    let diagnostics = body.find("App: Knot 1.0.0").expect("diagnostics missing");
+    let log = body.find("\"lifecycle\"")
+                  .expect("the log was not attached");
+    assert!(diagnostics < log, "{body}");
+}
+
+#[test]
+fn no_logs_heading_without_a_log() {
+    assert!(!issue_body(&report()).contains(&knot_core::l10n::t("bug_report.logs.label")));
+}
+
+#[test]
+fn the_compose_url_names_the_log_rather_than_carrying_it() {
+    let url = compose_url(&report_with_log());
+
+    assert!(!url.contains("lifecycle"), "{url}");
+    assert!(url.contains(&percent_encode("/tmp/Knot/knot-mcp.jsonl")),
             "{url}");
 }
 

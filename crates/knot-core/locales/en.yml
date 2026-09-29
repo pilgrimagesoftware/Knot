@@ -435,6 +435,14 @@ bug_report:
   browser_failed: "The browser could not be opened. Your report is still here."
   cancel: "Cancel"
   report: "Report"
+  logs:
+    label: "Logs"
+    hint: "Attaches the end of each chosen log. Logs can include file paths and agent names."
+    app: "Application log"
+    mcp: "MCP server log"
+    unreadable: "%{log}: nothing to attach at %{path}."
+    attach_by_hand: "%{log}: please attach %{path} to this issue."
+    no_directory: "(no log directory)"
 
 agent_editor:
   title_new: "New Agent"
