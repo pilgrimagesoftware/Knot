@@ -3,11 +3,9 @@
 //! path.
 
 use knot_acp::MCP_SERVER_NAME;
-use knot_core::Persona;
 use uuid::Uuid;
 
 use crate::consts::REGISTRATION_USER_PROMPT;
-use crate::escape::persona_prompt;
 
 /// The user prompt sent on first launch to trigger the agent list table.
 pub fn registration_user_prompt() -> &'static str {
@@ -80,39 +78,27 @@ pub fn registration_prompt(agent_id: Uuid) -> String {
 }
 
 /// The ACP protocol registration prompt sent as the first `session/prompt`
-/// on a fresh (non-resume) session: knot instructions, persona (if any), and
-/// the registration user prompt.
-pub fn acp_registration_prompt(agent_id: Uuid, is_resume: bool, persona: Option<&Persona>)
-                               -> Option<String> {
+/// on a fresh (non-resume) session: the registration request, led by
+/// `lead` - the standing instructions of an adapter whose carrier is the
+/// first turn ([`crate::InstructionDelivery::first_turn`]). Every other
+/// adapter has them already, through its system channel, so its first turn
+/// is the request alone.
+pub fn acp_registration_prompt(is_resume: bool, lead: Option<&str>) -> Option<String> {
     if is_resume {
         return None;
     }
-    let mut prompt = knot_instructions(agent_id);
-    if let Some(p) = persona_prompt(persona) {
-        prompt.push(' ');
-        prompt.push_str(&p);
-    }
-    prompt.push(' ');
-    prompt.push_str(registration_user_prompt());
-    Some(prompt)
+    Some(match lead {
+             Some(lead) => format!("{lead} {}", registration_user_prompt()),
+             None => registration_user_prompt().to_owned(),
+         })
 }
 
 #[cfg(test)]
 mod tests {
-    use knot_core::{PersonaState, PersonaType};
-
     use super::*;
 
     fn id() -> Uuid {
         Uuid::nil()
-    }
-
-    fn persona(instructions: &str) -> Persona {
-        Persona { id:           Uuid::nil(),
-                  name:         "Ada".to_string(),
-                  instructions: instructions.to_string(),
-                  persona_type: PersonaType::User,
-                  state:        PersonaState::Enabled, }
     }
 
     #[test]
@@ -210,8 +196,9 @@ mod tests {
         assert!(!knot_instructions(id()).contains('\n'));
         assert!(!registration_prompt(id()).contains('\n'));
         assert!(!registration_user_prompt().contains('\n'));
-        assert!(!acp_registration_prompt(id(), false, None).unwrap()
-                                                           .contains('\n'));
+        let lead = knot_instructions(id());
+        assert!(!acp_registration_prompt(false, Some(&lead)).unwrap()
+                                                            .contains('\n'));
     }
 
     /// Every launched agent pays for this text in its context window, so
@@ -224,22 +211,25 @@ mod tests {
         assert!(len <= 1_000, "the knot instructions grew to {len} chars");
     }
 
+    /// With the instructions on the system channel, the conversation opens
+    /// on what the user would recognise as a request - nothing else.
     #[test]
-    fn acp_registration_prompt_fresh_includes_instructions_and_user_prompt() {
-        let prompt = acp_registration_prompt(id(), false, None).unwrap();
-        assert!(prompt.contains(&id().to_string()));
-        assert!(prompt.contains(registration_user_prompt()));
+    fn acp_registration_prompt_without_a_lead_is_the_request_alone() {
+        assert_eq!(acp_registration_prompt(false, None).as_deref(),
+                   Some(registration_user_prompt()));
+    }
+
+    #[test]
+    fn acp_registration_prompt_leads_with_first_turn_instructions() {
+        let lead = knot_instructions(id());
+        let prompt = acp_registration_prompt(false, Some(&lead)).unwrap();
+        assert!(prompt.starts_with(&lead));
+        assert!(prompt.ends_with(registration_user_prompt()));
     }
 
     #[test]
     fn acp_registration_prompt_resume_is_none() {
-        assert!(acp_registration_prompt(id(), true, None).is_none());
-    }
-
-    #[test]
-    fn acp_registration_prompt_includes_persona() {
-        let p = persona("Be terse.");
-        let prompt = acp_registration_prompt(id(), false, Some(&p)).unwrap();
-        assert!(prompt.contains("impersonate Ada"));
+        assert!(acp_registration_prompt(true, None).is_none());
+        assert!(acp_registration_prompt(true, Some("lead")).is_none());
     }
 }

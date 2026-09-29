@@ -6,8 +6,8 @@ assembled from settings and per-agent-type rules: the base command and user
 options, resume/fork arguments, MCP configuration and hook plugin injection,
 inline registration arguments, the working-directory wrapper, the
 `KNOT_AGENT_ID` environment variable, leading-space history suppression, the
-shell-agent path, and what the knot instructions in a registration prompt have
-to say.
+shell-agent path, what the knot instructions given to an agent have to say,
+and which channel of its adapter carries them.
 
 ## Requirements
 
@@ -135,9 +135,11 @@ per-type CLI-flag behavior, which never reached the subprocess correctly.
 
 ### Requirement: Knot instructions given to a launched agent
 
-Every registration prompt the system sends an agent - the ACP protocol prompt
-on a fresh session, and the deferred shell-agent prompt - SHALL carry a single
-block of knot instructions, and that block SHALL meet all of the following.
+Every launched agent SHALL be given a single block of knot instructions - on
+the ACP path through its adapter's standing-instruction carrier (see
+"Standing instructions through the agent's system channel"), and on the
+shell-agent path in the deferred registration prompt - and that block SHALL
+meet all of the following.
 
 It SHALL state that the agent's current task outranks a request from a
 teammate, and that such a request is queued work rather than an interrupt. An
@@ -195,15 +197,82 @@ is funded by compressing wording elsewhere, not by raising the ceiling.
 - **WHEN** the knot instructions are rendered for any agent ID
 - **THEN** the result is one line of at most 1,000 characters
 
+### Requirement: Standing instructions through the agent's system channel
+
+An ACP-launched agent's standing instructions - its knot instructions and, when
+it has one with instructions, its persona - SHALL reach it through the system
+or developer-instruction channel of its adapter, chosen per agent type from a
+closed set of carriers:
+
+- `claude`: the object `{"append": <instructions>}` under `systemPrompt` in the
+  session's `_meta` on `session/new` and `session/load`, merged with any other
+  `_meta` the session opens with. The object form appends to the adapter's
+  `claude_code` preset; a string there would replace it.
+- `codex`: `developer_instructions` in the JSON object of the adapter
+  subprocess's `CODEX_CONFIG` environment variable, which `codex-acp` sends as
+  config overrides on both `thread/start` and `thread/resume`. A value the
+  variable already has in Knot's environment SHALL be kept, with
+  `developer_instructions` of its own placed ahead of Knot's.
+- `opencode`: a per-agent file, at a stable path under the application's cache
+  directory, named in the `instructions` array of the adapter subprocess's
+  `OPENCODE_CONFIG_CONTENT` JSON, after any entries that variable already
+  lists. The file SHALL be written before the adapter is spawned and never on
+  the render path.
+- Any other agent type: the first turn - the instructions lead the
+  registration request on a fresh session, as before this requirement.
+
+A carrier other than the first turn SHALL be applied on every launch, resumed
+sessions included, because none of these adapters restores it from the
+conversation's history. When such a session is fresh, its first turn SHALL be
+the registration request alone. When the opencode file cannot be written, or
+there is no cache directory to write it in, the instructions SHALL be sent on
+the first turn instead.
+
+The Swift app passed Codex its instructions as a `-c developer_instructions=`
+argument to the Codex CLI. `codex-acp` spawns `codex app-server` without
+passing its own arguments on, so that path does not reach Codex here.
+
+#### Scenario: A fresh Claude session opens on the registration request
+
+- **WHEN** a `claude` agent starts a fresh session
+- **THEN** `session/new` carries the knot instructions and persona under
+  `_meta.systemPrompt.append`, and the first user turn is the registration
+  request alone
+
+#### Scenario: A resumed session gets the instructions again
+
+- **WHEN** a `claude`, `codex` or `opencode` agent resumes a prior session
+- **THEN** its carrier delivers the standing instructions on that launch, and
+  no registration turn is sent
+
+#### Scenario: The user's own adapter configuration is kept
+
+- **WHEN** Knot's environment already sets `CODEX_CONFIG` or
+  `OPENCODE_CONFIG_CONTENT`
+- **THEN** the adapter receives those settings with Knot's instructions merged
+  in, not replaced by them
+
+#### Scenario: An adapter with no known channel
+
+- **WHEN** a `gemini` agent starts a fresh session
+- **THEN** its first turn is the knot instructions and persona followed by the
+  registration request
+
+#### Scenario: The opencode file cannot be written
+
+- **WHEN** an `opencode` agent's instructions file cannot be written
+- **THEN** the adapter is not pointed at it, and the instructions lead the
+  registration request on a fresh session instead
+
 ### Requirement: Startup prompt follows the initialization prompt
 
 On a fresh session for an agent with a startup prompt that resolves to text
 (see `prompt-library`), with its variables expanded for that agent at the
 moment the session starts, the system SHALL send that text as a separate user
 turn after the initialization prompt's turn. The initialization prompt - the
-knot instructions, persona and registration request - SHALL be unchanged by
-the presence of a startup prompt, and the startup prompt SHALL NOT be folded
-into it.
+registration request, led by the knot instructions and persona only for an
+adapter whose carrier is the first turn - SHALL be unchanged by the presence
+of a startup prompt, and the startup prompt SHALL NOT be folded into it.
 
 The startup prompt SHALL NOT be sent when a session is resumed or loaded,
 when the user re-sends registration with Register Agent, or when the

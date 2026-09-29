@@ -12,6 +12,7 @@ mod capabilities;
 mod consts;
 mod default_mode;
 mod escape;
+mod instructions;
 mod registration;
 mod startup;
 mod variables;
@@ -25,6 +26,10 @@ pub use builders::{
 pub use capabilities::supports_inline_registration;
 pub use default_mode::{DefaultMode, unconfigured_default_mode};
 pub use escape::persona_prompt;
+pub use instructions::{
+    DeliveryRequest, InstructionCarrier, InstructionDelivery, InstructionsFile,
+    instruction_carrier, instruction_delivery, merge_session_meta, standing_instructions,
+};
 pub use registration::{
     acp_registration_prompt, knot_instructions, registration_prompt, registration_user_prompt,
 };
