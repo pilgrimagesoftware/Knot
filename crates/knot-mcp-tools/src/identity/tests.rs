@@ -57,6 +57,16 @@ fn a_sender_is_held_to_its_connection_too() {
     assert!(is_refused(refusal(&store, consts::SEND_MESSAGE, &args, &caller)));
 }
 
+/// Found in the running app: a connection that arrives before the roster
+/// naming its agent was refused its own ID.
+#[test]
+fn a_connection_is_never_refused_its_own_id() {
+    let caller = bound_to(Uuid::new_v4());
+    let own = caller.agent.expect("bound").to_string();
+    let args = json!({ "agentId": own });
+    assert!(refusal(&AgentStore::new(), consts::REGISTER_AGENT, &args, &caller).is_none());
+}
+
 #[test]
 fn an_unknown_id_on_a_bound_connection_is_told_the_right_one() {
     let (store, _, builder) = knot();

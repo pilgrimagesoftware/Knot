@@ -42,7 +42,11 @@ pub(crate) fn refusal(store: &AgentStore, tool: &str, arguments: &serde_json::Va
                       caller: &Caller)
                       -> Option<ToolCallResult> {
     let claimed = arguments.get(caller_argument(tool))?.as_str()?;
-    let named = find_by_name_or_id(store, claimed).map(|agent| agent.id);
+    // An ID is its own agent whether or not the store has caught up with it:
+    // a connection may arrive before the roster that names it, and refusing
+    // an agent its own ID then would lock it out of the knot.
+    let named = find_by_name_or_id(store, claimed).map(|agent| agent.id)
+                                                  .or_else(|| Uuid::parse_str(claimed).ok());
     match caller.agent {
         Some(bound) if named == Some(bound) => None,
         Some(bound) => Some(ToolCallResult::error(format!(
