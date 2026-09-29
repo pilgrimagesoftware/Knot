@@ -61,6 +61,58 @@ can copy them into a report filed out of band without transcribing them.
 - **THEN** the text can be copied, so it can be pasted into a report filed by
   other means
 
+### Requirement: The diagnostics stay in view whatever is typed
+
+The description text area SHALL keep a fixed height and scroll its own
+content, rather than growing with it. Pasting or typing a long description
+SHALL NOT push the diagnostics section, or the controls below it, out of the
+window.
+
+#### Scenario: A long paste
+
+- **WHEN** the user pastes several hundred lines into the description
+- **THEN** the description scrolls within its field, and the diagnostics and
+  the Cancel and Report controls stay where they were
+
+### Requirement: A report can attach the application and MCP logs
+
+The window SHALL offer to attach the application log and the MCP server log,
+each chosen on its own and neither chosen by default: a log is the user's to
+share.
+
+A chosen log SHALL be attached as its most recent lines, bounded in size so
+the issue body stays within the forge's limit, in a collapsed block after the
+diagnostics. A chosen log that cannot be read SHALL be named with its path
+rather than failing the report.
+
+The browser fallback SHALL NOT carry log content, which would make the
+compose URL too long to open; it SHALL instead name each chosen log's file so
+the user can attach it on the page.
+
+The application log SHALL be whatever the application wrote to standard
+error, kept in the platform log directory whenever standard error is not a
+terminal - a packaged app's standard error otherwise goes nowhere. The
+previous run's log SHALL be kept beside it, and older ones discarded.
+
+#### Scenario: Attaching the MCP log
+
+- **WHEN** the user checks the MCP server log and files a report with the
+  forge ready
+- **THEN** the issue body carries the log's last lines in a collapsed block
+  after the diagnostics
+
+#### Scenario: Nothing is attached unasked
+
+- **WHEN** the user files a report without checking either log
+- **THEN** the issue carries no log
+
+#### Scenario: The browser fallback names the files
+
+- **WHEN** the forge is not ready and the user files a report with a log
+  checked
+- **THEN** the compose page's body names that log's file, and carries none of
+  its content
+
 ### Requirement: Report requires a subject and a description
 
 Report SHALL be disabled while the subject is empty or consists only of
