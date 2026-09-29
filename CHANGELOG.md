@@ -1,4 +1,11 @@
 
+## 1.19.2 - 2026-09-29
+
+### Fixed
+- Resolve an agent's persona from its persona_id
+
+
+
 ## 1.19.1 - 2026-09-28
 
 ### Fixed
