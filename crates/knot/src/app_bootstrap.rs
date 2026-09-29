@@ -39,6 +39,7 @@ use crate::menu_bar::MenuBarState;
 use crate::quit_guard;
 use crate::settings_window::open_settings_window;
 use crate::view_menu::view_menu;
+use crate::window_actions::register_focused_window_actions;
 use crate::window_options::manager_window_options;
 use crate::workspace_manager::WorkspaceManager;
 
@@ -171,8 +172,13 @@ actions!(knot_app,
 // does not currently offer. Wiring one is a matter of registering its
 // handler on the window that owns the behavior; the binding is already
 // here.
-actions!(knot_app,
-         [NewWorkspace, CloseWindow, MinimizeWindow, KnotHelp]);
+actions!(knot_app, [NewWorkspace, KnotHelp]);
+
+// File > Close Window and Window > Minimize / Zoom. Wired app-wide in
+// `window_actions`, so they act on whichever window is focused. Zoom is named
+// only so it can have a handler; macOS gives it no key equivalent, and
+// nothing binds one.
+actions!(knot_app, [CloseWindow, MinimizeWindow, ZoomWindow]);
 
 // Enter Full Screen is deliberately absent. macOS adds its own item to the
 // View menu when it does not find an equivalent one, and it judges
@@ -288,7 +294,7 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
             MenuItem::separator(),
             MenuItem::action("Import…", OpenImport),
             MenuItem::separator(),
-            MenuItem::action("Close Window", CloseWindow).disabled(true),
+            MenuItem::action("Close Window", CloseWindow),
         ]),
         // The text actions gpui already defines and binds for a focused
         // input, rather than placeholders of our own. Reusing them is what
@@ -326,10 +332,8 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
             MenuItem::action(knot_core::l10n::t("menu.window.command_center"), OpenCommandCenter),
             MenuItem::action(knot_core::l10n::t("menu.window.workspaces"), OpenWorkspaces),
             MenuItem::separator(),
-            MenuItem::action("Minimize", MinimizeWindow).disabled(true),
-            // Zoom keeps `NoAction`: macOS gives it no key equivalent, so
-            // it has no reason to be named.
-            MenuItem::action("Zoom", gpui_kit::NoAction).disabled(true),
+            MenuItem::action("Minimize", MinimizeWindow),
+            MenuItem::action("Zoom", ZoomWindow),
             MenuItem::separator(),
         ]),
         // Report a Bug has no key equivalent: macOS gives it none, and the
@@ -368,6 +372,7 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
     // Holds its own single-instance handle; see
     // `bug_report::register_report_bug_action`.
     register_report_bug_action(cx);
+    register_focused_window_actions(cx);
     cx.on_action(hide_app);
     cx.on_action(hide_others);
     cx.on_action(show_all_windows);

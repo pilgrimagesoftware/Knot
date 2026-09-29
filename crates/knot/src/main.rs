@@ -51,6 +51,7 @@ mod terminal_view;
 #[cfg(test)]
 mod tests;
 mod view_menu;
+mod window_actions;
 mod window_options;
 mod window_registry;
 mod working_indicator;
