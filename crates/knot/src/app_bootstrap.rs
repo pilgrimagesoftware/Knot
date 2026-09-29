@@ -173,7 +173,11 @@ actions!(knot_app,
 // does not currently offer. Wiring one is a matter of registering its
 // handler on the window that owns the behavior; the binding is already
 // here.
-actions!(knot_app, [NewWorkspace, KnotHelp]);
+actions!(knot_app, [NewWorkspace]);
+
+// Help > Knot Help (⌘?). Opens Knot's page in the browser; wired app-wide in
+// `install_actions_and_keys`, so it is enabled whatever is focused.
+actions!(knot_app, [KnotHelp]);
 
 // File > Close Window and Window > Minimize / Zoom. Wired app-wide in
 // `window_actions`, so they act on whichever window is focused. Zoom is named
@@ -254,6 +258,13 @@ pub(crate) fn quit_on_terminal_signals() {
 
 #[cfg(not(unix))]
 pub(crate) fn quit_on_terminal_signals() {}
+
+/// Opens Knot's help page. Through the platform rather than `open_in`: that
+/// runs `/usr/bin/open` and waits for it, and this is a menu handler on the
+/// main thread.
+pub(crate) fn knot_help(_: &KnotHelp, cx: &mut App) {
+    cx.open_url(crate::consts::KNOT_HELP_URL);
+}
 
 pub(crate) fn hide_app(_: &HideApp, cx: &mut App) {
     cx.hide();
@@ -340,7 +351,7 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
         // Report a Bug has no key equivalent: macOS gives it none, and the
         // item is enabled everywhere because it is how a user asks for help.
         Menu::new("Help").items([
-            MenuItem::action("Knot Help", KnotHelp).disabled(true),
+            MenuItem::action("Knot Help", KnotHelp),
             MenuItem::action(knot_core::l10n::t("menu.help.report_bug"), ReportBug),
         ]),
     ]);
@@ -370,6 +381,7 @@ pub(crate) fn install_actions_and_keys(settings: &knot_core::Settings,
     // Holds its own single-instance handle; see
     // `bug_report::register_report_bug_action`.
     register_report_bug_action(cx);
+    cx.on_action(knot_help);
     register_focused_window_actions(cx);
     cx.on_action(hide_app);
     cx.on_action(hide_others);

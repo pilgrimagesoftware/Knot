@@ -402,8 +402,17 @@ ask for help.
 #### Scenario: The item is not a placeholder
 
 - **WHEN** the user opens the Help menu
-- **THEN** Report a Bug… is enabled and answers, unlike the standard Knot Help
-  item, which stays a disabled placeholder until it is wired
+- **THEN** Report a Bug… is enabled and answers, as Knot Help does
+
+### Requirement: Knot Help opens the app's help page
+
+Help > Knot Help SHALL be enabled whatever window is focused, and choosing it
+or pressing ⌘? SHALL open Knot's page in the user's default browser.
+
+#### Scenario: Choosing Knot Help
+
+- **WHEN** the user chooses Help > Knot Help
+- **THEN** Knot's help page opens in the default browser
 
 ### Requirement: The View menu lists the navigation shortcuts
 
