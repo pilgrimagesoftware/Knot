@@ -21,6 +21,7 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::div;
 use uuid::Uuid;
 
+use super::closed::CloseTarget;
 use crate::app_support::single_line;
 use crate::workspace_window::WorkspaceWindow;
 
@@ -36,18 +37,11 @@ pub(in crate::workspace_window) enum Section {
 }
 
 impl Section {
-    const fn id_prefix(self) -> &'static str {
-        match self {
-            Self::Markdown => "markdown",
-            Self::Mermaid => "mermaid",
-        }
-    }
-
     /// The close control's element id.
     ///
-    /// A static string per variant rather than one formatted from
-    /// [`Self::id_prefix`]: `ElementId` is built from a `&'static str` and a
-    /// number, and a `String` does not convert.
+    /// A static string per variant rather than one formatted from a shared
+    /// prefix: `ElementId` is built from a `&'static str` and a number, and a
+    /// `String` does not convert.
     const fn close_id(self) -> &'static str {
         match self {
             Self::Markdown => "markdown-pane-close",
@@ -58,28 +52,56 @@ impl Section {
 
 /// What a section's header needs to know about its own state.
 ///
-/// `collapsible` is false whenever the section is the only one open: there is
-/// nothing to trade height with, so a chevron would offer a gesture that
-/// cannot do anything.
-#[derive(Debug, Clone, Copy, Default)]
+/// Built by [`section_chrome`], the one place that decides it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(in crate::workspace_window) struct SectionChrome {
     pub(in crate::workspace_window) collapsible: bool,
     pub(in crate::workspace_window) collapsed:   bool,
+    /// Whether the header carries its own close control.
+    pub(in crate::workspace_window) closable:    bool,
+}
+
+/// A section's chrome, given whether the other section is open too and
+/// whether the user collapsed this one.
+///
+/// A lone section has neither a chevron nor a close of its own. There is no
+/// other section to give its height to, so a chevron would offer a gesture
+/// that cannot do anything. And the toolbar's close-all, one row above,
+/// already closes exactly this section, so a second close beside it would be
+/// two controls for one action. With both open each keeps both: its chevron
+/// trades height with the other, and its close takes it alone, which
+/// close-all cannot.
+///
+/// The close is a departure from `ArtifactPanelView.singleSectionLayout`,
+/// which keeps the section's close beside the toolbar's.
+pub(in crate::workspace_window) fn section_chrome(both_open: bool, collapsed: bool)
+                                                  -> SectionChrome {
+    SectionChrome { collapsible: both_open,
+                    collapsed:   both_open && collapsed,
+                    closable:    both_open, }
 }
 
 impl WorkspaceWindow {
-    /// A section's header: its chevron when collapsible, its title, and its
-    /// own close control.
+    /// A section's header: its chevron when collapsible, its title, the
+    /// section's own `actions`, and its close control.
     ///
     /// The close control is the section's, not the panel's - it closes this
     /// artifact and leaves the other's alone, which is what distinguishes it
-    /// from the toolbar's close-all.
+    /// from the toolbar's close-all. `actions` are left out while the section
+    /// is collapsed, as `MarkdownPanelView` leaves them out: there is nothing
+    /// on screen for them to act on.
     pub(in crate::workspace_window) fn artifact_section_header(&self, id: Uuid,
                                                                section: Section, title: &str,
                                                                chrome: SectionChrome,
+                                                               actions: Vec<gpui_kit::AnyElement>,
                                                                cx: &mut Context<Self>)
                                                                -> gpui_kit::AnyElement {
-        let prefix = section.id_prefix();
+        let actions = if chrome.collapsed {
+            Vec::new()
+        }
+        else {
+            actions
+        };
         h_flex().w_full()
                 .flex_shrink_0()
                 .items_center()
@@ -125,24 +147,28 @@ impl WorkspaceWindow {
                             .text_ellipsis()
                             .font_semibold()
                             .child(single_line(title)))
-                .child(Button::new((section.close_id(), id.as_u128() as u64))
+                .child(h_flex().flex_shrink_0()
+                               .items_center()
+                               .gap_1()
+                               .children(actions))
+                .children(chrome.closable.then(|| {
+                    Button::new((section.close_id(), id.as_u128() as u64))
                     .icon(IconName::Close)
                     .ghost()
                     .small()
                     .tooltip(knot_core::l10n::t("panel.close"))
                     .on_click(cx.listener(move |view, _, _window, cx| {
-                        {
-                            let mut store = view.store.lock();
-                            let closed = match section {
-                                Section::Markdown => store.clear_markdown_panel(id),
-                                Section::Mermaid => store.clear_mermaid_panel(id),
-                            };
-                            if let Err(error) = closed {
-                                eprintln!("failed to close the {prefix} section: {error}");
-                            }
-                        }
+                        let target = match section {
+                            Section::Markdown => CloseTarget::Markdown,
+                            Section::Mermaid => CloseTarget::Mermaid,
+                        };
+                        view.close_artifact_sections(id, target);
                         cx.notify();
-                    })))
+                    }))
+                }))
                 .into_any_element()
     }
 }
+
+#[cfg(test)]
+mod tests;

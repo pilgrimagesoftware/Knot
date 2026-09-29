@@ -101,9 +101,14 @@ impl WorkspaceWindow {
             let agents = self.selected_agent_menu(cx)
                              .map(|selected| selected.snapshot)
                              .unwrap_or_default();
-            let window = OwningWindow { workspace_id:   self.workspace_id,
-                                        view_mode:      self.view_mode,
-                                        selected_agent: self.selected_agent, };
+            // Read before the store is locked below: it locks the store
+            // itself, and the lock is not reentrant.
+            let artifacts_shown = self.selected_agent
+                                      .is_some_and(|id| self.artifact_panel_open(id));
+            let window = OwningWindow { workspace_id: self.workspace_id,
+                                        view_mode: self.view_mode,
+                                        selected_agent: self.selected_agent,
+                                        artifacts_shown };
             let view = view_menu_snapshot(&self.store.lock(), Some(window));
             (Some(self.window_handle), MenuBarSnapshot { agents, view })
         }

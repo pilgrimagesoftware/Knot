@@ -64,3 +64,24 @@ pub const CLAUDE_ADAPTER_FLAGS: [&str; 13] = ["print",
                                               "continue",
                                               "fork-session",
                                               "allow-dangerously-skip-permissions"];
+
+/// The environment variable `codex-acp` reads as a JSON object of Codex
+/// config overrides and sends on every `thread/start` and `thread/resume`.
+pub const CODEX_CONFIG_ENV: &str = "CODEX_CONFIG";
+
+/// The Codex config key whose text becomes a developer message alongside
+/// the model's base instructions, rather than replacing them as
+/// `base_instructions` would.
+pub const CODEX_DEVELOPER_INSTRUCTIONS_KEY: &str = "developer_instructions";
+
+/// The environment variable opencode merges last over its config files, as
+/// inline JSON.
+pub const OPENCODE_CONFIG_ENV: &str = "OPENCODE_CONFIG_CONTENT";
+
+/// The opencode config key listing instruction files to append to the
+/// system prompt. Paths, globs or URLs - not inline text.
+pub const OPENCODE_INSTRUCTIONS_KEY: &str = "instructions";
+
+/// Where under the app's cache directory each agent's opencode instructions
+/// file is written, one `<agent id>.md` per agent.
+pub const INSTRUCTIONS_FILES_DIR: &str = "agent-instructions";

@@ -140,6 +140,12 @@ impl WorkspaceWindow {
         // happen. Taken into a local rather than into the `||` chain below,
         // which short-circuits: the compare-and-store has to run every tick.
         let artifacts_moved = self.drain_artifact_changes();
+        // After the drain above, so a file that just opened has its
+        // document started this tick. The read lands on a blocking thread
+        // and a watch re-reads on change; neither has a context to notify
+        // from, so without this a file would show "Loading" until something
+        // unrelated repainted. A local for the same short-circuit reason.
+        let documents_landed = self.poll_markdown_documents();
         let spinner_dirty = self.spinner_repaint_due();
         // Runs `ps` on its own much slower cadence, and only while a
         // processes section is expanded on the shown agent - see
@@ -179,6 +185,7 @@ impl WorkspaceWindow {
            || subagents_changed
            || mentions_listed
            || artifacts_moved
+           || documents_landed
            || shell_runs_moved
         {
             cx.notify();

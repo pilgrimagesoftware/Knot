@@ -249,7 +249,7 @@ fn jump_to_bottom_leaves_a_hidden_conversation_alone(cx: &mut TestAppContext) {
 
 /// Whether macOS would draw `action`'s menu item enabled: it asks exactly
 /// this of the focused window's last frame (`app-menu`).
-fn available(fixture: &mut Fixture, action: &dyn gpui_kit::Action) -> bool {
+pub(super) fn available(fixture: &mut Fixture, action: &dyn gpui_kit::Action) -> bool {
     fixture.window
            .update(|window, cx| window.is_action_available(action, cx))
 }

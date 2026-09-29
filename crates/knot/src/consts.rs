@@ -78,6 +78,22 @@ pub(crate) const ARTIFACT_PANEL_DEFAULT_SPLIT: f32 = 0.5;
 pub(crate) const ARTIFACT_PANEL_MIN_SPLIT: f32 = 0.15;
 pub(crate) const ARTIFACT_PANEL_MAX_SPLIT: f32 = 0.85;
 
+/// The message the markdown section's Approve sends: the go-ahead, verbatim
+/// from `MarkdownPanelView`. Sent to the agent, so not localized.
+pub(crate) const ARTIFACT_APPROVE_PROMPT: &str = "approved let's do it";
+
+/// The bounds the markdown section's font size controls step within, from
+/// `MarkdownPanelView`'s `A` buttons.
+pub(crate) const MARKDOWN_FONT_SIZE_MIN: i32 = 10;
+pub(crate) const MARKDOWN_FONT_SIZE_MAX: i32 = 24;
+
+/// How long text typed at a terminal agent's prompt gets to arrive before
+/// the escape that dismisses its autocomplete, and how long the escape gets
+/// before the Return. `TimingConstants.escapeKeyDelay` and `returnKeyDelay`:
+/// sent back to back, an agent CLI's autocomplete takes the Return.
+pub(crate) const TERMINAL_ESCAPE_KEY_DELAY: Duration = Duration::from_millis(300);
+pub(crate) const TERMINAL_RETURN_KEY_DELAY: Duration = Duration::from_millis(300);
+
 /// A collapsed artifact section's height: its header and nothing else.
 pub(crate) const ARTIFACT_SECTION_HEADER_HEIGHT: f32 = 34.;
 

@@ -118,42 +118,56 @@ impl WorkspaceWindow {
                                  .and_then(|header| header.state.as_ref())
             {
                 Some((state, git_stats)) => {
-                    v_flex().items_end()
-                            .gap_0p5()
-                            .child(h_flex().items_center()
-                                           .gap_2()
-                                           .child(div().w(px(10.))
-                                                       .h(px(10.))
-                                                       .rounded_full()
-                                                       .bg(state_color(*state)))
-                                           .child(div().font_family(title_font_name.clone())
-                                                       .text_size(title_font_size)
-                                                       .text_color(cx.theme().muted_foreground)
-                                                       .child(state_label(*state))))
-                            .child(match git_stats {
-                                       Some(Some(stats)) => {
-                                           // The stat row is already the
-                                           // "this folder has N changes"
-                                           // indicator, so it is what opens
-                                           // the panel that shows what those
-                                           // changes are - the question the
-                                           // row raises and cannot answer.
-                                           Self::render_diff_stats_button(stats,
+                    // Beside the status rather than in the panel, which is
+                    // gone once closed: this is the one place left to put a
+                    // control that brings it back. Drawn only while there is
+                    // something closed to reopen.
+                    let reopen = self.selected_agent
+                                     .and_then(|id| self.reopen_artifacts_button(id, cx));
+                    let status =
+                        v_flex().items_end()
+                                .gap_0p5()
+                                .child(h_flex().items_center()
+                                               .gap_2()
+                                               .child(div().w(px(10.))
+                                                           .h(px(10.))
+                                                           .rounded_full()
+                                                           .bg(state_color(*state)))
+                                               .child(div().font_family(title_font_name.clone())
+                                                           .text_size(title_font_size)
+                                                           .text_color(cx.theme().muted_foreground)
+                                                           .child(state_label(*state))))
+                                .child(match git_stats {
+                                           Some(Some(stats)) => {
+                                               // The stat row is already the
+                                               // "this folder has N changes"
+                                               // indicator, so it is what opens
+                                               // the panel that shows what
+                                               // those
+                                               // changes are - the question the
+                                               // row raises and cannot answer.
+                                               Self::render_diff_stats_button(stats,
                                                                           title_font_name.clone(),
                                                                           title_font_size,
                                                                           cx)
-                                       }
-                                       // The refresh ran and found no
-                                       // repository: the agent's folder
-                                       // isn't a git checkout, so there
-                                       // are no stats to wait for.
-                                       Some(None) => div().into_any_element(),
-                                       None => div().font_family(title_font_name.clone())
+                                           }
+                                           // The refresh ran and found no
+                                           // repository: the agent's folder
+                                           // isn't a git checkout, so there
+                                           // are no stats to wait for.
+                                           Some(None) => div().into_any_element(),
+                                           None => {
+                                               div().font_family(title_font_name.clone())
                                                     .text_size(title_font_size)
                                                     .text_color(cx.theme().muted_foreground)
                                                     .child(knot_core::l10n::t("git.stats_pending"))
-                                                    .into_any_element(),
-                                   })
+                                                    .into_any_element()
+                                           }
+                                       });
+                    h_flex().items_center()
+                            .gap_3()
+                            .children(reopen)
+                            .child(status)
                             .into_any_element()
                 }
                 None => div().into_any_element(),

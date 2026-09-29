@@ -157,6 +157,9 @@ impl WorkspaceWindow {
         self.artifact_panel.remove(&id);
         self.artifact_panel_resize.remove(&id);
         self.artifact_split_resize.remove(&id);
+        self.artifact_closed.remove(&id);
+        // Dropping the document stops its watch.
+        self.markdown_documents.remove(&id);
     }
 
     /// Reconciles `id`'s arrangement with what the store now holds, and says

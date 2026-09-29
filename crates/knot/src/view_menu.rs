@@ -41,30 +41,34 @@ pub(crate) struct ViewMenuSnapshot {
 /// The owning workspace window's side of [`ViewMenuSnapshot`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorkspaceViewFacts {
-    pub(crate) workspace_id:   Uuid,
-    pub(crate) view_mode:      WorkspaceViewMode,
+    pub(crate) workspace_id:    Uuid,
+    pub(crate) view_mode:       WorkspaceViewMode,
     /// The first nine sidebar agents, top to bottom.
-    pub(crate) agents:         Vec<(Uuid, String)>,
-    pub(crate) selected_agent: Option<Uuid>,
+    pub(crate) agents:          Vec<(Uuid, String)>,
+    pub(crate) selected_agent:  Option<Uuid>,
+    /// Whether the selected agent's artifact panel is shown, for the
+    /// Artifacts item's checkmark.
+    pub(crate) artifacts_shown: bool,
 }
 
 /// What the owning window shows, as [`view_menu_snapshot`] needs it.
 pub(crate) struct OwningWindow {
-    pub(crate) workspace_id:   Uuid,
-    pub(crate) view_mode:      WorkspaceViewMode,
-    pub(crate) selected_agent: Option<Uuid>,
+    pub(crate) workspace_id:    Uuid,
+    pub(crate) view_mode:       WorkspaceViewMode,
+    pub(crate) selected_agent:  Option<Uuid>,
+    pub(crate) artifacts_shown: bool,
 }
 
 /// Reads the snapshot from `store`, for `window` or for no workspace window.
 pub(crate) fn view_menu_snapshot(store: &knot_agents::AgentStore, window: Option<OwningWindow>)
                                  -> ViewMenuSnapshot {
     let workspaces = numbered_workspaces(store);
-    let window = window.map(|window| WorkspaceViewFacts { workspace_id:   window.workspace_id,
-                                                          view_mode:      window.view_mode,
-                                                          agents:
-                                                              sidebar_agents(store,
-                                                                             window.workspace_id),
-                                                          selected_agent: window.selected_agent, });
+    let window = window.map(|window| WorkspaceViewFacts { workspace_id:    window.workspace_id,
+                                                    view_mode:       window.view_mode,
+                                                    agents:
+                                                        sidebar_agents(store, window.workspace_id),
+                                                    selected_agent:  window.selected_agent,
+                                                    artifacts_shown: window.artifacts_shown, });
     ViewMenuSnapshot { window, workspaces }
 }
 
@@ -100,6 +104,11 @@ pub(crate) fn view_menu(snapshot: &ViewMenuSnapshot) -> Menu {
         MenuItem::separator(),
         MenuItem::action(knot_core::l10n::t("menu.view.focus_agent_input"), FocusAgentInput),
         MenuItem::action(knot_core::l10n::t("menu.view.jump_to_bottom"), JumpToBottom),
+        // Enabled by the window registering its handler, like the items
+        // above: only while the selected agent has an artifact shown or
+        // closed and reopenable (`artifact-panel`).
+        MenuItem::action(knot_core::l10n::t("menu.view.artifacts"), ToggleArtifacts)
+            .checked(snapshot.window.as_ref().is_some_and(|window| window.artifacts_shown)),
         MenuItem::separator(),
         select_agent_submenu(snapshot.window.as_ref()),
         select_workspace_submenu(snapshot),
