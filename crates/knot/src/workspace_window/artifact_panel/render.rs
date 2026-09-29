@@ -28,8 +28,9 @@ use gpui_kit::div;
 use gpui_kit::px;
 use uuid::Uuid;
 
+use super::closed::CloseTarget;
 use super::layout;
-use super::section::SectionChrome;
+use super::section::section_chrome;
 use super::state::ArtifactSnapshot;
 use crate::workspace_window::WorkspaceWindow;
 
@@ -70,24 +71,19 @@ impl WorkspaceWindow {
             return None;
         }
         let arrangement = self.artifact_arrangement(id);
-        // Collapsible only when both are open: a lone section has nothing to
-        // give its height to, so the chevron would offer a gesture that
-        // cannot do anything.
+        // A lone section has no chevron and no close of its own; see
+        // `section_chrome` for why.
         let both = markdown.is_some() && mermaid.is_some();
-        let markdown_collapsed = both && arrangement.markdown_collapsed;
-        let mermaid_collapsed = both && arrangement.mermaid_collapsed;
+        let markdown_chrome = section_chrome(both, arrangement.markdown_collapsed);
+        let mermaid_chrome = section_chrome(both, arrangement.mermaid_collapsed);
+        let markdown_collapsed = markdown_chrome.collapsed;
+        let mermaid_collapsed = mermaid_chrome.collapsed;
 
-        let markdown_section = markdown.map(|file| {
-                                           let chrome = SectionChrome { collapsible: both,
-                                                                        collapsed:
-                                                                            markdown_collapsed, };
-                                           self.render_markdown_pane(id, &file, chrome, cx)
-                                       });
+        let markdown_section =
+            markdown.map(|file| self.render_markdown_pane(id, &file, markdown_chrome, cx));
         let mermaid_section =
             mermaid.map(|(source, title)| {
-                       let chrome = SectionChrome { collapsible: both,
-                                                    collapsed:   mermaid_collapsed, };
-                       self.render_mermaid_pane(id, &source, title.as_deref(), chrome, cx)
+                       self.render_mermaid_pane(id, &source, title.as_deref(), mermaid_chrome, cx)
                    });
 
         let sections = match (markdown_section, mermaid_section) {
@@ -207,15 +203,7 @@ impl WorkspaceWindow {
                     .small()
                     .tooltip(knot_core::l10n::t("artifact_panel.close_all"))
                     .on_click(cx.listener(move |view, _, _window, cx| {
-                        {
-                            let mut store = view.store.lock();
-                            if let Err(error) = store.clear_markdown_panel(id) {
-                                eprintln!("failed to close the markdown section: {error}");
-                            }
-                            if let Err(error) = store.clear_mermaid_panel(id) {
-                                eprintln!("failed to close the diagram section: {error}");
-                            }
-                        }
+                        view.close_artifact_sections(id, CloseTarget::Both);
                         cx.notify();
                     })))
                 .into_any_element()

@@ -13,6 +13,7 @@ use crate::keymap::JumpToBottom;
 use crate::keymap::SELECT_AGENT;
 use crate::keymap::SELECT_WORKSPACE;
 use crate::keymap::Shortcut;
+use crate::keymap::ToggleArtifacts;
 use crate::keymap::ToggleDashboard;
 use crate::keymap::TogglePullRequests;
 use crate::keymap::validate::validate;
@@ -38,6 +39,7 @@ pub(crate) struct Resolved {
     toggle_pull_requests: Chord,
     open_command_center:  Chord,
     jump_to_bottom:       Chord,
+    toggle_artifacts:     Chord,
 }
 
 /// A default that does not parse is a bug in `Shortcut::default_chord`,
@@ -60,7 +62,8 @@ impl Resolved {
                toggle_dashboard:     default_chord(Shortcut::ToggleDashboard),
                toggle_pull_requests: default_chord(Shortcut::TogglePullRequests),
                open_command_center:  default_chord(Shortcut::OpenCommandCenter),
-               jump_to_bottom:       default_chord(Shortcut::JumpToBottom), }
+               jump_to_bottom:       default_chord(Shortcut::JumpToBottom),
+               toggle_artifacts:     default_chord(Shortcut::ToggleArtifacts), }
     }
 
     /// The stored customizations applied over the defaults, one at a time
@@ -80,7 +83,8 @@ impl Resolved {
                        (Shortcut::ToggleDashboard, &stored.toggle_dashboard),
                        (Shortcut::TogglePullRequests, &stored.toggle_pull_requests),
                        (Shortcut::OpenCommandCenter, &stored.open_command_center),
-                       (Shortcut::JumpToBottom, &stored.jump_to_bottom)];
+                       (Shortcut::JumpToBottom, &stored.jump_to_bottom),
+                       (Shortcut::ToggleArtifacts, &stored.toggle_artifacts)];
         for (shortcut, source) in singles {
             let Some(source) = source
             else {
@@ -133,7 +137,8 @@ impl Resolved {
                              toggle_dashboard:           chord(Shortcut::ToggleDashboard),
                              toggle_pull_requests:       chord(Shortcut::TogglePullRequests),
                              open_command_center:        chord(Shortcut::OpenCommandCenter),
-                             jump_to_bottom:             chord(Shortcut::JumpToBottom), }
+                             jump_to_bottom:             chord(Shortcut::JumpToBottom),
+                             toggle_artifacts:           chord(Shortcut::ToggleArtifacts), }
     }
 
     pub(crate) fn modifiers(&self, shortcut: Shortcut) -> Option<ShortcutModifiers> {
@@ -151,6 +156,7 @@ impl Resolved {
             Shortcut::TogglePullRequests => Some(&self.toggle_pull_requests),
             Shortcut::OpenCommandCenter => Some(&self.open_command_center),
             Shortcut::JumpToBottom => Some(&self.jump_to_bottom),
+            Shortcut::ToggleArtifacts => Some(&self.toggle_artifacts),
             Shortcut::SelectWorkspace | Shortcut::SelectAgent => None,
         }
     }
@@ -174,6 +180,7 @@ impl Resolved {
             Shortcut::TogglePullRequests => self.toggle_pull_requests = chord,
             Shortcut::OpenCommandCenter => self.open_command_center = chord,
             Shortcut::JumpToBottom => self.jump_to_bottom = chord,
+            Shortcut::ToggleArtifacts => self.toggle_artifacts = chord,
             Shortcut::SelectWorkspace | Shortcut::SelectAgent => {}
         }
         self
@@ -208,12 +215,13 @@ impl Resolved {
                 out.push(ConfiguredBinding { chord, bind });
             }
         }
-        let singles: [(Shortcut, BindFn); 5] =
+        let singles: [(Shortcut, BindFn); 6] =
             [(Shortcut::FocusAgentInput, |c| KeyBinding::new(c, FocusAgentInput, None)),
              (Shortcut::ToggleDashboard, |c| KeyBinding::new(c, ToggleDashboard, None)),
              (Shortcut::TogglePullRequests, |c| KeyBinding::new(c, TogglePullRequests, None)),
              (Shortcut::OpenCommandCenter, |c| KeyBinding::new(c, OpenCommandCenter, None)),
-             (Shortcut::JumpToBottom, |c| KeyBinding::new(c, JumpToBottom, None))];
+             (Shortcut::JumpToBottom, |c| KeyBinding::new(c, JumpToBottom, None)),
+             (Shortcut::ToggleArtifacts, |c| KeyBinding::new(c, ToggleArtifacts, None))];
         for (shortcut, bind) in singles {
             for chord in self.chords_of(shortcut) {
                 out.push(ConfiguredBinding { chord, bind });

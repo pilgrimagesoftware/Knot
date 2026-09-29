@@ -130,6 +130,22 @@ pub(crate) fn open_url(url: &str) -> bool {
     run_open(&[], url)
 }
 
+/// Whether this platform can show a file in its file manager at all.
+///
+/// The artifact panel leaves Reveal in Finder out entirely where this is
+/// false, as the processes section does with its process viewer.
+pub(crate) const fn can_reveal_files() -> bool {
+    cfg!(target_os = "macos")
+}
+
+/// Shows `path` selected in a Finder window, returning whether it worked.
+///
+/// `open -R` rather than opening the file: the point is where it is, not
+/// another application's view of what is already on screen.
+pub(crate) fn reveal_path(path: &std::path::Path) -> bool {
+    can_reveal_files() && run_open(&["-R"], &path.to_string_lossy())
+}
+
 /// Whether this platform has a process viewer to offer at all.
 ///
 /// The processes section leaves the action out entirely where this is

@@ -159,9 +159,15 @@ Every control in the toolbar SHALL carry a localized tooltip naming what it
 does, and the title and tooltips SHALL be resolved through localization rather
 than carried as literal English.
 
-Each section SHALL carry its own close control in its header, closing that
-section's artifact and leaving the other's alone. This is what close-all does to
-both at once. Every section control SHALL be localized on the same terms as the
+While both sections are open, each section SHALL carry its own close control in
+its header. It closes that section's artifact and leaves the other's alone,
+which close-all cannot do. While only one section is open, that section SHALL
+NOT carry a close control of its own. The toolbar's close-all, one row above,
+already closes exactly that section, and two controls for one action are one too
+many.
+
+This diverges from the Swift reference, whose `singleSectionLayout` keeps the
+section's close beside the toolbar's. Every section control SHALL be localized on the same terms as the
 toolbar's: the diagram section's close control is literal English today and SHALL
 NOT stay so.
 
@@ -176,6 +182,18 @@ NOT stay so.
 - **WHEN** the user activates the markdown section's own close control on a
   panel showing both
 - **THEN** the markdown file is closed and the diagram is still shown
+
+#### Scenario: A lone section has no close of its own
+
+- **WHEN** the panel holds only a markdown file, or only a diagram
+- **THEN** that section's header has no close control, and the toolbar's
+  close-all closes it
+
+#### Scenario: Both sections keep their own close
+
+- **WHEN** the panel holds both a markdown file and a diagram
+- **THEN** each section's header has its own close control, and the toolbar
+  still has close-all
 
 #### Scenario: The panel is localized
 
@@ -373,7 +391,9 @@ tool-call collapse state.
 
 When only one section is open, it SHALL fill the panel's height. No divider
 SHALL be drawn and that section SHALL NOT carry a collapse control: there is
-nothing to split and no other section to give height to.
+nothing to split and no other section to give height to. Nor SHALL it carry a
+close control of its own, per "The panel toolbar names the panel and closes
+it".
 
 Closing one of two open sections SHALL leave the other filling the panel, and
 SHALL discard the collapsed state of the section that closed, so reopening it
@@ -382,8 +402,8 @@ shows it expanded.
 #### Scenario: Only a diagram is open
 
 - **WHEN** an agent has a diagram open and no markdown file
-- **THEN** the mermaid section fills the panel, with no divider and no collapse
-  control
+- **THEN** the mermaid section fills the panel, with no divider, no collapse
+  control and no close control of its own
 
 #### Scenario: Closing one of two sections
 
@@ -416,3 +436,216 @@ even split, both sections expanded and the panel unexpanded.
 - **WHEN** an agent whose panel was resized is closed and another agent is
   created
 - **THEN** the new agent's panel opens at the default width
+
+### Requirement: A closed panel can be reopened
+
+Closing a section - by its own close control or by close-all - SHALL remember
+what it held: the markdown file's path, and the diagram's source and title. The
+window SHALL keep the last closed markdown file and the last closed diagram for
+each agent.
+
+While the selected agent has a closed artifact whose section is empty again, the
+agent's header SHALL show a reopen control beside the agent's status, with a
+localized tooltip. Activating it SHALL put back every such artifact through the
+store, as an agent's own `display-markdown` or `view-mermaid` call would, so the
+panel reappears by the same path. The control SHALL NOT be shown when there is
+nothing to reopen.
+
+Reopening SHALL NOT replace an artifact the agent has shown since the user
+closed its predecessor: a section the agent has refilled is newer than what the
+user closed and is left as it is. A reopened markdown file SHALL open
+unexpanded. `maximized` is what the agent asked for, and a user reopening a
+panel asks for nothing about its size.
+
+What was closed SHALL be window state on the same terms as the panel's
+arrangement: not persisted, and discarded when the agent is closed. The Markdown
+Files menu, which reads the agent's persisted markdown history, stays the way
+back to older files.
+
+This diverges from the Swift reference, which has no way to reopen a closed
+panel. There, as in the Rust port before this, the only way back was for the
+agent to show the artifact again, and a closed diagram was lost outright.
+
+#### Scenario: Reopening after close-all
+
+- **WHEN** the user activates close-all on a panel showing a markdown file and a
+  diagram, and then activates the reopen control
+- **THEN** both sections are shown again, with the same file and the same
+  diagram and title
+
+#### Scenario: Nothing to reopen
+
+- **WHEN** the selected agent's panel is open with every section it has had, or
+  the agent has never had an artifact
+- **THEN** no reopen control is shown
+
+#### Scenario: A newer artifact is not replaced
+
+- **WHEN** the user closes a markdown file, the agent then shows a different
+  file, and the user activates the reopen control
+- **THEN** the newer file is still shown
+
+### Requirement: The markdown section follows its file
+
+The markdown section SHALL NOT read its file on the render path. The file SHALL
+be read off the main thread when the section opens, and read again whenever it
+changes on disk, and each read that lands SHALL reach a frame through
+`repaint_poll_tick` without waiting for an unrelated repaint. Until the first
+read lands, the section SHALL show a localized loading state. A file that cannot
+be read SHALL show a localized note naming the file and the error in its place.
+
+This matches the Swift reference's `FileWatcher`, and diverges from the Rust
+port before this change, which re-read the file on every frame - once per
+keystroke in the composer beside it.
+
+#### Scenario: An agent edits the file it showed
+
+- **WHEN** the selected agent's markdown file is open and the agent rewrites it
+- **THEN** the section shows the new contents without the agent calling
+  `display-markdown` again
+
+#### Scenario: Typing does not read the file
+
+- **WHEN** the user types in the composer beside an open markdown section
+- **THEN** the file is not read on account of the keystrokes
+
+### Requirement: The markdown section can be approved or reviewed
+
+While a markdown section is expanded, its header SHALL offer the review
+verdicts of the Swift reference's `MarkdownPanelView`, each with a localized
+label and tooltip:
+
+- While the user is reading the file, **Approve** and **Review**.
+- **Approve** SHALL send the agent the message `approved let's do it` as one
+  submitted prompt.
+- **Review** SHALL start an unsent reply naming the file -
+  `While reviewing <file>, user made the following comments:` followed by a new
+  line - and then offer **Submit Review** in place of the two.
+- **Submit Review** SHALL send the reply with whatever the user added to it.
+- Once a verdict is sent, none SHALL be offered until the file is read again.
+  The agent revising the file is what reopens the question.
+
+Each verdict SHALL reach the agent the way the user typing it would. For a
+Panel-mode agent, Approve is delivered as a prompt, queued behind a running turn
+as any other prompt is. Review appends the reply to the composer, keeping a
+draft the user had begun, and focuses it. Submit Review is the composer's own
+send. For a Terminal-mode agent, the text is typed at the prompt and a
+submission is Escape then Return, with the Swift reference's delays between
+them, so an agent CLI's autocomplete does not take the Return.
+
+The messages are sent to the agent rather than shown as chrome, so they SHALL
+NOT be localized.
+
+#### Scenario: Approving a plan
+
+- **WHEN** an idle Panel-mode agent has a markdown file open and the user
+  activates Approve
+- **THEN** the agent receives `approved let's do it` as a prompt, and the
+  section offers no verdict until the file is read again
+
+#### Scenario: Reviewing with comments
+
+- **WHEN** the user activates Review, types a comment in the composer, and
+  activates Submit Review
+- **THEN** the agent receives the reply naming the file followed by the comment
+
+### Requirement: Each section offers actions on its artifact
+
+While a section is expanded, its header SHALL carry these controls, each with a
+localized tooltip, between its title and its close control:
+
+- The markdown section SHALL step the markdown font size down and up by one
+  point, within 10 to 24 points, drawing a step disabled at its bound. The size
+  SHALL be the persisted `markdown_font_size` setting, the same one the panel
+  conversation's assistant messages use, so the two surfaces stay alike.
+- The markdown section SHALL copy the file's contents to the clipboard,
+  disabled until the first read lands.
+- On macOS, the markdown section SHALL reveal the file in Finder.
+- The mermaid section SHALL copy the diagram's source to the clipboard.
+
+A collapsed section SHALL show none of these, only its chevron, title and close
+control, as the Swift reference does.
+
+Copy and reveal are additions of this port's own. Issue #535 asked for them, and
+the Swift reference does not have them.
+
+#### Scenario: Copying a file
+
+- **WHEN** the user activates the markdown section's copy control
+- **THEN** the clipboard holds the file's contents
+
+#### Scenario: The font size stops at its bound
+
+- **WHEN** the markdown font size is 24 points
+- **THEN** the step-up control is disabled
+
+### Requirement: Swift artifact actions this port leaves out
+
+The following actions of the Swift reference SHALL be absent from this port, for
+the reasons given, until a change adds them:
+
+- **Comment on a selection.** `MarkdownPanelView` opens a comment popup on text
+  selected in its web view while a review is active, and appends `- Re "<text>":
+  <comment>` to the reply. The port renders markdown natively, with no text
+  selection to anchor a popup to. A reviewer types comments into the reply that
+  Review starts.
+- **Diagram zoom.** `MermaidPanelView` zooms a rendered image from 0.25x to 4x.
+  The port draws the diagram as laid-out native cards, not an image, so zoom
+  would need a scale threaded through the layout and every card. The section
+  scrolls instead.
+- **Diagram theme picker.** `MermaidPanelView` picks among
+  `BeautifulMermaid` themes. The port draws the diagram in the app's own theme
+  colors, and has no second palette to choose.
+
+#### Scenario: A diagram section has no zoom
+
+- **WHEN** a mermaid section is expanded
+- **THEN** its header offers copy and close, and no zoom or theme control
+
+### Requirement: The panel can be shown and hidden from the menu bar and the keyboard
+
+The View menu SHALL carry an **Artifacts** item, labelled through localization,
+that toggles the selected agent's artifact panel. It dispatches the configurable
+Toggle Artifacts shortcut's action, default ⌥⌘A, so the item shows the binding
+beside its label and the item and the key do the same thing.
+
+- While the selected agent's panel is shown, the toggle SHALL hide it, the same
+  as close-all. What it hid is remembered like any close, so the next toggle
+  brings back exactly what was hidden.
+- While the panel is hidden and something closed can be reopened, the toggle
+  SHALL reopen it, the same as the header's reopen control.
+- The item SHALL be checked while the panel is shown.
+- The item and the shortcut SHALL be disabled when the selected agent has no
+  artifact shown and none to reopen, and when no agent is selected.
+- Neither SHALL depend on the view mode. The panel stays beside the dashboard
+  and pull requests, so it can be toggled while they are showing.
+
+The header's reopen control SHALL remain. It is visible where the panel was,
+and needs no knowledge of the menu or the key.
+
+#### Scenario: Reopening from the header
+
+- **WHEN** the user closes the selected agent's panel and activates the reopen
+  control beside the agent's status
+- **THEN** the panel is shown again with what it held
+
+#### Scenario: Toggling from the View menu
+
+- **WHEN** the selected agent's panel is shown and the user chooses View >
+  Artifacts, and then chooses it again
+- **THEN** the panel is hidden, and then shown again with the same sections
+
+#### Scenario: Toggling from the keyboard
+
+- **WHEN** the selected agent's panel is shown and the user presses ⌥⌘A twice
+- **THEN** the panel is hidden, and then shown again with the same sections
+
+#### Scenario: Nothing to toggle
+
+- **WHEN** the selected agent has never had an artifact
+- **THEN** View > Artifacts is disabled and ⌥⌘A does nothing
+
+#### Scenario: The item shows the panel's state
+
+- **WHEN** the selected agent's panel is shown
+- **THEN** View > Artifacts is checked

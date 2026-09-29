@@ -17,6 +17,15 @@ screen. A side panel removes the condition those exceptions were written for.
 
 ## What Changes
 
+- A closed panel can be reopened from a control in the agent's header, which
+  remembers the last markdown file and diagram the user closed (issue #535).
+- View > Artifacts and a configurable Toggle Artifacts shortcut (default ⌥⌘A)
+  hide and reshow the selected agent's panel. `keybindings` and `app-menu` gain
+  one requirement each.
+- The markdown section gains the Swift reference's review verdicts (Approve,
+  Review, Submit Review) and font size steps, plus copy and reveal in Finder.
+  The mermaid section gains copy. The file is read off the render path and
+  re-read on change instead of once per frame.
 - A new artifact panel: a trailing side panel, sibling to the content pane,
   holding the markdown section and the mermaid section. It is shown whenever the
   selected agent has a markdown file or a diagram open, and closes when both are.

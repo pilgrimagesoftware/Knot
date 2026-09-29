@@ -64,7 +64,9 @@ impl WorkspaceWindow {
                             .child(knot_core::l10n::t("plan.empty"))
                             .into_any_element()
                                                              });
-        let header = self.artifact_section_header(id, Section::Mermaid, &heading, chrome, cx);
+        let actions = self.mermaid_section_actions(id, source);
+        let header =
+            self.artifact_section_header(id, Section::Mermaid, &heading, chrome, actions, cx);
         if chrome.collapsed {
             return v_flex().size_full().child(header).into_any_element();
         }
@@ -87,7 +89,8 @@ impl WorkspaceWindow {
     /// item both set that file; until this existed, both wrote state no UI
     /// ever read, so an agent calling the tool appeared to be ignored.
     /// Closing the section clears the file but keeps the history, so the menu
-    /// can bring it back.
+    /// can bring it back - and the window remembers it, so the header's
+    /// reopen control can too.
     pub(in crate::workspace_window) fn render_markdown_pane(&self, id: Uuid, file: &Path,
                                                             chrome: SectionChrome,
                                                             cx: &mut Context<Self>)
@@ -95,14 +98,15 @@ impl WorkspaceWindow {
         let title = file.file_name()
                         .map(|name| name.to_string_lossy().into_owned())
                         .unwrap_or_else(|| file.to_string_lossy().into_owned());
-        // Read at render time rather than cached: the file is written by
-        // an agent that may still be editing it, and re-reading is what
-        // makes a second `display-markdown` of the same path show the new
-        // content.
-        let body = std::fs::read_to_string(file).unwrap_or_else(|error| {
-                       format!("Could not read `{}`:\n\n```\n{error}\n```", file.display())
-                   });
-        let header = self.artifact_section_header(id, Section::Markdown, &title, chrome, cx);
+        // From the document cache, never from disk: this runs every frame.
+        // The file is read off the main thread and re-read when it changes
+        // (`artifact_panel::document`), which is what keeps an agent's edits
+        // on screen without reading per keystroke.
+        let body = self.markdown_document_body(id)
+                       .unwrap_or_else(|| knot_core::l10n::t("artifact_panel.loading").into());
+        let actions = self.markdown_section_actions(id, file, cx);
+        let header =
+            self.artifact_section_header(id, Section::Markdown, &title, chrome, actions, cx);
         if chrome.collapsed {
             return v_flex().size_full().child(header).into_any_element();
         }

@@ -407,6 +407,14 @@ pub(crate) struct WorkspaceWindow {
     /// Compared each poll so a `display-markdown` arriving on the MCP
     /// server's thread reaches a frame.
     pub(super) artifact_drawn: BTreeMap<Uuid, super::artifact_panel::state::ArtifactSnapshot>,
+    /// What the user last closed in each agent's artifact panel, for the
+    /// header's reopen control. Outlives the arrangement, which goes when the
+    /// panel closes - remembering past that is the whole point.
+    pub(super) artifact_closed: BTreeMap<Uuid, super::artifact_panel::closed::ClosedArtifacts>,
+    /// Each agent's open markdown file, read off the render path. See
+    /// `artifact_panel::document`.
+    pub(super) markdown_documents:
+        BTreeMap<Uuid, super::artifact_panel::document::MarkdownDocument>,
     pub(super) view_mode:                        WorkspaceViewMode,
     pub(super) dashboard_sort:                   dashboard::DashboardSort,
     /// The sidebar's one error line, for a failure the user caused and can

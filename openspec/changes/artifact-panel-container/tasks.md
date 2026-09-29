@@ -193,3 +193,34 @@
       artifact panel stays shown beside it, covering "The dashboard does not
       close the panel". NOT DONE - the switch is a click, so it needs a
       visible window.
+
+## 8. Reopening and artifact actions (issue #535)
+
+- [x] 8.1 Remember what each close control closed, per agent, in
+      `artifact_panel/closed.rs`, and route the section close and close-all
+      through `close_artifact_sections`; verify with `closed/tests.rs`.
+- [x] 8.2 Draw a reopen control beside the agent's status in the header while
+      something closed can be reopened, restoring through the store's setters
+      without replacing a newer artifact; verify with `closed/tests.rs`.
+- [x] 8.3 Read the markdown file off the render path and re-read it on change
+      (`artifact_panel/document.rs`), draining landed reads in
+      `repaint_poll_tick`; verify with `document/tests.rs`.
+- [x] 8.4 Port `MarkdownPanelView`'s Approve / Review / Submit Review and font
+      size steps (`artifact_panel/review.rs`, `controls.rs`) for Panel-mode and
+      Terminal-mode agents; verify with `review/tests.rs`.
+- [x] 8.5 Add copy and reveal-in-Finder to the markdown section and copy to the
+      mermaid section; verify the catalogue keys resolve in
+      `tests/l10n_catalog.rs`.
+- [x] 8.6 Add View > Artifacts and the configurable Toggle Artifacts shortcut
+      (default ⌥⌘A) through `keymap`, stored as `toggleArtifacts`, with the
+      handler registered only while there is a panel to hide or reopen; verify
+      with `closed/tests.rs`, `tests/view_menu.rs` and the keymap binding tests.
+- [x] 8.7 Drop a lone section's own close control, keeping both levels while
+      both sections are open, decided by `section::section_chrome`; verify
+      with `section/tests.rs`.
+- [ ] 8.8 Verify in the running app: close a panel with both sections, reopen
+      it from the header, hide and reshow it with View > Artifacts and with
+      ⌥⌘A, see the item checked while shown and disabled for an agent with no
+      artifact, approve a file from a Panel-mode agent, and review one from a
+      Terminal-mode agent. Check a lone section has no close of its own
+      and both sections keep theirs.
