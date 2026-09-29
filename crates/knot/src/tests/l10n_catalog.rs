@@ -573,3 +573,30 @@ fn the_two_group_labels_are_distinguishable() {
     assert_ne!(subagents, processes);
     assert_ne!(subagents, knot_core::l10n::t("processes.title"));
 }
+
+/// The artifact panel's section actions and its reopen control (#535).
+#[test]
+fn artifact_panel_actions_resolve() {
+    for key in ["artifact_panel.reopen",
+                "artifact_panel.loading",
+                "artifact_panel.approve",
+                "artifact_panel.approve_tooltip",
+                "artifact_panel.review",
+                "artifact_panel.review_tooltip",
+                "artifact_panel.submit_review",
+                "artifact_panel.submit_review_tooltip",
+                "artifact_panel.font_smaller",
+                "artifact_panel.font_larger",
+                "artifact_panel.copy_markdown",
+                "artifact_panel.reveal_in_finder",
+                "artifact_panel.copy_diagram"]
+    {
+        let value = knot_core::l10n::t(key);
+        assert_ne!(value, key, "{key} is missing from the catalog");
+        assert!(!value.is_empty(), "{key} resolves to an empty string");
+    }
+    let note = knot_core::l10n::t_with("artifact_panel.read_failed",
+                                       &[("path", "/tmp/plan.md"), ("error", "not found")]);
+    assert!(note.contains("/tmp/plan.md") && note.contains("not found"),
+            "{note}");
+}

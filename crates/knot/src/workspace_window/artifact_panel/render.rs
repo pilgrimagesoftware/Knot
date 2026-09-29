@@ -28,6 +28,7 @@ use gpui_kit::div;
 use gpui_kit::px;
 use uuid::Uuid;
 
+use super::closed::CloseTarget;
 use super::layout;
 use super::section::SectionChrome;
 use super::state::ArtifactSnapshot;
@@ -207,15 +208,7 @@ impl WorkspaceWindow {
                     .small()
                     .tooltip(knot_core::l10n::t("artifact_panel.close_all"))
                     .on_click(cx.listener(move |view, _, _window, cx| {
-                        {
-                            let mut store = view.store.lock();
-                            if let Err(error) = store.clear_markdown_panel(id) {
-                                eprintln!("failed to close the markdown section: {error}");
-                            }
-                            if let Err(error) = store.clear_mermaid_panel(id) {
-                                eprintln!("failed to close the diagram section: {error}");
-                            }
-                        }
+                        view.close_artifact_sections(id, CloseTarget::Both);
                         cx.notify();
                     })))
                 .into_any_element()

@@ -15,8 +15,17 @@
 //! reference's `sectionHeight` is a static function with its own suite.
 //! [`state`] is the per-agent arrangement, which lives on the window and is
 //! discarded with it.
+//!
+//! What the sections act on came later (issue #535): [`closed`] remembers
+//! what the user closed so the panel can be reopened, [`document`] reads the
+//! markdown file off the render path, [`review`] is the Approve / Review flow,
+//! and [`controls`] draws the buttons for all three.
 
+pub(super) mod closed;
+pub(super) mod controls;
+pub(super) mod document;
 pub(super) mod layout;
 pub(super) mod render;
+pub(super) mod review;
 pub(super) mod section;
 pub(super) mod state;

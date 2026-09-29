@@ -817,6 +817,25 @@ artifact_panel:
   # since a lone section has no other to give its height to.
   collapse_section: "Collapse section"
   expand_section: "Expand section"
+  # Beside the agent's status in the header, shown only while something the
+  # user closed can be brought back.
+  reopen: "Show artifacts"
+  # The markdown section, until its file has been read off the main thread.
+  loading: "Loading…"
+  # Drawn in place of the file, as markdown, when it cannot be read.
+  read_failed: "Could not read `%{path}`:\n\n```\n%{error}\n```"
+  # The review verdicts on a markdown file, from the Swift reference.
+  approve: "Approve"
+  approve_tooltip: "Approve and continue"
+  review: "Review"
+  review_tooltip: "Start reviewing with comments"
+  submit_review: "Submit Review"
+  submit_review_tooltip: "Submit review comments to agent"
+  font_smaller: "Decrease font size"
+  font_larger: "Increase font size"
+  copy_markdown: "Copy contents"
+  reveal_in_finder: "Reveal in Finder"
+  copy_diagram: "Copy diagram source"
 
 # The variables a library prompt or custom startup prompt can use, as the
 # prompt editors list them.
