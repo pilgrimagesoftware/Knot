@@ -8,6 +8,7 @@
 rust_i18n::i18n!("locales", fallback = "en");
 
 pub mod agent_type;
+pub mod cache_dir;
 pub mod consts;
 pub mod error;
 pub mod exec_path;
@@ -18,6 +19,7 @@ pub mod log_dir;
 pub mod pull_request_url;
 pub mod settings;
 
+pub use cache_dir::cache_dir;
 pub use error::{Error, Result};
 pub use exec_path::{resolve_program, search_path};
 pub use folder_name::folder_name;

@@ -57,14 +57,28 @@ impl WorkspaceWindow {
         self.panel_sessions.insert(id, Arc::clone(&slot));
         let cwd = agent.folder.clone();
         let prior_session_id = agent.session_to_load().map(str::to_owned);
-        let registration_prompt =
-            knot_agent_launch::acp_registration_prompt(agent.id,
-                                                       prior_session_id.is_some(),
-                                                       crate::settings_global::read(cx).persona_for(agent.persona_id));
-        // Only alongside a registration prompt, which is what marks a fresh
-        // session: a resumed conversation gets neither.
-        let startup_prompt = registration_prompt.as_ref()
-                                                .and_then(|_| self.startup_request(&agent, cx));
+        let is_resume = prior_session_id.is_some();
+        // How the knot instructions and persona reach this agent (#534):
+        // its adapter's system channel where it has one, on every launch,
+        // so the first turn is the registration request alone. Environment
+        // reads and string work only - any file is written on the runtime.
+        let instructions = knot_agent_launch::standing_instructions(
+            agent.id,
+            crate::settings_global::read(cx).persona_for(agent.persona_id),
+        );
+        let cache_dir = knot_core::cache_dir();
+        let inherited = |name: &str| std::env::var(name).ok();
+        let delivery = knot_agent_launch::instruction_delivery(knot_agent_launch::DeliveryRequest {
+            carrier: knot_agent_launch::instruction_carrier(&agent.agent_type),
+            agent_id: agent.id,
+            instructions,
+            cache_dir: cache_dir.as_deref(),
+            inherited: &inherited,
+        });
+        // Only on a fresh session, which is what the registration prompt
+        // marks: a resumed conversation gets neither.
+        let startup_prompt = (!is_resume).then(|| self.startup_request(&agent, cx))
+                                         .flatten();
         let session_config = agent.session_config.clone();
         // The Coding tab's options for this type, in the shape its adapter
         // takes them. Pure string work, so here rather than on the runtime.
@@ -104,6 +118,29 @@ impl WorkspaceWindow {
                               .ok()
                               .flatten()
                         };
+                        // Written before the spawn that reads it; an
+                        // adapter pointed at a missing file would start
+                        // with no instructions, so a failed write moves
+                        // them to the first turn instead.
+                        let delivery = match delivery.file.clone() {
+                            Some(file) => {
+                                match tokio::task::spawn_blocking(move || file.write()).await {
+                                    Ok(Ok(())) => delivery,
+                                    failed => {
+                                        eprintln!("agent {id}: instructions file not written: {failed:?}");
+                                        delivery.into_first_turn()
+                                    }
+                                }
+                            }
+                            None => delivery,
+                        };
+                        let registration_prompt =
+                            knot_agent_launch::acp_registration_prompt(is_resume,
+                                                                       delivery.first_turn
+                                                                               .as_deref());
+                        let session_meta =
+                            knot_agent_launch::merge_session_meta(options.session_meta,
+                                                                  delivery.session_meta);
                         let request =
                             panel_session::ConnectRequest { config: &adapter_config,
                                                             cwd: &cwd,
@@ -114,7 +151,8 @@ impl WorkspaceWindow {
                                                             session_config,
                                                             default_mode,
                                                             option_mode: options.mode,
-                                                            session_meta: options.session_meta,
+                                                            session_meta,
+                                                            env: delivery.env,
                                                             subagents,
                                                             startup_prompt };
                         panel_session::connect_into(&slot, request, &progress, |session_id| {

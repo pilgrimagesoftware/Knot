@@ -357,8 +357,13 @@ pub struct ConnectRequest<'a> {
     /// the above; see `knot_agent_launch::adapter_options`.
     pub option_mode:         Option<DefaultMode>,
     /// The `_meta` the session opens with, carrying the agent's user
-    /// options to an adapter that takes them there.
+    /// options to an adapter that takes them there, and the standing
+    /// instructions to one whose carrier is the session's `_meta`.
     pub session_meta:        Option<serde_json::Value>,
+    /// Extra environment for the adapter subprocess: the standing
+    /// instructions, for an adapter whose carrier is its environment. See
+    /// `knot_agent_launch::instruction_delivery`.
+    pub env:                 Vec<(String, String)>,
     /// Where this agent's delegations are recorded, or `None` when its type
     /// reports none. Built by the caller, which is the only place that knows
     /// both the agent's id and the window's registry.
@@ -384,7 +389,8 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     let target = SessionTarget { cwd:              request.cwd,
                                  prior_session_id: request.prior_session_id,
                                  mcp_url:          request.mcp_url,
-                                 meta:             request.session_meta.as_ref(), };
+                                 meta:             request.session_meta.as_ref(),
+                                 env:              &request.env, };
     let mut handle = match PanelSessionHandle::start(request.config,
                                                      target,
                                                      progress,
@@ -521,6 +527,7 @@ mod tests {
                                        default_mode:        None,
                                        option_mode:         None,
                                        session_meta:        None,
+                                       env:                 Vec::new(),
                                        subagents:           None,
                                        startup_prompt:      None, };
 

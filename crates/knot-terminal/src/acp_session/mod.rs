@@ -80,6 +80,10 @@ pub struct SessionTarget<'a> {
     /// The `_meta` the session opens with - the agent's user options, for
     /// an adapter that takes them there.
     pub meta:             Option<&'a serde_json::Value>,
+    /// Extra environment for the adapter subprocess - the standing
+    /// instructions, for an adapter that reads them from there. Applied on
+    /// every spawn, so a resumed session gets them too.
+    pub env:              &'a [(String, String)],
 }
 
 /// How long to wait for the adapter to answer `initialize` and open a
@@ -121,7 +125,8 @@ impl AcpSession {
         let SessionTarget { cwd,
                             prior_session_id,
                             mcp_url,
-                            meta, } = target;
+                            meta,
+                            env, } = target;
         let build_command = || {
             let mut command = Command::new(config.command);
             command.args(config.args);
@@ -131,6 +136,7 @@ impl AcpSession {
             // locations are found (per `agent-launch-command`'s "ACP
             // launch path" requirement).
             command.env("PATH", adapter_path());
+            command.envs(env.iter().map(|(key, value)| (key, value)));
             command
         };
 
@@ -414,6 +420,32 @@ done"#,
             other => panic!("expected a text delta, got {other:?}"),
         }
 
+        session.stop().await;
+    }
+
+    /// The standing instructions reach some adapters only through their
+    /// environment, so what the target names has to be what the subprocess
+    /// sees.
+    #[tokio::test]
+    async fn the_target_env_reaches_the_adapter_subprocess() {
+        let launch = AdapterConfig { args: &[
+                                             "-c",
+                                             r#"while IFS= read -r line; do
+  id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+  case "$line" in
+    *'"initialize"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"capabilities\":{}}}" ;;
+    *'"session/new"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"sessionId\":\"sess-$KNOT_TEST_ENV\"}}" ;;
+  esac
+done"#,
+        ],
+                                     ..path_reporting_adapter_launch() };
+        let env = [("KNOT_TEST_ENV".to_owned(), "carried".to_owned())];
+        let target = SessionTarget { env: &env,
+                                     ..project() };
+        let (session, _options, _events) =
+            AcpSession::start(&launch, target, &no_progress()).await
+                                                              .expect("connect");
+        assert_eq!(session.session_id(), "sess-carried");
         session.stop().await;
     }
 
