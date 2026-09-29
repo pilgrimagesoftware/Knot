@@ -19,7 +19,7 @@ lock. `is_registered` isn't in the saved roster, so there's nothing to persist.
 Only the adapters checked live to keep the query (`claude-agent-acp` 0.82.0,
 `codex-acp`) are trusted with it. Every other type gets a one-line request after a
 real resume (`connect_into` already tells a real resume from a fallback), and
-only while MCP is on. The rule lives beside `supports_inline_registration`
-rather than as an `AdapterConfig` field, which would have touched 29 struct
-literals for one boolean. A type moves to the trusted list once it has been
-checked.
+only while MCP is on. The rule is a `keeps_mcp_query` column on the
+`knot_core::agent_type` roster, next to `inline_registration`, rather than a
+second per-type list or an `AdapterConfig` field (29 struct literals for one
+boolean). A type's column flips once it has been checked.

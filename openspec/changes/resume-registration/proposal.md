@@ -29,5 +29,6 @@ after every restart it sees nobody.
 
 - `knot-mcp`: `ToolCatalog::connected`, called for every request on a bound URL.
 - `knot-mcp-tools`: `McpToolCatalog::connected` marks the agent registered.
+- `knot-core`: a `keeps_mcp_query` column on the agent-type roster.
 - `knot-agent-launch`: `keeps_mcp_query`, `resume_registration_prompt`, consts.
 - `knot`: `ConnectRequest.resume_registration_prompt`, sent only on a real resume.

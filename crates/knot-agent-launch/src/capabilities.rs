@@ -12,10 +12,10 @@ pub fn supports_inline_registration(agent_type: &str) -> bool {
 }
 
 /// Whether `agent_type`'s adapter keeps its MCP URL's `?agent=` query, so
-/// the server registers the agent from its connection. An unlisted type is
-/// not assumed to: it is sent a registration turn on resume instead.
+/// the server registers the agent from its connection. Read from the
+/// roster; a type it does not mark is sent a registration turn on resume.
 pub fn keeps_mcp_query(agent_type: &str) -> bool {
-    crate::consts::MCP_QUERY_KEEPING_TYPES.contains(&agent_type)
+    knot_core::agent_type::keeps_mcp_query(agent_type)
 }
 
 #[cfg(test)]
