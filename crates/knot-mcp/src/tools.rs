@@ -2,6 +2,9 @@ use std::collections::BTreeMap;
 
 use async_trait::async_trait;
 use serde::Serialize;
+use uuid::Uuid;
+
+use crate::session::McpSessionManager;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolDefinition {
@@ -72,6 +75,35 @@ impl ToolCallResult {
     }
 }
 
+/// Who a tool call comes from: the connection it arrived on, and the agent
+/// that connection belongs to.
+#[derive(Clone, Default)]
+pub struct Caller {
+    /// The agent the connection is bound to - named by its URL, or by the
+    /// `register-agent` it made. `None` while it is bound to none.
+    pub agent:      Option<Uuid>,
+    /// The connection's MCP session, when the client keeps one; `None` for
+    /// a client whose every request opens a fresh one.
+    pub session_id: Option<String>,
+    /// Every live connection, for asking which one holds an agent.
+    pub sessions:   McpSessionManager,
+}
+
+impl Caller {
+    /// Whether another live connection holds `agent_id`.
+    pub fn held_elsewhere(&self, agent_id: Uuid) -> bool {
+        self.sessions
+            .held_elsewhere(agent_id, self.session_id.as_deref())
+    }
+
+    /// Binds this connection to `agent_id`, if the client keeps its session.
+    pub fn bind(&self, agent_id: Uuid) {
+        if let Some(id) = &self.session_id {
+            self.sessions.bind(id, agent_id);
+        }
+    }
+}
+
 /// The set of MCP tools an `McpServer` dispatches `tools/list`/`tools/call`
 /// through. The concrete catalog (`mcp-tools`) plugs in here without this
 /// crate changing.
@@ -79,6 +111,13 @@ impl ToolCallResult {
 pub trait ToolCatalog: Send + Sync {
     fn list(&self) -> Vec<ToolDefinition>;
     async fn call(&self, name: &str, arguments: serde_json::Value) -> ToolCallResult;
+
+    /// [`Self::call`], for `caller`. What the server dispatches through; a
+    /// catalog that holds callers to who they are overrides it.
+    async fn call_as(&self, name: &str, arguments: serde_json::Value, _caller: &Caller)
+                     -> ToolCallResult {
+        self.call(name, arguments).await
+    }
 }
 
 /// A `ToolCatalog` with no tools; every call fails with "unknown tool".

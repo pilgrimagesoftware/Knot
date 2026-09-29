@@ -32,6 +32,6 @@ pub use state::ServerState;
 pub use status::{AgentStatusEntry, agent_status};
 pub use supervisor::{Supervisor, SupervisorTuning};
 pub use tools::{
-    EmptyCatalog, PropertySchema, ToolCallResult, ToolCatalog, ToolContent, ToolDefinition,
+    Caller, EmptyCatalog, PropertySchema, ToolCallResult, ToolCatalog, ToolContent, ToolDefinition,
     ToolInputSchema,
 };

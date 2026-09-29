@@ -14,6 +14,14 @@ pub fn mcp_url(settings: &Settings) -> String {
     mcp_url_for_port(settings.mcp_server_port)
 }
 
+/// `agent_id`'s own MCP URL: [`mcp_url`] naming the agent it is given to,
+/// so the server can tell which agent each connection belongs to.
+pub fn agent_mcp_url(settings: &Settings, agent_id: uuid::Uuid) -> String {
+    format!("{}?{}={agent_id}",
+            mcp_url(settings),
+            knot_core::consts::MCP_AGENT_QUERY)
+}
+
 /// The same URL from a bare port, for callers that have no `Settings` -
 /// notably the settings window, which shows the URL and the `mcp add`
 /// command a user copies to register Knot with an agent by hand.
@@ -124,5 +132,14 @@ mod tests {
         let mut s = Settings::default();
         s.mcp_server_port = 8767;
         assert_eq!(mcp_url(&s), "http://127.0.0.1:8767/mcp");
+    }
+
+    #[test]
+    fn an_agents_mcp_url_names_the_agent() {
+        let mut s = Settings::default();
+        s.mcp_server_port = 8767;
+        let id = uuid::Uuid::new_v4();
+        assert_eq!(agent_mcp_url(&s, id),
+                   format!("http://127.0.0.1:8767/mcp?agent={id}"));
     }
 }

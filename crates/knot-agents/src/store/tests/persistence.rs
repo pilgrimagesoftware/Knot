@@ -44,6 +44,51 @@ fn resume_resolution_prefers_persisted_id_and_falls_back() {
                Some("fallback"));
 }
 
+/// Two claude agents in one folder, the first with a recorded session, as
+/// the orchestrator and a builder were in #539.
+fn two_agents_sharing_a_folder() -> (AgentStore, Uuid, Uuid) {
+    let first = knot_core::SavedAgent::new(Uuid::new_v4(), "Knot", None, "/tmp/proj");
+    let second = knot_core::SavedAgent::new(Uuid::new_v4(), "Builder 1", None, "/tmp/proj");
+    let (first_id, second_id) = (first.id, second.id);
+    (AgentStore::from_saved(&[first, second], Vec::new()), first_id, second_id)
+}
+
+/// #539: the builder had no session of its own, so the history fallback gave
+/// it the folder's newest conversation - the orchestrator's, whose first turn
+/// named the orchestrator's knot ID.
+#[test]
+fn an_agent_is_not_given_another_agents_conversation() {
+    let (mut store, knot, builder) = two_agents_sharing_a_folder();
+    store.resolve_resume_sessions(&BTreeMap::from([(knot, "knot-session".to_string())]),
+                                  |_, _| Some("knot-session".to_string()));
+    assert_eq!(store.agent(knot).unwrap().resume_session_id.as_deref(),
+               Some("knot-session"));
+    assert_eq!(store.agent(builder).unwrap().resume_session_id, None);
+}
+
+/// Nothing ties a history session to one of two agents that share a folder
+/// and type, so neither is guessed at.
+#[test]
+fn the_history_fallback_skips_agents_sharing_a_folder_and_type() {
+    let (mut store, knot, builder) = two_agents_sharing_a_folder();
+    store.resolve_resume_sessions(&BTreeMap::new(), |_, _| Some("newest".to_string()));
+    assert_eq!(store.agent(knot).unwrap().resume_session_id, None);
+    assert_eq!(store.agent(builder).unwrap().resume_session_id, None);
+}
+
+/// A session both records name - the builder once took the orchestrator's
+/// and persisted it - resumes for the earlier agent only.
+#[test]
+fn a_session_two_records_name_resumes_once() {
+    let (mut store, knot, builder) = two_agents_sharing_a_folder();
+    let persisted = BTreeMap::from([(knot, "shared".to_string()),
+                                    (builder, "shared".to_string())]);
+    store.resolve_resume_sessions(&persisted, |_, _| None);
+    assert_eq!(store.agent(knot).unwrap().resume_session_id.as_deref(),
+               Some("shared"));
+    assert_eq!(store.agent(builder).unwrap().resume_session_id, None);
+}
+
 /// 4.2: a settings file written before activation mode existed must behave
 /// exactly as it did - every agent in it starts when its workspace opens.
 /// The record's missing `activationMode` loads as `Active`, and the

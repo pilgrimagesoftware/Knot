@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{RawQuery, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -18,7 +18,7 @@ use crate::log::{Logger, Subject, Vitals, spawn_heartbeat};
 use crate::rpc::{self, JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 use crate::session::McpSessionManager;
 use crate::status::{self, AgentStatusEntry};
-use crate::tools::ToolCatalog;
+use crate::tools::{Caller, ToolCatalog};
 
 const SESSION_HEADER: &str = "Mcp-Session-Id";
 
@@ -313,7 +313,54 @@ async fn mcp_sse() -> Response {
     sse_response("connected", "{\"status\":\"connected\"}", None)
 }
 
-async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+/// The agent a request's URL names, from `?agent=<id>`; `None` for a URL
+/// that names none or names it badly.
+pub(crate) fn agent_from_query(query: Option<&str>) -> Option<Uuid> {
+    query?.split('&')
+          .filter_map(|pair| pair.split_once('='))
+          .find(|(key, _)| *key == knot_core::consts::MCP_AGENT_QUERY)
+          .and_then(|(_, value)| Uuid::parse_str(value).ok())
+}
+
+/// The connection a request arrived on, as a [`Caller`] - its session and
+/// the agent that session is bound to - and the session id to answer with.
+///
+/// A URL naming an agent binds the session to it, which also drops a
+/// session the agent held before: a restarted agent's new connection takes
+/// over from its old one. A session is only reported to the tools as kept
+/// when the client will send it again - one from `initialize`, or one it
+/// sent and the server still knows.
+fn connection(state: &AppState, is_initialize: bool, sent: Option<String>, agent: Option<Uuid>)
+              -> (Caller, String) {
+    let sessions = &state.sessions;
+    let opened = || sessions.create_session(agent.unwrap_or_else(Uuid::nil)).id;
+    let (session_id, kept) = match sent {
+        _ if is_initialize => (opened(), true),
+        Some(id) if sessions.session(&id).is_some() => {
+            sessions.touch(&id);
+            if let Some(agent) = agent {
+                sessions.bind(&id, agent);
+            }
+            (id, true)
+        }
+        // The client's session outlived the server's TTL (e.g. a paused
+        // session resuming after `DEFAULT_SESSION_TIMEOUT`). Reissue a fresh
+        // session instead of erroring so the client self-heals without a
+        // manual `/mcp reconnect` or restart.
+        Some(_) | None => (opened(), false),
+    };
+    let bound = sessions.session(&session_id)
+                        .map(|session| session.agent_id)
+                        .filter(|agent| !agent.is_nil());
+    let caller = Caller { agent:      bound.or(agent),
+                          session_id: kept.then(|| session_id.clone()),
+                          sessions:   sessions.clone(), };
+    (caller, session_id)
+}
+
+async fn mcp_rpc(State(state): State<AppState>, RawQuery(query): RawQuery, headers: HeaderMap,
+                 body: Bytes)
+                 -> Response {
     // Counted before parsing: a request that arrives malformed still
     // arrived, and a heartbeat reporting zero while a client hammers the
     // server with nonsense would be the more misleading of the two.
@@ -331,25 +378,10 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         Err(e) => return json_rpc_error_response(-32700, format!("Parse error: {e}")),
     };
 
-    let response_session_id = if request.method == "initialize" {
-        state.sessions.create_session(Uuid::nil()).id
-    }
-    else if let Some(session_id) = session_id {
-        if state.sessions.session(&session_id).is_some() {
-            state.sessions.touch(&session_id);
-            session_id
-        }
-        else {
-            // The client's session outlived the server's TTL (e.g. a paused
-            // session resuming after `DEFAULT_SESSION_TIMEOUT`). Reissue a
-            // fresh session instead of erroring so the client self-heals
-            // without a manual `/mcp reconnect` or restart.
-            state.sessions.create_session(Uuid::nil()).id
-        }
-    }
-    else {
-        state.sessions.create_session(Uuid::nil()).id
-    };
+    let (caller, response_session_id) = connection(&state,
+                                                   request.method == "initialize",
+                                                   session_id,
+                                                   agent_from_query(query.as_deref()));
 
     if request.method.starts_with("notifications/") {
         return StatusCode::ACCEPTED.into_response();
@@ -360,7 +392,10 @@ async fn mcp_rpc(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         log.info(Subject::Request,
                  format!("[{response_session_id}] {}", request.method));
     }
-    let response = rpc::dispatch(&request, state.catalog.as_ref(), state.log.as_ref()).await;
+    let response = rpc::dispatch(&request,
+                                 state.catalog.as_ref(),
+                                 state.log.as_ref(),
+                                 &caller).await;
     let outcome = if response.error.is_some() {
         "error"
     }
