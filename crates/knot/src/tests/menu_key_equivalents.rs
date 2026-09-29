@@ -205,3 +205,16 @@ fn new_agent_carries_the_reference_shortcut(cx: &mut TestAppContext) {
           assert!(!cx.is_action_available(&NewAgent));
       });
 }
+
+/// Help > Knot Help was a placeholder with no handler, so AppKit drew it
+/// disabled (#517). It is handled app-wide now, and opens the help page.
+#[gpui_kit::test]
+fn knot_help_is_enabled_and_opens_the_help_page(cx: &mut TestAppContext) {
+    app_with_bindings(cx);
+    cx.update(|cx| {
+          assert!(cx.is_action_available(&KnotHelp), "Knot Help is disabled");
+          cx.dispatch_action(&KnotHelp);
+      });
+    assert_eq!(cx.opened_url().as_deref(),
+               Some(crate::consts::KNOT_HELP_URL));
+}

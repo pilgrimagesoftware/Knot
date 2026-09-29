@@ -232,6 +232,10 @@ pub(crate) const WORKSPACE_DIALOG_WIDTH: f32 = 360.;
 /// without wrapping, so it reads as the one line it is when pasted.
 pub(crate) const BUG_REPORT_DIALOG_WIDTH: f32 = 560.;
 
+/// Where Help > Knot Help goes: the app's page, which is also the
+/// repository's listed homepage. There is no bundled help book.
+pub(crate) const KNOT_HELP_URL: &str = "https://pilgrimagesoftware.com/apps/knot";
+
 /// The bug report's description, in rows. Fixed rather than growing with its
 /// content: the dialog scrolls its body once it outgrows the window, so a
 /// description that grew with a long paste pushed the diagnostics out of
