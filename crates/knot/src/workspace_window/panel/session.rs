@@ -104,6 +104,10 @@ impl WorkspaceWindow {
         let store = Arc::clone(&self.store);
         let settings = crate::settings_global::handle(cx);
         let _runtime_guard = self.runtime.enter();
+        // Pure, so decided here: whether a session that resumes is sent a
+        // registration turn, or registered by its connection (#552).
+        let resume_registration_prompt =
+            knot_agent_launch::resume_registration_prompt(&agent.agent_type, mcp_url.is_some());
         let agent_type = agent.agent_type.clone();
         self.runtime.spawn(async move {
                         // Reads the agent CLI's settings files, so off the
@@ -152,6 +156,7 @@ impl WorkspaceWindow {
                                                                 prior_session_id.as_deref(),
                                                             mcp_url: mcp_url.as_deref(),
                                                             registration_prompt,
+                                                            resume_registration_prompt,
                                                             session_config,
                                                             default_mode,
                                                             option_mode: options.mode,

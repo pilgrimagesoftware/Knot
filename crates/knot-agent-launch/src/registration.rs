@@ -83,6 +83,16 @@ pub fn registration_prompt(agent_id: Uuid) -> String {
 /// first turn ([`crate::InstructionDelivery::first_turn`]). Every other
 /// adapter has them already, through its system channel, so its first turn
 /// is the request alone.
+/// The first turn for `agent_type`'s session once it has resumed: `None`
+/// where its connection registers it (the adapter keeps the MCP URL's
+/// `?agent=` query) or MCP is off, else the one-line registration request.
+/// A resumed agent needs registering again - registration does not survive
+/// a restart - and one whose first turn failed never was (#552).
+pub fn resume_registration_prompt(agent_type: &str, mcp_enabled: bool) -> Option<String> {
+    (mcp_enabled && !crate::capabilities::keeps_mcp_query(agent_type))
+        .then(|| crate::consts::RESUME_REGISTRATION_PROMPT.to_owned())
+}
+
 pub fn acp_registration_prompt(is_resume: bool, lead: Option<&str>) -> Option<String> {
     if is_resume {
         return None;
@@ -231,5 +241,16 @@ mod tests {
     fn acp_registration_prompt_resume_is_none() {
         assert!(acp_registration_prompt(true, None).is_none());
         assert!(acp_registration_prompt(true, Some("lead")).is_none());
+    }
+
+    #[test]
+    fn a_resume_registers_by_turn_only_where_the_connection_cannot() {
+        assert_eq!(resume_registration_prompt("claude", true), None);
+        assert_eq!(resume_registration_prompt("codex", true), None);
+        let prompt = resume_registration_prompt("gemini", true).expect("a turn");
+        assert!(prompt.contains("register-agent") && !prompt.contains('\n'));
+        assert_eq!(resume_registration_prompt("gemini", false),
+                   None,
+                   "no MCP, nothing to register");
     }
 }

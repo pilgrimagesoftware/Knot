@@ -1,4 +1,16 @@
 
+## 1.22.1 - 2026-09-29
+
+### Changed
+- Read keeps_mcp_query from the agent-type roster
+
+
+### Fixed
+- Show replayed harness messages as notices, not user prompts
+- Register a resumed agent from its connection
+
+
+
 ## 1.22.0 - 2026-09-29
 
 ### Added

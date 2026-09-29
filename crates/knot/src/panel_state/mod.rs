@@ -7,10 +7,13 @@
 //! `message` is what the list is made of, `state` is what a session's panel
 //! holds and what the UI asks of it, `fold` is how the event stream changes
 //! it, and `summary` groups a turn's contiguous tool calls for compact mode.
+//! `harness` tells a replayed user chunk the user typed from one the agent's
+//! harness injected.
 //!
 //! Contract: `openspec/specs/acp-panel-ui/spec.md`.
 
 mod fold;
+mod harness;
 mod message;
 mod state;
 mod summary;

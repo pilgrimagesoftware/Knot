@@ -57,20 +57,22 @@ fn registering_slot(runtime: &tokio::runtime::Runtime, text: &str) -> Arc<Mutex<
     let connecting = Arc::clone(&slot);
     runtime.spawn(async move {
                let config = stalling_adapter();
-               let request = panel_session::ConnectRequest { config:              &config,
-                                                             cwd:                 "/tmp",
-                                                             prior_session_id:    None,
-                                                             mcp_url:             None,
-                                                             registration_prompt:
-                                                                 Some("register".into()),
-                                                             session_config:      BTreeMap::new(),
-                                                             default_mode:        None,
-                                                             option_mode:         None,
-                                                             session_meta:        None,
-                                                             env:                 Vec::new(),
-                                                             args:                Vec::new(),
-                                                             subagents:           None,
-                                                             startup_prompt:      Some(startup), };
+               let request =
+                   panel_session::ConnectRequest { config:                     &config,
+                                                   cwd:                        "/tmp",
+                                                   prior_session_id:           None,
+                                                   mcp_url:                    None,
+                                                   registration_prompt:
+                                                       Some("register".into()),
+                                                   resume_registration_prompt: None,
+                                                   session_config:             BTreeMap::new(),
+                                                   default_mode:               None,
+                                                   option_mode:                None,
+                                                   session_meta:               None,
+                                                   env:                        Vec::new(),
+                                                   args:                       Vec::new(),
+                                                   subagents:                  None,
+                                                   startup_prompt:             Some(startup), };
                panel_session::connect_into(&connecting, request, &progress, |_| {}).await;
            });
     for _ in 0..500 {

@@ -123,6 +123,12 @@ pub struct AgentTypeInfo {
     /// Registers itself with Knot's MCP server through CLI arguments at
     /// launch, rather than needing a prompt afterwards.
     pub inline_registration: bool,
+    /// Its ACP adapter keeps the `?agent=<id>` query on every request to the
+    /// MCP URL Knot hands it, so the server registers the agent from its
+    /// connection and a resumed session needs no registration turn (#552).
+    /// Set only where checked live - `claude-agent-acp` and `codex-acp`
+    /// (#544); an unchecked type is sent the turn instead.
+    pub keeps_mcp_query:     bool,
     /// Reports progress through hooks Knot can turn into an activity
     /// tracker, so its status updates without polling.
     pub hook_activity:       bool,
@@ -165,6 +171,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           false,
                       inline_registration: true,
+                      keeps_mcp_query:     true,
                       hook_activity:       true,
                       mcp_program:         "claude",
                       mcp_list_args:       &["mcp", "list"],
@@ -180,6 +187,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           false,
                       inline_registration: true,
+                      keeps_mcp_query:     true,
                       hook_activity:       true,
                       mcp_program:         "codex",
                       mcp_list_args:       &[],
@@ -194,6 +202,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           false,
                       inline_registration: true,
+                      keeps_mcp_query:     false,
                       hook_activity:       false,
                       mcp_program:         "opencode",
                       mcp_list_args:       &[],
@@ -204,6 +213,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           false,
                       inline_registration: true,
+                      keeps_mcp_query:     false,
                       hook_activity:       false,
                       mcp_program:         "gemini",
                       mcp_list_args:       &["mcp", "list"],
@@ -215,6 +225,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           false,
                       inline_registration: true,
+                      keeps_mcp_query:     false,
                       hook_activity:       false,
                       mcp_program:         "copilot",
                       mcp_list_args:       &[],
@@ -227,6 +238,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           true,
                       inline_registration: false,
+                      keeps_mcp_query:     false,
                       hook_activity:       false,
                       mcp_program:         "",
                       mcp_list_args:       &[],
@@ -237,6 +249,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            false,
                       is_custom:           true,
                       inline_registration: false,
+                      keeps_mcp_query:     false,
                       hook_activity:       false,
                       mcp_program:         "",
                       mcp_list_args:       &[],
@@ -248,6 +261,7 @@ pub const ALL: &[AgentTypeInfo] =
                       is_shell:            true,
                       is_custom:           false,
                       inline_registration: true,
+                      keeps_mcp_query:     false,
                       mcp_program:         "",
                       mcp_list_args:       &[],
                       mcp_manage:          McpManage::None,
@@ -289,6 +303,13 @@ pub fn is_shell(id: &str) -> bool {
 #[must_use]
 pub fn supports_inline_registration(id: &str) -> bool {
     info(id).is_some_and(|agent_type| agent_type.inline_registration)
+}
+
+/// Whether `id`'s adapter keeps the MCP URL's `?agent=` query, so its
+/// connection registers it. `false` for a type this build does not know.
+#[must_use]
+pub fn keeps_mcp_query(id: &str) -> bool {
+    info(id).is_some_and(|agent_type| agent_type.keeps_mcp_query)
 }
 
 /// How `id` reports its subagents, or [`SubagentReporting::None`] for a type

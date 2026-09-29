@@ -135,3 +135,10 @@ pub const CODEX_FEATURES_KEY: &str = "features";
 
 /// The Codex config key `--profile` names.
 pub const CODEX_PROFILE_KEY: &str = "profile";
+
+/// Sent on a resumed session whose adapter may not keep the agent's MCP URL
+/// intact, so the server could not register it from the connection (#552).
+/// One line and the request alone: the instructions are already in the
+/// system channel, and the conversation has its context.
+pub const RESUME_REGISTRATION_PROMPT: &str =
+    "Knot restarted. Call register-agent with your knot agent ID; nothing else is needed.";
