@@ -223,3 +223,20 @@ fn an_option_cannot_displace_the_instructions() {
     assert_eq!(env_json(&delivery, "CODEX_CONFIG"),
                json!({ "model": "o3", "developer_instructions": "Mine\n\nKNOT" }));
 }
+
+/// `-c developer_instructions=42` parses as a number; it is still the
+/// user's text, so it is kept ahead of Knot's rather than replaced.
+#[test]
+fn non_string_developer_instructions_are_kept_as_text() {
+    let inherited = |name: &str| {
+        (name == "CODEX_CONFIG").then(|| r#"{"developer_instructions":42}"#.to_owned())
+    };
+    let delivery = instruction_delivery(DeliveryRequest { carrier:
+                                                              InstructionCarrier::CodexConfigEnv,
+                                                          agent_id:     id(),
+                                                          instructions: "KNOT".to_owned(),
+                                                          cache_dir:    None,
+                                                          inherited:    &inherited, });
+    assert_eq!(env_json(&delivery, "CODEX_CONFIG"),
+               json!({ "developer_instructions": "42\n\nKNOT" }));
+}
