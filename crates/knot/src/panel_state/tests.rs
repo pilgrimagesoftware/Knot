@@ -31,6 +31,32 @@ fn successive_text_deltas_accumulate_into_one_message() {
                vec![PanelMessage::Assistant("Hello, world".to_string())]);
 }
 
+/// `sent_at` must track `messages` one-to-one - every push goes through
+/// `push_message`, which is the only way either `Vec` grows (issue #577).
+#[test]
+fn sent_at_stays_in_step_with_messages() {
+    let mut state = PanelState::new();
+
+    state.push_user_message("hello".to_string());
+    state.apply(text("hi there"));
+    state.push_error("could not answer".to_string());
+
+    assert_eq!(state.sent_at.len(), state.messages.len());
+}
+
+/// Appending to a streaming message in place (`apply(text(..))` twice in a
+/// row) must not stamp a new entry - only the message's *first* chunk sets
+/// its time.
+#[test]
+fn appending_to_a_streaming_message_does_not_add_a_second_timestamp() {
+    let mut state = PanelState::new();
+
+    state.apply(text("Hel"));
+    state.apply(text("lo"));
+
+    assert_eq!(state.sent_at.len(), 1);
+}
+
 #[test]
 fn user_message_is_recorded_and_does_not_merge_with_assistant_text() {
     let mut state = PanelState::new();
