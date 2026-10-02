@@ -122,34 +122,42 @@ fn value(cx: &mut VisualTestContext, input: &Entity<PanelInputState>) -> String 
 
 /// What a chord actually does to an isolated composer, for both settings.
 ///
-/// The surprise this recorded, and the reason it is a table rather than two
-/// assertions: `submit_on_enter` is **not observable from the widget**.
-/// Either way round, both chords emit `PressEnter` - the emit sits outside
-/// the branch in `gpui-base`'s `enter()` - and both leave a newline in the
-/// buffer, because the submit branch calls `cx.propagate()` and GPUI's
-/// unhandled-key path then types the return itself.
+/// Both chords emit `PressEnter` regardless of setting - the emit sits
+/// outside the branch in `gpui-base`'s `enter()` - but only the *non-submit*
+/// chord for the active setting should ever leave a newline behind. A
+/// submit chord that also inserts a newline (at the cursor, anywhere in the
+/// text) is exactly issue #565: Shift+Enter both submitted and spliced a
+/// stray newline into the sent text.
 ///
 /// So the setting's whole effect lives in the window's subscription
 /// predicate ([`sends_on`]) and in `send_panel_prompt` replacing the
-/// buffer. That is exactly what the `Editor` swap must preserve, and a
-/// change in any cell here is the signal that it did not.
+/// buffer - the widget itself must never type anything on the keystroke
+/// that submits. That is exactly what the `Editor` swap must preserve, and
+/// a change in any cell here is the signal that it did not.
 #[gpui_kit::test]
 fn each_chord_reports_and_types_the_same_either_way_round(cx: &mut TestAppContext) {
     for shift_to_send in [false, true] {
         let (mut cx, input, enters) = composer(cx, shift_to_send);
+        // Whichever chord sends per this setting, it must never also type -
+        // that's the asymmetry issue #565 was about.
+        let value_after_enter = if shift_to_send { "\n" } else { "" };
 
         cx.simulate_keystrokes("enter");
         cx.run_until_parked();
         assert_eq!((value(&mut cx, &input), enters.borrow().clone()),
-                   ("\n".to_string(), vec![false]),
-                   "Enter reports with shift=false and leaves a newline \
+                   (value_after_enter.to_string(), vec![false]),
+                   "Enter reports with shift=false and inserts a newline only \
+                    when it is not the submit chord \
                     (agent_panel_shift_enter_sends={shift_to_send})");
 
         cx.simulate_keystrokes("shift-enter");
         cx.run_until_parked();
         assert_eq!((value(&mut cx, &input), enters.borrow().clone()),
-                   ("\n\n".to_string(), vec![false, true]),
-                   "Shift+Enter reports with shift=true and leaves a second newline \
+                   // Shift+Enter inserts a newline on top of `enter`'s only
+                   // when shift is *not* the submit chord.
+                   ("\n".to_string(), vec![false, true]),
+                   "Shift+Enter reports with shift=true and inserts a second \
+                    newline only when it is not the submit chord \
                     (agent_panel_shift_enter_sends={shift_to_send})");
     }
 }
