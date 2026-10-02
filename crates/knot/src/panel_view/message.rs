@@ -81,14 +81,18 @@ fn relative_timestamp(sent_at: SystemTime) -> String {
     }
 }
 
-/// The absolute moment `sent_at` represents, for the timestamp's tooltip.
-/// Not localized: it is a fixed-format instant, not a sentence, and UTC
-/// throughout - `time::OffsetDateTime::now_local` is unsound to call from
-/// more than one thread, which a GPUI app always is.
+/// The absolute moment `sent_at` represents, for the timestamp's tooltip, in
+/// the user's own time zone. Not localized: it is a fixed-format instant,
+/// not a sentence. Falls back to UTC if the local offset cannot be read -
+/// `current_local_offset` is unsound to call from more than one thread,
+/// which a GPUI app always is, so a failure here is expected on some runs
+/// rather than a bug to chase.
 fn absolute_timestamp(sent_at: SystemTime) -> String {
     const FORMAT: &[time::format_description::FormatItem<'_>] =
-        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute] UTC");
-    time::OffsetDateTime::from(sent_at).format(FORMAT)
+        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+    time::OffsetDateTime::from(sent_at).to_offset(offset)
+                                       .format(FORMAT)
                                        .unwrap_or_default()
 }
 

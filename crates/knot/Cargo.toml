@@ -33,7 +33,9 @@ uuid.workspace = true
 serde_json.workspace = true
 gpui-kit = "0.6"
 unicode-segmentation = "1.13"
-time.workspace = true
+# `local-offset` so a message's timestamp tooltip reads in the user's own
+# time zone rather than UTC.
+time = { workspace = true, features = ["local-offset"] }
 # `dup2` for pointing stderr at the application log (`app_log`). Already in the
 # lockfile transitively.
 libc = "0.2"
