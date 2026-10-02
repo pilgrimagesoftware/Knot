@@ -31,7 +31,7 @@ knot-history = { path = "../knot-history" }
 tokio.workspace = true
 uuid.workspace = true
 serde_json.workspace = true
-gpui-kit = "0.6"
+gpui-kit = "0.7"
 unicode-segmentation = "1.13"
 # `local-offset` so a message's timestamp tooltip reads in the user's own
 # time zone rather than UTC.
@@ -68,7 +68,7 @@ objc2-core-foundation = { version = "0.3", features = ["CFArray", "CFData"] }
 # `#[gpui_kit::test]` macro, so window-level behaviour (menu dispatch,
 # dialogs) can be covered without a display. Dev-only: the shipped binary
 # still builds against the default features.
-gpui-kit = { version = "0.6", features = ["test-support"] }
+gpui-kit = { version = "0.7", features = ["test-support"] }
 tempfile.workspace = true
 
 # Packaging config for cargo-packager, which assembles Knot.app and the DMG.
