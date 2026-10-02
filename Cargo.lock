@@ -2379,7 +2379,7 @@ dependencies = [
 [[package]]
 name = "gpui-base"
 version = "0.6.4"
-source = "git+https://github.com/pilgrimagesoftware/gpui-kit?branch=knot%2Fauto-grow-0.6.4#d41d897d4ce48635c639922e5f7c1da389c4aa2a"
+source = "git+https://github.com/pilgrimagesoftware/gpui-kit?branch=knot%2Fauto-grow-0.6.4#c9bd301b5d329c471ec5eb428f9c39fd2f54c630"
 dependencies = [
  "aho-corasick",
  "anyhow",
