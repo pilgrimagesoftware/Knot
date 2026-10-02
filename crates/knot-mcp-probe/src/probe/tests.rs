@@ -161,7 +161,7 @@ fn a_configured_command_replaces_the_default_program() {
 /// all, and an unrecognized type is a working agent Knot knows nothing about.
 #[test]
 fn a_type_with_no_reader_yields_an_unsupported_plan() {
-    for id in ["shell", "codex", "copilot", "nothing-by-that-name"] {
+    for id in ["shell", "copilot", "nothing-by-that-name"] {
         assert!(matches!(super::plan_for(id, Path::new("/projects/api"), vec![], None),
                          ProbePlan::Unsupported),
                 "{id} should not be probeable");

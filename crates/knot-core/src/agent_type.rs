@@ -178,10 +178,12 @@ pub const ALL: &[AgentTypeInfo] =
                       mcp_manage:          McpManage::Interactive { args: &[],
                                                                     send: "/mcp", },
                       subagents:           SubagentReporting::ToolCalls, },
-      // Codex has an `mcp` subcommand, but no machine this was built on had
-      // it installed, so its output shape is unobserved and it reports
-      // "cannot determine" rather than getting a reader written from
-      // documentation.
+      // `codex mcp list --json` lists configured servers, not their live
+      // connection state (see `knot_mcp_probe::parse::codex`), so the only
+      // row Knot can classify beyond `Unknown` is a disabled one.
+      // `codex mcp login %{server}` is the one per-server command Codex
+      // offers - the same compromise OpenCode's `mcp auth` makes, wired
+      // generically rather than left as a dead end.
       AgentTypeInfo { id:                  "codex",
                       label:               "Codex",
                       is_shell:            false,
@@ -190,8 +192,8 @@ pub const ALL: &[AgentTypeInfo] =
                       keeps_mcp_query:     true,
                       hook_activity:       true,
                       mcp_program:         "codex",
-                      mcp_list_args:       &[],
-                      mcp_manage:          McpManage::None,
+                      mcp_list_args:       &["mcp", "list", "--json"],
+                      mcp_manage:          McpManage::PerServer(&["mcp", "login", "%{server}"]),
                       subagents:           SubagentReporting::None, },
       // `opencode mcp auth <name>` is the only per-server command any agent
       // offers, so the handover is exact here. Its *listing* shape is still
