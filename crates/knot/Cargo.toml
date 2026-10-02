@@ -1,6 +1,6 @@
 [package]
 name = "knot"
-version = "1.22.1"
+version = "1.23.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -33,6 +33,9 @@ uuid.workspace = true
 serde_json.workspace = true
 gpui-kit = "0.6"
 unicode-segmentation = "1.13"
+# `local-offset` so a message's timestamp tooltip reads in the user's own
+# time zone rather than UTC.
+time = { workspace = true, features = ["local-offset"] }
 # `dup2` for pointing stderr at the application log (`app_log`). Already in the
 # lockfile transitively.
 libc = "0.2"
@@ -87,6 +90,13 @@ icons = ["assets/icon/icon.png", "assets/icon/icon.icns"]
 
 [package.metadata.packager.macos]
 minimum-system-version = "14.0"
+# `-` is an ad-hoc signature: no certificate, so it can't pass Gatekeeper, but
+# arm64 macOS won't run an unsigned binary and TCC keys its permission grants
+# to a signature. cargo-packager signs the .app before building the dmg from it
+# (so the copy inside is signed too), then signs the dmg itself. It reads the
+# identity only from here, never from APPLE_SIGNING_IDENTITY, so package.yml
+# swaps this line for that secret when one is set.
+signing-identity = "-"
 
 [package.metadata.packager.dmg]
 window-size = { width = 660, height = 400 }

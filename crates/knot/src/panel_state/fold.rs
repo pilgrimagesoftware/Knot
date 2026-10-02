@@ -54,14 +54,14 @@ impl PanelState {
                                            raw_input,
                                            meta, } => {
                 self.note_pull_requests_in(&content);
-                self.messages
-                    .push(PanelMessage::ToolCall(Box::new(ToolCallCard { id: tool_call_id,
-                                                                         kind,
-                                                                         title,
-                                                                         status,
-                                                                         content,
-                                                                         raw_input,
-                                                                         meta })));
+                self.push_message(PanelMessage::ToolCall(Box::new(ToolCallCard { id:
+                                                                                     tool_call_id,
+                                                                                 kind,
+                                                                                 title,
+                                                                                 status,
+                                                                                 content,
+                                                                                 raw_input,
+                                                                                 meta })));
             }
             SessionUpdate::ToolCallUpdate { tool_call_id,
                                             status,
@@ -153,7 +153,7 @@ impl PanelState {
         match classify_user_chunk(&text, meta) {
             UserChunk::Human => self.append_user_text(text),
             UserChunk::Hidden => {}
-            UserChunk::Notice(notice) => self.messages.push(PanelMessage::Notice(notice)),
+            UserChunk::Notice(notice) => self.push_message(PanelMessage::Notice(notice)),
         }
     }
 
@@ -162,7 +162,7 @@ impl PanelState {
             existing.push_str(&text);
         }
         else {
-            self.messages.push(PanelMessage::User(text));
+            self.push_message(PanelMessage::User(text));
         }
     }
 
@@ -175,7 +175,7 @@ impl PanelState {
             existing.push_str(&text);
         }
         else {
-            self.messages.push(PanelMessage::Assistant(text));
+            self.push_message(PanelMessage::Assistant(text));
         }
     }
 }

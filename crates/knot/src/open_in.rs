@@ -110,11 +110,30 @@ const GHOSTTY_BUNDLE_ID: &str = "com.mitchellh.ghostty";
 /// "Terminal" prefers Ghostty and falls back to Terminal.app, matching the
 /// reference - which checks for Ghostty first because that is the terminal
 /// Knot itself embeds.
+///
+/// Zed is single-instance: a plain `open -b dev.zed.Zed <folder>` delivers
+/// the folder as an Apple "open document" event, which Zed's running
+/// instance routes into its *existing* window rather than opening a new
+/// one (#567). `--args` instead hands the folder to Zed's own CLI parser,
+/// where `-n`/`--new` (confirmed via `zed --help`) does what the menu item
+/// promises.
 pub(crate) fn open_folder(app: OpenInApp, folder: &str) {
+    if let Some(args) = zed_new_window_args(app, folder) {
+        run_open_with_args(app.open_arguments(), &args);
+        return;
+    }
+
     let opened = run_open(app.open_arguments(), folder);
     if !opened && app == OpenInApp::Terminal {
         run_open(&["-a", "Terminal"], folder);
     }
+}
+
+/// The `--args` Zed should receive to open `folder` in a new window, or
+/// `None` for every other application - which keep going through the
+/// Apple-event `open` path.
+fn zed_new_window_args(app: OpenInApp, folder: &str) -> Option<[&str; 2]> {
+    (app == OpenInApp::Zed).then_some([folder, "--new"])
 }
 
 /// Opens `url` in the user's default browser, returning whether it worked.
@@ -182,6 +201,26 @@ fn run_open(_arguments: &[&str], _folder: &str) -> bool {
     false
 }
 
+/// Like [`run_open`], but hands `extra_args` to the launched application's
+/// own argv via `open`'s `--args`, instead of as an Apple "open document"
+/// event. `-n` forces a fresh process so the launch actually reaches the
+/// application's argument parser rather than being folded into whatever
+/// Apple event the already-running instance would otherwise receive.
+#[cfg(target_os = "macos")]
+fn run_open_with_args(bundle_arguments: &[&str], extra_args: &[&str]) -> bool {
+    Command::new("/usr/bin/open").arg("-n")
+                                 .args(bundle_arguments)
+                                 .arg("--args")
+                                 .args(extra_args)
+                                 .status()
+                                 .is_ok_and(|status| status.success())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn run_open_with_args(_bundle_arguments: &[&str], _extra_args: &[&str]) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,6 +266,19 @@ mod tests {
         assert!(OpenInApp::Finder.open_arguments().is_empty());
         assert_eq!(OpenInApp::Terminal.open_arguments(),
                    ["-b", "com.mitchellh.ghostty"]);
+    }
+
+    /// Zed is routed through `--args --new` so it opens a new window
+    /// (#567); every other application keeps the plain Apple-event path.
+    #[test]
+    fn only_zed_is_told_to_open_a_new_window() {
+        assert_eq!(zed_new_window_args(OpenInApp::Zed, "/tmp/project"),
+                   Some(["/tmp/project", "--new"]));
+        assert_eq!(zed_new_window_args(OpenInApp::VsCode, "/tmp/project"), None);
+        assert_eq!(zed_new_window_args(OpenInApp::Xcode, "/tmp/project"), None);
+        assert_eq!(zed_new_window_args(OpenInApp::Finder, "/tmp/project"), None);
+        assert_eq!(zed_new_window_args(OpenInApp::Terminal, "/tmp/project"),
+                   None);
     }
 
     /// The processes section offers the process-viewer action only where

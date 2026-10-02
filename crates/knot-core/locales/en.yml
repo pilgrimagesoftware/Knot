@@ -101,6 +101,13 @@ panel:
   lookup_prompt_tag: "Prompt"
   mentions_gathering: "Listing files…"
   mentions_capped: "This folder is too large to list in full — showing what was found"
+  # Each prompt and response's small relative-time label, per issue #577.
+  # The tooltip shows the absolute moment; this is the words beside it.
+  timestamp:
+    just_now: "Just now"
+    minutes_ago: "%{minutes}m ago"
+    hours_ago: "%{hours}h ago"
+    days_ago: "%{days}d ago"
   # The input area's session-config dropdowns. One render path serves the
   # permission, model and effort axes, so the copy names no axis: only the
   # model list is long enough to need searching, but all three share it.

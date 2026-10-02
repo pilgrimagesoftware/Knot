@@ -9,6 +9,7 @@
 //! command here and no format, or the reverse.
 
 pub(crate) mod claude;
+pub(crate) mod codex;
 pub(crate) mod gemini;
 pub(crate) mod line;
 
@@ -28,6 +29,9 @@ pub enum ListFormat {
     ClaudeCode,
     /// `gemini mcp list`: `<glyph> <name>: <target> (<transport>) - <state>`.
     Gemini,
+    /// `codex mcp list --json`: an array of configured servers, not a probe.
+    /// See [`codex`] for why that limits what state a row can claim.
+    Codex,
 }
 
 impl ListFormat {
@@ -41,7 +45,11 @@ impl ListFormat {
     /// configured" would be a confident wrong answer where the honest one is
     /// "I could not read this".
     pub fn read(self, program: &str, output: &str) -> Result<Vec<ServerRow>> {
-        let rows = line::parse(output, self.spec());
+        let rows = match self {
+            Self::ClaudeCode => line::parse(output, &claude::SPEC),
+            Self::Gemini => line::parse(output, &gemini::SPEC),
+            Self::Codex => codex::parse(output),
+        };
 
         rows.ok_or_else(|| ProbeError::Unrecognized { program:    program.to_owned(),
                                                       first_line: first_meaningful_line(output), })
@@ -61,14 +69,8 @@ impl ListFormat {
         match id {
             "claude" => Some(Self::ClaudeCode),
             "gemini" => Some(Self::Gemini),
+            "codex" => Some(Self::Codex),
             _ => None,
-        }
-    }
-
-    fn spec(self) -> &'static line::FormatSpec {
-        match self {
-            Self::ClaudeCode => &claude::SPEC,
-            Self::Gemini => &gemini::SPEC,
         }
     }
 }

@@ -79,6 +79,19 @@ cargo run -p knot
 
 The Swift reference app has separate Xcode and Makefile targets. Those targets are not required for Rust port development.
 
+## Running the App
+
+The app likely needs to local network permissions, and since it's unsigned, TCC on the Mac will
+not allow it to make network connections. Once you have the app installed in `/Applications`, run
+the following commands:
+
+```sh
+# remove quarantine
+xattr -d com.apple.quarantine "/Applications/Knot.app"
+# ad-hoc sign
+codesign --force --deep --sign - "/Applications/Knot.app"
+```
+
 ## Architecture
 
 The Rust workspace keeps the UI, terminal runtime, MCP server, messaging, discovery, Git, and persistence concerns in separate crates. Contracts under `openspec/specs/` define the behavior being ported from Swift.
