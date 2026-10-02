@@ -1,4 +1,19 @@
 
+## 1.23.0 - 2026-10-02
+
+### Added
+- Read Codex's MCP listing
+- Show a relative timestamp on each prompt and response
+
+
+### Fixed
+- Open Zed in a new window instead of reusing one
+- Bump gpui-kit pin for Shift+Enter submit-chord newline fix
+- Show the timestamp tooltip in local time, not UTC
+- Shrink the message timestamp label below text_xs
+
+
+
 ## 1.22.1 - 2026-09-29
 
 ### Changed
