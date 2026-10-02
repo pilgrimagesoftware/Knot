@@ -102,7 +102,9 @@ fn absolute_timestamp(sent_at: SystemTime) -> String {
 fn render_timestamp(sent_at: SystemTime, kind: &'static str, index: usize) -> impl IntoElement {
     let absolute = absolute_timestamp(sent_at);
     div().id((kind, index as u64))
-         .text_xs()
+         // Smaller than `text_xs` (12px): this is a secondary annotation
+         // beside the message, not body text.
+         .text_size(px(10.))
          .text_color(rgb(MUTED))
          .tooltip(move |window, cx| Tooltip::new(absolute.clone()).build(window, cx))
          .child(relative_timestamp(sent_at))
