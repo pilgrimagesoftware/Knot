@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::SystemTime;
 
 use knot_acp::ConfigOption;
 use knot_acp::PermissionRequest;
@@ -25,6 +26,10 @@ pub struct PanelState {
     /// supports `usage_update` notifications.
     pub context_usage:              Option<(u64, u64)>,
     pub messages:                   Vec<PanelMessage>,
+    /// When each entry in [`Self::messages`] was recorded, one-to-one by
+    /// index. Only [`Self::push_message`] may grow either `Vec`, so they
+    /// never drift apart.
+    pub sent_at:                    Vec<SystemTime>,
     /// Set by a `session/request_permission` event; sending further
     /// prompts SHALL be blocked while this is set (enforced by the caller
     /// that owns the `AcpSession`, not this pure state).
@@ -133,7 +138,7 @@ impl PanelState {
     /// new turn: the next response tracks by default until the user
     /// scrolls away or the turn ends.
     pub fn push_user_message(&mut self, text: String) {
-        self.messages.push(PanelMessage::User(text));
+        self.push_message(PanelMessage::User(text));
         self.turn_active = true;
         self.tracking = true;
     }
@@ -144,7 +149,7 @@ impl PanelState {
     /// it, and leaving `turn_active` set would lock the composer out of
     /// sending anything else for the rest of the session.
     pub fn push_error(&mut self, text: String) {
-        self.messages.push(PanelMessage::Error(text));
+        self.push_message(PanelMessage::Error(text));
         self.turn_active = false;
     }
 
@@ -157,7 +162,15 @@ impl PanelState {
     /// was, and running one while the agent is idle must not make the panel
     /// think a turn has begun.
     pub fn push_shell_command(&mut self, card: ShellCard) {
-        self.messages.push(PanelMessage::Shell(card));
+        self.push_message(PanelMessage::Shell(card));
+    }
+
+    /// Appends a message and stamps it with the moment it was recorded.
+    /// The only way `messages` may grow, so [`Self::sent_at`] never falls
+    /// out of step with it.
+    pub(super) fn push_message(&mut self, message: PanelMessage) {
+        self.messages.push(message);
+        self.sent_at.push(SystemTime::now());
     }
 
     /// Updates the card for `id` with the run's latest state, reporting

@@ -3,6 +3,7 @@
 //! bar.
 
 use std::rc::Rc;
+use std::time::SystemTime;
 
 use gpui_kit::ClickEvent;
 use gpui_kit::ClipboardItem;
@@ -11,6 +12,7 @@ use gpui_kit::IntoElement;
 use gpui_kit::ListOffset;
 use gpui_kit::ListState;
 use gpui_kit::ParentElement;
+use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
@@ -20,6 +22,7 @@ use gpui_kit::component::WindowExt;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::div;
 use gpui_kit::px;
 use gpui_kit::relative;
@@ -52,6 +55,61 @@ pub(super) struct Message<'a> {
     pub(super) list:    &'a ListState,
 }
 
+/// How long ago `sent_at` was, in words - the small label shown beside a
+/// prompt or response, per issue #577. Buckets widen as the conversation
+/// ages rather than ever showing a raw count of seconds, matching
+/// `workspace_window::render::mcp_pane::taken_ago_text`'s shape.
+fn relative_timestamp(sent_at: SystemTime) -> String {
+    let elapsed = SystemTime::now().duration_since(sent_at)
+                                   .unwrap_or_default();
+    let total = elapsed.as_secs();
+
+    if total < 60 {
+        knot_core::l10n::t("panel.timestamp.just_now")
+    }
+    else if total < 3600 {
+        knot_core::l10n::t_with("panel.timestamp.minutes_ago",
+                                &[("minutes", &(total / 60).to_string())])
+    }
+    else if total < 86400 {
+        knot_core::l10n::t_with("panel.timestamp.hours_ago",
+                                &[("hours", &(total / 3600).to_string())])
+    }
+    else {
+        knot_core::l10n::t_with("panel.timestamp.days_ago",
+                                &[("days", &(total / 86400).to_string())])
+    }
+}
+
+/// The absolute moment `sent_at` represents, for the timestamp's tooltip, in
+/// the user's own time zone. Not localized: it is a fixed-format instant,
+/// not a sentence. Falls back to UTC if the local offset cannot be read -
+/// `current_local_offset` is unsound to call from more than one thread,
+/// which a GPUI app always is, so a failure here is expected on some runs
+/// rather than a bug to chase.
+fn absolute_timestamp(sent_at: SystemTime) -> String {
+    const FORMAT: &[time::format_description::FormatItem<'_>] =
+        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+    time::OffsetDateTime::from(sent_at).to_offset(offset)
+                                       .format(FORMAT)
+                                       .unwrap_or_default()
+}
+
+/// The small, subtitle-colored relative-time label for one message, with a
+/// tooltip giving the absolute moment - per issue #577. `kind` and `index`
+/// together give the row a stable id under the list's virtualization.
+fn render_timestamp(sent_at: SystemTime, kind: &'static str, index: usize) -> impl IntoElement {
+    let absolute = absolute_timestamp(sent_at);
+    div().id((kind, index as u64))
+         // Smaller than `text_xs` (12px): this is a secondary annotation
+         // beside the message, not body text.
+         .text_size(px(10.))
+         .text_color(rgb(MUTED))
+         .tooltip(move |window, cx| Tooltip::new(absolute.clone()).build(window, cx))
+         .child(relative_timestamp(sent_at))
+}
+
 pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                              callbacks: &PanelCallbacks)
                              -> gpui_kit::AnyElement {
@@ -67,98 +125,124 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
         // system/tool content" requirement.
         PanelMessage::User(text) => {
             let copy_text = text.clone();
-            h_flex()
+            v_flex()
                 .w_full()
                 .min_w_0()
-                .justify_end()
-                // The hover group is this shrink-wrapped cluster, not the
-                // full-width row: a group on the row would reveal the control
-                // from the empty space left of a short prompt, which
-                // acp-panel-ui's "empty space beside a prompt reveals nothing"
-                // rules out. The button being inside the group is also what
-                // keeps it shown once the pointer reaches it.
+                .items_end()
+                .gap_0p5()
+                .children(
+                    state
+                        .sent_at
+                        .get(index)
+                        .copied()
+                        .map(|at| render_timestamp(at, "panel-prompt-time", index)),
+                )
                 .child(
-                    // The 85% cap belongs on the cluster, not on the bubble
-                    // inside it. A percentage resolves against its containing
-                    // block, and the cluster is shrink-wrapped, so a cap on
-                    // the bubble resolved against an indefinite width and
-                    // stopped constraining anything - a long prompt then grew
-                    // past the row and read as left-aligned.
                     h_flex()
-                        .max_w(relative(0.85))
+                        .w_full()
                         .min_w_0()
-                        .gap_1()
-                        .group(PROMPT_HOVER_GROUP)
+                        .justify_end()
+                        // The hover group is this shrink-wrapped cluster, not the
+                        // full-width row: a group on the row would reveal the control
+                        // from the empty space left of a short prompt, which
+                        // acp-panel-ui's "empty space beside a prompt reveals nothing"
+                        // rules out. The button being inside the group is also what
+                        // keeps it shown once the pointer reaches it.
                         .child(
-                            Button::new(("panel-copy-prompt", index as u64))
-                                .icon(IconName::Copy)
-                                .tooltip(knot_core::l10n::t("panel.copy_prompt"))
-                                .ghost()
-                                .small()
-                                // `Visibility::Hidden` keeps the button in the
-                                // layout, so revealing it cannot reflow the
-                                // conversation as the pointer travels down it.
-                                .invisible()
-                                .group_hover(PROMPT_HOVER_GROUP, |style| style.visible())
-                                .on_click(move |_: &ClickEvent, window, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        copy_text.clone(),
-                                    ));
-                                    window.push_notification(
-                                        Notification::info(knot_core::l10n::t(
-                                            "panel.copied_prompt",
-                                        )),
-                                        cx,
-                                    );
-                                }),
-                        )
-                        .child(
-                            div()
+                            // The 85% cap belongs on the cluster, not on the bubble
+                            // inside it. A percentage resolves against its containing
+                            // block, and the cluster is shrink-wrapped, so a cap on
+                            // the bubble resolved against an indefinite width and
+                            // stopped constraining anything - a long prompt then grew
+                            // past the row and read as left-aligned.
+                            h_flex()
+                                .max_w(relative(0.85))
                                 .min_w_0()
-                                .text_sm()
-                                .text_color(style.prompt_foreground)
-                                .px_3()
-                                .py_1p5()
-                                .rounded_md()
-                                .bg(style.prompt_color)
-                                .child(text.clone()),
+                                .gap_1()
+                                .group(PROMPT_HOVER_GROUP)
+                                .child(
+                                    Button::new(("panel-copy-prompt", index as u64))
+                                        .icon(IconName::Copy)
+                                        .tooltip(knot_core::l10n::t("panel.copy_prompt"))
+                                        .ghost()
+                                        .small()
+                                        // `Visibility::Hidden` keeps the button in the
+                                        // layout, so revealing it cannot reflow the
+                                        // conversation as the pointer travels down it.
+                                        .invisible()
+                                        .group_hover(PROMPT_HOVER_GROUP, |style| style.visible())
+                                        .on_click(move |_: &ClickEvent, window, cx| {
+                                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                                copy_text.clone(),
+                                            ));
+                                            window.push_notification(
+                                                Notification::info(knot_core::l10n::t(
+                                                    "panel.copied_prompt",
+                                                )),
+                                                cx,
+                                            );
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .text_sm()
+                                        .text_color(style.prompt_foreground)
+                                        .px_3()
+                                        .py_1p5()
+                                        .rounded_md()
+                                        .bg(style.prompt_color)
+                                        .child(text.clone()),
+                                ),
                         ),
                 )
                 .into_any_element()
         }
         PanelMessage::Assistant(text) => {
-            v_flex().w_full()
-                    .min_w_0()
-                    .gap_1()
-                    // Plain `w_full().min_w_0()`, deliberately *not* a
-                    // scroll container: a scroll parent hands its child an
-                    // unconstrained width, so the markdown measured its
-                    // runs against one width and painted them into
-                    // another, drawing words on top of each other. Wide
-                    // content clips here instead, which `min_w_0` at least
-                    // keeps from stretching the pane.
-                    .child(div().w_full()
-                                .min_w_0()
-                                .child(crate::markdown_view::markdown_view(
-                        ("panel-message-markdown", index as u64),
+            v_flex()
+                .w_full()
+                .min_w_0()
+                .gap_1()
+                .children(
+                    state
+                        .sent_at
+                        .get(index)
+                        .copied()
+                        .map(|at| render_timestamp(at, "panel-response-time", index)),
+                )
+                // Plain `w_full().min_w_0()`, deliberately *not* a
+                // scroll container: a scroll parent hands its child an
+                // unconstrained width, so the markdown measured its
+                // runs against one width and painted them into
+                // another, drawing words on top of each other. Wide
+                // content clips here instead, which `min_w_0` at least
+                // keeps from stretching the pane.
+                .child(
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .child(crate::markdown_view::markdown_view(
+                            ("panel-message-markdown", index as u64),
+                            text.clone(),
+                            style.ui_font_family.clone(),
+                            style.title_font_family.clone(),
+                            style.markdown_font_size,
+                        )),
+                )
+                .children((is_last && state.turn_active).then(|| {
+                    render_track_toggle(state.tracking, callbacks.on_toggle_track.clone())
+                }))
+                .children((!(is_last && state.turn_active)).then(|| {
+                    let user_index = preceding_user_message(state, index);
+                    render_response_actions(
                         text.clone(),
-                        style.ui_font_family.clone(),
-                        style.title_font_family.clone(),
-                        style.markdown_font_size,
-                    )))
-                    .children((is_last && state.turn_active).then(|| {
-                                                                render_track_toggle(state.tracking,
-                                                      callbacks.on_toggle_track.clone())
-                                                            }))
-                    .children((!(is_last && state.turn_active)).then(|| {
-                                  let user_index = preceding_user_message(state, index);
-                                  render_response_actions(text.clone(),
-                                                          user_index,
-                                                          index,
-                                                          list,
-                                                          callbacks.on_manual_scroll.clone())
-                              }))
-                    .into_any_element()
+                        user_index,
+                        index,
+                        list,
+                        callbacks.on_manual_scroll.clone(),
+                    )
+                }))
+                .into_any_element()
         }
         PanelMessage::ToolCall(card) => render_tool_call_card(card,
                                                               style,
@@ -293,4 +377,28 @@ pub(super) fn render_response_actions(text: String, user_index: Option<usize>, i
                     manual_to_top();
                 }),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    /// The bucket boundaries in `relative_timestamp` - just now, minutes,
+    /// hours, days - per issue #577. Catalogue keys resolve regardless of
+    /// locale, so the test checks which bucket was chosen, not the copy.
+    #[test]
+    fn relative_timestamp_buckets_by_elapsed_time() {
+        let now = SystemTime::now();
+
+        assert_eq!(relative_timestamp(now),
+                   knot_core::l10n::t("panel.timestamp.just_now"));
+        assert_eq!(relative_timestamp(now - Duration::from_secs(90)),
+                   knot_core::l10n::t_with("panel.timestamp.minutes_ago", &[("minutes", "1")]));
+        assert_eq!(relative_timestamp(now - Duration::from_secs(3 * 3600)),
+                   knot_core::l10n::t_with("panel.timestamp.hours_ago", &[("hours", "3")]));
+        assert_eq!(relative_timestamp(now - Duration::from_secs(2 * 86400)),
+                   knot_core::l10n::t_with("panel.timestamp.days_ago", &[("days", "2")]));
+    }
 }
