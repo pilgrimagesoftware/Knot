@@ -118,7 +118,7 @@ fn a_known_type_answers_from_its_row() {
 
 /// The ids Knot can ask about their MCP servers today: the ones whose real
 /// listing output has been captured and has a parser pinned to a fixture.
-const PROBEABLE: &[&str] = &["claude", "gemini"];
+const PROBEABLE: &[&str] = &["claude", "gemini", "codex"];
 
 /// The ids that deliberately cannot be asked. Keeping them written down is
 /// the point: a new agent type added without an MCP decision changes this
@@ -127,13 +127,12 @@ const PROBEABLE: &[&str] = &["claude", "gemini"];
 ///
 /// Why each one:
 ///
-/// - `codex` - `codex mcp` exists; its output shape is unobserved.
 /// - `opencode` - `opencode mcp list` exists; its *populated* shape is
 ///   unobserved. Its per-server handover is known and already recorded.
 /// - `copilot` - no MCP listing command is known.
 /// - `custom1`, `custom2` - a user-configured command, not a vendor CLI.
 /// - `shell` - runs no MCP client at all.
-const UNPROBEABLE: &[&str] = &["codex", "opencode", "copilot", "custom1", "custom2", "shell"];
+const UNPROBEABLE: &[&str] = &["opencode", "copilot", "custom1", "custom2", "shell"];
 
 /// Adding an agent type must force a decision about its MCP support. Without
 /// this, a new row defaults to "cannot determine" and nobody finds out until
@@ -178,6 +177,13 @@ fn handover_shape_matches_what_the_cli_offers() {
     let McpManage::PerServer(command) = mcp_manage("opencode")
     else {
         panic!("`opencode mcp auth <name>` addresses one server directly")
+    };
+    assert!(command.contains(&"%{server}"),
+            "a per-server command must name the server");
+
+    let McpManage::PerServer(command) = mcp_manage("codex")
+    else {
+        panic!("`codex mcp login <name>` addresses one server directly")
     };
     assert!(command.contains(&"%{server}"),
             "a per-server command must name the server");

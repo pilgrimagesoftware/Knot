@@ -34,8 +34,18 @@ fn the_configured_program_is_what_runs() {
 #[test]
 fn a_type_with_no_mcp_command_offers_nothing() {
     assert_eq!(handover("shell", "zsh", "github"), None);
-    assert_eq!(handover("codex", "codex", "github"), None);
     assert_eq!(handover("nothing-by-that-name", "x", "github"), None);
+}
+
+/// Codex's per-server command is `mcp login`, not an absence - unlike
+/// OpenCode's `mcp auth`, it is not the agent's own name for the action, but
+/// it is the one command Codex exposes to address a single server.
+#[test]
+fn codex_names_the_server_on_its_login_command() {
+    let flow = handover("codex", "codex", "github").expect("codex has a flow");
+
+    assert_eq!(flow.command(), "codex mcp login 'github'");
+    assert_eq!(flow.send(), None, "there is nothing left to navigate");
 }
 
 /// Shell metacharacters are neutralized by quoting rather than rejected -
