@@ -1,0 +1,55 @@
+[
+  {
+    "name": "akeyless",
+    "enabled": true,
+    "disabled_reason": null,
+    "transport": {
+      "type": "streamable_http",
+      "url": "http://127.0.0.1:8086/mcp"
+    },
+    "startup_timeout_sec": null,
+    "tool_timeout_sec": null,
+    "auth_status": "unknown"
+  },
+  {
+    "name": "codex_app",
+    "enabled": false,
+    "disabled_reason": null,
+    "transport": {
+      "type": "stdio",
+      "command": "/Users/example/.codex/plugins/cache/openai-bundled/codex-app-tools/0.1.5/scripts/launch_codex_app_tools_mcp",
+      "args": ["./server.mjs"],
+      "env": {},
+      "cwd": "/Users/example/.codex/plugins/cache/openai-bundled/codex-app-tools/0.1.5"
+    },
+    "startup_timeout_sec": 10.0,
+    "tool_timeout_sec": 3600.0,
+    "auth_status": "unsupported"
+  },
+  {
+    "name": "sentry",
+    "enabled": true,
+    "disabled_reason": null,
+    "transport": {
+      "type": "streamable_http",
+      "url": "https://mcp.sentry.dev/mcp"
+    },
+    "startup_timeout_sec": null,
+    "tool_timeout_sec": null,
+    "auth_status": "o_auth"
+  },
+  {
+    "name": "legacy-tool",
+    "enabled": false,
+    "disabled_reason": "removed by the user",
+    "transport": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/opt/legacy-tool/index.js"],
+      "env": {}
+    },
+    "startup_timeout_sec": null,
+    "tool_timeout_sec": null,
+    "auth_status": "unknown"
+  }
+]
