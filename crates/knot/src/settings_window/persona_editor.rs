@@ -121,7 +121,7 @@ impl PersonaEditor {
 }
 
 impl Render for PersonaEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .size_full()
             .gap_3()
@@ -167,6 +167,5 @@ impl Render for PersonaEditor {
                             .on_click(cx.listener(|editor, _, window, cx| editor.save(window, cx))),
                     ),
             )
-            .children(crate::app_support::root_overlays(window, cx))
     }
 }

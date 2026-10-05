@@ -5,8 +5,8 @@
 //!
 //! Two subjects, and they are not the same kind of test. The dialog probe
 //! below pins a property of a *dependency*: whether an open dialog sits
-//! inside the window root's focus subtree, which is what decides how the
-//! guard in `prepare_frame` has to be written. The rest cover
+//! inside the window root's focus subtree, which is what a containment-based
+//! guard in `prepare_frame` would rest on. The rest cover
 //! [`focus_target`], the pure helper that says which of the pane's input
 //! targets a frame will draw.
 
@@ -16,7 +16,6 @@ use gpui_kit::Entity;
 use gpui_kit::FocusHandle;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
-use gpui_kit::ParentElement;
 use gpui_kit::Render;
 use gpui_kit::Styled;
 use gpui_kit::TestAppContext;
@@ -28,25 +27,23 @@ use gpui_kit::component::WindowExt;
 use gpui_kit::div;
 use uuid::Uuid;
 
-use crate::app_support;
 use crate::workspace_window::pane_focus::FocusTarget;
 use crate::workspace_window::pane_focus::SelectedAgentFacts;
 use crate::workspace_window::pane_focus::focus_target;
 
 /// Stands in for the workspace window's root element: one focus handle
-/// tracked on the element that also hosts the overlay layers. That is
-/// exactly the relationship `render/mod.rs` builds - `root_overlays` goes on
-/// as a child of the element carrying `track_focus(&self.root_focus)` - and
-/// it is the relationship this test is about.
+/// tracked on the outermost element of the application view, exactly as
+/// `render/mod.rs` tracks `root_focus`. The overlay layers are not in this
+/// view at all - `gpui_kit::init` registers them as a `Root` plugin that
+/// `Root::new` mounts beside the view - and where that puts a dialog's focus
+/// relative to this handle is what the test is about.
 struct FocusProbe {
     root: FocusHandle,
 }
 
 impl Render for FocusProbe {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div().size_full()
-             .track_focus(&self.root)
-             .children(app_support::root_overlays(window, cx))
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().track_focus(&self.root)
     }
 }
 
@@ -68,18 +65,19 @@ fn probe_window(cx: &mut TestAppContext) -> (VisualTestContext, Entity<FocusProb
     (VisualTestContext::from_window(window.into(), cx), probe.expect("the probe was built"))
 }
 
-/// The guard `design.md` first proposed - "focus is nowhere, or inside this
-/// window's own root subtree" - assumed a dialog's focus would fail the
-/// containment check, on the reading that `root_overlays` adds the dialog
-/// layer as a sibling of the view's own tree.
+/// Through gpui-kit 0.6 the dialog layer was drawn by Knot's own root views,
+/// as a child of the element tracking `root_focus`, so a dialog's focus was
+/// inside that subtree and no containment check could tell it from the
+/// window's own panes. 0.7 moved the layer into a `Root` plugin, a sibling
+/// of the application view, and this test flipped with it.
 ///
-/// It does not. `root_overlays` is passed to `.children(..)` on the element
-/// that tracks `root_focus`, so the dialog's focus handle is a descendant of
-/// it in the dispatch tree, and `contains_focused` answers `true`. The guard
-/// has to name the dialog explicitly instead; this test is what says so, and
-/// what will fail if a gpui-component upgrade ever moves the layer out.
+/// The guard in `prepare_frame` asks `has_active_dialog` either way - it is
+/// correct on both sides of this - but anything that reasons from focus
+/// containment, such as a menu or shortcut handler declared on the root
+/// element, now sees a dialog as outside the window's tree. This fails if a
+/// gpui-component upgrade moves the layer back in.
 #[gpui_kit::test]
-fn an_open_dialog_sits_inside_the_root_focus_subtree(cx: &mut TestAppContext) {
+fn an_open_dialog_sits_outside_the_root_focus_subtree(cx: &mut TestAppContext) {
     let (mut probe_cx, probe) = probe_window(cx);
 
     let root = probe_cx.update(|_window, cx| probe.read(cx).root.clone());
@@ -100,19 +98,19 @@ fn an_open_dialog_sits_inside_the_root_focus_subtree(cx: &mut TestAppContext) {
             });
     probe_cx.run_until_parked();
 
-    // Without this the assertion below is vacuous: a dialog that never took
-    // focus leaves it on the root, which is trivially inside the root's own
-    // subtree. What makes the containment answer meaningful is that focus
-    // moved somewhere else first.
-    let moved = probe_cx.update(|window, cx| window.focused(cx).as_ref() != Some(&root));
-    assert!(moved,
-            "opening a dialog should move focus off the root - if it does not, this test proves \
-             nothing about containment");
+    // Without this the assertion below is vacuous: focus that went nowhere
+    // is trivially outside the root's subtree. What makes the containment
+    // answer meaningful is that the dialog took focus - it is on some handle,
+    // and not the root's.
+    let focused = probe_cx.update(|window, cx| window.focused(cx));
+    assert!(focused.is_some_and(|handle| handle != root),
+            "opening a dialog should move focus onto the dialog - if it does not, this test \
+             proves nothing about containment");
 
     let contained = probe_cx.update(|window, cx| root.contains_focused(window, cx));
-    assert!(contained,
-            "an open dialog's focus is inside the root's subtree, so a containment check cannot \
-             tell a dialog apart from the window's own panes");
+    assert!(!contained,
+            "an open dialog's focus is outside the root view's subtree: the dialog layer is a \
+             `Root` plugin beside the view, not a child of it");
 }
 
 /// An activated Panel-mode agent with nothing in front of its conversation -

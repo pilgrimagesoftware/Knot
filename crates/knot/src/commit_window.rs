@@ -196,6 +196,5 @@ impl Render for CommitWindow {
                                                               .on_click(cx.listener(
                     |view, _, window, cx| view.commit(window, cx),
                 ))))
-            .children(crate::app_support::root_overlays(window, cx))
     }
 }

@@ -5,7 +5,8 @@
 //! the name dialog, so nothing in it could be read without reading all of
 //! it. Each of those is a method here, and `render` is the shape of the
 //! window. The name dialog has since left entirely - it is built by
-//! `dialog` and drawn by the shared dialog layer `root_overlays` renders.
+//! `dialog` and drawn by the dialog layer gpui-component's `Root` plugin
+//! mounts in every window.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -200,7 +201,7 @@ impl WorkspaceManager {
 }
 
 impl Render for WorkspaceManager {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // One lock for both reads: the current workspace was being re-read
         // per row, taking the store lock once per workspace in the middle of
         // building the element tree.
@@ -298,6 +299,5 @@ impl Render for WorkspaceManager {
                                    .children(rows))
                     .children(self.error.as_ref().map(|error| div().child(error.clone())))
             )
-            .children(crate::app_support::root_overlays(window, cx))
     }
 }

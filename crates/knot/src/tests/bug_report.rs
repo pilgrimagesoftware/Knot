@@ -11,8 +11,8 @@ use std::sync::Arc;
 use gpui_kit::component::Root;
 use gpui_kit::component::WindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled,
-    TestAppContext, VisualTestContext, Window, WindowOptions, div,
+    AnyWindowHandle, AppContext, Context, Entity, IntoElement, Render, Styled, TestAppContext,
+    VisualTestContext, Window, WindowOptions, div,
 };
 use knot_forge::ForgeAvailability;
 use parking_lot::Mutex;
@@ -29,9 +29,8 @@ use crate::bug_report::{
 struct Blank;
 
 impl Render for Blank {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         div().size_full()
-             .children(crate::app_support::root_overlays(window, cx))
     }
 }
 
