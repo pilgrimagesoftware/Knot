@@ -25,8 +25,8 @@ knot-processes = { path = "../knot-processes" }
 knot-subagents = { path = "../knot-subagents" }
 knot-tasks = { path = "../knot-tasks" }
 knot-terminal = { path = "../knot-terminal" }
+gpui-terminal = { path = "../gpui-terminal" }
 knot-watch = { path = "../knot-watch" }
-alacritty_terminal = "0.26.0"
 knot-history = { path = "../knot-history" }
 tokio.workspace = true
 uuid.workspace = true

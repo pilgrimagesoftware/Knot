@@ -5,7 +5,6 @@
 use gpui_kit::AppContext;
 use gpui_kit::Context;
 use gpui_kit::Entity;
-use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Styled;
@@ -20,9 +19,7 @@ use gpui_kit::div;
 use gpui_kit::px;
 
 use crate::consts;
-use crate::terminal_view;
 use crate::workspace_window::WorkspaceWindow;
-use crate::workspace_window::terminal_cell_size;
 
 impl WorkspaceWindow {
     /// The column that fills the window beside the sidebar.
@@ -136,110 +133,12 @@ impl WorkspaceWindow {
                                                                                window,
                                                                                cx));
                                         }
-                                        let grid =
-                                            self.sessions.get(&id)?.lock().grid()?;
-                                        Some(
-                                            div()
-                                                .id("terminal-pane")
-                                                .size_full()
-                                                .track_focus(&self.terminal_focus)
-                                                .on_mouse_down(
-                                                    gpui_kit::MouseButton::Left,
-                                                    cx.listener(
-                                                        move |view,
-                                                              event: &gpui_kit::MouseDownEvent,
-                                                              window,
-                                                              cx| {
-                                                            view.terminal_focus
-                                                                .clone()
-                                                                .focus(window, cx);
-                                                            view.dispatch_mouse_button(
-                                                                id,
-                                                                event.position,
-                                                                knot_terminal::MouseButton::Left,
-                                                                true,
-                                                                cx,
-                                                            );
-                                                        },
-                                                    ),
-                                                )
-                                                .on_mouse_up(
-                                                    gpui_kit::MouseButton::Left,
-                                                    cx.listener(
-                                                        move |view,
-                                                              event: &gpui_kit::MouseUpEvent,
-                                                              _window,
-                                                              cx| {
-                                                            view.dispatch_mouse_button(
-                                                                id,
-                                                                event.position,
-                                                                knot_terminal::MouseButton::Left,
-                                                                false,
-                                                                cx,
-                                                            );
-                                                        },
-                                                    ),
-                                                )
-                                                .on_mouse_move(cx.listener(
-                                                    move |view,
-                                                          event: &gpui_kit::MouseMoveEvent,
-                                                          _window,
-                                                          cx| {
-                                                        if event.dragging() {
-                                                            view.dispatch_mouse_drag(
-                                                                id,
-                                                                event.position,
-                                                                cx,
-                                                            );
-                                                        }
-                                                    },
-                                                ))
-                                                .on_scroll_wheel(cx.listener(
-                                                    move |view,
-                                                          event: &gpui_kit::ScrollWheelEvent,
-                                                          _window,
-                                                          cx| {
-                                                        let (_, cell_height) =
-                                                            terminal_cell_size(
-                                                                cx,
-                                                                view.terminal_font_family(),
-                                                                px(crate::settings_global::read(cx)
-                                                                    .terminal_font_size
-                                                                    as f32),
-                                                            );
-                                                        let lines = match event.delta {
-                                                            gpui_kit::ScrollDelta::Lines(
-                                                                point,
-                                                            ) => point.y,
-                                                            gpui_kit::ScrollDelta::Pixels(
-                                                                point,
-                                                            ) => {
-                                                                f32::from(point.y)
-                                                                    / cell_height
-                                                            }
-                                                        };
-                                                        view.dispatch_scroll(
-                                                            id,
-                                                            event.position,
-                                                            lines,
-                                                            cx,
-                                                        );
-                                                    },
-                                                ))
-                                                .on_key_down(cx.listener(
-                                                    move |view, event, _window, cx| {
-                                                        view.dispatch_key(id, event, cx);
-                                                    },
-                                                ))
-                                                .child(terminal_view::render_grid(
-                                                    &grid.lock(),
-                                                    self.terminal_font_family(),
-                                                    px(crate::settings_global::read(cx)
-                                                        .terminal_font_size
-                                                        as f32),
-                                                ))
-                                                .into_any_element(),
-                                        )
+                                        // The view owns its input, sizing
+                                        // and repaint; see `terminal_pane`.
+                                        let pane = self.terminal_panes.get(&id)?;
+                                        Some(div().size_full()
+                                                  .child(pane.view.clone())
+                                                  .into_any_element())
                                     })
                                     .unwrap_or_else(|| {
                                         div()

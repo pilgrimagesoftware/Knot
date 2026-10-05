@@ -96,7 +96,6 @@ impl WorkspaceWindow {
                   // which `cx.new`'s context is not.
                   let subagents = crate::app_support::Subagents::handle(cx);
                   let sidebar_resize = cx.new(|_| ResizableState::default());
-                  let clipboard_writes = Arc::new(Mutex::new(Vec::new()));
                   let exited_sessions: Arc<Mutex<Vec<Uuid>>> = Arc::new(Mutex::new(Vec::new()));
                   let view =
                       cx.new(|cx| {
@@ -138,15 +137,14 @@ impl WorkspaceWindow {
                     workspace_id,
                     selected_agent,
                     sessions: BTreeMap::new(),
+                    terminal_panes: BTreeMap::new(),
                     panel_states: BTreeMap::new(),
                     runtime: tokio::runtime::Runtime::new()
                         .expect("failed to start terminal session runtime"),
                     sidebar_resize,
                     root_focus: cx.focus_handle(),
                     key_hints: Default::default(),
-                    terminal_focus: cx.focus_handle(),
                     terminal_font: TerminalFont::default(),
-                    clipboard_writes: Arc::clone(&clipboard_writes),
                     panel_sessions: BTreeMap::new(),
                     subagents: Arc::clone(&subagents),
                     last_spinner_frame: 0,
@@ -229,10 +227,7 @@ impl WorkspaceWindow {
                   // view is only in scope here: `cx.open_window` hands back a
                   // handle to the `Root` wrapper, not to this.
                   WindowRegistry::register(key, window.window_handle(), Some(view.downgrade()), cx);
-                  spawn_repaint_poll(view.clone(),
-                                     clipboard_writes,
-                                     Arc::clone(&exited_sessions),
-                                     cx);
+                  spawn_repaint_poll(view.clone(), Arc::clone(&exited_sessions), cx);
                   // Remember where the user puts this workspace's window.
                   // The observer fires continuously through a drag, so the
                   // store's setter reports whether the frame actually

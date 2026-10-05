@@ -151,7 +151,7 @@ fn a_terminal_mode_agent_with_a_grid_shows_its_surface() {
 
 /// The frame the selection changes on is not necessarily the frame the
 /// surface appears on: until the session has a grid the pane draws the
-/// starting placeholder, and `terminal_focus` is tracked by no element on
+/// starting placeholder, and no terminal view is tracking focus on
 /// screen. Focusing it then lands outside the element tree, `prepare_frame`'s
 /// own fallback moves focus to the window root on the same frame, and the
 /// latch - already stored - means no later frame retries.

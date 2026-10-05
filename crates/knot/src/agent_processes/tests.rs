@@ -269,7 +269,7 @@ fn no_render_module_calls_a_blocking_process_entry_point() {
                                       "sample_roots("];
 
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let render_paths = ["workspace_window/render", "panel_view", "terminal_view.rs"];
+    let render_paths = ["workspace_window/render", "panel_view"];
 
     let mut offenders = Vec::new();
     for path in render_paths {

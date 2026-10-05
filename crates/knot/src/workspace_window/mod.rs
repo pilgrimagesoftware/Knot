@@ -39,7 +39,7 @@ mod shortcuts;
 mod shortcuts_tests;
 mod sidebar_layout;
 pub(crate) mod terminal_font;
-mod terminal_input;
+mod terminal_pane;
 mod title;
 mod view_mode;
 mod window;

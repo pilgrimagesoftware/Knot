@@ -126,7 +126,7 @@ impl WorkspaceWindow {
     }
 
     /// The work a frame does before it draws: settle the terminal's font
-    /// family, match the terminal to its pane, ask for diff stats that have
+    /// family and hand it to the terminal view, ask for diff stats that have
     /// aged out, and make sure something holds focus.
     ///
     /// None of it draws, none of it runs `git` here - `refresh_diff_stats`
@@ -135,11 +135,11 @@ impl WorkspaceWindow {
     /// the text system which fonts exist: `refresh_terminal_font` is a string
     /// compare unless the configured name changed (see `terminal_font`).
     fn prepare_frame(&mut self, is_dashboard: bool, window: &mut Window, cx: &mut Context<Self>) {
-        // Ahead of the resize, which is the frame's first reader of it.
+        // Ahead of `sync_terminal_style`, the frame's first reader of it.
         self.refresh_terminal_font(cx);
-        if !is_dashboard && let Some(id) = self.selected_agent {
-            self.resize_session_to_pane(id, window, cx);
-        }
+        // The view sizes itself to its bounds; only the font is the window's
+        // to hand it.
+        self.sync_terminal_style(cx);
         if let Some(id) = self.selected_agent {
             let folder = self.store
                              .lock()
@@ -269,11 +269,8 @@ impl WorkspaceWindow {
                 let input = self.panel_prompt_input(id, window, cx);
                 input.update(cx, |state, cx| state.focus(window, cx));
             }
-            // One handle for every agent, not one each: only the selected
-            // agent's pane is rendered, and a terminal keeps no per-agent
-            // caret state the way a composer keeps its draft.
-            pane_focus::FocusTarget::Terminal(_) => {
-                window.focus(&self.terminal_focus.clone(), cx);
+            pane_focus::FocusTarget::Terminal(id) => {
+                self.focus_terminal(id, window, cx);
             }
         }
     }
@@ -282,9 +279,7 @@ impl WorkspaceWindow {
     /// between the terminal surface and the "Starting terminal…"
     /// placeholder in `render/content.rs`.
     fn session_has_grid(&self, id: Uuid) -> bool {
-        self.sessions
-            .get(&id)
-            .is_some_and(|session| session.lock().grid().is_some())
+        self.terminal_panes.contains_key(&id)
     }
 
     /// The sidebar's own title bar, which owns the traffic lights.
