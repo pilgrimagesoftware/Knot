@@ -1,7 +1,8 @@
 ---
 id: ADR-0002
 title: Fork gpui-base to allow auto-grow on any multi-line mode
-status: accepted
+status: superseded
+superseded_by: ADR-0003
 date: 2026-09-23
 tags: [ui, dependencies, gpui-kit]
 ---

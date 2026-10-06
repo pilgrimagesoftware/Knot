@@ -271,7 +271,7 @@ impl CommandCenterWindow {
 }
 
 impl Render for CommandCenterWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         self.refresh_diff_stats(cx);
         let diff_stats = self.diff_stats.snapshot();
@@ -344,6 +344,5 @@ impl Render for CommandCenterWindow {
                     .overflow_y_scroll()
                     .children(sections),
             )
-            .children(crate::app_support::root_overlays(window, cx))
     }
 }

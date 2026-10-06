@@ -5,7 +5,6 @@ use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
-use gpui_kit::component::Root;
 use gpui_kit::component::Theme;
 use gpui_kit::component::ThemeTokens;
 use gpui_kit::px;
@@ -494,34 +493,6 @@ pub(crate) fn observe_system_appearance(window: &Window) {
               window.refresh();
           })
           .detach();
-}
-
-/// The overlay layers `gpui_component::Root` does not draw for you.
-///
-/// `Root::render` paints its view plus the tooltip and menu overlays, but
-/// *not* `active_dialogs` - a dialog opened with `open_alert_dialog` is
-/// pushed onto the `Root` and then only appears if the application's own
-/// root view renders this layer. Upstream says as much on
-/// `render_dialog_layer`: "A dialog that opens into a root which never
-/// renders this layer looks exactly like one that does not open." No window
-/// in Knot rendered it, so every confirmation dialog in the app - restart
-/// and remove agent, delete workspace, restore defaults, About - opened
-/// invisibly and the click appeared to do nothing.
-///
-/// Every root view calls this, because `about_knot` opens its dialog on
-/// whichever window happens to be active.
-pub(crate) fn root_overlays(window: &mut Window, cx: &mut App) -> Vec<gpui_kit::AnyElement> {
-    let mut layers = Vec::new();
-    if let Some(layer) = Root::render_dialog_layer(window, cx) {
-        layers.push(layer.into_any_element());
-    }
-    if let Some(layer) = Root::render_sheet_layer(window, cx) {
-        layers.push(layer.into_any_element());
-    }
-    if let Some(layer) = Root::render_notification_layer(window, cx) {
-        layers.push(layer.into_any_element());
-    }
-    layers
 }
 
 /// Names the running process, so macOS shows "Knot" in the application

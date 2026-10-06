@@ -45,7 +45,6 @@ use uuid::Uuid;
 use crate::app_bootstrap::PanelOpenPermissionSelector;
 use crate::app_bootstrap::PanelPermissionAllow;
 use crate::app_bootstrap::PanelPermissionDeny;
-use crate::app_support;
 use crate::app_support::app_titlebar_icon;
 use crate::window_options;
 use crate::workspace_window::SidebarMenuTargets;
@@ -245,11 +244,11 @@ impl WorkspaceWindow {
             }
             return;
         };
-        // A dialog's focus handle is a descendant of `root_focus` - the
-        // dialog layer is a child of the element tracking it - so no
-        // containment check can tell a dialog apart from this window's own
-        // panes. Asking whether one is open is the only guard that works;
-        // `tests/pane_focus.rs` is what establishes that.
+        // Ask whether a dialog is open rather than where focus sits. Whether
+        // a dialog's focus is inside `root_focus`'s subtree is a property of
+        // gpui-component's layering, and it has already flipped once - inside
+        // through 0.6, outside since 0.7 put the layer in a `Root` plugin.
+        // `tests/pane_focus.rs` pins the current answer.
         if window.has_active_dialog(cx) {
             return;
         }
@@ -575,6 +574,5 @@ impl Render for WorkspaceWindow {
                                                                        window,
                                                                        cx))),
             )
-                    .children(app_support::root_overlays(window, cx))
     }
 }

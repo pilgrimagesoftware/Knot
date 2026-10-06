@@ -108,7 +108,7 @@ impl BenchEditor {
 }
 
 impl Render for BenchEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let library = crate::settings_global::read(cx).prompts.clone();
         let editor = cx.entity();
         let picker = startup_choice::picker("bench-editor-startup-prompt",
@@ -170,6 +170,5 @@ impl Render for BenchEditor {
                                .disabled(self.name(cx).is_empty())
                                .on_click(cx.listener(|editor, _, window, cx| editor.save(window, cx)))),
             )
-            .children(crate::app_support::root_overlays(window, cx))
     }
 }

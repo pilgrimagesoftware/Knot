@@ -130,7 +130,7 @@ impl PromptEditor {
 }
 
 impl Render for PromptEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (_, text) = self.fields(cx);
         let warning = crate::prompt_text::unknown_variables_warning(&text);
         let target = self.text_input.clone();
@@ -190,6 +190,5 @@ impl Render for PromptEditor {
                             .on_click(cx.listener(|editor, _, window, cx| editor.save(window, cx))),
                     ),
             )
-            .children(crate::app_support::root_overlays(window, cx))
     }
 }

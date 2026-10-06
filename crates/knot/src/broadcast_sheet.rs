@@ -104,7 +104,7 @@ pub(crate) fn open_broadcast_sheet(on_send: impl Fn(String, &mut Window, &mut Ap
 }
 
 impl Render for BroadcastSheet {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_send = self.trimmed(cx).is_some();
         v_flex().size_full()
                 .gap_3()
@@ -130,6 +130,5 @@ impl Render for BroadcastSheet {
                                                                    .on_click(cx.listener(
                         |sheet, _, window, cx| sheet.send(window, cx),
                     ))))
-                .children(crate::app_support::root_overlays(window, cx))
     }
 }
