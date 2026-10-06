@@ -62,12 +62,15 @@ impl OpenInApp {
     /// The application an id names, or `None` for one this build does not
     /// know - which can only reach here from a stale menu-bar action.
     pub(crate) fn from_id(id: &str) -> Option<Self> {
-        [Self::VsCode,
-         Self::Zed,
-         Self::Xcode,
-         Self::Finder,
-         Self::Terminal].into_iter()
-                        .find(|app| app.id() == id)
+        [
+            Self::VsCode,
+            Self::Zed,
+            Self::Xcode,
+            Self::Finder,
+            Self::Terminal,
+        ]
+        .into_iter()
+        .find(|app| app.id() == id)
     }
 
     /// The `open` arguments for this application, ahead of the folder
@@ -94,12 +97,14 @@ impl OpenInApp {
 /// cross-platform editor rather than after the Apple one - Zed is an
 /// addition of this port's own, not something `OpenWithProvider` has.
 pub(crate) fn open_in_entries() -> Vec<OpenInEntry> {
-    vec![OpenInEntry::App(OpenInApp::VsCode),
-         OpenInEntry::App(OpenInApp::Zed),
-         OpenInEntry::App(OpenInApp::Xcode),
-         OpenInEntry::Separator,
-         OpenInEntry::App(OpenInApp::Finder),
-         OpenInEntry::App(OpenInApp::Terminal),]
+    vec![
+        OpenInEntry::App(OpenInApp::VsCode),
+        OpenInEntry::App(OpenInApp::Zed),
+        OpenInEntry::App(OpenInApp::Xcode),
+        OpenInEntry::Separator,
+        OpenInEntry::App(OpenInApp::Finder),
+        OpenInEntry::App(OpenInApp::Terminal),
+    ]
 }
 
 const GHOSTTY_BUNDLE_ID: &str = "com.mitchellh.ghostty";
@@ -188,10 +193,11 @@ pub(crate) fn open_process_viewer() -> bool {
 
 #[cfg(target_os = "macos")]
 fn run_open(arguments: &[&str], folder: &str) -> bool {
-    Command::new("/usr/bin/open").args(arguments)
-                                 .arg(folder)
-                                 .status()
-                                 .is_ok_and(|status| status.success())
+    Command::new("/usr/bin/open")
+        .args(arguments)
+        .arg(folder)
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 /// Nothing to open elsewhere: Knot ships on macOS, and the workspace only
@@ -206,14 +212,27 @@ fn run_open(_arguments: &[&str], _folder: &str) -> bool {
 /// event. `-n` forces a fresh process so the launch actually reaches the
 /// application's argument parser rather than being folded into whatever
 /// Apple event the already-running instance would otherwise receive.
+///
+/// `-n` is only used when the application is already running: when it is
+/// not, `open -n` prevents the application from launching with the args
+/// (#585), so the flag is omitted to let it start normally.
 #[cfg(target_os = "macos")]
 fn run_open_with_args(bundle_arguments: &[&str], extra_args: &[&str]) -> bool {
-    Command::new("/usr/bin/open").arg("-n")
-                                 .args(bundle_arguments)
-                                 .arg("--args")
-                                 .args(extra_args)
-                                 .status()
-                                 .is_ok_and(|status| status.success())
+    let is_running = Command::new("pgrep")
+        .args(["-x", "Zed"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let mut cmd = Command::new("/usr/bin/open");
+    if is_running {
+        cmd.arg("-n");
+    }
+    cmd.args(bundle_arguments)
+        .arg("--args")
+        .args(extra_args)
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -227,25 +246,30 @@ mod tests {
 
     #[test]
     fn the_submenu_matches_the_swift_reference_order() {
-        assert_eq!(open_in_entries(),
-                   vec![OpenInEntry::App(OpenInApp::VsCode),
-                        OpenInEntry::App(OpenInApp::Zed),
-                        OpenInEntry::App(OpenInApp::Xcode),
-                        OpenInEntry::Separator,
-                        OpenInEntry::App(OpenInApp::Finder),
-                        OpenInEntry::App(OpenInApp::Terminal)]);
+        assert_eq!(
+            open_in_entries(),
+            vec![
+                OpenInEntry::App(OpenInApp::VsCode),
+                OpenInEntry::App(OpenInApp::Zed),
+                OpenInEntry::App(OpenInApp::Xcode),
+                OpenInEntry::Separator,
+                OpenInEntry::App(OpenInApp::Finder),
+                OpenInEntry::App(OpenInApp::Terminal)
+            ]
+        );
     }
 
     /// The ids the menu-bar action carries survive a round trip, which is
     /// the only place an application is still named by string.
     #[test]
     fn every_application_round_trips_through_its_id() {
-        for app in [OpenInApp::VsCode,
-                    OpenInApp::Zed,
-                    OpenInApp::Xcode,
-                    OpenInApp::Finder,
-                    OpenInApp::Terminal]
-        {
+        for app in [
+            OpenInApp::VsCode,
+            OpenInApp::Zed,
+            OpenInApp::Xcode,
+            OpenInApp::Finder,
+            OpenInApp::Terminal,
+        ] {
             assert_eq!(OpenInApp::from_id(app.id()), Some(app));
         }
         assert_eq!(OpenInApp::from_id("nothing-by-that-name"), None);
@@ -256,29 +280,37 @@ mod tests {
     /// this mapping exists to keep out of the menu handlers.
     #[test]
     fn each_application_maps_to_the_right_open_flag() {
-        assert_eq!(OpenInApp::VsCode.open_arguments(),
-                   ["-b", "com.microsoft.VSCode"]);
+        assert_eq!(
+            OpenInApp::VsCode.open_arguments(),
+            ["-b", "com.microsoft.VSCode"]
+        );
         // Zed is launched by bundle id like VS Code, not by name like
         // Xcode. The id was read from the installed application's
         // Info.plist, not recalled.
         assert_eq!(OpenInApp::Zed.open_arguments(), ["-b", "dev.zed.Zed"]);
         assert_eq!(OpenInApp::Xcode.open_arguments(), ["-a", "Xcode"]);
         assert!(OpenInApp::Finder.open_arguments().is_empty());
-        assert_eq!(OpenInApp::Terminal.open_arguments(),
-                   ["-b", "com.mitchellh.ghostty"]);
+        assert_eq!(
+            OpenInApp::Terminal.open_arguments(),
+            ["-b", "com.mitchellh.ghostty"]
+        );
     }
 
     /// Zed is routed through `--args --new` so it opens a new window
     /// (#567); every other application keeps the plain Apple-event path.
     #[test]
     fn only_zed_is_told_to_open_a_new_window() {
-        assert_eq!(zed_new_window_args(OpenInApp::Zed, "/tmp/project"),
-                   Some(["/tmp/project", "--new"]));
+        assert_eq!(
+            zed_new_window_args(OpenInApp::Zed, "/tmp/project"),
+            Some(["/tmp/project", "--new"])
+        );
         assert_eq!(zed_new_window_args(OpenInApp::VsCode, "/tmp/project"), None);
         assert_eq!(zed_new_window_args(OpenInApp::Xcode, "/tmp/project"), None);
         assert_eq!(zed_new_window_args(OpenInApp::Finder, "/tmp/project"), None);
-        assert_eq!(zed_new_window_args(OpenInApp::Terminal, "/tmp/project"),
-                   None);
+        assert_eq!(
+            zed_new_window_args(OpenInApp::Terminal, "/tmp/project"),
+            None
+        );
     }
 
     /// The processes section offers the process-viewer action only where
