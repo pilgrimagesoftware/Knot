@@ -274,8 +274,9 @@ done"#,
 #[tokio::test]
 async fn the_adapter_subprocess_is_spawned_with_the_merged_adapter_path() {
     let (session, _config_options, mut events) =
-        AcpSession::start(&path_reporting_adapter_launch(), project(), &no_progress()).await
-                                         .expect("connect");
+        AcpSession::start(&path_reporting_adapter_launch(), project(), &no_progress())
+            .await
+            .expect("connect");
     assert_eq!(session.session_id(), "sess-path");
 
     let update = events.recv().await.expect("session update");
@@ -407,7 +408,8 @@ async fn missing_adapter_is_auto_installed_and_the_connection_is_retried() {
                                  supports_resume: false,
                                  supports_permission_modes: false,
                                  install: Some(InstallMethod { command: "sh",
-                                                               args:    install_args, }) };
+                                                               args:    install_args,
+                                                               package: "test-package", }) };
 
     let (session, _config_options, _events) =
         AcpSession::start(&launch, project(), &no_progress()).await

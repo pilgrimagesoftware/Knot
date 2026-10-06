@@ -287,5 +287,9 @@ async fn run_install(install: InstallMethod) -> AcpResult<()> {
     Ok(())
 }
 
+mod adapter_update;
+
+pub use adapter_update::{AdapterUpdateStatus, check_adapter_update, update_adapter};
+
 #[cfg(test)]
 mod tests;

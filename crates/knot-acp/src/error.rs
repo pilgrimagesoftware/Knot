@@ -34,6 +34,15 @@ pub enum AcpError {
     /// non-zero.
     #[error("failed to install acp adapter: {0}")]
     InstallFailed(String),
+
+    /// Checking an adapter's installed/latest npm version failed - the
+    /// `npm view`/`npm list` subprocess couldn't run, exited non-zero, or
+    /// its output didn't parse as expected. Distinct from
+    /// [`AcpError::InstallFailed`]: this is a read-only check, never run
+    /// implicitly, so a failure here never blocks connecting to the
+    /// adapter.
+    #[error("failed to check for an acp adapter update: {0}")]
+    UpdateCheckFailed(String),
 }
 
 /// Why an ACP session stopped taking requests, per the `acp-client` spec's
