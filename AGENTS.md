@@ -31,19 +31,18 @@ crates/
 ├── knot-discovery/   Maps a source folder to repos + linked worktrees via
 │                      filesystem reads only (no `git` process); tokio-driven
 │                      debounced folder watch. `scan()` is a pure function.
-├── gpui-terminal/    MIT-licensed, not AGPL: alacritty grid, `Transport` trait
-│                      (PTY behind the default `pty` feature), GPUI
-│                      `TerminalView`. Shared with Fernrohr.
 └── knot/             Binary. GPUI Kit window shell (gpui-kit crate).
 ```
 
 ### Dependency relationships
 
 - `knot` depends on `knot-core` and `gpui-kit` (external, the UI toolkit).
-- `gpui-terminal` carries `license = "MIT"` and its own `LICENSE-MIT`, so it
-  must never depend on a `knot-*` crate. Knot-specific terminal behaviour (the
-  agent's shell and startup command, activity tracking, the pull request
-  scan) lives in `knot-terminal`, on top of it.
+- `gpui-terminal` (alacritty grid, `Transport` trait, PTY behind the default
+  `pty` feature, GPUI `TerminalView`) is an external git dependency,
+  `pilgrimagesoftware/gpui-terminal`, shared with Fernrohr. It is MIT, not
+  AGPL, so changes to it go to that repo, not here. Knot-specific terminal
+  behaviour (the agent's shell and startup command, activity tracking, the
+  pull request scan) lives in `knot-terminal`, on top of it.
 - `knot-git` and `knot-discovery` are standalone: they depend on `thiserror`
   (via workspace) and, for discovery, `notify` + `tokio`.
 - Shared dep versions are pinned in the root `Cargo.toml` `[workspace.dependencies]`.

@@ -13,7 +13,7 @@ parking_lot.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["process"] }
 uuid.workspace = true
-gpui-terminal = { path = "../gpui-terminal" }
+gpui-terminal.workspace = true
 knot-acp = { path = "../knot-acp" }
 knot-activity = { path = "../knot-activity" }
 knot-agent-launch = { path = "../knot-agent-launch" }

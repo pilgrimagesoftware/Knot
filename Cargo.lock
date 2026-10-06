@@ -3014,13 +3014,13 @@ checksum = "829258540ea51bb9ea4a71686beffe5c99586901ba9f39944d06e4a180ab63fe"
 [[package]]
 name = "gpui-terminal"
 version = "0.1.0"
+source = "git+https://github.com/pilgrimagesoftware/gpui-terminal?tag=v0.1.0#e8812afc94e4d1dad541a3115344793c7c6154ef"
 dependencies = [
  "alacritty_terminal",
  "async-channel",
  "gpui-kit",
  "parking_lot",
  "portable-pty",
- "tempfile",
  "thiserror 2.0.21",
 ]
 
