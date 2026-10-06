@@ -185,7 +185,6 @@ impl Render for ImportWindow {
                 .p_4()
                 .bg(cx.theme().background)
                 .child(self.render_import(cx))
-                .children(crate::app_support::root_overlays(window, cx))
     }
 }
 

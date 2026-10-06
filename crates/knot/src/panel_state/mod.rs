@@ -1,7 +1,7 @@
 //! Folds an ACP session's update stream into renderable panel state: the
 //! message list with streaming text accumulation, tool-call cards, and
-//! pending permission state. Sibling to `terminal_view.rs` (which renders
-//! a `Grid`) rather than a mode inside it - this folds a
+//! pending permission state. Sibling to `gpui_terminal::TerminalView` (which
+//! renders a `Grid`) rather than a mode inside it - this folds a
 //! `knot_acp::SessionEvent` stream into a different data model entirely.
 //!
 //! `message` is what the list is made of, `state` is what a session's panel

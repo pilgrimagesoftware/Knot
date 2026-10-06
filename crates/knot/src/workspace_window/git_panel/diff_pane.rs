@@ -6,8 +6,8 @@
 //! every hunk, which it could afford because SwiftUI does not rebuild the
 //! whole element tree per frame.
 //!
-//! Within a line, the run-per-style shape `terminal_view` uses: an `h_flex`
-//! per line, a `div` per styled run.
+//! Within a line, the run-per-style shape `gpui_terminal`'s grid render uses:
+//! an `h_flex` per line, a `div` per styled run.
 //!
 //! Contract: `openspec/specs/git-panel-ui/spec.md`.
 

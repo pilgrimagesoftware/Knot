@@ -76,7 +76,7 @@ impl WorkspaceWindow {
     ///
     /// The callback runs on a tokio task with no GPUI context, so it only
     /// flips a flag; acting on it is the poll's job - the same hand-off
-    /// `clipboard_writes` and `exited_sessions` use.
+    /// `exited_sessions` uses.
     pub(in crate::workspace_window) fn drain_git_watches(&mut self) -> bool {
         let fired: Vec<Uuid> = self.git_watch_dirty
                                    .iter()

@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
+use gpui_terminal::{GridSize, Transport};
 use knot_agent_launch::{AdapterConfig, InstallMethod, adapter_path};
 use parking_lot::Mutex;
 
 use super::*;
-use crate::{TerminalError, TerminalTransport};
 
 /// A throwaway progress cell for tests that don't assert on progress.
 fn no_progress() -> ConnectProgress {
@@ -206,17 +206,19 @@ struct FakeTransport {
     sent: Arc<Mutex<Vec<String>>>,
 }
 
-impl TerminalTransport for FakeTransport {
-    fn send_text(&mut self, text: &str) -> Result<(), TerminalError> {
-        self.sent.lock().push(text.to_string());
+impl Transport for FakeTransport {
+    fn write(&mut self, bytes: &[u8]) -> gpui_terminal::Result<()> {
+        self.sent
+            .lock()
+            .push(String::from_utf8_lossy(bytes).into_owned());
         Ok(())
     }
 
-    fn send_return(&mut self) -> Result<(), TerminalError> {
+    fn resize(&mut self, _size: GridSize) -> gpui_terminal::Result<()> {
         Ok(())
     }
 
-    fn terminate(&mut self) -> Result<(), TerminalError> {
+    fn terminate(&mut self) -> gpui_terminal::Result<()> {
         Ok(())
     }
 }
@@ -272,8 +274,9 @@ done"#,
 #[tokio::test]
 async fn the_adapter_subprocess_is_spawned_with_the_merged_adapter_path() {
     let (session, _config_options, mut events) =
-        AcpSession::start(&path_reporting_adapter_launch(), project(), &no_progress()).await
-                                         .expect("connect");
+        AcpSession::start(&path_reporting_adapter_launch(), project(), &no_progress())
+            .await
+            .expect("connect");
     assert_eq!(session.session_id(), "sess-path");
 
     let update = events.recv().await.expect("session update");
@@ -405,7 +408,8 @@ async fn missing_adapter_is_auto_installed_and_the_connection_is_retried() {
                                  supports_resume: false,
                                  supports_permission_modes: false,
                                  install: Some(InstallMethod { command: "sh",
-                                                               args:    install_args, }) };
+                                                               args:    install_args,
+                                                               package: "test-package", }) };
 
     let (session, _config_options, _events) =
         AcpSession::start(&launch, project(), &no_progress()).await

@@ -17,7 +17,7 @@ use gpui_kit::ListState;
 use gpui_kit::Subscription;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::select::SelectState;
-use knot_terminal::PtyTransport;
+use gpui_terminal::PtyTransport;
 use knot_terminal::TerminalSession;
 use parking_lot::Mutex;
 use uuid::Uuid;
@@ -59,8 +59,7 @@ pub(crate) struct WorkspaceWindow {
     pub(super) pull_request_view:                super::pull_requests_actions::PullRequestViewState,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
-    /// and cannot touch the view directly, the same hand-off
-    /// `clipboard_writes` uses.
+    /// and cannot touch the view directly.
     pub(super) exited_sessions:                  Arc<Mutex<Vec<Uuid>>>,
     /// Keeps the window-bounds observer alive for this window's lifetime.
     pub(super) window_bounds_subscription:       Option<gpui_kit::Subscription>,
@@ -92,6 +91,9 @@ pub(crate) struct WorkspaceWindow {
     pub(super) workspace_id:                     Uuid,
     pub(super) selected_agent:                   Option<Uuid>,
     pub(super) sessions: BTreeMap<Uuid, Arc<Mutex<TerminalSession<PtyTransport>>>>,
+    /// The view drawing each session in `sessions`, created and dropped with
+    /// it. See `terminal_pane`.
+    pub(super) terminal_panes:                   BTreeMap<Uuid, super::terminal_pane::TerminalPane>,
     pub(super) panel_states: BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
     /// `TerminalSession::spawn_pty` runs `tokio::spawn` for the activity
     /// tracker; the UI thread has no tokio runtime of its own, so enter
@@ -100,9 +102,9 @@ pub(crate) struct WorkspaceWindow {
     /// Backs the divider between the sidebar and the content column.
     ///
     /// The window owns it rather than letting the group keep its own keyed
-    /// state inside the element tree: two things outside the group read the
-    /// sidebar's width - the compact predicate and the terminal pane's
-    /// geometry - and a window-held entity gives both the same source.
+    /// state inside the element tree: the compact predicate reads the
+    /// sidebar's width from outside the group, and a window-held entity gives
+    /// it the same source the divider writes.
     pub(super) sidebar_resize:                   Entity<ResizableState>,
     /// Focus target for the window's root element.
     ///
@@ -118,19 +120,10 @@ pub(crate) struct WorkspaceWindow {
     /// Whether ⌘ is held, and the sidebar's key hints once it has been held
     /// long enough (`agent-list-ui`).
     pub(super) key_hints:                        super::key_hints::KeyHintHold,
-    /// Focus target for the terminal grid pane - key events only reach
-    /// `dispatch_key` while this is focused (click the pane to focus it).
-    pub(super) terminal_focus:                   gpui_kit::FocusHandle,
     /// The family the terminal draws and measures in, resolved from the
     /// installed families once per configured name rather than once per
     /// frame - see `terminal_font`.
     pub(super) terminal_font:                    TerminalFont,
-    /// OSC 52 clipboard-store requests, queued by `ensure_session`'s
-    /// `on_grid_event` (which runs on the PTY reader thread) and drained
-    /// by a polling loop onto the OS pasteboard via GPUI's main-thread
-    /// clipboard API - the same background-thread-to-main-thread hand-off
-    /// pattern `SettingsWindow` already uses for the native font panel.
-    pub(super) clipboard_writes:                 Arc<Mutex<Vec<String>>>,
     /// Live ACP connections for Panel-mode agents, keyed by agent id -
     /// independent of `sessions` (the terminal PTYs), per the
     /// `acp-panel-ui` "Switch to Terminal mid-turn" scenario: an entry
@@ -317,7 +310,7 @@ pub(crate) struct WorkspaceWindow {
     pub(super) process_sampling:                 Arc<std::sync::atomic::AtomicBool>,
     /// Terminations that were refused, queued by the blocking task and
     /// drained by the poll - the same off-main-thread hand-off
-    /// `clipboard_writes` and `exited_sessions` use. Agent, PID, reason.
+    /// `exited_sessions` uses. Agent, PID, reason.
     pub(super) process_failures:                 Arc<Mutex<Vec<(Uuid, u32, String)>>>,
     /// The MCP section's state per agent that has one: whether it is open,
     /// whether a probe is wanted, the last inventory and the last failure.
@@ -358,7 +351,7 @@ pub(crate) struct WorkspaceWindow {
     /// Set by a watch callback, which runs on a tokio task with no GPUI
     /// context and so cannot touch the caches or notify. The repaint poll
     /// reads it, forgets the agent's status and redraws - the same
-    /// off-main-thread hand-off `clipboard_writes` uses.
+    /// off-main-thread hand-off `exited_sessions` uses.
     pub(super) git_watch_dirty:                  BTreeMap<Uuid, Arc<AtomicBool>>,
     /// The panel's width per agent, in pixels. View state, not persisted:
     /// a reopened panel starts at the default again.

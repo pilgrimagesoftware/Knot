@@ -3,7 +3,8 @@
 //! Contract: the `pull-request-tracking` capability spec under
 //! `openspec/changes/pull-request-tracking/specs/`.
 //!
-//! Neither tap can record on its own: `Grid` is a parser and `PanelState` is
+//! Neither tap can record on its own: `TerminalSession`'s scan sits on a PTY
+//! reader thread and `PanelState` is
 //! pure folded state, and neither knows which agent it belongs to or holds the
 //! store. Both buffer what they saw; this is where the two meet the agent id
 //! and become one record, so "a panel agent opened a pull request" and "a
@@ -30,11 +31,7 @@ impl WorkspaceWindow {
         let mut seen: Vec<(Uuid, String)> = Vec::new();
 
         for (id, session) in &self.sessions {
-            let Some(grid) = session.lock().grid()
-            else {
-                continue;
-            };
-            let urls = grid.lock().take_pull_request_urls();
+            let urls = session.lock().take_pull_request_urls();
             seen.extend(urls.into_iter().map(|url| (*id, url)));
         }
 

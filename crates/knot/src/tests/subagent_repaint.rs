@@ -98,7 +98,7 @@ fn no_render_module_recognizes_a_subagent() {
                                          ".recognize(",
                                          "SubagentSink"];
 
-    let render_paths = ["workspace_window/render", "panel_view", "terminal_view.rs"];
+    let render_paths = ["workspace_window/render", "panel_view"];
 
     let mut offenders = Vec::new();
     for path in render_paths {

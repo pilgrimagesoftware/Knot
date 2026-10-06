@@ -2,81 +2,77 @@
 
 use std::time::Instant;
 
-use crate::grid::{Grid, GridSize};
+use gpui_terminal::{DEFAULT_GRID_SIZE, Grid};
+
+use super::PullRequestTap;
 
 const PULL_REQUEST: &str = "https://github.com/acme/widget/pull/42";
 
-fn grid() -> Grid {
-    Grid::new(GridSize { columns: 80,
-                         rows:    24, })
+fn tap() -> PullRequestTap {
+    PullRequestTap::default()
 }
 
 #[test]
 fn a_url_in_the_stream_is_noted() {
-    let mut grid = grid();
+    let mut tap = tap();
 
-    grid.feed(b"https://github.com/acme/widget/pull/42\r\n");
+    tap.feed(b"https://github.com/acme/widget/pull/42\r\n");
 
-    assert_eq!(grid.take_pull_request_urls(),
-               vec![PULL_REQUEST.to_string()]);
+    assert_eq!(tap.take(), vec![PULL_REQUEST.to_string()]);
 }
 
 /// The reason the scan is on the stream and not on the grid: a URL printed
 /// into a narrow terminal is broken across rows by the renderer, and reading
-/// it back off the screen would never reassemble it.
+/// it back off the screen would never reassemble it. The stream has no width.
 #[test]
 fn a_url_wider_than_the_terminal_is_still_found() {
-    let mut grid = Grid::new(GridSize { columns: 20,
-                                        rows:    5, });
+    let mut tap = tap();
 
-    grid.feed(format!("opened {PULL_REQUEST} ok\r\n").as_bytes());
+    tap.feed(format!("opened {PULL_REQUEST} ok\r\n").as_bytes());
 
-    assert_eq!(grid.take_pull_request_urls(),
-               vec![PULL_REQUEST.to_string()]);
+    assert_eq!(tap.take(), vec![PULL_REQUEST.to_string()]);
 }
 
 /// A PTY read can split a URL anywhere.
 #[test]
 fn a_url_split_across_reads_is_still_found() {
-    let mut grid = grid();
+    let mut tap = tap();
     let bytes = format!("{PULL_REQUEST} done");
 
     for byte in bytes.as_bytes() {
-        grid.feed(&[*byte]);
+        tap.feed(&[*byte]);
     }
 
-    assert_eq!(grid.take_pull_request_urls(),
-               vec![PULL_REQUEST.to_string()]);
+    assert_eq!(tap.take(), vec![PULL_REQUEST.to_string()]);
 }
 
 #[test]
 fn the_same_url_printed_twice_is_buffered_once() {
-    let mut grid = grid();
+    let mut tap = tap();
 
-    grid.feed(format!("{PULL_REQUEST}\r\n").as_bytes());
-    grid.feed(format!("{PULL_REQUEST}\r\n").as_bytes());
+    tap.feed(format!("{PULL_REQUEST}\r\n").as_bytes());
+    tap.feed(format!("{PULL_REQUEST}\r\n").as_bytes());
 
-    assert_eq!(grid.take_pull_request_urls(),
-               vec![PULL_REQUEST.to_string()]);
+    assert_eq!(tap.take(), vec![PULL_REQUEST.to_string()]);
 }
 
 #[test]
 fn draining_clears_the_buffer() {
-    let mut grid = grid();
-    grid.feed(format!("{PULL_REQUEST}\r\n").as_bytes());
+    let mut tap = tap();
+    tap.feed(format!("{PULL_REQUEST}\r\n").as_bytes());
 
-    assert_eq!(grid.take_pull_request_urls().len(), 1);
-    assert!(grid.take_pull_request_urls().is_empty());
+    assert_eq!(tap.take().len(), 1);
+    assert!(tap.take().is_empty());
 }
 
 #[test]
 fn ordinary_output_notes_nothing() {
-    let mut grid = grid();
+    let mut tap = tap();
 
-    grid.feed(b"$ cargo test\r\n   Compiling knot-terminal v1.13.0\r\n");
-    grid.feed(b"https://github.com/acme/widget/issues/42\r\n");
+    tap.feed(b"$ cargo test\r\n   Compiling knot-terminal v1.13.0\r\n");
+    tap.feed(b"https://github.com/acme/widget/issues/42\r\n");
 
-    assert!(grid.take_pull_request_urls().is_empty());
+    assert!(tap.take().is_empty());
 }
 
 /// The scan runs on the same thread that parses the bytes into cells, so it
@@ -122,20 +118,23 @@ fn scanning_does_not_measurably_slow_the_grid_feed() {
     const REPEATS: usize = 9;
     let chunk = b"the quick brown fox jumps over the lazy dog 0123456789 abcdefghijklmnop\r\n";
 
+    // What the output hook does ahead of the parse, then the parse itself.
     let feed_scanning = || {
-        let mut grid = grid();
+        let mut tap = tap();
+        let mut grid = Grid::new(DEFAULT_GRID_SIZE);
         let started = Instant::now();
         for _ in 0..CHUNKS {
+            tap.feed(chunk);
             grid.feed(chunk);
         }
         started.elapsed()
     };
     // The same work with the scan skipped, to price the VT parse alone.
     let feed_parsing_only = || {
-        let mut grid = grid();
+        let mut grid = Grid::new(DEFAULT_GRID_SIZE);
         let started = Instant::now();
         for _ in 0..CHUNKS {
-            grid.feed_without_scan(chunk);
+            grid.feed(chunk);
         }
         started.elapsed()
     };

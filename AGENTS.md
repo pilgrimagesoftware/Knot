@@ -37,6 +37,12 @@ crates/
 ### Dependency relationships
 
 - `knot` depends on `knot-core` and `gpui-kit` (external, the UI toolkit).
+- `gpui-terminal` (alacritty grid, `Transport` trait, PTY behind the default
+  `pty` feature, GPUI `TerminalView`) is an external git dependency,
+  `pilgrimagesoftware/gpui-terminal`, shared with Fernrohr. It is MIT, not
+  AGPL, so changes to it go to that repo, not here. Knot-specific terminal
+  behaviour (the agent's shell and startup command, activity tracking, the
+  pull request scan) lives in `knot-terminal`, on top of it.
 - `knot-git` and `knot-discovery` are standalone: they depend on `thiserror`
   (via workspace) and, for discovery, `notify` + `tokio`.
 - Shared dep versions are pinned in the root `Cargo.toml` `[workspace.dependencies]`.

@@ -45,7 +45,6 @@ use uuid::Uuid;
 use crate::app_bootstrap::PanelOpenPermissionSelector;
 use crate::app_bootstrap::PanelPermissionAllow;
 use crate::app_bootstrap::PanelPermissionDeny;
-use crate::app_support;
 use crate::app_support::app_titlebar_icon;
 use crate::window_options;
 use crate::workspace_window::SidebarMenuTargets;
@@ -127,7 +126,7 @@ impl WorkspaceWindow {
     }
 
     /// The work a frame does before it draws: settle the terminal's font
-    /// family, match the terminal to its pane, ask for diff stats that have
+    /// family and hand it to the terminal view, ask for diff stats that have
     /// aged out, and make sure something holds focus.
     ///
     /// None of it draws, none of it runs `git` here - `refresh_diff_stats`
@@ -136,11 +135,11 @@ impl WorkspaceWindow {
     /// the text system which fonts exist: `refresh_terminal_font` is a string
     /// compare unless the configured name changed (see `terminal_font`).
     fn prepare_frame(&mut self, is_dashboard: bool, window: &mut Window, cx: &mut Context<Self>) {
-        // Ahead of the resize, which is the frame's first reader of it.
+        // Ahead of `sync_terminal_style`, the frame's first reader of it.
         self.refresh_terminal_font(cx);
-        if !is_dashboard && let Some(id) = self.selected_agent {
-            self.resize_session_to_pane(id, window, cx);
-        }
+        // The view sizes itself to its bounds; only the font is the window's
+        // to hand it.
+        self.sync_terminal_style(cx);
         if let Some(id) = self.selected_agent {
             let folder = self.store
                              .lock()
@@ -245,11 +244,11 @@ impl WorkspaceWindow {
             }
             return;
         };
-        // A dialog's focus handle is a descendant of `root_focus` - the
-        // dialog layer is a child of the element tracking it - so no
-        // containment check can tell a dialog apart from this window's own
-        // panes. Asking whether one is open is the only guard that works;
-        // `tests/pane_focus.rs` is what establishes that.
+        // Ask whether a dialog is open rather than where focus sits. Whether
+        // a dialog's focus is inside `root_focus`'s subtree is a property of
+        // gpui-component's layering, and it has already flipped once - inside
+        // through 0.6, outside since 0.7 put the layer in a `Root` plugin.
+        // `tests/pane_focus.rs` pins the current answer.
         if window.has_active_dialog(cx) {
             return;
         }
@@ -270,11 +269,8 @@ impl WorkspaceWindow {
                 let input = self.panel_prompt_input(id, window, cx);
                 input.update(cx, |state, cx| state.focus(window, cx));
             }
-            // One handle for every agent, not one each: only the selected
-            // agent's pane is rendered, and a terminal keeps no per-agent
-            // caret state the way a composer keeps its draft.
-            pane_focus::FocusTarget::Terminal(_) => {
-                window.focus(&self.terminal_focus.clone(), cx);
+            pane_focus::FocusTarget::Terminal(id) => {
+                self.focus_terminal(id, window, cx);
             }
         }
     }
@@ -283,9 +279,7 @@ impl WorkspaceWindow {
     /// between the terminal surface and the "Starting terminal…"
     /// placeholder in `render/content.rs`.
     fn session_has_grid(&self, id: Uuid) -> bool {
-        self.sessions
-            .get(&id)
-            .is_some_and(|session| session.lock().grid().is_some())
+        self.terminal_panes.contains_key(&id)
     }
 
     /// The sidebar's own title bar, which owns the traffic lights.
@@ -575,6 +569,5 @@ impl Render for WorkspaceWindow {
                                                                        window,
                                                                        cx))),
             )
-                    .children(app_support::root_overlays(window, cx))
     }
 }

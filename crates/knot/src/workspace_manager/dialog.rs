@@ -15,10 +15,13 @@
 //! layer stacking - with a content area this can put an `Input` in.
 //!
 //! Nothing the dialog draws is read from the [`WorkspaceManager`] entity.
-//! The dialog layer is rendered by `root_overlays` at the end of this
-//! window's own `Render`, so the builder below runs *inside* that entity's
-//! update - reading it there panics with "cannot read while it is already
-//! being updated". So the title comes from a flag captured when the dialog
+//! Through gpui-kit 0.6 the dialog layer was rendered at the end of this
+//! window's own `Render`, so the builder below ran *inside* that entity's
+//! update and reading it panicked with "cannot read while it is already being
+//! updated". 0.7 draws the layer from a `Root` plugin instead, which lifts
+//! that, but the builder still runs on every paint and keeps to state it
+//! owns: a layering change should not be able to reintroduce the panic. So
+//! the title comes from a flag captured when the dialog
 //! opened, and the confirm button's disabled state from the name input,
 //! which is its own entity and is not mid-update. The callbacks may touch
 //! the manager freely: they run from a click or a keystroke, not a paint.

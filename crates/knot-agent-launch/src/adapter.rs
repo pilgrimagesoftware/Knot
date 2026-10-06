@@ -13,6 +13,11 @@
 pub struct InstallMethod {
     pub command: &'static str,
     pub args:    &'static [&'static str],
+    /// The installed package's name, for an update check (`npm view
+    /// <package> version` vs. the locally installed version) - kept
+    /// separate from `args` so a check doesn't have to parse the install
+    /// command back apart to find it.
+    pub package: &'static str,
 }
 
 /// How to launch `agent_type`'s ACP adapter subprocess, and what it
@@ -61,7 +66,8 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
                                          install:                   Some(InstallMethod { command: "npm",
                                                                                          args:    &["install",
                                                                                                     "-g",
-                                                                                                    "@agentclientprotocol/claude-agent-acp"], }), }),
+                                                                                                    "@agentclientprotocol/claude-agent-acp"],
+                                                                                         package: "@agentclientprotocol/claude-agent-acp", }), }),
         // The npm adapter includes a compatible Codex CLI dependency and
         // installs the `codex-acp` executable alongside Claude's adapter.
         // `codex-acp` 2.0.0 implements `session/load` and advertises
@@ -74,7 +80,8 @@ pub fn acp_adapter(agent_type: &str) -> Option<AdapterConfig> {
                                         install:                   Some(InstallMethod { command: "npm",
                                                                                         args:    &["install",
                                                                                                    "-g",
-                                                                                                   "@agentclientprotocol/codex-acp"], }), }),
+                                                                                                   "@agentclientprotocol/codex-acp"],
+                                                                                        package: "@agentclientprotocol/codex-acp", }), }),
         // Native ACP subcommand - no install step (the opencode CLI
         // itself is the agent).
         "opencode" => Some(AdapterConfig { command:                   "opencode",
@@ -202,6 +209,20 @@ mod tests {
                                               .map(|install| install.command),
                        Some("npm"),
                        "{agent_type} should declare its npm installer");
+        }
+    }
+
+    /// The update check (`npm view <package> version`) names the package
+    /// directly rather than re-deriving it from `args`, so this is the one
+    /// place that pairing can drift - a wrong `package` would check a
+    /// different package's version than the one `args` actually installs.
+    #[test]
+    fn declared_package_matches_the_install_args() {
+        for agent_type in ["claude", "codex"] {
+            let install = acp_adapter(agent_type).unwrap().install.unwrap();
+            assert_eq!(install.args.last(),
+                       Some(&install.package),
+                       "{agent_type}'s declared package should match its install args");
         }
     }
 

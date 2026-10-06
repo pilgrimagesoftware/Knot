@@ -147,6 +147,5 @@ impl Render for AboutWindow {
                                                                            window.remove_window()
                                                                        })))
                 })
-                .children(crate::app_support::root_overlays(window, cx))
     }
 }

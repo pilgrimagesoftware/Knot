@@ -41,6 +41,12 @@ rust-i18n = "4.2.2"
 # alternative: a lossy text format that has to be re-parsed, macOS-only in a
 # way a library is not, and a subprocess whose output shape is a UI convention.
 plist = "1.10.1"
+# The terminal grid, `Transport` trait and GPUI `TerminalView`, shared with
+# Fernrohr. Its own repository because it is MIT, not AGPL, and its CI proves
+# the standalone build against crates.io with no `[patch]`. It pins
+# `gpui-kit = "=0.7.0"` exactly, so bump the tag together with `crates/knot`'s
+# pin: two `gpui` versions in one build are two incompatible `Entity` types.
+gpui-terminal = { git = "https://github.com/pilgrimagesoftware/gpui-terminal", tag = "v0.1.0" }
 
 # `gpui-base` puts `auto_grow`, `set_auto_grow`, `rows` and `set_rows` on
 # `impl InputBaseState<TextareaMode>`, so an `EditorState` has no row sizing at
@@ -51,12 +57,15 @@ plist = "1.10.1"
 # `impl` block's bound does.
 #
 # The fork moves those four methods to the existing `impl<M: MultiLineMode>`
-# block with no change to any body. It is branched from `v0.6.4` - the version
-# the workspace already resolves - so this patch is those four methods and
-# nothing else, rather than a version bump wearing a patch's clothes.
+# block with no change to any body, keys indent-on-newline to the layout, and
+# carries the Shift+Enter submit-chord fixes (#565). It is branched from
+# `v0.7.0` - the version `crates/knot` pins - so this patch is those commits
+# and nothing else, rather than a version bump wearing a patch's clothes.
+# 0.7.0 still has the `TextareaMode`-only bound, so the bump rebased the fork
+# rather than retiring it.
 #
 # Delete this entry, and the fork, once a release carries the relaxed bound.
-# `docs/adr/0002-gpui-base-auto-grow-fork.md` records the upstream PR and the
+# `docs/adr/0003-gpui-base-fork-on-0-7.md` records the commits and the
 # exit condition.
 [patch.crates-io]
-gpui-base = { git = "https://github.com/pilgrimagesoftware/gpui-kit", branch = "knot/auto-grow-0.6.4" }
+gpui-base = { git = "https://github.com/pilgrimagesoftware/gpui-kit", branch = "knot/auto-grow-0.7.0" }

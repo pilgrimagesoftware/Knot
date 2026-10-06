@@ -34,9 +34,12 @@ and dialogs; follow them for any new pane, dialog, or window in `crates/knot`.
   `min_w_0()` on the immediate flex child, not just `flex_1()` - `flex_1()`
   alone keeps the browser/GPUI default `min-width: auto` and the content
   overflows its container instead of wrapping.
-- Dialog layer: `gpui_component::Root::render` does not draw
-  `active_dialogs`; a window's own root view must render
-  `Root::render_dialog_layer`, or every dialog it opens is invisible.
+- Dialog layer: since gpui-kit 0.7 the dialog, sheet and notification layers
+  are a `Root` plugin that `gpui_kit::init` registers and `Root::new` mounts
+  beside the view. A root view must not draw them itself (they would paint
+  twice). Every window needs `Root::new` *after* `gpui_kit::init`, or its
+  dialogs are invisible. A dialog's focus is outside the view's `track_focus`
+  subtree (`tests/pane_focus.rs`).
 - Dialogs from menu actions: the macOS menu dispatches through
   `App::dispatch_action`, which already runs inside
   `active_window.update(...)`. Opening a dialog on that same window is a
