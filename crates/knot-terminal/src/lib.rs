@@ -12,7 +12,10 @@ mod pull_requests;
 mod session;
 mod terminal_session;
 
-pub use acp_session::{AcpSession, ConnectProgress, ConnectStep, SessionTarget};
+pub use acp_session::{
+    AcpSession, AdapterUpdateStatus, ConnectProgress, ConnectStep, SessionTarget,
+    check_adapter_update, update_adapter,
+};
 pub use session::{SessionConfig, SessionPlan};
 pub use terminal_session::TerminalSession;
 use thiserror::Error;
