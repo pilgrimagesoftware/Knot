@@ -3,26 +3,35 @@
 //! Contract: the `pull-request-tracking` capability spec under
 //! `openspec/changes/pull-request-tracking/specs/`.
 //!
-//! The scan is on the PTY byte stream as it is fed to the parser, not on the
-//! rendered grid. Scanning the grid would mean re-reading a screen that
-//! changes every frame, on a path that runs per repaint, and would miss
-//! anything that scrolled past between two polls. The stream sees every byte
-//! exactly once.
+//! The scan is on the PTY byte stream, through the terminal's output hook
+//! (`gpui_terminal::TerminalBuilder::on_output`), not on the rendered grid.
+//! Scanning the grid would mean re-reading a screen that changes every frame,
+//! on a path that runs per repaint, and would miss anything that scrolled past
+//! between two polls. The stream sees every byte exactly once.
 //!
 //! The scanner carries a bounded tail across chunk boundaries, because a PTY
 //! read can split a URL anywhere.
 
 use knot_core::pull_request_url::PullRequestUrlScanner;
 
-use super::Grid;
+/// The scanner and what it has found, fed from the output hook on the PTY
+/// reader thread and drained by the window's poll.
+#[derive(Default)]
+pub(crate) struct PullRequestTap {
+    /// Carries a bounded tail across chunk boundaries, since a PTY read can
+    /// split a URL anywhere.
+    scanner: PullRequestUrlScanner,
+    /// Found but not yet handed to the window that owns the agent store.
+    urls:    Vec<String>,
+}
 
-impl Grid {
+impl PullRequestTap {
     /// Scan a chunk of PTY output, buffering any pull request URLs found.
-    pub(super) fn scan_for_pull_requests(&mut self, bytes: &[u8]) {
-        for url in self.pull_request_scanner.feed(bytes, PULL_REQUEST_HOSTS) {
+    pub(crate) fn feed(&mut self, bytes: &[u8]) {
+        for url in self.scanner.feed(bytes, PULL_REQUEST_HOSTS) {
             let url = url.to_string();
-            if !self.pull_request_urls.contains(&url) {
-                self.pull_request_urls.push(url);
+            if !self.urls.contains(&url) {
+                self.urls.push(url);
             }
         }
     }
@@ -33,14 +42,9 @@ impl Grid {
     /// however often it polls, and the buffer does not grow for the life of
     /// the session. Recording is idempotent per agent anyway, so a URL handed
     /// over twice costs nothing.
-    pub fn take_pull_request_urls(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.pull_request_urls)
+    pub(crate) fn take(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.urls)
     }
-}
-
-/// A fresh scanner with nothing carried over.
-pub(super) fn new_scanner() -> PullRequestUrlScanner {
-    PullRequestUrlScanner::new()
 }
 
 /// The hosts a terminal agent's output is scanned against.

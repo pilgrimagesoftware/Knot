@@ -235,7 +235,7 @@ narrow rather than be re-exported.
 
 `mod.rs` files still holding implementation elsewhere in the workspace -
 `workspace_window/render`, `workspace_manager` and `plan_view` in `knot`, and
-several in `knot-acp` and `knot-terminal` - were outside that issue's scope and
+several in `knot-acp`, and `acp_session` in `knot-terminal` - were outside that issue's scope and
 are still to do.
 
 A `mod.rs` that is only declarations and re-exports also makes the module's

@@ -9,7 +9,7 @@
 //! is `CTFontCollectionCreateMatchingFontDescriptors` plus a `String` per
 //! descriptor - 11.4ms measured over 181 families. The rule used to run from
 //! `chrome::terminal_font_family` on every call, and two of its callers are
-//! on the frame (`prepare_frame`'s resize and `render_grid`), so a terminal
+//! on the frame (`prepare_frame`'s resize and the grid render), so a terminal
 //! that repaints for each keystroke it echoes spent ~23ms a frame deciding
 //! something that changes only when the user edits a setting.
 //!
@@ -96,7 +96,7 @@ impl WorkspaceWindow {
     /// everything drawn or measured this frame reads one value.
     ///
     /// Called from `prepare_frame`, beside the window's other per-frame memo
-    /// refreshes, and ahead of `resize_session_to_pane` - the frame's first
+    /// refreshes, and ahead of `sync_terminal_style` - the frame's first
     /// reader.
     pub(super) fn refresh_terminal_font(&mut self, cx: &App) {
         self.terminal_font

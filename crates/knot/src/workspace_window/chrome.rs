@@ -95,24 +95,6 @@ pub(crate) fn element_key(id: Uuid) -> u64 {
     id.as_u64_pair().0
 }
 
-/// Measures the actual rendered cell size for `terminal_view`'s font/size,
-/// rather than guessing - an overestimate (e.g. a fixed 18px row height for
-/// a font that actually renders taller) reports more PTY rows than fit in
-/// the pane, so content the running program draws near what it thinks is
-/// the bottom (an input box, a status line) ends up laid out below the
-/// visible container and never appears.
-pub(crate) fn terminal_cell_size(cx: &App, font_family: gpui_kit::SharedString,
-                                 font_size: gpui_kit::Pixels)
-                                 -> (f32, f32) {
-    let font_id = cx.text_system().resolve_font(&gpui_kit::font(font_family));
-    let width = cx.text_system()
-                  .em_advance(font_id, font_size)
-                  .unwrap_or(px(8.));
-    let ascent = cx.text_system().ascent(font_id, font_size);
-    let descent = cx.text_system().descent(font_id, font_size);
-    (f32::from(width).max(1.), f32::from(ascent + descent).max(1.))
-}
-
 pub(crate) fn format_token_count(tokens: u64) -> String {
     let digits = tokens.to_string();
     let first_group = digits.len() % 3;

@@ -11,7 +11,6 @@
 use std::sync::Arc;
 
 use gpui_kit::App;
-use gpui_kit::ClipboardItem;
 use gpui_kit::Entity;
 use parking_lot::Mutex;
 use uuid::Uuid;
@@ -25,27 +24,18 @@ use crate::workspace_window::prompt_queue;
 
 /// Starts the window's repaint poll, which runs for the window's lifetime.
 ///
-/// Two jobs the PTY reader thread cannot do itself, because it is not the
-/// main thread: drain OSC 52 clipboard writes onto the pasteboard (see
-/// `clipboard_writes`), and ask for a repaint when the terminal grid has
-/// changed. Without the second the grid only updates on an unrelated UI
-/// event - a keystroke, a mouse move - so output looks stalled after
-/// pressing Enter.
+/// The terminal grid is not on it: each `gpui_terminal::TerminalView` wakes
+/// on its own output and repaints itself, and hands OSC 52 clipboard writes
+/// to `terminal_pane` as events. What stays is the exited-session queue the
+/// PTY reader thread fills, and everything else in `repaint_poll_tick`.
 pub(super) fn spawn_repaint_poll(view: Entity<WorkspaceWindow>,
-                                 clipboard_writes: Arc<Mutex<Vec<String>>>,
                                  exited_sessions: Arc<Mutex<Vec<Uuid>>>, cx: &mut App) {
     cx.spawn(async move |cx| {
           loop {
               cx.background_executor()
                 .timer(consts::REPAINT_POLL_INTERVAL)
                 .await;
-              let texts = std::mem::take(&mut *clipboard_writes.lock());
               let exited = std::mem::take(&mut *exited_sessions.lock());
-              for text in texts {
-                  cx.update(|app| {
-                        app.write_to_clipboard(ClipboardItem::new_string(text));
-                    });
-              }
               cx.update(|app| {
                     view.update(app, |view, cx| view.repaint_poll_tick(&exited, cx));
                 });
@@ -76,10 +66,6 @@ impl WorkspaceWindow {
         // Before the repaint checks below, so an agent started here has its
         // slot in place when they run.
         let activated = self.activate_messaged_agents(cx);
-        let grid_dirty = self.selected_agent
-                             .and_then(|id| self.sessions.get(&id))
-                             .and_then(|session| session.lock().grid())
-                             .is_some_and(|grid| grid.lock().take_dirty());
         // Every agent's taps, not just the selected one's: an agent working
         // in an unselected pane is the case this feature exists for.
         let pull_requests_recorded = self.drain_pull_requests(cx);
@@ -164,8 +150,7 @@ impl WorkspaceWindow {
         // exits. Lands here because `spawn_blocking` has no context to
         // notify from - see `workspace_window::mcp_panel::probe`.
         let mcp_probed = self.mcp_probe_tick(cx);
-        if grid_dirty
-           || panel_states_moved
+        if panel_states_moved
            || panel_status_landed
            || panel_dirty
            || spinner_dirty

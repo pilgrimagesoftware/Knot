@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use gpui_kit::App;
+use gpui_kit::Context;
 use knot_activity::EventSink;
 use knot_git::Repository;
-use knot_terminal::PtyTransport;
 use knot_terminal::SessionConfig;
 use knot_terminal::SessionPlan;
 use knot_terminal::TerminalSession;
@@ -45,7 +45,7 @@ impl WorkspaceWindow {
     /// `ensure_panel_session` (window open, row click, dashboard card,
     /// repaint poll) inherits it without having to remember, per
     /// `agent-lifecycle`'s "Activation mode" requirement.
-    pub(super) fn ensure_session(&mut self, id: Uuid, cx: &App) {
+    pub(super) fn ensure_session(&mut self, id: Uuid, cx: &mut Context<Self>) {
         if self.sessions.contains_key(&id) {
             return;
         }
@@ -78,53 +78,24 @@ impl WorkspaceWindow {
                                             apply_terminal_status(&status_store, id, event.status);
                                         })),
                         ..Default::default() };
-        let title_store = Arc::clone(&self.store);
-        let clipboard_writes = Arc::clone(&self.clipboard_writes);
-
         let last_output: Arc<Mutex<Option<std::time::Instant>>> = Arc::new(Mutex::new(None));
         let on_output_activity = Arc::clone(&last_output);
 
         let _runtime_guard = self.runtime.enter();
-        let session = TerminalSession::<PtyTransport>::spawn_pty_with_exit(
-            &config,
-            status_sink,
-            move |_| {
-                {
-                    let mut last_output = on_output_activity.lock();
-                    *last_output = Some(std::time::Instant::now());
-                }
-            },
-            {
-                let exited = Arc::clone(&self.exited_sessions);
-                move |_status| {
-                    {
-                        let mut exited = exited.lock();
-                        exited.push(id);
-                    }
-                }
-            },
-            move |event| match event {
-                knot_terminal::GridEvent::Title(title) => {
-                    {
-                        let mut store = title_store.lock();
-                        store.set_terminal_title(id, title);
-                    }
-                }
-                knot_terminal::GridEvent::ClipboardStore(
-                    knot_terminal::ClipboardType::Clipboard,
-                    text,
-                ) => {
-                    {
-                        let mut queue = clipboard_writes.lock();
-                        queue.push(text);
-                    }
-                }
-                _ => {}
-            },
-        )
-        .map(|session| (session, SessionPlan::build(&config)));
+        let session =
+            TerminalSession::spawn_pty(&config,
+                                       status_sink,
+                                       move |_| {
+                                           *on_output_activity.lock() =
+                                               Some(std::time::Instant::now());
+                                       },
+                                       {
+                                           let exited = Arc::clone(&self.exited_sessions);
+                                           move |_| exited.lock().push(id)
+                                       }).map(|session| (session, SessionPlan::build(&config)));
         match session {
             Ok((session, plan)) => {
+                self.open_terminal_pane(id, session.terminal().clone(), cx);
                 let session = Arc::new(Mutex::new(session));
                 self.sessions.insert(id, Arc::clone(&session));
                 // The shell needs a moment to switch the PTY out of canonical
@@ -221,6 +192,9 @@ impl WorkspaceWindow {
     /// agent has no `sessions` entry at all, so without the panel half
     /// removing it left its adapter subprocess running.
     pub(super) fn remove_session(&mut self, id: Uuid) {
+        // The view goes with the session: its pump would otherwise outlive
+        // the terminal it draws, and its subscription the agent it reports.
+        self.terminal_panes.remove(&id);
         if let Some(session) = self.sessions.remove(&id) {
             let mut session = session.lock();
             // Best-effort: dropping the session is what kills the child, so
