@@ -1,4 +1,25 @@
 
+## 1.24.0 - 2026-10-06
+
+### Added
+- Add MIT terminal crate with a GPUI view
+- Check and install ACP adapter updates on demand
+
+
+### Changed
+- Run Knot's terminal on gpui-terminal
+
+
+### Documentation
+- Supersede ADR-0002 with the 0.7.0-based gpui-base fork
+
+
+### Fixed
+- Open Zed when not already running
+- Reformat open_in.rs to match the pinned rustfmt
+
+
+
 ## 1.23.0 - 2026-10-02
 
 ### Added
