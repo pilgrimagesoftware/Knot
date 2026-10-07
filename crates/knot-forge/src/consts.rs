@@ -49,3 +49,12 @@ pub const UNAUTHENTICATED_MARKERS: &[&str] = &["not logged in",
                                                "no accounts",
                                                "authentication failed",
                                                "gh auth login"];
+
+/// The most open issues fetched per repository, most recently updated first.
+/// A repository with more is reported as truncated rather than fetched in
+/// full - see `issue::issue_list_with`.
+pub const ISSUE_LIST_LIMIT: usize = 100;
+
+/// The fields `gh issue list` is asked for: what every row shows, plus
+/// nothing a row has no use for.
+pub const ISSUE_LIST_FIELDS: &str = "number,title,url,labels,author,createdAt,updatedAt";
