@@ -103,6 +103,12 @@ impl WorkspaceWindow {
         // unrelated to repaint the window, which on an idle workspace is the
         // "could be never" the two above exist to prevent.
         let pull_requests_expiring = self.pull_requests_expiring();
+        // The Changes view's repositories, issues and OpenSpec changes land
+        // from `spawn_blocking` the same way, and the issues wait for the
+        // repositories: without this the Issues tab would sit on its first
+        // answer until something unrelated repainted. One local for the
+        // three, whose own reads are taken apart before they are combined.
+        let work_items_landed = self.work_items.take_changed();
         // The git panel's three off-main-thread sources, all draining here
         // for the same reason: none of them has a GPUI context, so each only
         // leaves something behind for this tick to act on. A staging
@@ -163,6 +169,7 @@ impl WorkspaceWindow {
            || forge_probed
            || pull_request_states_changed
            || pull_requests_expiring
+           || work_items_landed
            || git_actions_landed
            || git_commits_landed
            || git_watches_fired

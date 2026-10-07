@@ -281,16 +281,37 @@ impl WorkspaceWindow {
     /// not a reason to withhold the message from the rest.
     pub(super) fn broadcast_to_agents(&mut self, text: &str) {
         for id in self.workspace_agent_ids() {
-            if self.deliver_panel_prompt(id, text.to_string(), PromptOrigin::User) {
-                continue;
-            }
-            if let Some(session) = self.sessions.get(&id) {
-                let mut session = session.lock();
-                if let Err(error) = session.send_text(text) {
-                    eprintln!("failed to broadcast to agent {id}: {error}");
-                }
+            self.deliver_prompt(id, text);
+        }
+    }
+
+    /// Hands `text` to agent `id` as a prompt from the user: through its
+    /// panel session - sent now, or queued behind a running turn or a
+    /// pending permission - else typed into its terminal. Returns whether it
+    /// reached either. Shared by broadcast and the Changes view's "Send
+    /// prompt to" (#504), so the two cannot route a prompt differently.
+    pub(super) fn deliver_prompt(&mut self, id: Uuid, text: &str) -> bool {
+        if self.deliver_panel_prompt(id, text.to_string(), PromptOrigin::User) {
+            return true;
+        }
+        let Some(session) = self.sessions.get(&id)
+        else {
+            return false;
+        };
+        match session.lock().send_text(text) {
+            Ok(()) => true,
+            Err(error) => {
+                eprintln!("failed to deliver a prompt to agent {id}: {error}");
+                false
             }
         }
+    }
+
+    /// Whether [`Self::deliver_prompt`] has anywhere to put a prompt for
+    /// `id`: a panel session (which queues while connecting or busy) or a
+    /// terminal session. An agent with neither is not running.
+    pub(super) fn can_receive_prompt(&self, id: Uuid) -> bool {
+        self.panel_sessions.contains_key(&id) || self.sessions.contains_key(&id)
     }
 }
 

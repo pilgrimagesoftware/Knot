@@ -316,7 +316,7 @@ keymap:
     select_agent: "Select agent 1–9"
     focus_agent_input: "Focus agent input"
     toggle_dashboard: "Toggle Dashboard"
-    toggle_pull_requests: "Toggle Pull Requests"
+    toggle_pull_requests: "Toggle Changes"
     open_command_center: "Open Command Center"
     jump_to_bottom: "Jump to bottom"
     toggle_artifacts: "Show or hide artifacts"
@@ -356,7 +356,7 @@ menu:
   # them.
   view:
     dashboard: "Dashboard"
-    pull_requests: "Pull Requests"
+    pull_requests: "Changes"
     focus_agent_input: "Focus Agent Input"
     jump_to_bottom: "Jump to Bottom"
     # Shows or hides the selected agent's artifact panel; checked while it is
@@ -593,6 +593,61 @@ import:
 plan:
   title: "Plan"
   empty: "No plan committed yet."
+
+# The Changes view (#504): pull requests, issues and OpenSpec changes, one
+# tab each. Its launcher row keeps counting pull requests only.
+changes_view:
+  title: "Changes"
+  no_pull_requests: "No pull requests"
+  tab:
+    pull_requests: "Pull Requests"
+    issues: "Issues"
+    openspec: "OpenSpec"
+  # "Send prompt to" on an issue or change row (#504): the submenu title and
+  # the one prompt each item sends.
+  send_prompt_to: "Send prompt to"
+  prompt:
+    issue: "Work on this issue: %{url}"
+    change: "Work on this OpenSpec change: %{name}"
+  # Shared by the Issues and OpenSpec tabs' toolbars and rows.
+  repo_all: "All repositories"
+  list_actions: "List actions"
+  refresh_now: "Refresh Now"
+  clear_filters: "Clear Search and Filters"
+  row_actions: "Actions"
+
+# The Changes view's Issues tab (#504): open issues of the workspace's GitHub
+# repositories.
+issues:
+  search_placeholder: "Search title, number, repository, URL or label"
+  checking: "Checking for open issues…"
+  forge_missing: "The GitHub CLI (gh) is not installed, so issues cannot be listed. Install it from cli.github.com."
+  forge_unauthenticated: "The GitHub CLI (gh) is not signed in, so issues cannot be listed. Run gh auth login."
+  forge_failed: "Issues could not be listed: %{reason}"
+  no_github_repos: "None of this workspace's repositories is on GitHub."
+  empty: "No open issues in this workspace's repositories."
+  no_match: "No issues match the search and filters."
+  fetch_failed: "The issues of %{repo} could not be fetched: %{reason}"
+  truncated: "Only the first %{count} open issues are shown."
+  updated: "updated %{when}"
+  open_in_browser: "Open in Browser"
+  copy_url: "Copy URL"
+  copy_urls: "Copy URLs"
+  sort:
+    recently_updated: "Recently updated"
+    newest: "Newest first"
+    oldest: "Oldest first"
+    number: "Number"
+
+# The Changes view's OpenSpec tab (#504): un-archived OpenSpec changes in the
+# workspace's repositories.
+openspec_changes:
+  search_placeholder: "Search name or repository"
+  checking: "Looking for OpenSpec changes…"
+  empty: "No OpenSpec changes in this workspace's repositories."
+  no_match: "No changes match the search and filters."
+  reveal: "Reveal in Finder"
+  copy_name: "Copy Name"
 
 pull_requests:
   title: "Pull Requests"

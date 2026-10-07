@@ -173,6 +173,22 @@ pub(crate) const PULL_REQUEST_MERGED_RETENTION: Duration = Duration::from_secs(2
 /// does it.
 pub(crate) const FORGE_PROBE_MAX_AGE: Duration = Duration::from_secs(60);
 
+/// How often the Changes view re-reads which repositories the workspace's
+/// agents work in (#504). Cheap - three `git rev-parse`s per folder - and
+/// only while the Issues or OpenSpec tab is shown, so a moved or new agent
+/// folder is picked up within this.
+pub(crate) const WORKSPACE_REPOS_MAX_AGE: Duration = Duration::from_secs(30);
+
+/// How long a repository's open issues are shown before they are fetched
+/// again (`workspace-issues`): one `gh` call per repository, so slower than
+/// pull request state.
+pub(crate) const ISSUES_MAX_AGE: Duration = Duration::from_secs(5 * 60);
+
+/// How long a repository's OpenSpec change list is shown before it is read
+/// again (`workspace-openspec-changes`). A directory read, so cheap; Refresh
+/// now covers the change the user just made.
+pub(crate) const OPENSPEC_CHANGES_MAX_AGE: Duration = Duration::from_secs(30);
+
 /// How often the settings window drains the native font panel's selections.
 ///
 /// The panel is an AppKit window with no callback into GPUI, so its choice is

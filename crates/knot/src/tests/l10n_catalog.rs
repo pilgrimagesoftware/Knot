@@ -637,3 +637,51 @@ fn status_dot_tooltip_resolves() {
                "sidebar.status_idle_since",
                "sidebar.status_idle_since is missing from the catalog");
 }
+
+/// Every label and message of the Changes view's tabs (#504) - a missing key
+/// would ship the key string itself as a tab, a menu item or a notice.
+#[test]
+fn changes_view_labels_resolve() {
+    for key in ["changes_view.clear_filters",
+                "changes_view.list_actions",
+                "changes_view.no_pull_requests",
+                "changes_view.prompt.change",
+                "changes_view.prompt.issue",
+                "changes_view.refresh_now",
+                "changes_view.repo_all",
+                "changes_view.row_actions",
+                "changes_view.send_prompt_to",
+                "changes_view.tab.issues",
+                "changes_view.tab.openspec",
+                "changes_view.tab.pull_requests",
+                "changes_view.title",
+                "issues.checking",
+                "issues.copy_url",
+                "issues.copy_urls",
+                "issues.empty",
+                "issues.fetch_failed",
+                "issues.forge_failed",
+                "issues.forge_missing",
+                "issues.forge_unauthenticated",
+                "issues.no_github_repos",
+                "issues.no_match",
+                "issues.open_in_browser",
+                "issues.search_placeholder",
+                "issues.sort.newest",
+                "issues.sort.number",
+                "issues.sort.oldest",
+                "issues.sort.recently_updated",
+                "issues.truncated",
+                "issues.updated",
+                "openspec_changes.checking",
+                "openspec_changes.copy_name",
+                "openspec_changes.empty",
+                "openspec_changes.no_match",
+                "openspec_changes.reveal",
+                "openspec_changes.search_placeholder"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
+}

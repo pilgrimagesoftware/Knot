@@ -19,7 +19,7 @@ use super::WorkspaceWindow;
 use crate::pull_request_filter::{PullRequestGroup, PullRequestRow};
 use crate::pull_request_groups;
 use crate::pull_request_state::{self, PullRequestCounts};
-use crate::workspace_window::WorkspaceViewMode;
+use crate::workspace_window::changes_tab::ChangesTab;
 
 impl WorkspaceWindow {
     /// This workspace's recorded pull request URLs, newest first, each once.
@@ -87,7 +87,7 @@ impl WorkspaceWindow {
     /// answer. That includes the availability probe, which is `gh auth
     /// status` and was the one thing here that did run on the frame.
     pub(super) fn refresh_pull_request_states(&mut self, cx: &App) {
-        if self.view_mode != WorkspaceViewMode::PullRequests {
+        if !self.showing_changes_tab(ChangesTab::PullRequests) {
             return;
         }
         // Before the fetches rather than after: this frame's answers landed
@@ -145,7 +145,7 @@ impl WorkspaceWindow {
     /// Gated on the view before it touches the store, so the common tick -
     /// the view closed - is one enum comparison.
     pub(super) fn pull_requests_expiring(&self) -> bool {
-        if self.view_mode != WorkspaceViewMode::PullRequests {
+        if !self.showing_changes_tab(ChangesTab::PullRequests) {
             return false;
         }
         !pull_request_state::expired_urls(&self.pull_request_states.snapshot(),

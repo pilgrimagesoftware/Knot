@@ -23,25 +23,22 @@ use crate::workspace_window::key_hints::with_key_hint;
 use crate::workspace_window::{WorkspaceViewMode, WorkspaceWindow};
 
 impl WorkspaceWindow {
-    /// The Pull Requests row, or `None` when this workspace has none
-    /// recorded.
+    /// The Changes row, which opens the Changes view (#504).
     ///
-    /// Absent rather than empty: a workspace whose agents have never opened a
-    /// pull request has nothing the row could lead to, and a permanent "0"
-    /// above the agent list is a row that never does anything.
+    /// Always present: the view holds the repositories' issues and OpenSpec
+    /// changes as well as pull requests, so a workspace with none of the
+    /// latter still has somewhere for the row to lead. Its counts stay pull
+    /// requests only, as `pull-request-tracking` requires.
     pub(super) fn pull_requests_row(&self, compact: bool, cx: &mut Context<Self>)
-                                    -> Option<gpui_kit::AnyElement> {
+                                    -> gpui_kit::AnyElement {
         let counts = self.pull_request_counts();
-        if counts.total() == 0 {
-            return None;
-        }
-        let is_showing = self.view_mode == WorkspaceViewMode::PullRequests;
+        let is_showing = self.view_mode == WorkspaceViewMode::Changes;
 
         // The second line ellipsizes in a narrow sidebar, and the compact
         // sidebar drops it altogether - so the whole of it goes in a tooltip,
         // the one place the full breakdown is always readable.
         let tooltip = format!("{} — {}",
-                              knot_core::l10n::t("pull_requests.title"),
+                              knot_core::l10n::t("changes_view.title"),
                               counts_label(counts));
 
         let hint = self.key_hints
@@ -54,47 +51,51 @@ impl WorkspaceWindow {
         else {
             with_key_hint(row, hint.as_deref(), false, cx)
         };
-        Some(row.cursor_pointer()
-                  .rounded(cx.theme().radius)
-                  .p_2()
-                  .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-                  .bg(if is_showing {
-                      cx.theme().muted
-                  }
-                  else {
-                      cx.theme().transparent
-                  })
-                  .child(h_flex().w_full()
-                                 .gap_3()
-                                 .items_center()
-                                 .when(compact, |row| row.justify_center())
-                                 .child({
-                                     let icon = div().w(px(40.))
-                                                     .h(px(40.))
-                                                     .flex_shrink_0()
-                                                     .flex()
-                                                     .items_center()
-                                                     .justify_center()
-                                                     .child(Icon::default().path("icons/git-pull-request.svg"));
-                                     if compact { with_key_hint(icon, hint.as_deref(), true, cx) } else { icon }
-                                 })
-                                 .when(!compact, |row| {
-                                     // `min_w_0` on the growing child, not
-                                     // just `flex_1`: the breakdown is the
-                                     // longest text in the sidebar, and
-                                     // without it the row pushes the divider
-                                     // instead of ellipsizing.
-                                     row.child(div().flex_1()
-                                                    .min_w_0()
-                                                    .child(title_and_counts(counts, cx)))
-                                 }))
-                  .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
-                                view.view_mode =
-                                    view.view_mode
-                                        .toggled(WorkspaceViewMode::PullRequests);
-                                cx.notify();
-                            }))
-                  .into_any_element())
+        row.cursor_pointer()
+           .rounded(cx.theme().radius)
+           .p_2()
+           .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+           .bg(if is_showing {
+               cx.theme().muted
+           }
+           else {
+               cx.theme().transparent
+           })
+           .child(h_flex().w_full()
+                          .gap_3()
+                          .items_center()
+                          .when(compact, |row| row.justify_center())
+                          .child({
+                              let icon =
+                                  div().w(px(40.))
+                                       .h(px(40.))
+                                       .flex_shrink_0()
+                                       .flex()
+                                       .items_center()
+                                       .justify_center()
+                                       .child(Icon::default().path("icons/git-pull-request.svg"));
+                              if compact {
+                                  with_key_hint(icon, hint.as_deref(), true, cx)
+                              }
+                              else {
+                                  icon
+                              }
+                          })
+                          .when(!compact, |row| {
+                              // `min_w_0` on the growing child, not
+                              // just `flex_1`: the breakdown is the
+                              // longest text in the sidebar, and
+                              // without it the row pushes the divider
+                              // instead of ellipsizing.
+                              row.child(div().flex_1()
+                                             .min_w_0()
+                                             .child(title_and_counts(counts, cx)))
+                          }))
+           .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                           view.view_mode = view.view_mode.toggled(WorkspaceViewMode::Changes);
+                           cx.notify();
+                       }))
+           .into_any_element()
     }
 }
 
@@ -103,7 +104,7 @@ fn title_and_counts(counts: PullRequestCounts, cx: &mut Context<WorkspaceWindow>
                     -> gpui_kit::AnyElement {
     gpui_kit::base::v_flex().min_w_0()
                             .child(div().font_semibold()
-                                        .child(knot_core::l10n::t("pull_requests.title")))
+                                        .child(knot_core::l10n::t("changes_view.title")))
                             .child(div().text_xs()
                                         .overflow_hidden()
                                         .whitespace_nowrap()
@@ -130,6 +131,9 @@ fn title_and_counts(counts: PullRequestCounts, cx: &mut Context<WorkspaceWindow>
 /// each part stays independently translatable and the separator is
 /// punctuation.
 pub(crate) fn counts_label(counts: PullRequestCounts) -> String {
+    if counts.total() == 0 {
+        return knot_core::l10n::t("changes_view.no_pull_requests");
+    }
     if counts.nothing_known() {
         return knot_core::l10n::t_with("pull_requests.counts_total",
                                        &[("count", &counts.total().to_string())]);

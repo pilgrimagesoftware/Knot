@@ -11,9 +11,12 @@ mod agents;
 pub(crate) mod artifact_panel;
 mod bench;
 mod bench_popover;
+mod changes_tab;
 mod chrome;
 mod creation;
 mod git_panel;
+mod issue_filter;
+mod issues_view;
 mod key_hints;
 #[cfg(test)]
 mod key_hints_tests;
@@ -21,6 +24,7 @@ pub(crate) mod mcp_panel;
 mod menus;
 mod notifications;
 mod open;
+mod openspec_view;
 pub(crate) mod pane_focus;
 pub(crate) mod panel;
 mod panel_activity;
@@ -34,6 +38,8 @@ mod render;
 mod repaint;
 #[cfg(test)]
 mod restart_tests;
+#[cfg(test)]
+mod send_prompt_tests;
 mod sessions;
 mod shortcuts;
 #[cfg(test)]
@@ -46,6 +52,7 @@ mod terminal_pane;
 mod title;
 mod view_mode;
 mod window;
+mod work_items;
 
 // Re-exported so the rest of the crate keeps reaching these by
 // `workspace_window::<name>`, as it did when they lived here.
