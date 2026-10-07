@@ -50,6 +50,7 @@ mod terminal_font;
 mod view_menu;
 mod window_actions;
 mod window_bounds;
+mod window_menu;
 mod window_registry;
 mod workspace_dialog;
 mod workspace_manager_drag;

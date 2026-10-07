@@ -362,7 +362,6 @@ menu:
     # shown.
     artifacts: "Artifacts"
     select_agent: "Select Agent"
-    select_workspace: "Select Workspace"
   # The Window menu's own items. macOS appends and maintains the list of
   # open windows below them.
   window:

@@ -334,20 +334,9 @@ pub(crate) fn set_app_menus(snapshot: &MenuBarSnapshot, cx: &mut App) {
         // Screen below them; see the note beside the `actions!` block.
         view_menu(&snapshot.view),
         agents_menu(&snapshot.agents),
-        // Knot's own items first, then a separator, then the list of open
-        // windows macOS appends and maintains below them. Without the
-        // separator a workspace called "Zoom" is indistinguishable from the
-        // Zoom command, and these four shift down every time a window opens.
-        // The two openers are their own group: they open windows, Minimize
-        // and Zoom manipulate the focused one.
-        Menu::new("Window").items([
-            MenuItem::action(knot_core::l10n::t("menu.window.command_center"), OpenCommandCenter),
-            MenuItem::action(knot_core::l10n::t("menu.window.workspaces"), OpenWorkspaces),
-            MenuItem::separator(),
-            MenuItem::action("Minimize", MinimizeWindow),
-            MenuItem::action("Zoom", ZoomWindow),
-            MenuItem::separator(),
-        ]),
+        // Knot's own items, then the list of open windows macOS appends;
+        // see `window_menu`.
+        crate::window_menu::window_menu(&snapshot.window),
         // Report an Issue has no key equivalent: macOS gives it none, and the
         // item is enabled everywhere because it is how a user asks for help.
         Menu::new("Help").items([
@@ -421,7 +410,7 @@ fn register_window_actions(store: Arc<Mutex<knot_agents::AgentStore>>,
               CommandCenterWindow::open(Arc::clone(&store), Arc::clone(&messages), cx);
           });
     }
-    crate::keymap::register_global_handlers(Arc::clone(&store), Arc::clone(&messages), cx);
+    crate::keymap::register_global_handlers(Arc::clone(&store), cx);
     cx.on_action(move |_: &OpenWorkspaces, cx| {
           crate::window_registry::activate_or_open(
               crate::window_registry::WindowKey::WorkspaceManager,

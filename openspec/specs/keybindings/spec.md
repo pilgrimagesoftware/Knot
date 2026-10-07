@@ -60,12 +60,12 @@ takes them first while it is focused.
 
 ### Requirement: Selecting a workspace by number
 
-Pressing the workspace modifier with digit N SHALL open the Nth workspace, in
-the order the workspace manager lists workspaces. If that workspace's window is
-already open, the window SHALL be raised and focused instead, so that one
-window per workspace is kept (`window-lifecycle`). The shortcut SHALL work from
-any Knot window, and with no Knot window focused. When there are fewer than N
-workspaces, it SHALL do nothing.
+Pressing the workspace modifier with digit N SHALL bring the Nth workspace's
+window - in the order the workspace manager lists workspaces - to the front
+and focus it, if that window is open. It SHALL NOT open a window: when the Nth
+workspace has no open window, or there are fewer than N workspaces, it SHALL do
+nothing. Opening a workspace is the workspace manager's. The shortcut SHALL
+work from any Knot window, and with no Knot window focused.
 
 #### Scenario: Raising an open workspace
 
@@ -74,10 +74,10 @@ workspaces, it SHALL do nothing.
 - **THEN** B's window comes to the front and is focused, and no second window
   for B opens
 
-#### Scenario: Opening a closed workspace
+#### Scenario: A closed workspace is not opened
 
 - **WHEN** workspace C has no open window and the user presses ⌥⌘3
-- **THEN** C's window opens
+- **THEN** nothing happens, and no window opens
 
 #### Scenario: Out of range
 
