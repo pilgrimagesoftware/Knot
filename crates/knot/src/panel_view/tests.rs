@@ -574,3 +574,54 @@ fn a_shell_entry_takes_one_row_like_any_other_message() {
     assert_eq!(row_at(&state, 1), Some(PanelRow::Message(1)));
     assert_eq!(row_at(&state, 2), None);
 }
+
+fn claude_request() -> PermissionRequest {
+    PermissionRequest { options: serde_json::from_value(serde_json::json!([
+        { "kind": "allow_always", "name": "Always Allow", "optionId": "allow_always" },
+        { "kind": "allow_once", "name": "Allow", "optionId": "allow" },
+        { "kind": "reject_once", "name": "Reject", "optionId": "reject" }
+    ])).expect("the options deserialize"),
+                        ..permission_request() }
+}
+
+/// With kinds, the prompt offers every option by the agent's own name -
+/// Always Allow included (#530) - and each decision key's hint sits on the
+/// option it answers with, not on whichever is listed first.
+#[test]
+fn every_offered_option_is_a_choice_with_its_key() {
+    use knot_acp::PermissionDecision;
+
+    use super::render::{ChoiceKey, ChoiceLook, prompt_choices};
+
+    let choices = prompt_choices(&claude_request());
+
+    let summary: Vec<_> = choices.iter()
+                                 .map(|choice| (choice.label.as_str(), choice.look, choice.key))
+                                 .collect();
+    assert_eq!(summary,
+               [("Always Allow", ChoiceLook::Outline, Some(ChoiceKey::AllowAlways)),
+                ("Allow", ChoiceLook::Primary, Some(ChoiceKey::Allow)),
+                ("Reject", ChoiceLook::Quiet, Some(ChoiceKey::Deny))]);
+    assert_eq!(choices[0].decision, PermissionDecision::Choose(0));
+}
+
+/// Without kinds the prompt keeps its Allow and Deny pair, which answer as
+/// they always did.
+#[test]
+fn an_adapter_without_kinds_keeps_allow_and_deny() {
+    use knot_acp::PermissionDecision;
+
+    use super::render::{ChoiceKey, prompt_choices};
+
+    let choices = prompt_choices(&permission_request());
+
+    let summary: Vec<_> = choices.iter()
+                                 .map(|choice| (choice.decision, choice.key))
+                                 .collect();
+    assert_eq!(summary,
+               [(PermissionDecision::Allow, Some(ChoiceKey::Allow)),
+                (PermissionDecision::Deny, Some(ChoiceKey::Deny))]);
+    assert!(choices.iter()
+                   .all(|choice| !choice.label.starts_with("panel.")),
+            "a label rendered its key");
+}

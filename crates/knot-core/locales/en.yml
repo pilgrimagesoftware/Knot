@@ -331,6 +331,7 @@ keymap:
     minimize: "Minimize"
     help: "Knot Help"
     permission_allow: "Allow permission"
+    permission_allow_always: "Always allow permission"
     permission_deny: "Deny permission"
     permission_selector: "Permission mode selector"
     undo: "Undo"

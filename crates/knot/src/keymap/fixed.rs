@@ -23,6 +23,7 @@ use crate::app_bootstrap::OpenSettings;
 use crate::app_bootstrap::OpenWorkspaces;
 use crate::app_bootstrap::PanelOpenPermissionSelector;
 use crate::app_bootstrap::PanelPermissionAllow;
+use crate::app_bootstrap::PanelPermissionAllowAlways;
 use crate::app_bootstrap::PanelPermissionDeny;
 use crate::app_bootstrap::Quit;
 use crate::keymap::Chord;
@@ -70,6 +71,9 @@ pub(crate) fn fixed_bindings() -> Vec<FixedBinding> {
                              "menu.window.workspaces"),
                        fixed(KeyBinding::new("cmd-shift-a", PanelPermissionAllow, None),
                              "keymap.fixed.permission_allow"),
+                       // Allow's key with Option held: the same answer, for longer.
+                       fixed(KeyBinding::new("cmd-alt-shift-a", PanelPermissionAllowAlways, None),
+                             "keymap.fixed.permission_allow_always"),
                        fixed(KeyBinding::new("cmd-shift-d", PanelPermissionDeny, None),
                              "keymap.fixed.permission_deny"),
                        fixed(KeyBinding::new("cmd-shift-p", PanelOpenPermissionSelector, None),
