@@ -5,8 +5,10 @@
 //! passthrough), since the agent's response may carry ACP fields this
 //! client doesn't yet use.
 
+mod agent_info;
 mod json_rpc;
 
+pub use agent_info::AgentInfo;
 pub use json_rpc::{
     IncomingMessage, JsonRpcErrorPayload, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
 };
@@ -51,6 +53,13 @@ pub struct InitializeResult {
     /// the same way, since the stabilized spec allows either.
     #[serde(default, rename = "configOptions")]
     pub config_options:   Vec<ConfigOption>,
+    /// The agent's name and version, which it SHOULD send - see
+    /// [`AgentInfo`]. A missing or malformed one reads as `None` rather than
+    /// failing the handshake.
+    #[serde(default,
+            rename = "agentInfo",
+            deserialize_with = "agent_info::lenient")]
+    pub agent_info:       Option<AgentInfo>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
