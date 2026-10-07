@@ -24,6 +24,7 @@ pub(crate) mod mentions;
 mod pane;
 pub(crate) mod prompt;
 mod prompt_expansion;
+pub(crate) mod reply;
 mod scroll_to_latest;
 mod session;
 pub(super) mod shell;

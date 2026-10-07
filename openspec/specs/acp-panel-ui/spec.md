@@ -475,13 +475,30 @@ for the status SHALL be carried by the icon's tooltip.
 
 ### Requirement: Response action bar
 Each completed agent response SHALL display an action bar with: copy
-response, scroll to the user message that produced this response, and
-scroll to the top of the conversation history.
+response, reply to the response, scroll to the user message that produced
+this response, and scroll to the top of the conversation history.
+
+Reply SHALL quote the response into the prompt input as a Markdown block
+quote - every line prefixed with `>`, blank lines as a bare `>` - followed by
+a blank line, so text typed after it starts a new paragraph rather than
+continuing the quote. A draft already in the input SHALL be kept, with the
+quote appended a paragraph below it. The input SHALL take focus with the
+caret at the end, on the line below the quote.
 
 #### Scenario: Copy response
 - **WHEN** the user activates "copy response" on an agent response
 - **THEN** the full text of that response is placed on the system
   clipboard
+
+#### Scenario: Reply to a response
+- **WHEN** the user activates "reply" on an agent response and then types
+- **THEN** the prompt input holds the response as a block quote, and what
+  the user typed follows it on its own line, outside the quote
+
+#### Scenario: Reply keeps a draft
+- **WHEN** the prompt input already holds a draft and the user activates
+  "reply" on an agent response
+- **THEN** the draft is unchanged and the quote follows it a paragraph below
 
 #### Scenario: Scroll to originating user message
 - **WHEN** the user activates "scroll to user input" on an agent response
