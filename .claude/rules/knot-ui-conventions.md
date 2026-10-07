@@ -21,6 +21,18 @@ and dialogs; follow them for any new pane, dialog, or window in `crates/knot`.
   should scroll (e.g. the persona list). Never nest that scroll region inside
   another scrolling container - the outer scroll steals gesture priority and
   makes the section header/border appear to drift with the content.
+- Every scroll region shows a scrollbar (#583). A bare `overflow_y_scroll()`
+  scrolls with no indication of where you are. Use the one that matches the
+  layout - `tests/scrollbars.rs` pins each:
+  - fills its space (`flex_1().min_h_0()`, `size_full()`): `overflow_y_scrollbar()`
+    (`gpui_kit::component::scroll::ScrollableElement`). It makes the element
+    the scrolled *content*, so a `debug_selector` on it measures every row,
+    not the viewport; borders and backgrounds on it scroll away too.
+  - capped (`max_h`): `crate::capped_scroll::capped_scroll`.
+    `overflow_y_scrollbar()` stretches a short capped list to its full cap.
+  - a `list()`/`ListState`: `.vertical_scrollbar(&list_state)` on a
+    `relative()` wrapper around it.
+  Per-agent regions need the agent in the id, or they share a scroll position.
 - Buttons: prefer an icon + tooltip (`SettingsWindow::icon_button`) over a
   text label for actions with an obvious icon (add/edit/delete/copy/restore).
   Tint the icon red for destructive actions - keep the button `.ghost()`,

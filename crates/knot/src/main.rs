@@ -17,6 +17,7 @@ mod app_support;
 mod appearance;
 mod broadcast_sheet;
 mod bug_report;
+mod capped_scroll;
 mod command_center;
 mod commit_window;
 mod composer_scan;

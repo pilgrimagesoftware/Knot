@@ -36,6 +36,7 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::component::resizable::h_resizable;
 use gpui_kit::component::resizable::resizable_panel;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::div;
 use gpui_kit::prelude::FluentBuilder;
@@ -383,7 +384,7 @@ impl WorkspaceWindow {
                        div().id("workspace-agent-list")
                             .flex_1()
                             .min_h_0()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .child(
             v_flex().min_h_full()
                     .gap_1()

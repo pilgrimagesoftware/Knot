@@ -228,18 +228,24 @@ impl WorkspaceWindow {
                     .when(is_status, |row| row.cursor_default())
         });
 
-        Some(v_flex().id(("panel-lookup", element_key(id)))
-                     .w_full()
-                     .min_w_0()
-                     .max_h(px(LOOKUP_MAX_VISIBLE as f32 * 28.))
-                     .overflow_y_scroll()
-                     .gap_0p5()
-                     .p_1()
-                     .rounded(px(6.))
-                     .border_1()
-                     .border_color(cx.theme().border)
-                     .bg(cx.theme().popover)
-                     .children(rows)
+        // The box is the outer element and does not scroll; the rows scroll
+        // inside it. With the scrollbar wrapper on the box itself, its
+        // border and background would sit on the scrolled content and
+        // scroll away with it.
+        Some(div().w_full()
+                  .min_w_0()
+                  .rounded(px(6.))
+                  .border_1()
+                  .border_color(cx.theme().border)
+                  .bg(cx.theme().popover)
+                  .overflow_hidden()
+                  .child(crate::capped_scroll::capped_scroll(
+                      ("panel-lookup", element_key(id)),
+                      px(LOOKUP_MAX_VISIBLE as f32 * 28.),
+                      v_flex().w_full()
+                              .gap_0p5()
+                              .p_1()
+                              .children(rows)
                      // The keys are not discoverable from the list itself,
                      // and there is no empty state to put them in: a filter
                      // matching nothing dismisses the popup outright.
@@ -247,7 +253,8 @@ impl WorkspaceWindow {
                                  .pt_1()
                                  .text_xs()
                                  .text_color(cx.theme().muted_foreground)
-                                 .child(knot_core::l10n::t("panel.lookup_hint"))))
+                                 .child(knot_core::l10n::t("panel.lookup_hint"))),
+                  )))
     }
 
     /// Moves the selection by `delta` entries, stopping at either end.

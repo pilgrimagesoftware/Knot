@@ -11,6 +11,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{StyledExt, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{ActiveTheme, Icon, Sizable};
 use gpui_kit::{
     ClickEvent, Context, InteractiveElement, IntoElement, ParentElement, SharedString,
@@ -143,7 +144,7 @@ impl WorkspaceWindow {
                         .child(div().id("git-panel-tree")
                                     .flex_1()
                                     .min_h_0()
-                                    .overflow_y_scroll()
+                                    .overflow_y_scrollbar()
                                     .child(self.tree_column(agent, &folder, *tree, &selection, cx)))
                         .child(self.git_diff_pane(agent, diff, window, cx))
                         .into_any_element()
