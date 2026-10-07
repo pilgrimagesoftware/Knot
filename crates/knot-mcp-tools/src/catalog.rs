@@ -269,11 +269,14 @@ impl ToolCatalog for McpToolCatalog {
             }
             consts::DISPATCH_TASK => {
                 let bench_agents = self.bench_agents.lock();
-                tasks::dispatch_task(tasks::DispatchContext { agents:   &mut self.agents.lock(),
-                                                              graphs:   &mut self.graphs.lock(),
-                                                              messages: &mut self.messages.lock(),
-                                                              notifier: self.notifier.as_ref(),
-                                                              bench:    &bench_agents, },
+                tasks::dispatch_task(tasks::DispatchContext { agents:     &mut self.agents.lock(),
+                                                              graphs:     &mut self.graphs.lock(),
+                                                              messages:   &mut self.messages.lock(),
+                                                              notifier:   self.notifier.as_ref(),
+                                                              bench:      &bench_agents,
+                                                              activation: self.activation
+                                                                              .lock()
+                                                                              .as_ref(), },
                                      &arguments)
             }
             consts::COMPLETE_TASK => {

@@ -142,6 +142,11 @@ routing applies. A dispatch the messaging rules reject SHALL leave the task
 `ready` rather than marking it `dispatched`, and SHALL return the messaging
 rejection text.
 
+A dispatch is a direct message to one agent, so a dispatch delivered to a
+deactivated assignee SHALL activate it exactly as `mcp-messaging`'s "Direct
+send activates a deactivated recipient" requires of a direct send: only once
+delivery has succeeded, and never for a rejected dispatch.
+
 Where the assignee is a set of capability tags rather than an agent, dispatch
 SHALL resolve it against the registry and use the first candidate, and SHALL
 be refused with an explanatory message when no candidate matches.
@@ -150,6 +155,13 @@ be refused with an explanatory message when no candidate matches.
 
 - **WHEN** a task whose dependency is still `dispatched` is dispatched
 - **THEN** the dispatch is refused and the refusal names that dependency
+
+#### Scenario: Dispatch to a deactivated assignee starts it
+
+- **WHEN** a ready task is dispatched to a deactivated agent in the caller's
+  workspace
+- **THEN** the goal is delivered and the agent is activated, its session
+  starting the same way selecting it would
 
 #### Scenario: A rejected delivery does not consume the task
 
