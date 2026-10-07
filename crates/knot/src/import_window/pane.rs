@@ -18,7 +18,6 @@ use gpui_kit::Context;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::h_flex;
@@ -28,6 +27,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::div;
 
 use super::window::ImportWindow;
@@ -47,7 +47,7 @@ impl ImportWindow {
                 .gap_3()
                 .child(v_flex().id("import-sections")
                                .flex_1()
-                               .overflow_y_scroll()
+                               .overflow_y_scrollbar()
                                .gap_3()
                                .child(self.render_refresh_row(cx))
                                .child(self.render_personas_section(cx))

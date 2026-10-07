@@ -6,10 +6,8 @@
 //! where they are edited, which the popover has no room for.
 
 use gpui_kit::Context;
-use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
@@ -124,10 +122,7 @@ impl SettingsWindow {
                                    }))
                     .into_any_element()
         };
-        let list = div().id("bench-list")
-                        .max_h(px(420.))
-                        .overflow_y_scroll()
-                        .child(list);
+        let list = crate::capped_scroll::capped_scroll("bench-list", px(420.), list);
         v_flex().gap_3()
                 .child(crate::controls::group(knot_core::l10n::t("settings.bench.bench")).child(list))
     }

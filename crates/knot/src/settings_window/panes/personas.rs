@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
 
 use gpui_kit::Context;
-use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::h_flex;
@@ -209,10 +207,7 @@ impl SettingsWindow {
         // Bounded so the list scrolls in place instead of pushing the group's
         // title/action row (which must stay visible) off the top of the
         // window - same cap philosophy as the window's own per-pane height.
-        let list = div().id("personas-list")
-                        .max_h(px(420.))
-                        .overflow_y_scroll()
-                        .child(list);
+        let list = crate::capped_scroll::capped_scroll("personas-list", px(420.), list);
 
         v_flex().gap_3().child(
             crate::controls::group(knot_core::l10n::t("settings.personas.personas"))

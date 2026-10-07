@@ -151,10 +151,9 @@ fn bench_popover_content(entity: &gpui_kit::Entity<WorkspaceWindow>, app: &mut A
              .into_any_element()
     }
     else {
-        div().id("bench-popover-list")
-             .max_h(px(300.))
-             .overflow_y_scroll()
-             .child(v_flex().children(rows.into_iter().map(|row| {
+        crate::capped_scroll::capped_scroll("bench-popover-list",
+                                            px(300.),
+                                            v_flex().children(rows.into_iter().map(|row| {
                                                           let entry =
                                                               bench.iter()
                                                                    .find(|entry| entry.id == row.id)

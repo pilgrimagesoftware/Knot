@@ -8,6 +8,7 @@
 use gpui_kit::base::{StyledExt, h_flex, v_flex};
 use gpui_kit::component::button::Button;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
@@ -71,7 +72,7 @@ impl WorkspaceWindow {
         Some(div().id("workspace-pull-requests")
                   .flex_1()
                   .min_h_0()
-                  .overflow_y_scroll()
+                  .overflow_y_scrollbar()
                   .child(v_flex().min_h_full()
                                  .gap_4()
                                  .p_5()

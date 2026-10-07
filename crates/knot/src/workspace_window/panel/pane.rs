@@ -18,13 +18,13 @@ use gpui_kit::IntoElement;
 use gpui_kit::ListAlignment;
 use gpui_kit::ListState;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::div;
 use gpui_kit::px;
 use gpui_kit::rgb;
@@ -75,7 +75,11 @@ impl WorkspaceWindow {
                             .min_h_0()
                             .w_full()
                             .min_w_0()
-                            .overflow_scroll()
+                            .overflow_scrollbar()
+                            // Per agent, as the element id is: the
+                            // wrapper otherwise keys its scroll position by
+                            // call site, which every agent shares.
+                            .id(("mermaid-pane-scroll", id.as_u128() as u64))
                             .p_4()
                             .child(body))
                 .into_any_element()
@@ -115,7 +119,8 @@ impl WorkspaceWindow {
                             .min_h_0()
                             .w_full()
                             .min_w_0()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
+                            .id(("markdown-pane-scroll", id.as_u128() as u64))
                             .p_4()
                             // The same constructor the panel's assistant
                             // messages use, with the same families and body
@@ -381,6 +386,10 @@ impl WorkspaceWindow {
                                 )
                                 .with_shell(on_cancel_shell, on_discard_shell),
                             ))
+                            // Shown while scrolling, per the user's macOS
+                            // scroll bar setting (#583). Before the jump
+                            // control, so the control paints over it.
+                            .vertical_scrollbar(&list)
                             .children(scrolled_up.then(|| {
                                 super::scroll_to_latest::scroll_to_latest(move |_| {
                                     list_to_bottom.scroll_to_end();

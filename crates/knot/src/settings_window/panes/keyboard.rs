@@ -3,7 +3,6 @@ use gpui_kit::Context;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
@@ -11,6 +10,7 @@ use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Selectable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::div;
 use knot_core::ShortcutModifiers;
 
@@ -51,7 +51,7 @@ impl SettingsWindow {
         let list = div().id("keyboard-shortcuts-list")
                         .flex_1()
                         .min_h_0()
-                        .overflow_y_scroll()
+                        .overflow_y_scrollbar()
                         .child(rows);
         let settings_window = cx.entity();
         v_flex().size_full()

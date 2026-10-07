@@ -267,21 +267,19 @@ impl WorkspaceWindow {
                         .and_then(knot_mcp_probe::Inventory::taken_at)
                         .map(|at| taken_ago_text(Instant::now().saturating_duration_since(at)));
 
-        v_flex().id("mcp-body")
-                .w_full()
-                .max_h(px(BODY_MAX_HEIGHT))
-                .overflow_y_scroll()
-                .children(rows.into_iter()
-                              .enumerate()
-                              .map(|(index, row)| self.mcp_row(index, &row, cx)))
-                .children(taken.map(|text| {
-                                   div().px_5()
-                                        .py_1()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(text)
-                               }))
-                .into_any_element()
+        let body = v_flex().w_full()
+                           .children(rows.into_iter()
+                                         .enumerate()
+                                         .map(|(index, row)| self.mcp_row(index, &row, cx)))
+                           .children(taken.map(|text| {
+                                              div().px_5()
+                                                   .py_1()
+                                                   .text_xs()
+                                                   .text_color(cx.theme().muted_foreground)
+                                                   .child(text)
+                                          }));
+        crate::capped_scroll::capped_scroll("mcp-body", px(BODY_MAX_HEIGHT), body)
+            .into_any_element()
     }
 
     /// One server's row: its name, how it is reached, and what state it is

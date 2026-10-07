@@ -167,14 +167,16 @@ impl WorkspaceWindow {
     fn processes_body(&mut self, agent_id: Uuid, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let is_running = self.agent_session_root(agent_id).is_some();
 
-        div().id("processes-body")
-             .w_full()
-             .max_h(px(BODY_MAX_HEIGHT))
-             .overflow_y_scroll()
-             .child(v_flex().w_full()
-                            .children(self.subagents_group(agent_id, is_running, cx))
-                            .child(self.processes_group(agent_id, is_running, cx)))
-             .into_any_element()
+        crate::capped_scroll::capped_scroll("processes-body",
+                                            px(BODY_MAX_HEIGHT),
+                                            v_flex().w_full()
+                                                    .children(self.subagents_group(agent_id,
+                                                                                   is_running,
+                                                                                   cx))
+                                                    .child(self.processes_group(agent_id,
+                                                                                is_running,
+                                                                                cx)))
+            .into_any_element()
     }
 
     /// The subagents group, or `None` for an agent whose type cannot report
