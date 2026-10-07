@@ -61,6 +61,17 @@ impl WorkspaceWindow {
                                                      .gap_3()
                                                      .px_5()
                                                      .bg(cx.theme().background)
+                                                     // The rule between the
+                                                     // header and the pane
+                                                     // (#578), drawn like the
+                                                     // window's other
+                                                     // separators. On the
+                                                     // header row, so it runs
+                                                     // the content column's
+                                                     // full width, from the
+                                                     // sidebar to the edge.
+                                                     .border_b_1()
+                                                     .border_color(cx.theme().border)
                                                      .child(title_bar_left)
                                                      .child(h_flex().flex_shrink_0()
                                                                     .items_center()
