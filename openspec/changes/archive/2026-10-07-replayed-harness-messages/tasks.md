@@ -18,6 +18,7 @@
 
 ## 3. Verification
 
-- [ ] 3.1 Verify in the running app: resume a Claude agent whose conversation
+- [x] 3.1 Verify in the running app: resume a Claude agent whose conversation
       holds a background-task notification, and see a notice row where the
-      prompt bubble was.
+      prompt bubble was. (Not tested in the app; the user accepted it as
+      complete on 2026-10-07.)

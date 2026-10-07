@@ -16,7 +16,7 @@
 - [x] 1.2 Re-apply the indent-on-newline-to-layout fix (ADR-0002 commit 2); verify `cargo test -p gpui-base` passes, including the indent-inheritance test ADR-0002 names
 - [x] 1.3 Re-derive issue #565's submit-chord-newline fix against 0.7's `enter()`; verify the ported `test_shift_enter_submits_without_inserting_newline_when_configured_as_submit_chord` test passes
 - [x] 1.4 Re-derive issue #565's propagate fix against 0.7's `enter()`; verify `cargo test -p gpui-base input::` passes in full (273+ tests, zero failures)
-- [ ] 1.5 (skipped: the branch was pushed directly, since there is no fork base to open a PR against; reviewed through the Knot PR) Push the branch and open a PR against it describing both re-derived fixes; merge once green
+- [x] 1.5 (skipped: the branch was pushed directly, since there is no fork base to open a PR against; reviewed through the Knot PR) Push the branch and open a PR against it describing both re-derived fixes; merge once green
 
 ## 2. Bump the pin in Knot
 
@@ -28,5 +28,5 @@
 
 - [x] 3.1 Supersede `docs/adr/0002-gpui-base-auto-grow-fork.md` with a new ADR recording the 0.7.0-based fork, its single remaining commit, and its own exit condition; verify `docs/adr/README.md`'s index is updated
 - [x] 3.2 Run the full `make` gate (fmt-check, size-check, lint, test, build); verify all pass
-- [ ] 3.3 Manually smoke-test a dialog, a sheet, a notification, and the panel composer's Shift+Enter submit in a running build; verify no stray newline and no missing overlay layer
-- [ ] 3.4 Open the Knot PR referencing issues #565 and #575; verify CI is green before requesting merge
+- [x] 3.3 Manually smoke-test a dialog, a sheet, a notification, and the panel composer's Shift+Enter submit in a running build; verify no stray newline and no missing overlay layer (verified by the user in a running build on 2026-10-07)
+- [x] 3.4 Open the Knot PR referencing issues #565 and #575; verify CI is green before requesting merge (done: PR #588 merged 2026-10-06, closing #575 and #565)

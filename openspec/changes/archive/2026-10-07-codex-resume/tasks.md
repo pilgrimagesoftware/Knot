@@ -20,6 +20,7 @@
 
 - [x] 3.1 Mark `codex` resume-capable in the adapter registry and replace
       `codex_resume_is_conservatively_unsupported`; verify `make test`.
-- [ ] 3.2 Verify in the running app with `codex-acp` 2.0.0: a Codex agent
+- [x] 3.2 Verify in the running app with `codex-acp` 2.0.0: a Codex agent
       survives a Knot restart with its history shown, sends no registration
-      turn, and still follows its knot instructions and persona.
+      turn, and still follows its knot instructions and persona. (Not tested
+      in the app; the user accepted it as complete on 2026-10-07.)
