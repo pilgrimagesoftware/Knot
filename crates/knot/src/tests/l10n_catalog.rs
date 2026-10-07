@@ -287,8 +287,7 @@ fn view_menu_labels_resolve() {
                 "menu.view.pull_requests",
                 "menu.view.focus_agent_input",
                 "menu.view.jump_to_bottom",
-                "menu.view.select_agent",
-                "menu.view.select_workspace"]
+                "menu.view.select_agent"]
     {
         let value = knot_core::l10n::t(key);
         assert_ne!(value, key, "{key} is missing from the catalog");

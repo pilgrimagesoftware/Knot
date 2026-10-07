@@ -17,16 +17,14 @@ use gpui_kit::App;
 use parking_lot::Mutex;
 
 use crate::keymap::*;
-use crate::workspace_window::WorkspaceWindow;
+use crate::window_registry::WindowKey;
+use crate::window_registry::WindowRegistry;
 
-pub(crate) fn register_global_handlers(store: Arc<Mutex<knot_agents::AgentStore>>,
-                                       messages: Arc<Mutex<knot_messaging::MessageStore>>,
-                                       cx: &mut App) {
+pub(crate) fn register_global_handlers(store: Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     macro_rules! select_workspace {
         ($($action:ty => $index:expr),* $(,)?) => {$({
             let store = Arc::clone(&store);
-            let messages = Arc::clone(&messages);
-            cx.on_action(move |_: &$action, cx| select_workspace($index, &store, &messages, cx));
+            cx.on_action(move |_: &$action, cx| select_workspace($index, &store, cx));
         })*};
     }
     select_workspace!(SelectWorkspace1 => 0,
@@ -40,17 +38,17 @@ pub(crate) fn register_global_handlers(store: Arc<Mutex<knot_agents::AgentStore>
                       SelectWorkspace9 => 8);
 }
 
-/// Opens or raises the workspace at `index` in the manager's order; nothing
-/// when there is no such workspace. `WorkspaceWindow::open` is what keeps it
-/// to one window per workspace.
+/// Brings the window of the workspace at `index` in the manager's order to
+/// the front, if it is open. Nothing when it is not, or when there is no
+/// such workspace (#543): opening a workspace is the workspace manager's
+/// job, and a numbered shortcut that opened windows put a new one up for
+/// every digit pressed by mistake.
 ///
 /// Deferred, because the shortcut is dispatched from inside the focused
 /// window's own update: raising a window is an update of its handle, which
 /// fails for the window already being updated, and the registry reads that
-/// failure as "closed" and opens a second window for the workspace that was
-/// already in front.
-fn select_workspace(index: usize, store: &Arc<Mutex<knot_agents::AgentStore>>,
-                    messages: &Arc<Mutex<knot_messaging::MessageStore>>, cx: &mut App) {
+/// failure as "closed" and forgets the window that was already in front.
+fn select_workspace(index: usize, store: &Arc<Mutex<knot_agents::AgentStore>>, cx: &mut App) {
     let Some(workspace_id) = store.lock()
                                   .workspaces()
                                   .get(index)
@@ -58,7 +56,7 @@ fn select_workspace(index: usize, store: &Arc<Mutex<knot_agents::AgentStore>>,
     else {
         return;
     };
-    let store = Arc::clone(store);
-    let messages = Arc::clone(messages);
-    cx.defer(move |cx| WorkspaceWindow::open(store, messages, workspace_id, cx));
+    cx.defer(move |cx| {
+          WindowRegistry::activate(WindowKey::Workspace(workspace_id), cx);
+      });
 }

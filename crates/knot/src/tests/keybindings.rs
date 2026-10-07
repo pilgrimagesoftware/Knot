@@ -17,6 +17,7 @@ use crate::app_bootstrap::OpenCommandCenter;
 use crate::app_bootstrap::Quit;
 use crate::app_bootstrap::install_actions_and_keys;
 use crate::keymap::*;
+use crate::window_registry::WindowKey;
 use crate::window_registry::WindowRegistry;
 
 fn install(settings: knot_core::Settings, cx: &mut App) {
@@ -118,40 +119,45 @@ fn a_stored_binding_that_takes_a_fixed_key_is_ignored_at_launch(cx: &mut TestApp
       });
 }
 
+/// Select Workspace N raises an open workspace window and never opens one
+/// (#543): the shortcut is for moving between the windows already up.
 #[gpui_kit::test]
-fn selecting_a_workspace_opens_it_once_and_ignores_a_missing_one(cx: &mut TestAppContext) {
+fn selecting_a_workspace_raises_its_open_window_and_opens_none(cx: &mut TestAppContext) {
     let mut store = knot_agents::AgentStore::new();
     store.add_workspace(crate::tests::workspace("First"));
     store.add_workspace(crate::tests::workspace("Second"));
+    let second = store.workspaces()[1].id;
     let store = Arc::new(Mutex::new(store));
-    let messages = Arc::new(Mutex::new(knot_messaging::MessageStore::new()));
-    let dir = TempDir::new().expect("a temporary settings root");
     cx.update(|cx| {
           gpui_kit::init(cx);
           WindowRegistry::install(cx);
-          crate::settings_global::install(knot_core::Settings::with_store_root(dir.path()), cx);
-          register_global_handlers(Arc::clone(&store), Arc::clone(&messages), cx);
+          register_global_handlers(Arc::clone(&store), cx);
       });
 
     cx.update(|cx| cx.dispatch_action(&SelectWorkspace2));
     cx.run_until_parked();
-    assert_eq!(cx.update(|cx| cx.windows().len()), 1, "workspace 2 opens");
+    assert_eq!(cx.update(|cx| cx.windows().len()),
+               0,
+               "workspace 2 has no window, so nothing opens");
 
+    cx.update(|cx| {
+          crate::window_registry::activate_or_open(WindowKey::Workspace(second),
+                                                   cx,
+                                                   crate::tests::window_registry::open_blank)
+      });
     cx.update(|cx| cx.dispatch_action(&SelectWorkspace2));
     cx.run_until_parked();
     assert_eq!(cx.update(|cx| cx.windows().len()),
                1,
-               "a second press raises, not reopens");
+               "an open window is raised, not opened again");
+    assert_eq!(cx.update(|cx| WindowRegistry::open_workspaces(cx)),
+               [second],
+               "the raise kept the window registered");
 
+    cx.update(|cx| cx.dispatch_action(&SelectWorkspace1));
     cx.update(|cx| cx.dispatch_action(&SelectWorkspace5));
     cx.run_until_parked();
     assert_eq!(cx.update(|cx| cx.windows().len()),
                1,
-               "there is no fifth workspace");
-
-    cx.update(|cx| cx.dispatch_action(&SelectWorkspace1));
-    cx.run_until_parked();
-    assert_eq!(cx.update(|cx| cx.windows().len()),
-               2,
-               "workspace 1 gets its own window");
+               "workspace 1 is closed and there is no fifth workspace");
 }

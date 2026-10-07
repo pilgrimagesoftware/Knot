@@ -35,7 +35,7 @@ impl Render for Blank {
 
 /// Opens a window with no view of its own and reports its handle, standing in
 /// for whatever a real caller would open.
-fn open_blank(cx: &mut gpui_kit::App) -> Option<AnyWindowHandle> {
+pub(super) fn open_blank(cx: &mut gpui_kit::App) -> Option<AnyWindowHandle> {
     cx.open_window(WindowOptions::default(), |window, cx| {
           let view = cx.new(|_| Blank);
           cx.new(|cx| Root::new(view, window, cx))
@@ -145,4 +145,28 @@ fn the_registry_is_total_without_being_installed(cx: &mut TestAppContext) {
           assert!(WindowRegistry::workspace_view(key, cx).is_none());
           WindowRegistry::forget(key, cx);
       });
+}
+
+/// The Window menu's list: workspace windows that are open now, not every
+/// entry the registry has not yet noticed is closed (#543).
+#[gpui_kit::test]
+fn open_workspaces_lists_live_workspace_windows_only(cx: &mut TestAppContext) {
+    let (open, closed) = (Uuid::new_v4(), Uuid::new_v4());
+    cx.update(|cx| {
+          gpui_kit::init(cx);
+          WindowRegistry::install(cx);
+          activate_or_open(WindowKey::Workspace(open), cx, open_blank);
+          activate_or_open(WindowKey::Workspace(closed), cx, open_blank);
+          activate_or_open(WindowKey::CommandCenter, cx, open_blank);
+      });
+    let closing = cx.update(|cx| cx.windows()[1]);
+    cx.update(|cx| {
+          closing.update(cx, |_, window, _| window.remove_window())
+                 .expect("the window is open");
+      });
+    cx.run_until_parked();
+
+    let listed = cx.update(|cx| WindowRegistry::open_workspaces(cx));
+
+    assert_eq!(listed, vec![open]);
 }

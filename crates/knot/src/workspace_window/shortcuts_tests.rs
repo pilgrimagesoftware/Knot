@@ -70,7 +70,7 @@ pub(super) fn window_with(count: usize, configure: impl FnOnce(&mut knot_core::S
                      let mut settings = knot_core::Settings::with_store_root(dir.path());
                      configure(&mut settings);
                      crate::settings_global::install(settings, cx);
-                     register_global_handlers(Arc::clone(&store), Arc::clone(&messages), cx);
+                     register_global_handlers(Arc::clone(&store), cx);
                      WorkspaceWindow::open(store, messages, workspace_id, cx);
                      WindowRegistry::workspace_view(WindowKey::Workspace(workspace_id), cx)
                          .expect("opening a workspace registers its view")
