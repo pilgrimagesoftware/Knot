@@ -20,6 +20,7 @@ use gpui_kit::ListState;
 use gpui_kit::ParentElement;
 use gpui_kit::Render;
 use gpui_kit::ScrollDelta;
+use gpui_kit::ScrollHandle;
 use gpui_kit::ScrollWheelEvent;
 use gpui_kit::Styled;
 use gpui_kit::TestAppContext;
@@ -36,6 +37,7 @@ use gpui_kit::px;
 use gpui_kit::size;
 
 use crate::capped_scroll::capped_scroll;
+use crate::capped_scroll::capped_scroll_list;
 
 const WINDOW_HEIGHT: f32 = 400.;
 const ROW_HEIGHT: f32 = 50.;
@@ -50,6 +52,9 @@ enum Shape {
     /// `max_h` on the region itself, with something after it that must sit
     /// directly below the cap.
     Capped,
+    /// [`Shape::Capped`] with the list as the scrolled element and the
+    /// caller's handle driving it, as the panel's slash lookup is (#557).
+    CappedTracked,
     /// `flex_1().min_h_0()` between a header and a footer in a fixed-height
     /// column, as the sidebar's agent list, the git panel's tree and the
     /// Command Center grid are.
@@ -61,9 +66,10 @@ enum Shape {
 }
 
 struct ScrollProbe {
-    shape: Shape,
-    rows:  usize,
-    list:  ListState,
+    shape:  Shape,
+    rows:   usize,
+    list:   ListState,
+    handle: ScrollHandle,
 }
 
 fn row(index: usize, rows: usize) -> Div {
@@ -97,6 +103,11 @@ impl Render for ScrollProbe {
             Shape::Capped => v_flex().size_full()
                                      .child(capped_scroll("capped-list", px(CAP), content))
                                      .child(bar("after-list")),
+            Shape::CappedTracked => {
+                v_flex().size_full()
+                        .child(capped_scroll_list("tracked-list", px(CAP), content).track(&self.handle))
+                        .child(bar("after-list"))
+            }
             Shape::FillsColumn => v_flex().size_full()
                                           .child(bar("header"))
                                           .child(div().id("column-list")
@@ -126,6 +137,13 @@ impl Render for ScrollProbe {
 }
 
 fn probe(cx: &mut TestAppContext, shape: Shape, rows: usize) -> VisualTestContext {
+    probe_tracked(cx, shape, rows, ScrollHandle::new())
+}
+
+/// [`probe`], with `handle` as the probe's scroll handle - which a test
+/// keeps a clone of to scroll the region by code.
+fn probe_tracked(cx: &mut TestAppContext, shape: Shape, rows: usize, handle: ScrollHandle)
+                 -> VisualTestContext {
     let window =
         cx.update(|cx| {
               gpui_kit::init(cx);
@@ -136,7 +154,10 @@ fn probe(cx: &mut TestAppContext, shape: Shape, rows: usize) -> VisualTestContex
                              |window, cx| {
                                  let list =
                                      ListState::new(rows, ListAlignment::Top, px(ROW_HEIGHT));
-                                 let view = cx.new(|_| ScrollProbe { shape, rows, list });
+                                 let view = cx.new(|_| ScrollProbe { shape,
+                                                                     rows,
+                                                                     list,
+                                                                     handle });
                                  cx.new(|cx| Root::new(view, window, cx))
                              })
                 .expect("the probe window should open")
@@ -232,4 +253,28 @@ fn a_diff_list_inside_a_sideways_region_fills_it_and_scrolls(cx: &mut TestAppCon
     scroll_down(&mut probe_cx, WINDOW_HEIGHT / 2.);
     assert!(top_of(&mut probe_cx, "sixth-row") < before,
             "the wheel scrolls the diff vertically");
+}
+
+/// A tracked capped list keeps the cap, and scrolling its handle to a row
+/// brings that row fully into view - what a keyboard selection moving past
+/// the visible rows needs (#557). Wrapped one level down, as a plain
+/// `capped_scroll` does, the handle would count the wrapper, not the rows.
+#[gpui_kit::test]
+fn scrolling_a_tracked_capped_list_to_a_row_shows_it(cx: &mut TestAppContext) {
+    let rows = 10;
+    let handle = ScrollHandle::new();
+    let mut probe_cx = probe_tracked(cx, Shape::CappedTracked, rows, handle.clone());
+    assert_eq!(top_of(&mut probe_cx, "after-list"),
+               CAP,
+               "the tracked list keeps its cap");
+    assert!(top_of(&mut probe_cx, "last-row") >= CAP,
+            "the last row starts out of view, or the test proves nothing");
+
+    handle.scroll_to_item(rows - 1);
+    draw(&mut probe_cx);
+    draw(&mut probe_cx);
+
+    assert_eq!(top_of(&mut probe_cx, "last-row"),
+               CAP - ROW_HEIGHT,
+               "the last row is scrolled just far enough to sit fully inside the cap");
 }
