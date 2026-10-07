@@ -200,7 +200,7 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                         user_index,
                         index,
                         list,
-                        callbacks.on_manual_scroll.clone(),
+                        callbacks,
                     )
                 }))
                 .into_any_element()
@@ -278,8 +278,8 @@ pub(super) fn render_track_toggle(tracking: bool, on_toggle: Rc<dyn Fn()>) -> im
                                                     }))
 }
 
-/// A finalized response's action bar: copy, scroll to the user message that
-/// prompted it, and scroll to the top of the conversation.
+/// A finalized response's action bar: copy, reply, scroll to the user message
+/// that prompted it, and scroll to the top of the conversation.
 ///
 /// The two scroll buttons drive the `ListState` directly (rather than a
 /// `ScrollHandle`) so they also stop tail-following - `scroll_to` on an
@@ -288,12 +288,14 @@ pub(super) fn render_track_toggle(tracking: bool, on_toggle: Rc<dyn Fn()>) -> im
 /// pulling the view straight back to the tail. Button ids carry `index` so
 /// each response's bar is a distinct hit target under virtualization.
 pub(super) fn render_response_actions(text: String, user_index: Option<usize>, index: usize,
-                                      list: &ListState, on_manual_scroll: Rc<dyn Fn()>)
+                                      list: &ListState, callbacks: &PanelCallbacks)
                                       -> impl IntoElement {
     let scroll_to_user = list.clone();
     let scroll_to_top = list.clone();
-    let manual_to_user = on_manual_scroll.clone();
-    let manual_to_top = on_manual_scroll;
+    let manual_to_user = callbacks.on_manual_scroll.clone();
+    let manual_to_top = callbacks.on_manual_scroll.clone();
+    let on_reply = callbacks.on_reply.clone();
+    let reply_text = text.clone();
     h_flex()
         .gap_1()
         .child(
@@ -308,6 +310,16 @@ pub(super) fn render_response_actions(text: String, user_index: Option<usize>, i
                         Notification::info(knot_core::l10n::t("panel.copied_response")),
                         cx,
                     );
+                }),
+        )
+        .child(
+            Button::new(("panel-reply-response", index as u64))
+                .icon(IconName::Reply)
+                .tooltip(knot_core::l10n::t("panel.reply_to_response"))
+                .ghost()
+                .small()
+                .on_click(move |_: &ClickEvent, window, cx| {
+                    on_reply(reply_text.clone(), window, cx)
                 }),
         )
         .children(user_index.map(|user_index| {

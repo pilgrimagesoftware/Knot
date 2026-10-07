@@ -98,6 +98,7 @@ panel:
   copy_response: "Copy response"
   copied_prompt: "Copied prompt to clipboard"
   copied_response: "Copied response to clipboard"
+  reply_to_response: "Reply"
   copy_code: "Copy code"
   copied_code: "Copied code to clipboard"
   queued: "Queued"

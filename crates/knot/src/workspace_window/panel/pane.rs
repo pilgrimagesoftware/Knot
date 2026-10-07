@@ -9,6 +9,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use gpui_kit::App;
 use gpui_kit::ClickEvent;
 use gpui_kit::Context;
 use gpui_kit::Focusable;
@@ -292,6 +293,17 @@ impl WorkspaceWindow {
                         handle.discard_shell_result(card_id);
                     }
                 };
+                // Quotes a response into this agent's own composer. Weak, as
+                // every closure the list keeps across frames must be: the
+                // panel's rows outlive no window.
+                let reply_window = cx.entity().downgrade();
+                let on_reply = move |response: String, window: &mut Window, app: &mut App| {
+                    if let Some(view) = reply_window.upgrade() {
+                        view.update(app, |view, cx| {
+                                view.reply_to_response(id, &response, window, cx);
+                            });
+                    }
+                };
                 let follow_slot = Arc::clone(slot);
                 let list_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
@@ -384,7 +396,8 @@ impl WorkspaceWindow {
                                     on_toggle_tool_run,
                                     on_manual_scroll,
                                 )
-                                .with_shell(on_cancel_shell, on_discard_shell),
+                                .with_shell(on_cancel_shell, on_discard_shell)
+                                .with_reply(on_reply),
                             ))
                             // Shown while scrolling, per the user's macOS
                             // scroll bar setting (#583). Before the jump
