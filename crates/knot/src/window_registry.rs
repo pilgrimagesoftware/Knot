@@ -123,6 +123,27 @@ impl WindowRegistry {
         }
     }
 
+    /// The workspaces with a window open now, for the Window menu.
+    ///
+    /// Read against `cx.windows()` rather than trusted from the map: an
+    /// entry is only dropped when a raise finds its window gone, so a
+    /// workspace whose window was closed is still listed here until then.
+    pub(crate) fn open_workspaces(cx: &App) -> Vec<Uuid> {
+        let Some(registry) = cx.try_global::<Self>()
+        else {
+            return Vec::new();
+        };
+        let live = cx.windows();
+        registry.windows
+                .iter()
+                .filter(|(_, registered)| live.contains(&registered.handle))
+                .filter_map(|(key, _)| match key {
+                    WindowKey::Workspace(id) => Some(*id),
+                    WindowKey::CommandCenter | WindowKey::WorkspaceManager => None,
+                })
+                .collect()
+    }
+
     /// `key`'s handle, without asking whether its window is still open.
     fn handle(key: WindowKey, cx: &App) -> Option<AnyWindowHandle> {
         Some(cx.try_global::<Self>()?.windows.get(&key)?.handle)

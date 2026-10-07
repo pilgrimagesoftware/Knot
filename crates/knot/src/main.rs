@@ -56,6 +56,7 @@ mod tests;
 mod timestamp;
 mod view_menu;
 mod window_actions;
+mod window_menu;
 mod window_options;
 mod window_registry;
 mod working_indicator;

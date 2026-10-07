@@ -352,7 +352,8 @@ Zoom command, and the menu's fixed items shift down every time a window opens.
 
 - **WHEN** the user opens the Window menu
 - **THEN** Command Center and Workspaces appear first, then a separator, then
-  Minimize and Zoom, then a separator, then the open windows
+  the open workspace windows on their shortcuts and a separator when any is
+  open, then Minimize and Zoom, then a separator, then the open windows
 
 #### Scenario: The fixed items do not move
 
@@ -428,15 +429,15 @@ The View menu SHALL carry an item for each workspace navigation shortcut in
 | View > Jump to Bottom | the Jump to bottom shortcut (default ⌃⌘↓) |
 | separator | |
 | View > Select Agent ▸ | submenu, see "The View menu's Select Agent submenu" |
-| View > Select Workspace ▸ | submenu, see "The View menu's Select Workspace submenu" |
 | separator | |
 
 Choosing an item SHALL do exactly what its shortcut does (`keybindings`). Each
 item SHALL show the shortcut's current binding and SHALL update when the user
 rebinds it, without a restart.
 
-Open Command Center SHALL NOT appear in the View menu; it stays in the Window
-menu. The View menu SHALL still carry exactly one Enter Full Screen item, per
+Open Command Center and Select Workspace SHALL NOT appear in the View menu;
+both are the Window menu's, Select Workspace as one item per open workspace
+window (see "The Window menu lists open workspace windows"). The View menu SHALL still carry exactly one Enter Full Screen item, per
 "Standard menu items carry the platform's key equivalents".
 
 This diverges from the Swift reference, whose View menu holds Toggle Git
@@ -541,34 +542,35 @@ SHALL be disabled.
 - **WHEN** the focused workspace has twelve agents
 - **THEN** View > Select Agent lists the first nine
 
-### Requirement: The View menu's Select Workspace submenu
+### Requirement: The Window menu lists open workspace windows
 
-View > Select Workspace SHALL list the first nine workspaces in the order the
-workspace manager lists them, each by name. The Nth item SHALL show the Select
-workspace N shortcut (default ⌥⌘N) and choosing it SHALL do what that shortcut
-does. The item for the focused workspace window's workspace SHALL be checked.
+The Window menu SHALL list, between Command Center and Workspaces and
+Minimize and Zoom, one item for each of the first nine workspaces - in the
+order the workspace manager lists them - whose window is open, each by name.
+A workspace's item SHALL show its Select workspace N shortcut (default ⌥⌘N),
+where N is its position in the manager's order, and choosing it SHALL do what
+that shortcut does. The item for the focused workspace window's workspace
+SHALL be checked. A workspace with no open window SHALL have no item: Select
+workspace N does nothing for it, and an item macOS would enable regardless is
+not offered.
 
-The submenu SHALL reflect the current workspaces, names and order each time it
-is opened, including workspaces created, removed, renamed or reordered since
-launch.
+The list SHALL reflect the open windows and the current workspace names and
+order, including windows opened or closed and workspaces renamed or reordered
+since launch. With no workspace window open, the list and its separator SHALL
+be absent.
 
-#### Scenario: Opening a workspace from the menu
+#### Scenario: Raising a workspace from the menu
 
-- **WHEN** workspace C has no open window and the user chooses View > Select
-  Workspace > C
-- **THEN** C's window opens, the same as pressing its ⌥⌘N shortcut
-
-#### Scenario: With no window open
-
-- **WHEN** every Knot window is closed and the user opens View > Select
-  Workspace
-- **THEN** the workspaces are listed and enabled
+- **WHEN** workspaces A, B and C are listed in that order, A's and C's windows
+  are open, and the user opens the Window menu
+- **THEN** it lists A with ⌥⌘1 and C with ⌥⌘3, and no item for B
+- **WHEN** the user chooses C
+- **THEN** C's window comes to the front, the same as pressing ⌥⌘3
 
 #### Scenario: A renamed workspace
 
-- **WHEN** the user renames workspace B to Backend and opens View > Select
-  Workspace
-- **THEN** the item reads Backend
+- **WHEN** workspace C's window is open and the user renames C to Backend
+- **THEN** the Window menu's item reads Backend
 
 ### Requirement: File > New Agent opens the agent editor
 
