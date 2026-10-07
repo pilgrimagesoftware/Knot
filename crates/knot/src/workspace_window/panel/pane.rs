@@ -21,10 +21,8 @@ use gpui_kit::ParentElement;
 use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::div;
@@ -384,25 +382,17 @@ impl WorkspaceWindow {
                                 .with_shell(on_cancel_shell, on_discard_shell),
                             ))
                             .children(scrolled_up.then(|| {
-                                div().absolute().bottom_3().right_4().child(
-                                    Button::new("panel-scroll-to-bottom")
-                                        .icon(IconName::ChevronDown)
-                                        .tooltip(knot_core::l10n::t("panel.scroll_to_latest"))
-                                        .small()
-                                        .on_click(move |_: &ClickEvent, _, _| {
-                                            list_to_bottom.scroll_to_end();
-                                            // Jumping to the end also
-                                            // resumes following new
-                                            // output, which is what the
-                                            // control implies.
-                                            if let panel_session::PanelSessionSlot::Ready(
-                                                handle,
-                                            ) = &*follow_slot.lock()
-                                            {
-                                                handle.set_tracking(true);
-                                            }
-                                        }),
-                                )
+                                super::scroll_to_latest::scroll_to_latest(move |_| {
+                                    list_to_bottom.scroll_to_end();
+                                    // Jumping to the end also resumes
+                                    // following new output, which is what
+                                    // the control implies.
+                                    if let panel_session::PanelSessionSlot::Ready(handle) =
+                                        &*follow_slot.lock()
+                                    {
+                                        handle.set_tracking(true);
+                                    }
+                                })
                             })),
                     )
                     .child(self.render_panel_input_area(
