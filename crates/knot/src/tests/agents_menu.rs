@@ -10,9 +10,9 @@ use crate::agent_menu::AgentMenuSnapshot;
 use crate::agent_menu::agent_menu_action;
 use crate::agent_menu::agent_menu_entry_for_action;
 use crate::agent_menu::agents_menu;
-use crate::app_state::AgentMenuEntry;
-use crate::app_state::AgentMenuFacts;
-use crate::app_state::agent_context_menu_entries;
+use crate::agent_menu_entries::AgentMenuEntry;
+use crate::agent_menu_entries::AgentMenuFacts;
+use crate::agent_menu_entries::agent_context_menu_entries;
 use crate::tests::menu_labels;
 
 /// Exhaustive by construction: a new `AgentMenuEntry` variant makes this
@@ -31,11 +31,12 @@ fn entry_ordinal(entry: AgentMenuEntry) -> usize {
         AgentMenuEntry::BenchAgent => 8,
         AgentMenuEntry::OpenIn => 9,
         AgentMenuEntry::MarkdownFiles => 10,
-        AgentMenuEntry::RegisterAgent => 11,
-        AgentMenuEntry::Deactivate => 12,
-        AgentMenuEntry::RestartAgent => 13,
-        AgentMenuEntry::RestartWithNewConversation => 14,
-        AgentMenuEntry::RemoveAgent => 15,
+        AgentMenuEntry::AgentInfo => 11,
+        AgentMenuEntry::RegisterAgent => 12,
+        AgentMenuEntry::Deactivate => 13,
+        AgentMenuEntry::RestartAgent => 14,
+        AgentMenuEntry::RestartWithNewConversation => 15,
+        AgentMenuEntry::RemoveAgent => 16,
     }
 }
 

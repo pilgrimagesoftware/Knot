@@ -8,6 +8,7 @@
 mod about_window;
 mod agent_editor;
 mod agent_menu;
+mod agent_menu_entries;
 mod agent_processes;
 mod app_bootstrap;
 mod app_log;

@@ -5,8 +5,8 @@
 
 use uuid::Uuid;
 
-use crate::app_state::AgentMenuFacts;
-use crate::app_state::agent_context_menu_entries;
+use crate::agent_menu_entries::AgentMenuFacts;
+use crate::agent_menu_entries::agent_context_menu_entries;
 
 mod about_window;
 mod agent_context_menu;

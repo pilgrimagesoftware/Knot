@@ -39,9 +39,9 @@ use gpui_kit::actions;
 use gpui_kit::{Action, SharedString};
 use uuid::Uuid;
 
-use crate::app_state::AgentMenuEntry;
-use crate::app_state::AgentMenuFacts;
-use crate::app_state::agent_context_menu_entries;
+use crate::agent_menu_entries::AgentMenuEntry;
+use crate::agent_menu_entries::AgentMenuFacts;
+use crate::agent_menu_entries::agent_context_menu_entries;
 use crate::open_in;
 
 actions!(knot_app,
@@ -55,6 +55,7 @@ actions!(knot_app,
           AgentMenuBenchAgent,
           AgentMenuOpenIn,
           AgentMenuMarkdownFiles,
+          AgentMenuAgentInfo,
           AgentMenuRegisterAgent,
           AgentMenuDeactivate,
           AgentMenuRestartAgent,
@@ -138,6 +139,7 @@ pub(crate) fn agent_menu_action(entry: AgentMenuEntry) -> Option<Box<dyn Action>
              AgentMenuEntry::BenchAgent => Box::new(AgentMenuBenchAgent),
              AgentMenuEntry::OpenIn => Box::new(AgentMenuOpenIn),
              AgentMenuEntry::MarkdownFiles => Box::new(AgentMenuMarkdownFiles),
+             AgentMenuEntry::AgentInfo => Box::new(AgentMenuAgentInfo),
              AgentMenuEntry::RegisterAgent => Box::new(AgentMenuRegisterAgent),
              AgentMenuEntry::Deactivate => Box::new(AgentMenuDeactivate),
              AgentMenuEntry::RestartAgent => Box::new(AgentMenuRestartAgent),

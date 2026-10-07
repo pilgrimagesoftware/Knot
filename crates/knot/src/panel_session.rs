@@ -18,7 +18,10 @@ use parking_lot::Mutex;
 use crate::panel_state::PanelState;
 use crate::subagent_feed::SubagentSink;
 
+mod agent_identity;
 mod default_mode;
+
+pub(crate) use agent_identity::AgentIdentity;
 
 pub struct PanelSessionHandle {
     session:        AcpSession,
@@ -74,6 +77,11 @@ impl PanelSessionHandle {
                   state,
                   dirty,
                   startup_prompt: None })
+    }
+
+    /// The agent's name and version as it reported them on `initialize`.
+    pub fn agent_info(&self) -> Option<&knot_acp::AgentInfo> {
+        self.session.agent_info()
     }
 
     pub fn state(&self) -> Arc<Mutex<PanelState>> {
@@ -269,7 +277,10 @@ pub enum PanelSessionSlot {
     /// Connecting, carrying the step the attempt is currently on so the
     /// placeholder can say what it's waiting for.
     Connecting(ConnectProgress),
-    Ready(PanelSessionHandle),
+    /// Boxed so the slot is a pointer wide in every phase: the handle is by
+    /// far the largest variant and had reached clippy's
+    /// `large_enum_variant` bound exactly.
+    Ready(Box<PanelSessionHandle>),
     Failed(String),
 }
 
@@ -310,6 +321,16 @@ impl PanelSessionSlot {
         match self {
             Self::Ready(handle) => handle.process_id(),
             Self::Connecting(_) | Self::Failed(_) => None,
+        }
+    }
+
+    /// Which agent this slot's session is running, for the header's info
+    /// button and the Agents menu's Agent Info. Only a `Ready` slot has an
+    /// `initialize` response to read.
+    pub(crate) fn agent_identity(&self) -> AgentIdentity {
+        match self {
+            Self::Ready(handle) => AgentIdentity::from_info(handle.agent_info()),
+            Self::Connecting(_) | Self::Failed(_) => AgentIdentity::NotConnected,
         }
     }
 
@@ -478,7 +499,7 @@ pub async fn connect_into(slot: &Arc<Mutex<PanelSessionSlot>>, request: ConnectR
     if let Some(prompt) = &registration_prompt {
         handle.record_user_message(prompt.clone());
     }
-    *slot.lock() = PanelSessionSlot::Ready(handle);
+    *slot.lock() = PanelSessionSlot::Ready(Box::new(handle));
 
     if let Some(prompt) = registration_prompt
        && let Err(error) = session.prompt(&prompt).await
