@@ -67,28 +67,28 @@ impl WorkspaceWindow {
         let empty = empty_message(groups.is_empty(), shown.is_empty());
 
         div().id("workspace-pull-requests")
-                  .flex_1()
-                  .min_h_0()
-                  .overflow_y_scrollbar()
-                  .child(v_flex().min_h_full()
-                                 .gap_4()
-                                 .p_5()
-                                 .children(notice.map(|text| {
-                                                     div().text_sm()
-                                                          .text_color(cx.theme().muted_foreground)
-                                                          .child(text)
-                                                 }))
-                                 // A click that opened nothing has to say so, or the row
-                                 // reads as broken rather than as a browser that refused.
-                                 .children(self.pull_request_open_failed.then(|| {
-                                                                            div().text_sm()
+             .flex_1()
+             .min_h_0()
+             .overflow_y_scrollbar()
+             .child(v_flex().min_h_full()
+                            .gap_4()
+                            .p_5()
+                            .children(notice.map(|text| {
+                                                div().text_sm()
+                                                     .text_color(cx.theme().muted_foreground)
+                                                     .child(text)
+                                            }))
+                            // A click that opened nothing has to say so, or the row
+                            // reads as broken rather than as a browser that refused.
+                            .children(self.pull_request_open_failed.then(|| {
+                                                                       div().text_sm()
                                           .text_color(cx.theme().danger)
                                           .child(knot_core::l10n::t("pull_requests.open_failed"))
-                                                                        }))
-                                 .children(toolbar)
-                                 .children(empty.map(|empty| render_empty(empty, cx)))
-                                 .children(shown.into_iter().map(|group| render_group(group, cx))))
-                  .into_any_element()
+                                                                   }))
+                            .children(toolbar)
+                            .children(empty.map(|empty| render_empty(empty, cx)))
+                            .children(shown.into_iter().map(|group| render_group(group, cx))))
+             .into_any_element()
     }
 
     /// The one availability message for the whole view, or `None` when state

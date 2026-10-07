@@ -12,8 +12,6 @@
 //! `filter` holds the search and repository filtering the tab applies to the
 //! rows this module scans.
 
-// UNWIRED(#504): wired into the OpenSpec tab's toolbar by the integrating
-// session; `pub(crate)` so `render/openspec_toolbar.rs` can reach it there.
 pub(crate) mod filter;
 
 #[cfg(test)]
@@ -40,8 +38,6 @@ pub(crate) struct ChangeEntry {
 /// is anything that is not a directory. A missing `openspec/changes/`
 /// directory is not an error: it yields an empty list, the same as a working
 /// tree with an empty one.
-// UNWIRED(#504): wired into the OpenSpec tab's cache by the integrating session.
-#[allow(dead_code)]
 pub(crate) fn scan(worktree: &Path) -> Vec<ChangeEntry> {
     let changes_dir = worktree.join("openspec").join("changes");
     let Ok(entries) = fs::read_dir(&changes_dir)
@@ -83,8 +79,6 @@ fn why_line(dir: &Path) -> Option<String> {
 /// list, sorted by name, keeping the first worktree's entry for a name found
 /// in more than one - so Reveal in Finder targets the worktree it was first
 /// seen in.
-// UNWIRED(#504): wired into the OpenSpec tab's cache by the integrating session.
-#[allow(dead_code)]
 pub(crate) fn merge(per_worktree: impl IntoIterator<Item = Vec<ChangeEntry>>) -> Vec<ChangeEntry> {
     let mut merged: Vec<ChangeEntry> = Vec::new();
     for changes in per_worktree {

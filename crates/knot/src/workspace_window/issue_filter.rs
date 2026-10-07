@@ -16,10 +16,6 @@ use knot_forge::{Issue, RepoSlug};
 
 /// One repository's open issues, before search, filter or sort narrow them.
 #[derive(Debug, Clone, PartialEq, Eq)]
-// UNWIRED(#504): built ahead of the Issues tab render surface. Nothing
-// constructs this outside tests; the integrating session wires it into
-// `render/issues_pane.rs` alongside the issue cache.
-#[allow(dead_code)]
 pub(super) struct IssueGroup {
     pub(super) slug:   RepoSlug,
     pub(super) issues: Vec<Issue>,
@@ -27,9 +23,6 @@ pub(super) struct IssueGroup {
 
 /// The order issues take within each repository group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-// UNWIRED(#504): nothing reads this outside tests until the sort picker in
-// `render/issues_toolbar.rs` exists.
-#[allow(dead_code)]
 pub(super) enum IssueSort {
     /// Most recently updated first. The default: what the tab shows before
     /// the user picks a different order.
@@ -43,10 +36,17 @@ pub(super) enum IssueSort {
     Number,
 }
 
-// UNWIRED(#504): nothing calls this outside tests until the sort picker in
-// `render/issues_toolbar.rs` exists.
-#[allow(dead_code)]
 impl IssueSort {
+    /// The sort picker's label.
+    pub(super) fn label(self) -> String {
+        knot_core::l10n::t(match self {
+                               Self::RecentlyUpdated => "issues.sort.recently_updated",
+                               Self::Newest => "issues.sort.newest",
+                               Self::Oldest => "issues.sort.oldest",
+                               Self::Number => "issues.sort.number",
+                           })
+    }
+
     /// Every order, in the order the sort picker lists them.
     pub(super) const ALL: [Self; 4] = [Self::RecentlyUpdated,
                                        Self::Newest,
@@ -70,24 +70,12 @@ impl IssueSort {
 /// What narrows the list: the search text and the chosen repository.
 /// `None` shows every workspace repository.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-// UNWIRED(#504): held by `IssuesViewState` once the integrating session adds
-// it; nothing constructs this outside tests yet.
-#[allow(dead_code)]
 pub(super) struct IssueFilter {
     pub(super) search: String,
     pub(super) repo:   Option<RepoSlug>,
 }
 
-// UNWIRED(#504): nothing calls this outside tests until the toolbar in
-// `render/issues_toolbar.rs` exists.
-#[allow(dead_code)]
 impl IssueFilter {
-    /// Whether anything narrows the list, so the toolbar knows whether to
-    /// offer a control that clears both.
-    pub(super) fn is_active(&self) -> bool {
-        !self.search.trim().is_empty() || self.repo.is_some()
-    }
-
     /// Return the picker to "All repositories" when the chosen one is no
     /// longer among the workspace's - a removed agent, or one whose folder
     /// changed, must not leave the filter pointed at a repository that can
@@ -132,9 +120,6 @@ fn issue_matches(needle: &str, slug: &RepoSlug, issue: &Issue) -> bool {
 /// tab tells the two apart by comparing against the unfiltered input.
 /// Surviving groups come back ordered by `<owner>/<repo>`, per "The Issues
 /// tab lists issues by repository".
-// UNWIRED(#504): nothing calls this outside tests until `issues_pane.rs`
-// asks it for the rows to draw.
-#[allow(dead_code)]
 pub(super) fn apply(groups: Vec<IssueGroup>, filter: &IssueFilter, sort: IssueSort)
                     -> Vec<IssueGroup> {
     let needle = needle(&filter.search);

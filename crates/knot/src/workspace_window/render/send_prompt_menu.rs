@@ -1,9 +1,10 @@
 //! "Send prompt to": hands an issue or an OpenSpec change to one of the
 //! workspace's agents from the Changes view (#504).
 //!
-//! Contract: `openspec/changes/pr-view-issues-and-changes/specs/work-item-prompts/spec.md`.
-//! The same submenu sits in both menus of both tabs, so it is built here once
-//! from a [`WorkItemRef`] and the workspace's agents.
+//! Contract: `openspec/changes/pr-view-issues-and-changes/specs/
+//! work-item-prompts/spec.md`. The same submenu sits in both menus of both
+//! tabs, so it is built here once from a [`WorkItemRef`] and the workspace's
+//! agents.
 
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::{App, Context, Entity, Window};
@@ -25,7 +26,9 @@ impl WorkItemRef {
     /// or name substituted.
     pub(in crate::workspace_window) fn prompt_text(&self) -> String {
         match self {
-            Self::Issue(url) => knot_core::l10n::t_with("changes_view.prompt.issue", &[("url", url)]),
+            Self::Issue(url) => {
+                knot_core::l10n::t_with("changes_view.prompt.issue", &[("url", url)])
+            }
             Self::Change(name) => {
                 knot_core::l10n::t_with("changes_view.prompt.change", &[("name", name)])
             }
@@ -72,7 +75,8 @@ impl WorkspaceWindow {
 
     /// Sends `item`'s prompt to agent `id` and nothing else. The view stays
     /// where it is: the user is triaging a list, not leaving it.
-    pub(in crate::workspace_window) fn send_work_item(&mut self, id: Uuid, item: &WorkItemRef) -> bool {
+    pub(in crate::workspace_window) fn send_work_item(&mut self, id: Uuid, item: &WorkItemRef)
+                                                      -> bool {
         self.deliver_prompt(id, &item.prompt_text())
     }
 }

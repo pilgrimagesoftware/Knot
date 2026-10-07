@@ -1,11 +1,11 @@
 //! The Changes view's frame: its title, the tab bar, and the chosen tab's
 //! body below them (#504).
 //!
-//! Contract: `openspec/changes/pr-view-issues-and-changes/specs/pull-request-tracking/spec.md`,
-//! "The Changes view is divided into tabs". Each tab's body is its own
-//! module - `pull_requests_pane`, `issues_pane`, `openspec_pane` - and keeps
-//! its own search and filters, so switching tabs neither clears nor shares
-//! them.
+//! Contract: `openspec/changes/pr-view-issues-and-changes/specs/
+//! pull-request-tracking/spec.md`, "The Changes view is divided into tabs".
+//! Each tab's body is its own module - `pull_requests_pane`, `issues_pane`,
+//! `openspec_pane` - and keeps its own search and filters, so switching tabs
+//! neither clears nor shares them.
 
 use gpui_kit::base::{StyledExt, v_flex};
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -46,7 +46,9 @@ impl WorkspaceWindow {
         let entity = cx.entity();
         TabBar::new("changes-tabs").underline()
                                    .selected_index(selected.index())
-                                   .children(ChangesTab::ALL.map(|tab| Tab::new().label(tab.label())))
+                                   .children(ChangesTab::ALL.map(|tab| {
+                                                                Tab::new().label(tab.label())
+                                                            }))
                                    .on_click(move |index, _, app| {
                                        let Some(&tab) = ChangesTab::ALL.get(*index)
                                        else {

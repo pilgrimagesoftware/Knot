@@ -62,6 +62,7 @@ mod window_options;
 mod window_registry;
 mod working_indicator;
 mod workspace_manager;
+mod workspace_repos;
 mod workspace_window;
 
 fn main() {

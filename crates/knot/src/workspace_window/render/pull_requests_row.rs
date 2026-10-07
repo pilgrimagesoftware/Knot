@@ -52,46 +52,50 @@ impl WorkspaceWindow {
             with_key_hint(row, hint.as_deref(), false, cx)
         };
         row.cursor_pointer()
-                  .rounded(cx.theme().radius)
-                  .p_2()
-                  .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-                  .bg(if is_showing {
-                      cx.theme().muted
-                  }
-                  else {
-                      cx.theme().transparent
-                  })
-                  .child(h_flex().w_full()
-                                 .gap_3()
-                                 .items_center()
-                                 .when(compact, |row| row.justify_center())
-                                 .child({
-                                     let icon = div().w(px(40.))
-                                                     .h(px(40.))
-                                                     .flex_shrink_0()
-                                                     .flex()
-                                                     .items_center()
-                                                     .justify_center()
-                                                     .child(Icon::default().path("icons/git-pull-request.svg"));
-                                     if compact { with_key_hint(icon, hint.as_deref(), true, cx) } else { icon }
-                                 })
-                                 .when(!compact, |row| {
-                                     // `min_w_0` on the growing child, not
-                                     // just `flex_1`: the breakdown is the
-                                     // longest text in the sidebar, and
-                                     // without it the row pushes the divider
-                                     // instead of ellipsizing.
-                                     row.child(div().flex_1()
-                                                    .min_w_0()
-                                                    .child(title_and_counts(counts, cx)))
-                                 }))
-                  .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
-                                view.view_mode =
-                                    view.view_mode
-                                        .toggled(WorkspaceViewMode::Changes);
-                                cx.notify();
-                            }))
-                  .into_any_element()
+           .rounded(cx.theme().radius)
+           .p_2()
+           .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+           .bg(if is_showing {
+               cx.theme().muted
+           }
+           else {
+               cx.theme().transparent
+           })
+           .child(h_flex().w_full()
+                          .gap_3()
+                          .items_center()
+                          .when(compact, |row| row.justify_center())
+                          .child({
+                              let icon =
+                                  div().w(px(40.))
+                                       .h(px(40.))
+                                       .flex_shrink_0()
+                                       .flex()
+                                       .items_center()
+                                       .justify_center()
+                                       .child(Icon::default().path("icons/git-pull-request.svg"));
+                              if compact {
+                                  with_key_hint(icon, hint.as_deref(), true, cx)
+                              }
+                              else {
+                                  icon
+                              }
+                          })
+                          .when(!compact, |row| {
+                              // `min_w_0` on the growing child, not
+                              // just `flex_1`: the breakdown is the
+                              // longest text in the sidebar, and
+                              // without it the row pushes the divider
+                              // instead of ellipsizing.
+                              row.child(div().flex_1()
+                                             .min_w_0()
+                                             .child(title_and_counts(counts, cx)))
+                          }))
+           .on_click(cx.listener(|view, _: &ClickEvent, _window, cx| {
+                           view.view_mode = view.view_mode.toggled(WorkspaceViewMode::Changes);
+                           cx.notify();
+                       }))
+           .into_any_element()
     }
 }
 

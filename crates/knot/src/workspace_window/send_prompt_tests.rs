@@ -28,7 +28,8 @@ fn the_chosen_agent_alone_queues_the_prompt_and_the_view_stays(cx: &mut TestAppC
                     view.view_mode = WorkspaceViewMode::Changes;
                     view.changes_view.tab = ChangesTab::Issues;
                     let (connecting, _progress) = PanelSessionSlot::connecting();
-                    view.panel_sessions.insert(chosen, Arc::new(Mutex::new(connecting)));
+                    view.panel_sessions
+                        .insert(chosen, Arc::new(Mutex::new(connecting)));
 
                     assert!(view.can_receive_prompt(chosen));
                     assert!(view.send_work_item(chosen, &WorkItemRef::Issue(url.to_owned())));
@@ -36,9 +37,12 @@ fn the_chosen_agent_alone_queues_the_prompt_and_the_view_stays(cx: &mut TestAppC
                     let queue = &view.panel_prompt_queues[&chosen];
                     assert_eq!(queue.len(), 1);
                     assert_eq!(queue[0].text,
-                               knot_core::l10n::t_with("changes_view.prompt.issue", &[("url", url)]));
+                               knot_core::l10n::t_with("changes_view.prompt.issue",
+                                                       &[("url", url)]));
                     assert_eq!(queue[0].origin, PromptOrigin::User);
-                    assert!(view.panel_prompt_queues.get(&other).is_none_or(Vec::is_empty),
+                    assert!(view.panel_prompt_queues
+                                .get(&other)
+                                .is_none_or(Vec::is_empty),
                             "no other agent receives anything");
                     assert_eq!((view.view_mode, view.changes_view.tab),
                                (WorkspaceViewMode::Changes, ChangesTab::Issues),

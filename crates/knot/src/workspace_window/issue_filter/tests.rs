@@ -188,17 +188,6 @@ fn sort_oldest_first_orders_by_created_at_ascending() {
 }
 
 #[test]
-fn is_active_reports_search_or_repo_filter() {
-    assert!(!IssueFilter::default().is_active());
-    assert!(IssueFilter { search: "x".to_owned(),
-                          repo:   None, }.is_active());
-    assert!(IssueFilter { search: String::new(),
-                          repo:   Some(slug("acme", "widget")), }.is_active());
-    assert!(!IssueFilter { search: "   ".to_owned(),
-                           repo:   None, }.is_active());
-}
-
-#[test]
 fn reset_missing_repo_clears_a_repository_that_is_gone() {
     let mut filter = IssueFilter { search: String::new(),
                                    repo:   Some(slug("acme", "widget")), };

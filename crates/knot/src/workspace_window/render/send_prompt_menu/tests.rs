@@ -10,10 +10,11 @@ fn target(name: &str, enabled: bool) -> SendTarget {
 
 #[test]
 fn the_agents_are_listed_alphabetically() {
-    let names: Vec<_> = send_targets(vec![target("Bo", true), target("ada", true), target("Cy", true)])
-        .into_iter()
-        .map(|target| target.name)
-        .collect();
+    let names: Vec<_> = send_targets(vec![target("Bo", true),
+                                          target("ada", true),
+                                          target("Cy", true)]).into_iter()
+                                                              .map(|target| target.name)
+                                                              .collect();
     assert_eq!(names, ["ada", "Bo", "Cy"]);
 }
 

@@ -16,8 +16,6 @@ use super::ChangeEntry;
 /// Case-insensitive and trimmed on both sides; a row matches when its name or
 /// its repository heading contains the search text. An empty search matches
 /// every row.
-// UNWIRED(#504): wired into the OpenSpec tab by the integrating session.
-#[allow(dead_code)]
 pub(crate) fn matches(search: &str, heading: &str, entry: &ChangeEntry) -> bool {
     let needle = search.trim().to_lowercase();
     needle.is_empty()
@@ -27,9 +25,6 @@ pub(crate) fn matches(search: &str, heading: &str, entry: &ChangeEntry) -> bool 
 
 /// Clears `filter` when it names a repository heading no longer among
 /// `headings` - e.g. the workspace's last agent in that repository left.
-// UNWIRED(#504): wired into the OpenSpec tab's toolbar state by the
-// integrating session.
-#[allow(dead_code)]
 pub(crate) fn reset_if_missing(filter: &mut Option<String>, headings: &[String]) {
     if let Some(heading) = filter
        && !headings.iter().any(|candidate| candidate == heading)
