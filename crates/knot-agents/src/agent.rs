@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use knot_core::{ActivationMode, Capabilities, CostTier, StartupPrompt, ViewMode};
 use serde::{Deserialize, Serialize};
@@ -84,6 +85,12 @@ pub struct Agent {
     /// back stopped, or "passive" would decay into "active after first use".
     pub activated:         bool,
     pub state:             AgentState,
+    /// When the agent last went idle, which is when it finished its last
+    /// message. `None` until a transition into [`AgentState::Idle`] has
+    /// been seen in this run: an agent that has not spoken yet has no last
+    /// message, and a restart clears it. Set by
+    /// [`crate::AgentStore::set_state`], never by hand.
+    pub idle_since:        Option<SystemTime>,
     pub status_text:       String,
     pub is_registered:     bool,
     pub is_pending_start:  bool,
@@ -203,6 +210,7 @@ mod tests {
                 startup_prompt:     None,
                 activated:          false,
                 state:              AgentState::Idle,
+                idle_since:         None,
                 status_text:        String::new(),
                 is_registered:      false,
                 is_pending_start:   false,

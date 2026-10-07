@@ -33,6 +33,7 @@ impl AgentStore {
                             // it starts when its workspace next opens.
                             activated: opts.activation_mode == ActivationMode::Active,
                             state: AgentState::Idle,
+                            idle_since: None,
                             status_text: String::new(),
                             is_registered: false,
                             is_pending_start: false,
@@ -184,6 +185,7 @@ impl AgentStore {
         let agent = self.agent_mut(id).ok_or(AgentError::NotFound(id))?;
         agent.restart_token = Uuid::new_v4();
         agent.state = AgentState::Idle;
+        agent.idle_since = None;
         agent.is_registered = false;
         agent.terminal_title = String::new();
         Ok(())

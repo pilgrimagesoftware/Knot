@@ -184,8 +184,17 @@ impl AgentStore {
         }
     }
 
+    /// Set `id`'s state, recording the moment it goes idle in
+    /// [`Agent::idle_since`]. Only a transition counts: a repeated `Idle`
+    /// keeps the time the agent actually finished, rather than moving it to
+    /// whenever the state was last re-reported.
     pub fn set_state(&mut self, id: Uuid, state: AgentState) {
-        self.update(id, |agent| agent.state = state);
+        self.update(id, |agent| {
+                if state == AgentState::Idle && agent.state != AgentState::Idle {
+                    agent.idle_since = Some(std::time::SystemTime::now());
+                }
+                agent.state = state;
+            });
     }
 
     pub fn update_metadata(&mut self, id: Uuid, metadata: BTreeMap<String, String>) {
