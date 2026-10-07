@@ -36,6 +36,7 @@ mod mcp_lifetime;
 mod mcp_status;
 mod menu_bar;
 mod open_in;
+mod openspec_changes;
 mod panel_commands;
 mod panel_session;
 mod panel_state;
