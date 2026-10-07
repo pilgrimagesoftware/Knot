@@ -619,3 +619,12 @@ fn harness_notices_resolve_and_keep_their_summary() {
     assert_ne!(finished, "panel.harness.task_finished");
     assert!(finished.contains("Tests passed"), "{finished}");
 }
+
+/// The sidebar status dot's idle tooltip (#582). A missing key would ship
+/// the key string itself as the tooltip.
+#[test]
+fn status_dot_tooltip_resolves() {
+    assert_ne!(knot_core::l10n::t("sidebar.status_idle_since"),
+               "sidebar.status_idle_since",
+               "sidebar.status_idle_since is missing from the catalog");
+}

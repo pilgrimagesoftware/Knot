@@ -53,6 +53,24 @@ pub(crate) fn state_label(state: knot_agents::AgentState) -> &'static str {
     }
 }
 
+/// The sidebar status dot's tooltip (#582): the header's label for `state`,
+/// and for an idle agent that has finished a message in this run, when it
+/// did. Called when the tooltip opens, so "5m ago" is never stale.
+pub(crate) fn state_tooltip(state: knot_agents::AgentState,
+                            idle_since: Option<std::time::SystemTime>)
+                            -> String {
+    let label = state_label(state);
+    match (state, idle_since) {
+        (knot_agents::AgentState::Idle, Some(at)) => {
+            knot_core::l10n::t_with("sidebar.status_idle_since",
+                                    &[("state", label),
+                                      ("when", &crate::timestamp::relative_timestamp(at)),
+                                      ("at", &crate::timestamp::absolute_timestamp(at))])
+        }
+        _ => label.to_string(),
+    }
+}
+
 /// Status-dot color for the agent's automatic state. Diverges from the
 /// Swift reference (which uses red for both input and error) by giving
 /// "awaiting input" its own blue, since it isn't a failure state.

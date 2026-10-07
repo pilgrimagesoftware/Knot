@@ -39,6 +39,8 @@ mod shortcuts;
 #[cfg(test)]
 mod shortcuts_tests;
 mod sidebar_layout;
+#[cfg(test)]
+mod status_dot_tests;
 pub(crate) mod terminal_font;
 mod terminal_pane;
 mod title;

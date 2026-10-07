@@ -53,6 +53,7 @@ mod startup_choice;
 mod subagent_feed;
 #[cfg(test)]
 mod tests;
+mod timestamp;
 mod view_menu;
 mod window_actions;
 mod window_options;
