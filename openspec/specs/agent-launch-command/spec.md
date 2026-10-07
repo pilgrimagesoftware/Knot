@@ -157,6 +157,13 @@ SHALL forbid opening a design debate, seeking consensus, and waiting for
 approval before acting. Without a bound, an answered message is an invitation
 to another one.
 
+The knot agent ID it carries SHALL be the launched agent's own, on every
+launch - fresh, resumed, forked, duplicated or restored - never one taken from
+a conversation it resumes. On the ACP path the agent's MCP server URL SHALL
+also name that ID (see `mcp-tools`' "A caller acts only as itself"), so a
+session that reads another agent's ID from somewhere is refused rather than
+acting as it.
+
 It SHALL continue to carry the agent's knot agent ID verbatim, the name of the
 MCP server the knot tools come from together with the reason that name
 matters, the names `list-agents`, `send-message`, `broadcast-message` and
@@ -196,6 +203,12 @@ is funded by compressing wording elsewhere, not by raising the ceiling.
 
 - **WHEN** the knot instructions are rendered for any agent ID
 - **THEN** the result is one line of at most 1,000 characters
+
+#### Scenario: A resumed agent is given its own ID
+
+- **WHEN** an agent is launched on a resumed conversation whose transcript
+  names another agent's knot ID
+- **THEN** its knot instructions and its MCP server URL carry its own ID
 
 ### Requirement: Standing instructions through the agent's system channel
 
@@ -382,3 +395,122 @@ conversation survived a restart.
   `loadSession`, and the load is refused
 - **THEN** a fresh session opens, it is sent the registration prompt, and its
   id is persisted in place of the refused one
+
+### Requirement: User options for an ACP-launched agent
+
+For a Claude agent launched through its ACP adapter, the system SHALL pass the
+options set for the `claude` type in Settings - Coding - Agent Options to the
+adapter's session, as `_meta.claudeCode.options.extraArgs` on `session/new` and
+`session/load`. Options SHALL be split into words as a shell would, honoring
+quotes. A word `--name=value`, or `--name` followed by a word that does not
+start with `-`, SHALL be forwarded as `name` with that value; a `--name` with
+no value SHALL be forwarded as a bare flag.
+
+`--dangerously-skip-permissions` SHALL instead select the adapter's
+`bypassPermissions` mode, and `--permission-mode <mode>` the mode it names in
+any spelling Claude Code accepts, once the session opens. That mode SHALL win
+over a persisted session mode and over a mode set in Claude's settings files,
+and SHALL NOT be requested when the adapter does not offer it.
+
+Flags the adapter passes itself to drive the session, short flags, stray words,
+and all the options when their quoting is unbalanced SHALL NOT be forwarded,
+and the system SHALL log what it did not forward. Options for agent types whose
+adapter has no confirmed way to take them SHALL NOT be forwarded and SHALL be
+logged the same way.
+
+When the adapter refuses the session with an error carrying details, the
+failure the panel shows SHALL include those details.
+
+#### Scenario: Extra flags reach the agent
+
+- **WHEN** the Claude options are `--remote-control --add-dir /tmp/x`
+- **THEN** the session opens with `extraArgs` `{"remote-control": null, "add-dir": "/tmp/x"}`
+
+#### Scenario: Skipping permissions selects bypass
+
+- **WHEN** the Claude options include `--dangerously-skip-permissions` and the
+  adapter offers `bypassPermissions`
+- **THEN** the session is moved to `bypassPermissions` after it opens, even if
+  the agent's persisted mode is another one
+
+#### Scenario: Adapter-owned flags are dropped
+
+- **WHEN** the Claude options include `--output-format text`
+- **THEN** it is not forwarded, and is logged as not passed to the adapter
+
+#### Scenario: No options
+
+- **WHEN** no options are set for the Claude type
+- **THEN** the session opens with no `_meta`
+
+#### Scenario: A mistyped option names itself
+
+- **WHEN** an option is one `claude` does not know and the adapter fails the
+  session
+- **THEN** the panel's error includes the CLI's message naming the option
+
+### Requirement: User options for the other ACP-launched agents
+
+For a Codex, OpenCode or Gemini agent, the system SHALL pass the options set
+for its type in Settings - Coding - Agent Options to its ACP adapter, split
+into words as a shell would, as follows. Only the flags listed for a type
+SHALL be forwarded, each in its long or one-letter form, with a value given
+either after `=` or as the next word that does not start with `-`.
+
+- Codex: SHALL set each `-c`/`--config` `key=value` as that key, a dotted key
+  naming nested tables, with the value read as JSON where it parses and as a
+  string otherwise; `-m`/`--model` as `model`; `-p`/`--profile` as `profile`;
+  and `--enable <name>` / `--disable <name>` as `features.<name>` set to true
+  or false. These SHALL go into the JSON object of the adapter subprocess's
+  `CODEX_CONFIG`, with nested tables merged into what that variable already
+  holds.
+- OpenCode: SHALL set `-m`/`--model` as `model` and `--agent` as
+  `default_agent` in the adapter subprocess's `OPENCODE_CONFIG_CONTENT`, and
+  SHALL pass `--print-logs`, `--log-level <level>` and `--pure` on the `opencode
+  acp` command line.
+- Gemini: SHALL append `--model`, `--sandbox`, `--yolo`, `--approval-mode`,
+  `--policy`, `--admin-policy`, `--allowed-mcp-server-names`,
+  `--allowed-tools`, `--extensions`, `--include-directories`, `--raw-output`
+  and `--accept-raw-output-risk` to the adapter's command line under their long
+  names.
+
+The options SHALL override the value the environment variable has in Knot's
+own environment, and the standing instructions SHALL be merged in after them
+(see "Standing instructions through the agent's system channel"), so that no
+option removes or replaces them. The variable SHALL still be set, with the
+options, when the instructions fall back to the first turn.
+
+A flag not listed for the type, together with the word after it when that word
+is not a flag; a listed flag that needs a value and has none; a stray word; all
+the options when their quoting is unbalanced; and every option for Copilot,
+whose adapter has no confirmed way to take them, SHALL NOT be forwarded, and
+the system SHALL log what it did not forward.
+
+#### Scenario: Codex options become config overrides
+
+- **WHEN** the Codex options are `-m o3 -c features.web_search=true`
+- **THEN** the adapter starts with `CODEX_CONFIG` holding `model` `o3`,
+  `features.web_search` `true` and the knot's `developer_instructions`
+
+#### Scenario: An option cannot displace the instructions
+
+- **WHEN** the Codex options include `-c developer_instructions=Mine`
+- **THEN** `developer_instructions` holds `Mine` followed by the knot
+  instructions
+
+#### Scenario: OpenCode starts in the chosen agent
+
+- **WHEN** the OpenCode options are `--agent plan --print-logs`
+- **THEN** `OPENCODE_CONFIG_CONTENT` sets `default_agent` to `plan` and the
+  adapter runs as `opencode acp --print-logs`
+
+#### Scenario: A Gemini flag that would end the ACP session is dropped
+
+- **WHEN** the Gemini options are `-p hello --model gemini-2.5-pro`
+- **THEN** the adapter runs as `gemini --acp --skip-trust --model
+  gemini-2.5-pro`, and `-p hello` is logged as not passed
+
+#### Scenario: Copilot options are not forwarded
+
+- **WHEN** options are set for the Copilot type
+- **THEN** none are passed to its adapter, and all are logged as not passed
