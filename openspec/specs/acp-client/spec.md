@@ -99,3 +99,45 @@ as a panic.
 - **WHEN** the subprocess exits while a prompt turn is in progress
 - **THEN** the system reports the session as ended with the process exit code,
   and any pending prompt/permission futures resolve with an error
+
+### Requirement: A loaded session keeps the id it was loaded by
+
+A successful `session/load` SHALL identify the session by the `sessionId` its
+response carries when it carries one, and otherwise by the `sessionId` the
+request named. ACP's `LoadSessionResponse` defines no `sessionId`: a loaded
+session continues under the id it was asked for. A response without one SHALL
+NOT be treated as a failure.
+
+`codex-acp` 2.0.0 answers `session/load` with its models, modes and config
+options and no `sessionId`. Treating that as an error made every Codex load
+fall back to a fresh session.
+
+#### Scenario: A load response with no session id
+
+- **WHEN** the caller loads session `thread-7` and the agent's successful
+  response has no `sessionId`
+- **THEN** the loaded session is identified as `thread-7`
+
+#### Scenario: A load response naming its session
+
+- **WHEN** the agent's successful load response carries a `sessionId`
+- **THEN** the loaded session is identified by that id
+
+### Requirement: User message chunks keep their metadata
+
+A `user_message_chunk` SHALL be delivered with its `_meta` envelope, verbatim,
+alongside its text, or with none when the agent sent none. Not every replayed
+user message was typed by the user. An adapter may say who produced one: Claude
+Code's origin is `_claude/origin`. A caller can only tell the two apart if the
+metadata reaches it.
+
+#### Scenario: An origin tag reaches the caller
+
+- **WHEN** an agent sends a `user_message_chunk` whose `_meta` carries
+  `_claude/origin` with kind `task-notification`
+- **THEN** the delivered chunk carries that `_meta`
+
+#### Scenario: A chunk without metadata
+
+- **WHEN** an agent sends a `user_message_chunk` with no `_meta`
+- **THEN** the delivered chunk carries its text and no metadata

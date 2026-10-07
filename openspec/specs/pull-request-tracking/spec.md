@@ -675,6 +675,13 @@ search does not hide a row only because its title has not arrived.
 
 The list SHALL narrow as the user types, without a separate submit.
 
+The search field SHALL look like a field while it does not have focus: it
+SHALL be outlined by a border in the window's separator color, distinguishable
+from the field's fill and from the toolbar behind it, in light and dark
+appearance. While it has focus it SHALL show the focus border every focused
+control shows. This styling belongs to the search field alone; other text
+fields keep their own appearance.
+
 #### Scenario: Searching by title
 
 - **WHEN** the list holds pull requests titled `Fix login redirect` and
@@ -708,6 +715,19 @@ The list SHALL narrow as the user types, without a separate submit.
 
 - **WHEN** the user empties the search field
 - **THEN** every row is shown again
+
+#### Scenario: The unfocused search field has a border
+
+- **WHEN** the Pull Requests view is shown on macOS, in light or in dark
+  appearance, and the search field does not have focus
+- **THEN** the search field is outlined by a separator-colored border that
+  stands out from its fill and the toolbar
+
+#### Scenario: The focused search field shows the focus border
+
+- **WHEN** the user clicks into the search field
+- **THEN** its border changes to the focus border, as any focused control's
+  does
 
 ### Requirement: The user can filter the Pull Requests view by status
 

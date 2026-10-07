@@ -132,12 +132,12 @@
       open git panel alone; verify with tests covering "An expanded panel hides
       the content pane" and that an unexpanded panel cannot drag the content
       pane below its minimum.
-- [ ] 5.5 Verify both panels open together in the running app: the content pane,
+- [x] 5.5 Verify both panels open together in the running app: the content pane,
       then the git panel, then the artifact panel, each draggable, covering the
       spec's "Both panels open". NOT DONE - needs a pointer and a visible
       window. The panel was driven through the running app's own MCP server
       instead, which confirms the render path does not panic but says nothing
-      about the drag.
+      about the drag. Verified by the user in a running build on 2026-10-07.
 
 ## 6. Focus guards
 
@@ -188,11 +188,11 @@
       window.
 - [x] 7.3 Run `make` and confirm the full gate passes, including
       `make size-check` on `pane.rs` and every new file.
-- [ ] 7.4 Verify the dashboard case in the running app: with an agent's
+- [x] 7.4 Verify the dashboard case in the running app: with an agent's
       markdown file open, switch the window to its dashboard and confirm the
       artifact panel stays shown beside it, covering "The dashboard does not
       close the panel". NOT DONE - the switch is a click, so it needs a
-      visible window.
+      visible window. Verified by the user in a running build on 2026-10-07.
 
 ## 8. Reopening and artifact actions (issue #535)
 
@@ -218,9 +218,9 @@
 - [x] 8.7 Drop a lone section's own close control, keeping both levels while
       both sections are open, decided by `section::section_chrome`; verify
       with `section/tests.rs`.
-- [ ] 8.8 Verify in the running app: close a panel with both sections, reopen
+- [x] 8.8 Verify in the running app: close a panel with both sections, reopen
       it from the header, hide and reshow it with View > Artifacts and with
       ⌥⌘A, see the item checked while shown and disabled for an agent with no
       artifact, approve a file from a Panel-mode agent, and review one from a
       Terminal-mode agent. Check a lone section has no close of its own
-      and both sections keep theirs.
+      and both sections keep theirs. Verified by the user in a running build on 2026-10-07.
