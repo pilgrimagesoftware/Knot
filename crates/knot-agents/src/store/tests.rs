@@ -1,3 +1,4 @@
+mod duplicate;
 mod idle_since;
 mod lifecycle;
 mod persistence;
