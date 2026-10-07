@@ -8,6 +8,7 @@ use knot_mcp::ToolCallResult;
 use knot_messaging::{DeliveryNotifier, MessageStore, send};
 use knot_tasks::{Assignee, Outcome, TaskId};
 
+use crate::ActivationQueue;
 use crate::agents::registry::declared_tools;
 use crate::args::require_str;
 use crate::lookup::{agent_not_found, find_by_name_or_id, workspace_members};
@@ -20,11 +21,14 @@ use crate::tasks::store::GraphStore;
 /// Grouped rather than passed as six arguments, per the project's
 /// argument-count convention.
 pub struct DispatchContext<'a> {
-    pub agents:   &'a AgentStore,
-    pub graphs:   &'a mut GraphStore,
-    pub messages: &'a mut MessageStore,
-    pub notifier: &'a dyn DeliveryNotifier,
-    pub bench:    &'a [BenchAgent],
+    pub agents:     &'a AgentStore,
+    pub graphs:     &'a mut GraphStore,
+    pub messages:   &'a mut MessageStore,
+    pub notifier:   &'a dyn DeliveryNotifier,
+    pub bench:      &'a [BenchAgent],
+    /// Where a deactivated assignee is queued to be started, as for a
+    /// direct `send-message`. `None` delivers without starting anyone.
+    pub activation: Option<&'a ActivationQueue>,
 }
 
 pub fn dispatch_task(ctx: DispatchContext<'_>, arguments: &serde_json::Value) -> ToolCallResult {
@@ -88,6 +92,11 @@ pub fn dispatch_task(ctx: DispatchContext<'_>, arguments: &serde_json::Value) ->
     // must be registered, the recipient must share its workspace, shell
     // agents cannot receive, and companion routing applies.
     let members = workspace_members(ctx.agents, caller.id);
+    // Read before delivery, as `send-message` does: a dispatch is a message
+    // to one agent the caller chose, so it starts a deactivated assignee
+    // the same way (#563). `None` for an unknown recipient, which `send`
+    // rejects below.
+    let recipient_activated = ctx.agents.agent(recipient).map(|agent| agent.activated);
     if let Err(error) = send(ctx.messages,
                              ctx.notifier,
                              &caller,
@@ -96,6 +105,14 @@ pub fn dispatch_task(ctx: DispatchContext<'_>, arguments: &serde_json::Value) ->
                              &dispatchable.goal)
     {
         return ToolCallResult::error(error.to_string());
+    }
+    // Only after delivery succeeded - a dispatch the messaging rules reject
+    // starts nobody, per `mcp-messaging`'s "Direct send activates a
+    // deactivated recipient".
+    if recipient_activated == Some(false)
+       && let Some(queue) = ctx.activation
+    {
+        queue.lock().push(recipient);
     }
 
     let graph = ctx.graphs
