@@ -42,6 +42,18 @@ pub const COMMIT: &[&str] = &["commit", "-m"];
 
 pub const WORKTREE_ADD: &[&str] = &["worktree", "add", "-b"];
 
+/// A folder's working tree root. Absolute already - git resolves it - so
+/// unlike [`GIT_COMMON_DIR`] this needs no further canonicalization.
+pub const TOPLEVEL: &[&str] = &["rev-parse", "--show-toplevel"];
+/// The directory shared by every worktree of one repository. May come back
+/// relative to the working directory or already absolute depending on git's
+/// version and how the repository was cloned, which is why
+/// [`Repository::common_dir`](crate::repository::Repository::common_dir)
+/// resolves and canonicalizes it before comparing two worktrees.
+pub const GIT_COMMON_DIR: &[&str] = &["rev-parse", "--git-common-dir"];
+/// Base argv for a named remote's URL; the remote name is appended.
+pub const REMOTE_GET_URL: &[&str] = &["remote", "get-url"];
+
 pub const BRANCH_SHOW_CURRENT: &[&str] = &["branch", "--show-current"];
 pub const SHORT_HEAD: &[&str] = &["rev-parse", "--short", "HEAD"];
 pub const LOG_UNPUSHED: &[&str] = &["log", "@{u}..", "--oneline"];

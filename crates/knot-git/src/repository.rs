@@ -175,6 +175,58 @@ impl Repository {
         Ok((ahead, behind))
     }
 
+    /// The folder's working tree root, from `git rev-parse --show-toplevel`.
+    ///
+    /// `None` when the folder is not inside a git repository, rather than an
+    /// error - a folder an agent works in need not be one, and the caller
+    /// (resolving a workspace's repositories) treats that folder as
+    /// contributing no repository, not as a failure.
+    pub fn toplevel(&self) -> Result<Option<PathBuf>> {
+        let output = match self.runner.run(consts::TOPLEVEL) {
+            Ok(output) => output,
+            Err(GitError::Command { .. }) => return Ok(None),
+            Err(err) => return Err(err),
+        };
+        Ok(Some(PathBuf::from(output)))
+    }
+
+    /// The directory shared by every worktree of this repository, from
+    /// `git rev-parse --git-common-dir`, resolved against the folder and
+    /// canonicalized to an absolute, symlink-free path.
+    ///
+    /// Canonicalizing is what lets two worktrees of one repository compare
+    /// equal: git may report the common dir relative to the working
+    /// directory, or already absolute, depending on its version and how the
+    /// repository was cloned - two different-looking answers for the same
+    /// directory otherwise.
+    ///
+    /// `None` when the folder is not inside a git repository.
+    pub fn common_dir(&self) -> Result<Option<PathBuf>> {
+        let output = match self.runner.run(consts::GIT_COMMON_DIR) {
+            Ok(output) => output,
+            Err(GitError::Command { .. }) => return Ok(None),
+            Err(err) => return Err(err),
+        };
+        // `Path::join` with an absolute `output` discards `cwd` and keeps
+        // `output`, so this is correct whichever form git chose to report.
+        let resolved = self.runner.cwd().join(output);
+        Ok(Some(fs::canonicalize(resolved)?))
+    }
+
+    /// A named remote's URL, from `git remote get-url <name>`.
+    ///
+    /// `None` both outside a git repository and when the repository has no
+    /// such remote - git fails the command the same way either time, and
+    /// neither is an error a caller resolving repositories should see.
+    pub fn remote_url(&self, name: &str) -> Result<Option<String>> {
+        let argv = [consts::REMOTE_GET_URL, &[name]].concat();
+        match self.runner.run(&argv) {
+            Ok(url) => Ok(Some(url)),
+            Err(GitError::Command { .. }) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Create a worktree at `destination` on a new branch `branch`, via
     /// `git worktree add -b <branch> <destination>` run from this repository.
     /// The runner's error propagates unchanged, so an existing branch name
