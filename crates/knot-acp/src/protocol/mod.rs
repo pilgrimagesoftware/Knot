@@ -7,10 +7,14 @@
 
 mod agent_info;
 mod json_rpc;
+mod permission;
 
 pub use agent_info::AgentInfo;
 pub use json_rpc::{
     IncomingMessage, JsonRpcErrorPayload, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
+};
+pub use permission::{
+    PermissionDecision, PermissionOption, PermissionOptionKind, PermissionRequest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -344,29 +348,6 @@ fn field_str(value: &Value, key: &str) -> String {
 /// omits `status` is leaving it unchanged, not clearing it.
 fn optional_str(value: &Value, key: &str) -> Option<String> {
     value.get(key).and_then(Value::as_str).map(str::to_owned)
-}
-
-/// A `session/request_permission` request from the agent, awaiting an
-/// allow/deny decision from the caller.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PermissionRequest {
-    pub rpc_id:          Value,
-    pub tool_call_id:    String,
-    pub tool_call_title: Option<String>,
-    pub options:         Vec<PermissionOption>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct PermissionOption {
-    #[serde(rename = "optionId")]
-    pub option_id: String,
-    pub name:      String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PermissionDecision {
-    Allow,
-    Deny,
 }
 
 #[cfg(test)]
