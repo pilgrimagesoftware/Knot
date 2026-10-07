@@ -124,7 +124,8 @@ pub(crate) fn open_settings_window(handle: &Rc<RefCell<Option<AnyWindowHandle>>>
                                                   _autopilot_custom_prompt_subscription:
                                                       autopilot_custom_prompt_subscription,
                                                   _mcp_port_subscription: mcp_port_subscription,
-                                                  keyboard: Default::default() }
+                                                  keyboard: Default::default(),
+                                                  adapter_update: Default::default() }
                              });
                 #[cfg(target_os = "macos")]
                 {
@@ -245,6 +246,11 @@ pub(crate) struct SettingsWindow {
     pub(super) _mcp_port_subscription: Subscription,
     /// The Keyboard tab's armed recorder and last rejection.
     pub(super) keyboard: super::keyboard::KeyboardPaneState,
+    /// The Coding tab's last adapter version check per agent type, keyed by
+    /// `agent_type` so switching the picker doesn't lose another type's
+    /// in-flight or completed check.
+    pub(super) adapter_update:
+        std::collections::BTreeMap<String, super::panes::coding::AdapterUpdateState>,
 }
 
 impl SettingsWindow {

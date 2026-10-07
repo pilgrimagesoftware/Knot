@@ -206,14 +206,26 @@ fn run_open(_arguments: &[&str], _folder: &str) -> bool {
 /// event. `-n` forces a fresh process so the launch actually reaches the
 /// application's argument parser rather than being folded into whatever
 /// Apple event the already-running instance would otherwise receive.
+///
+/// `-n` is only used when the application is already running: when it is
+/// not, `open -n` prevents the application from launching with the args
+/// (#585), so the flag is omitted to let it start normally.
 #[cfg(target_os = "macos")]
 fn run_open_with_args(bundle_arguments: &[&str], extra_args: &[&str]) -> bool {
-    Command::new("/usr/bin/open").arg("-n")
-                                 .args(bundle_arguments)
-                                 .arg("--args")
-                                 .args(extra_args)
-                                 .status()
-                                 .is_ok_and(|status| status.success())
+    let is_running = Command::new("pgrep").args(["-x", "Zed"])
+                                          .output()
+                                          .map(|o| o.status.success())
+                                          .unwrap_or(false);
+
+    let mut cmd = Command::new("/usr/bin/open");
+    if is_running {
+        cmd.arg("-n");
+    }
+    cmd.args(bundle_arguments)
+       .arg("--args")
+       .args(extra_args)
+       .status()
+       .is_ok_and(|status| status.success())
 }
 
 #[cfg(not(target_os = "macos"))]
