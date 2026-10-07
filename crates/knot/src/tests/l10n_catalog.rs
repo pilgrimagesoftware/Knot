@@ -2,8 +2,8 @@
 //! keys - a missing entry renders the key, which is visible but easy to
 //! miss in review.
 
+use crate::agent_menu_entries::AgentMenuEntry;
 use crate::app_state::AgentListBackgroundEntry;
-use crate::app_state::AgentMenuEntry;
 use crate::app_state::SidebarMenuFacts;
 use crate::app_state::sidebar_background_menu_entries;
 use crate::settings_window::SettingsTab;

@@ -338,3 +338,72 @@ fn usage_update_parses_context_window_tokens() {
                      SessionUpdate::Usage { used: 53_000,
                                             size: 200_000, }));
 }
+
+/// The `initialize` response from the spec's own example
+/// (<https://agentclientprotocol.com/protocol/initialization>), not a shape
+/// inferred from [`AgentInfo`].
+fn spec_initialize_result() -> Value {
+    serde_json::json!({
+        "protocolVersion": 1,
+        "agentCapabilities": {
+            "loadSession": true,
+            "promptCapabilities": { "image": true, "audio": true, "embeddedContext": true },
+            "mcpCapabilities": { "http": true, "sse": true }
+        },
+        "agentInfo": { "name": "my-agent", "title": "My Agent", "version": "1.0.0" },
+        "authMethods": []
+    })
+}
+
+#[test]
+fn agent_info_parses_from_the_spec_example() {
+    let result: InitializeResult =
+        serde_json::from_value(spec_initialize_result()).expect("the spec's example parses");
+
+    let info = result.agent_info.expect("the example carries agentInfo");
+    assert_eq!(info.name, "my-agent");
+    assert_eq!(info.display_name(), "My Agent");
+    assert_eq!(info.version(), Some("1.0.0"));
+}
+
+/// `agentInfo` is a SHOULD: an agent that leaves it out still connects.
+#[test]
+fn an_absent_agent_info_reads_as_none() {
+    let mut raw = spec_initialize_result();
+    raw.as_object_mut().expect("an object").remove("agentInfo");
+
+    let result: InitializeResult = serde_json::from_value(raw).expect("still parses");
+
+    assert_eq!(result.agent_info, None);
+    assert!(result.capabilities.supports_resume,
+            "dropping agentInfo must not disturb the fields beside it");
+}
+
+/// A field the client only displays must not fail the handshake.
+#[test]
+fn a_malformed_agent_info_reads_as_none_rather_than_failing_initialize() {
+    for malformed in [serde_json::json!({ "title": "No Name" }),
+                      serde_json::json!("my-agent 1.0.0"),
+                      Value::Null]
+    {
+        let mut raw = spec_initialize_result();
+        raw["agentInfo"] = malformed.clone();
+
+        let result: InitializeResult =
+            serde_json::from_value(raw).unwrap_or_else(|error| {
+                                           panic!("{malformed} failed initialize: {error}")
+                                       });
+
+        assert_eq!(result.agent_info, None, "{malformed}");
+    }
+}
+
+#[test]
+fn display_name_falls_back_to_name_and_blank_fields_count_as_absent() {
+    let info: AgentInfo =
+        serde_json::from_value(serde_json::json!({ "name": "codex-acp", "title": "  ",
+                                                   "version": "" })).expect("parses");
+
+    assert_eq!(info.display_name(), "codex-acp");
+    assert_eq!(info.version(), None);
+}

@@ -10,9 +10,9 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::{AcpError, Result};
 use crate::protocol::{
-    AgentCapabilities, ConfigOption, InitializeParams, InitializeResult, JsonRpcErrorPayload,
-    MCP_SERVER_NAME, PROTOCOL_VERSION, PermissionDecision, PermissionOption, PermissionRequest,
-    SessionUpdate,
+    AgentCapabilities, AgentInfo, ConfigOption, InitializeParams, InitializeResult,
+    JsonRpcErrorPayload, MCP_SERVER_NAME, PROTOCOL_VERSION, PermissionDecision, PermissionOption,
+    PermissionRequest, SessionUpdate,
 };
 use crate::transport::{Transport, TransportEvent};
 
@@ -27,6 +27,10 @@ pub use events::{NewSession, SessionEvent};
 pub struct AcpClient {
     transport:           Arc<Transport>,
     capabilities:        AgentCapabilities,
+    /// The agent's name and version from `initialize`, if it sent them.
+    /// Behind an `Arc` because the client is cloned for every request, and
+    /// three owned strings would otherwise be copied each time.
+    agent_info:          Option<Arc<AgentInfo>>,
     /// Session Config Options declared on `initialize`, if any - seeds a
     /// new session's config options before `session/new`'s own (possibly
     /// richer, per-session) list arrives.
@@ -170,6 +174,7 @@ impl AcpClient {
 
         Ok((Self { transport,
                    capabilities: init_result.capabilities,
+                   agent_info: init_result.agent_info.map(Arc::new),
                    init_config_options: init_result.config_options,
                    permission_pending,
                    events: events_for_client,
@@ -179,6 +184,12 @@ impl AcpClient {
 
     pub fn capabilities(&self) -> &AgentCapabilities {
         &self.capabilities
+    }
+
+    /// The agent's name and version as it reported them on `initialize`.
+    /// `None` when it did not - the spec only says it SHOULD.
+    pub fn agent_info(&self) -> Option<&AgentInfo> {
+        self.agent_info.as_deref()
     }
 
     /// The adapter subprocess's process id, while the connection is live.

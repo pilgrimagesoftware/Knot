@@ -512,3 +512,40 @@ async fn a_connected_client_reports_the_adapters_pid() {
     assert!(pid > 1, "got {pid}");
     assert_ne!(pid, std::process::id());
 }
+
+/// A fake agent whose `initialize` reports `agentInfo`, in the shape of the
+/// spec's example (<https://agentclientprotocol.com/protocol/initialization>).
+fn identified_agent() -> Command {
+    let script = format!(
+                         r#"while IFS= read -r line; do
+          id=$(echo "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+          method=$(echo "$line" | sed -nE 's/.*"method":"([^"]+)".*/\1/p')
+          case "$method" in
+            initialize) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"protocolVersion\":{PROTOCOL_VERSION},\"agentCapabilities\":{{}},\"agentInfo\":{{\"name\":\"my-agent\",\"title\":\"My Agent\",\"version\":\"1.0.0\"}}}}}}" ;;
+            *) echo "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}" ;;
+          esac
+        done"#
+    );
+    sh_agent(script)
+}
+
+/// What the handshake reported is what the client hands back, so a session
+/// can say which agent and version it is running.
+#[tokio::test]
+async fn connect_keeps_the_agent_info_initialize_reported() {
+    let (client, _events) = AcpClient::connect(identified_agent()).await
+                                                                  .expect("connect");
+
+    let info = client.agent_info().expect("agentInfo was reported");
+    assert_eq!(info.display_name(), "My Agent");
+    assert_eq!(info.version(), Some("1.0.0"));
+}
+
+#[tokio::test]
+async fn connect_reports_no_agent_info_when_the_agent_sends_none() {
+    let (client, _events) =
+        AcpClient::connect(fake_agent(PROTOCOL_VERSION, false)).await
+                                                               .expect("connect");
+
+    assert!(client.agent_info().is_none());
+}

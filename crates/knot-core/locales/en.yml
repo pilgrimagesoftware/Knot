@@ -57,6 +57,17 @@ agent:
   duplicate_name: "%{name} %{number}"
 
 panel:
+  # Which ACP agent a Panel-mode session is running, from the `agentInfo`
+  # it reported on `initialize`. The header's info button shows the
+  # summary as its tooltip; the Agents menu's Agent Info shows it in a
+  # dialog. %{name} is the agent's own display name, %{version} its
+  # version string - both as the agent sent them, never translated.
+  agent_info:
+    title: "Agent Info"
+    reported: "%{name} %{version}"
+    reported_no_version: "%{name} (version not reported)"
+    unreported: "This agent did not report its name or version."
+    not_connected: "This agent is not connected."
   # Failures the panel records into the conversation itself, where the
   # user reads them beside the turn they belong to.
   error_first_turn: "The agent could not start its first turn: %{error}"
@@ -365,6 +376,7 @@ menu:
     bench_agent: "Bench Agent…"
     open_in: "Open In…"
     markdown_files: "Markdown Files"
+    agent_info: "Agent Info…"
     register_agent: "Register Agent"
     deactivate: "Deactivate"
     restart_agent: "Restart Agent"

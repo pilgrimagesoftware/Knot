@@ -1,7 +1,7 @@
 //! One agent row's context menu.
 //!
 //! Shape and enablement come from
-//! [`crate::app_state::agent_context_menu_entries`], which is pure and
+//! [`crate::agent_menu_entries::agent_context_menu_entries`], which is pure and
 //! tested against the Swift reference's ordering; this is the wiring -
 //! reading the row's facts out of the store, building the submenus, and
 //! running whichever entry the user picked.
@@ -23,9 +23,9 @@ use crate::agent_editor::AgentEditorRequest;
 use crate::agent_editor::AgentPrefill;
 use crate::agent_editor::open_agent_editor;
 use crate::agent_menu::markdown_label;
-use crate::app_state::AgentMenuEntry;
-use crate::app_state::AgentMenuFacts;
-use crate::app_state::agent_context_menu_entries;
+use crate::agent_menu_entries::AgentMenuEntry;
+use crate::agent_menu_entries::AgentMenuFacts;
+use crate::agent_menu_entries::agent_context_menu_entries;
 use crate::open_in;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::menus::confirm_then;
@@ -71,12 +71,13 @@ pub(crate) fn agent_menu_facts(store: &knot_agents::AgentStore, id: Uuid)
              .map(|workspace| (workspace.id, workspace.name.clone()))
              .collect::<Vec<_>>();
     let history = agent.markdown_history.clone();
-    let facts = AgentMenuFacts { is_companion:         agent.is_companion,
-                                 is_shell:             agent.is_shell(),
-                                 has_move_targets:     own_workspace.is_some()
-                                                       && !move_targets.is_empty(),
-                                 has_markdown_history: !history.is_empty(),
-                                 is_running:           agent.activated, };
+    let facts =
+        AgentMenuFacts { is_companion:         agent.is_companion,
+                         is_shell:             agent.is_shell(),
+                         has_move_targets:     own_workspace.is_some() && !move_targets.is_empty(),
+                         has_markdown_history: !history.is_empty(),
+                         is_running:           agent.activated,
+                         is_panel_mode:        agent.view_mode == knot_core::ViewMode::Panel, };
     (facts, move_targets, history)
 }
 
@@ -366,6 +367,10 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
                                                       cx.notify();
                                                   });
                          });
+        }
+        AgentMenuEntry::AgentInfo => {
+            let identity = targets.window_entity.read(app).agent_identity(targets.id);
+            crate::workspace_window::agent_info::show_agent_info(window, app, &identity);
         }
         AgentMenuEntry::RegisterAgent => {
             targets.window_entity.update(app, |view, cx| {

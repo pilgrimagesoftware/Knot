@@ -10,9 +10,9 @@ use uuid::Uuid;
 
 use crate::agent_editor::created_agent_type;
 use crate::agent_editor::persona_choices;
-use crate::app_state::AgentMenuEntry;
-use crate::app_state::AgentMenuFacts;
-use crate::app_state::agent_context_menu_entries;
+use crate::agent_menu_entries::AgentMenuEntry;
+use crate::agent_menu_entries::AgentMenuFacts;
+use crate::agent_menu_entries::agent_context_menu_entries;
 use crate::tests::workspace;
 use crate::workspace_window::agent_menu_facts;
 
@@ -22,7 +22,8 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
                                  is_shell:             false,
                                  has_move_targets:     true,
                                  has_markdown_history: true,
-                                 is_running:           true, };
+                                 is_running:           true,
+                                 is_panel_mode:        true, };
     assert_eq!(agent_context_menu_entries(facts),
                vec![AgentMenuEntry::NewCompanion,
                     AgentMenuEntry::NewShellCompanion,
@@ -38,11 +39,48 @@ fn agent_context_menu_matches_the_swift_reference_order_for_a_full_menu() {
                     AgentMenuEntry::OpenIn,
                     AgentMenuEntry::MarkdownFiles,
                     AgentMenuEntry::Separator,
+                    AgentMenuEntry::AgentInfo,
                     AgentMenuEntry::RegisterAgent,
                     AgentMenuEntry::Deactivate,
                     AgentMenuEntry::RestartAgent,
                     AgentMenuEntry::RestartWithNewConversation,
                     AgentMenuEntry::RemoveAgent]);
+}
+
+/// Agent Info reports what a Panel-mode agent's ACP session said about
+/// itself on `initialize` (#591). A Terminal-mode agent has no such session,
+/// so the item is absent for one rather than offered and empty.
+#[test]
+fn agent_info_is_offered_only_for_a_panel_mode_agent() {
+    let terminal = agent_context_menu_entries(AgentMenuFacts::default());
+    assert!(!terminal.contains(&AgentMenuEntry::AgentInfo),
+            "{terminal:?}");
+
+    let panel = agent_context_menu_entries(AgentMenuFacts { is_panel_mode: true,
+                                                            ..Default::default() });
+    let info = panel.iter()
+                    .position(|entry| *entry == AgentMenuEntry::AgentInfo);
+    let register = panel.iter()
+                        .position(|entry| *entry == AgentMenuEntry::RegisterAgent);
+    assert_eq!(info.zip(register).map(|(i, r)| r == i + 1),
+               Some(true),
+               "Agent Info heads the session group, directly above Register Agent: {panel:?}");
+}
+
+/// The fact is read off the agent's view mode: a coding agent runs in Panel
+/// mode over ACP, a shell in Terminal mode with no ACP session at all.
+#[test]
+fn agent_menu_facts_read_panel_mode_off_the_agents_view_mode() {
+    let mut store = knot_agents::AgentStore::new();
+    let coding = store.create("~/alpha", knot_agents::CreateOptions::default());
+    let shell =
+        store.create("~/alpha",
+                knot_agents::CreateOptions { agent_type:
+                                                 Some(knot_core::agent_type::SHELL.to_string()),
+                                             ..Default::default() });
+
+    assert!(agent_menu_facts(&store, coding).0.is_panel_mode);
+    assert!(!agent_menu_facts(&store, shell).0.is_panel_mode);
 }
 
 /// Restart with New Conversation sits directly after Restart Agent, whose
@@ -80,7 +118,8 @@ fn agent_context_menu_omits_companion_actions_for_companions() {
                                  is_shell:             true,
                                  has_move_targets:     true,
                                  has_markdown_history: false,
-                                 is_running:           false, };
+                                 is_running:           false,
+                                 is_panel_mode:        false, };
     assert_eq!(agent_context_menu_entries(facts),
                vec![AgentMenuEntry::EditAgent,
                     AgentMenuEntry::Separator,
@@ -282,12 +321,15 @@ fn agent_context_menu_never_emits_a_stray_divider() {
         for is_shell in [false, true] {
             for has_move_targets in [false, true] {
                 for has_markdown_history in [false, true] {
-                    for is_running in [false, true] {
+                    for (is_running, is_panel_mode) in
+                        [(false, false), (false, true), (true, false), (true, true)]
+                    {
                         let facts = AgentMenuFacts { is_companion,
                                                      is_shell,
                                                      has_move_targets,
                                                      has_markdown_history,
-                                                     is_running };
+                                                     is_running,
+                                                     is_panel_mode };
                         let entries = agent_context_menu_entries(facts);
                         assert_ne!(entries.first(),
                                    Some(&AgentMenuEntry::Separator),

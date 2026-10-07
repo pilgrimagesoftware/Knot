@@ -5,6 +5,7 @@
 //! off it for one concern - `sessions` for the PTYs, `panel` for the ACP side,
 //! `render` for the element tree, `repaint` for the poll that drives it.
 
+mod agent_info;
 mod agent_row;
 mod agents;
 pub(crate) mod artifact_panel;
