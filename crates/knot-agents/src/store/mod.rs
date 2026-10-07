@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::agent::{Agent, AgentState};
 
 mod bench;
+mod duplicate;
 mod edit;
 mod helpers;
 mod lifecycle;

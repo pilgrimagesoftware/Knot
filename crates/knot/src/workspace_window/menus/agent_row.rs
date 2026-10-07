@@ -297,33 +297,11 @@ pub(super) fn run_agent_menu_action(entry: AgentMenuEntry, targets: &AgentMenuTa
             open_editor_from_menu(targets, prefill, Some(targets.id), None, app);
         }
         AgentMenuEntry::DuplicateAgent => {
-            let created = {
-                let mut store = targets.store.lock();
-                let Some(source) = store.agent(targets.id).cloned()
-                else {
-                    return;
-                };
-                // Numbered off every existing name, not `{name} (copy)`:
-                // the old suffix stacked, so a duplicate of a duplicate read
-                // `Foo (copy) (copy)`.
-                let taken: Vec<String> = store.agents()
-                                              .iter()
-                                              .map(|agent| agent.name.clone())
-                                              .collect();
-                let name =
-                    knot_agents::duplicate_name(&source.name, taken.iter().map(String::as_str));
-                store.create(source.folder.clone(),
-                             knot_agents::CreateOptions { name: Some(name),
-                                                          avatar: Some(source.avatar.clone()),
-                                                          agent_type: Some(source.agent_type
-                                                                                 .clone()),
-                                                          shell_command: source.shell_command
-                                                                               .clone(),
-                                                          persona_id: source.persona_id,
-                                                          startup_prompt: source.startup_prompt
-                                                                                .clone(),
-                                                          insert_after: Some(targets.id),
-                                                          ..Default::default() })
+            // The store copies every setup field and names the copy off the
+            // existing names; see `AgentStore::duplicate`.
+            let Some(created) = targets.store.lock().duplicate(targets.id)
+            else {
+                return;
             };
             targets.window_entity.update(app, |view, cx| {
                                      view.persist_agents(cx);
