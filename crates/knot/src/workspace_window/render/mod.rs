@@ -45,6 +45,7 @@ use uuid::Uuid;
 
 use crate::app_bootstrap::PanelOpenPermissionSelector;
 use crate::app_bootstrap::PanelPermissionAllow;
+use crate::app_bootstrap::PanelPermissionAllowAlways;
 use crate::app_bootstrap::PanelPermissionDeny;
 use crate::app_support::app_titlebar_icon;
 use crate::window_options;
@@ -518,6 +519,10 @@ impl Render for WorkspaceWindow {
             .track_focus(&self.root_focus)
             .on_action(cx.listener(|view, _: &PanelPermissionAllow, _, cx| {
                 view.answer_selected_permission(knot_acp::PermissionDecision::Allow);
+                cx.notify();
+            }))
+            .on_action(cx.listener(|view, _: &PanelPermissionAllowAlways, _, cx| {
+                view.answer_selected_permission(knot_acp::PermissionDecision::AllowAlways);
                 cx.notify();
             }))
             .on_action(cx.listener(|view, _: &PanelPermissionDeny, _, cx| {

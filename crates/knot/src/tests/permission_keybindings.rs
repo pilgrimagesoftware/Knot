@@ -28,7 +28,7 @@ use gpui_kit::{
 use parking_lot::Mutex;
 
 use crate::app_bootstrap::install_actions_and_keys;
-use crate::app_bootstrap::{PanelPermissionAllow, PanelPermissionDeny};
+use crate::app_bootstrap::{PanelPermissionAllow, PanelPermissionAllowAlways, PanelPermissionDeny};
 
 /// A root view with no content: nothing here reads the rendered frame, only
 /// the keymap the window resolves against.
@@ -87,6 +87,7 @@ fn the_decision_keys_reach_their_actions(cx: &mut TestAppContext) {
     app_with_bindings(cx);
     cx.update(|cx| {
           assert_bound(cx, "cmd-shift-a", &PanelPermissionAllow);
+          assert_bound(cx, "cmd-alt-shift-a", &PanelPermissionAllowAlways);
           assert_bound(cx, "cmd-shift-d", &PanelPermissionDeny);
       });
 }
@@ -100,6 +101,8 @@ fn the_decision_buttons_find_a_hint_to_draw(cx: &mut TestAppContext) {
     window.update(cx, |_, window, _| {
               assert!(Kbd::global_binding_for_action(&PanelPermissionAllow, window).is_some(),
                       "the Allow button would draw no hint");
+              assert!(Kbd::global_binding_for_action(&PanelPermissionAllowAlways, window).is_some(),
+                      "the Always Allow button would draw no hint");
               assert!(Kbd::global_binding_for_action(&PanelPermissionDeny, window).is_some(),
                       "the Deny button would draw no hint");
           })

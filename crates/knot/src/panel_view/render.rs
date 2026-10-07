@@ -10,8 +10,11 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::kbd::Kbd;
-use gpui_kit::{ClickEvent, IntoElement, ListState, ParentElement, Styled, Window, div, rgb};
+use gpui_kit::{
+    ClickEvent, IntoElement, ListState, ParentElement, SharedString, Styled, Window, div, rgb,
+};
 use knot_acp::PermissionDecision;
+use knot_acp::PermissionOptionKind;
 use knot_acp::PermissionRequest;
 use parking_lot::Mutex;
 
@@ -24,6 +27,7 @@ use super::style::RiskLevel;
 use super::style::risk_color;
 use super::summary_row::*;
 use crate::app_bootstrap::PanelPermissionAllow;
+use crate::app_bootstrap::PanelPermissionAllowAlways;
 use crate::app_bootstrap::PanelPermissionDeny;
 use crate::panel_state::PanelState;
 
@@ -144,59 +148,139 @@ fn render_row(index: usize, state: &PanelState, style: &PanelStyle, list: &ListS
          .into_any_element()
 }
 
-/// An inline permission request with actionable allow/deny controls, per
-/// `acp-panel-ui`'s permission-prompts requirement. Sending further
-/// prompts is blocked by the caller while this is rendered (the caller
-/// checks `PanelState::pending_permission` before calling `prompt`).
+/// An inline permission request with a control for each option the agent
+/// offers, per `acp-panel-ui`'s permission-prompts requirement. Sending
+/// further prompts is blocked by the caller while this is rendered (the
+/// caller checks `PanelState::pending_permission` before calling `prompt`).
 ///
-/// Each button carries the keystroke its action is actually bound to, per
-/// `permission-prompt-ui`'s keyboard-operability requirement. The lookup is
-/// against the live keymap rather than a hard-coded string, so a rebinding
-/// moves the hint with it, and an action with nothing bound yields `None` -
-/// which `children` draws as nothing at all, leaving the plain button.
+/// A button carries the keystroke that answers with its option, per
+/// `permission-prompt-ui`'s keyboard-operability requirement - Allow,
+/// Always Allow and Deny each land on the option of their kind (#530). The
+/// lookup is against the live keymap rather than a hard-coded string, so a
+/// rebinding moves the hint with it, and an action with nothing bound yields
+/// `None` - which `children` draws as nothing at all, leaving the plain
+/// button.
 pub(super) fn render_permission_prompt(panel_state: &PanelState, request: &PermissionRequest,
                                        permission_risk: RiskLevel,
                                        on_decision: Rc<dyn Fn(PermissionDecision)>,
                                        window: &Window)
                                        -> impl IntoElement {
-    let allow = on_decision.clone();
-    let deny = on_decision;
-    let allow_kbd = Kbd::global_binding_for_action(&PanelPermissionAllow, window);
-    let deny_kbd = Kbd::global_binding_for_action(&PanelPermissionDeny, window);
-    v_flex()
-        .gap_2()
-        .p_3()
-        .rounded_md()
-        .border_1()
-        .border_color(rgb(risk_color(permission_risk).unwrap_or(0x3B82F6)))
-        .child(div().text_sm().child(format!(
-            "Permission requested for {}",
-            panel_state.display_name(request)
-        )))
-        .child(
-            h_flex()
-                .gap_2()
-                .child(
-                    Button::new("panel-permission-allow")
-                        .label(knot_core::l10n::t("panel.allow"))
-                        .primary()
-                        .small()
-                        .children(allow_kbd)
-                        .on_click(move |_: &ClickEvent, _, _| {
-                            allow(PermissionDecision::Allow);
-                        }),
-                )
-                .child(
-                    Button::new("panel-permission-deny")
-                        .label(knot_core::l10n::t("panel.deny"))
-                        .ghost()
-                        .small()
-                        .children(deny_kbd)
-                        .on_click(move |_: &ClickEvent, _, _| {
-                            deny(PermissionDecision::Deny);
-                        }),
-                ),
-        )
+    v_flex().gap_2()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(risk_color(permission_risk).unwrap_or(0x3B82F6)))
+            .child(div().text_sm().child(format!("Permission requested for {}",
+                                                 panel_state.display_name(request))))
+            .child(h_flex().flex_wrap()
+                           .gap_2()
+                           .children(permission_buttons(request, &on_decision, window)))
+}
+
+/// How a choice is drawn: allow once is the answer most prompts want;
+/// always is the same answer for longer, so it is set apart without
+/// competing; a refusal stays quiet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ChoiceLook {
+    Primary,
+    Outline,
+    Quiet,
+}
+
+/// The key whose hint a choice carries - the decision key that answers with
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ChoiceKey {
+    Allow,
+    AllowAlways,
+    Deny,
+}
+
+/// One control in the permission prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PromptChoice {
+    pub(super) label:    String,
+    pub(super) decision: PermissionDecision,
+    pub(super) look:     ChoiceLook,
+    pub(super) key:      Option<ChoiceKey>,
+}
+
+/// What the prompt offers: one choice per option, in the agent's order and
+/// with the agent's own wording, when the options say what kind they are -
+/// each decision key's hint on the option it answers with. Without kinds
+/// there is no telling an "Always" from a plain allow, so the prompt keeps
+/// the Allow and Deny pair it had.
+pub(super) fn prompt_choices(request: &PermissionRequest) -> Vec<PromptChoice> {
+    if !request.has_kinds() {
+        return vec![PromptChoice { label:    knot_core::l10n::t("panel.allow"),
+                                   decision: PermissionDecision::Allow,
+                                   look:     ChoiceLook::Primary,
+                                   key:      Some(ChoiceKey::Allow), },
+                    PromptChoice { label:    knot_core::l10n::t("panel.deny"),
+                                   decision: PermissionDecision::Deny,
+                                   look:     ChoiceLook::Quiet,
+                                   key:      Some(ChoiceKey::Deny), },];
+    }
+    let picks = |decision: PermissionDecision| decision.option_index(&request.options);
+    let keys = [(picks(PermissionDecision::Allow), ChoiceKey::Allow),
+                (picks(PermissionDecision::AllowAlways), ChoiceKey::AllowAlways),
+                (picks(PermissionDecision::Deny), ChoiceKey::Deny)];
+    request.options
+           .iter()
+           .enumerate()
+           .map(|(index, option)| PromptChoice { label:    option.name.clone(),
+                                                 decision: PermissionDecision::Choose(index),
+                                                 look:     match option.kind {
+                                                     Some(PermissionOptionKind::AllowOnce) => {
+                                                         ChoiceLook::Primary
+                                                     }
+                                                     Some(PermissionOptionKind::AllowAlways) => {
+                                                         ChoiceLook::Outline
+                                                     }
+                                                     Some(PermissionOptionKind::RejectOnce
+                                                          | PermissionOptionKind::RejectAlways)
+                                                     | None => ChoiceLook::Quiet,
+                                                 },
+                                                 key:
+                                                     keys.iter()
+                                                         .find(|(picked, _)| *picked == Some(index))
+                                                         .map(|(_, key)| *key), })
+           .collect()
+}
+
+/// The prompt's buttons, drawn from [`prompt_choices`].
+fn permission_buttons(request: &PermissionRequest, on_decision: &Rc<dyn Fn(PermissionDecision)>,
+                      window: &Window)
+                      -> Vec<Button> {
+    prompt_choices(request).into_iter()
+                           .enumerate()
+                           .map(|(index, choice)| {
+                               let on_decision = on_decision.clone();
+                               let decision = choice.decision;
+                               let button =
+                                   Button::new(SharedString::from(format!("panel-permission-{index}")))
+                                       .label(choice.label)
+                                       .small()
+                                       .on_click(move |_: &ClickEvent, _, _| on_decision(decision));
+                               let button = match choice.look {
+                                   ChoiceLook::Primary => button.primary(),
+                                   ChoiceLook::Outline => button.outline(),
+                                   ChoiceLook::Quiet => button.ghost(),
+                               };
+                               button.children(choice.key.and_then(|key| match key {
+                                   ChoiceKey::Allow => {
+                                       Kbd::global_binding_for_action(&PanelPermissionAllow, window)
+                                   }
+                                   ChoiceKey::AllowAlways => {
+                                       Kbd::global_binding_for_action(&PanelPermissionAllowAlways,
+                                                                      window)
+                                   }
+                                   ChoiceKey::Deny => {
+                                       Kbd::global_binding_for_action(&PanelPermissionDeny, window)
+                                   }
+                               }))
+                           })
+                           .collect()
 }
 
 fn render_ended_banner(cause: &knot_acp::SessionEndCause) -> impl IntoElement {

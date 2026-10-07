@@ -157,6 +157,7 @@ actions!(knot_app,
           OpenSettings,
           OpenImport,
           PanelPermissionAllow,
+          PanelPermissionAllowAlways,
           PanelPermissionDeny,
           PanelOpenPermissionSelector]);
 

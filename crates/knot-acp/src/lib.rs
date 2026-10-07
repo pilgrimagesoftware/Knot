@@ -16,5 +16,6 @@ pub use client::{AcpClient, NewSession, SessionEvent};
 pub use error::{AcpError, Result, SessionEndCause};
 pub use protocol::{
     AgentCapabilities, AgentInfo, ConfigOption, ConfigOptionValue, MCP_SERVER_NAME,
-    PermissionDecision, PermissionOption, PermissionRequest, SessionUpdate, ToolCallContent,
+    PermissionDecision, PermissionOption, PermissionOptionKind, PermissionRequest, SessionUpdate,
+    ToolCallContent,
 };

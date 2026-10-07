@@ -355,20 +355,15 @@ fn config_options_from(raw: &Value, init_config_options: &[ConfigOption]) -> Vec
        .unwrap_or_else(|| init_config_options.to_vec())
 }
 
+/// The answer to a permission request. A decision with no option on offer
+/// cannot reach here from the UI, which offers only what the request does;
+/// one that does anyway - or a dropped channel - is answered as a refusal,
+/// never left unanswered.
 fn permission_result(decision: PermissionDecision, options: &[PermissionOption])
                      -> std::result::Result<Value, JsonRpcErrorPayload> {
-    let outcome = match decision {
-        PermissionDecision::Allow => options.first()
-                                            .map(|option| option.option_id.clone())
-                                            .unwrap_or_else(|| "allow".to_owned()),
-        PermissionDecision::Deny => options.iter()
-                                           .find(|option| {
-                                               option.option_id.to_lowercase().contains("deny")
-                                               || option.name.to_lowercase().contains("deny")
-                                           })
-                                           .map(|option| option.option_id.clone())
-                                           .unwrap_or_else(|| "deny".to_owned()),
-    };
+    let outcome = decision.option_id(options)
+                          .or_else(|| PermissionDecision::Deny.option_id(options))
+                          .unwrap_or_else(|| "deny".to_owned());
     Ok(json!({ "outcome": { "outcome": "selected", "optionId": outcome } }))
 }
 
