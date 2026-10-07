@@ -15,6 +15,7 @@ mod changes_tab;
 mod chrome;
 mod creation;
 mod git_panel;
+mod issue_filter;
 mod key_hints;
 #[cfg(test)]
 mod key_hints_tests;
