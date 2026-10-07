@@ -10,6 +10,7 @@
 //! run on the background executor and land back through `update_in`, which
 //! notifies the entity and so reaches a frame without any poll.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui_kit::App;
@@ -19,15 +20,19 @@ use gpui_kit::Context;
 use gpui_kit::Entity;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
+use gpui_kit::PathPromptOptions;
+use gpui_kit::SharedString;
 use gpui_kit::Styled;
 use gpui_kit::Subscription;
 use gpui_kit::WeakEntity;
 use gpui_kit::Window;
+use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::StyledExt;
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
@@ -49,12 +54,15 @@ use gpui_kit::px;
 use knot_forge::ForgeAvailability;
 
 use super::diagnostics::Diagnostics;
-use super::form::{Phase, can_report};
+use super::form::{Phase, can_report, filed_message};
 use super::kind::IssueKind;
 use super::logs::{self, Attachment, LogKind};
+use super::screenshots::{self, Handoff};
 use super::submit::{self, Outcome, Report};
 use crate::app_bootstrap::ReportIssue;
-use crate::consts::{BUG_REPORT_DESCRIPTION_ROWS, BUG_REPORT_DIALOG_WIDTH};
+use crate::consts::{
+    BUG_REPORT_DESCRIPTION_ROWS, BUG_REPORT_DIALOG_WIDTH, BUG_REPORT_MAX_SCREENSHOTS,
+};
 
 type Collect = dyn Fn() -> Diagnostics + Send + Sync;
 type Submit = dyn Fn(&Report, &ForgeAvailability) -> Outcome + Send + Sync;
@@ -77,7 +85,8 @@ impl ReportServices {
                    submit::submit(report,
                                   forge,
                                   &knot_forge::GhRunner::new(),
-                                  crate::open_in::open_url)
+                                  crate::open_in::open_url,
+                                  crate::open_in::reveal_path)
                }),
                read_log: Arc::new(logs::read), }
     }
@@ -178,6 +187,12 @@ pub(crate) struct BugReport {
     /// The logs to attach, in the order they are offered. None by default:
     /// a log is the user's to share.
     pub(crate) attached:    Vec<LogKind>,
+    /// The screenshots to name, in the order chosen (#566). None by
+    /// default, as with the logs.
+    pub(crate) screenshots: Vec<PathBuf>,
+    /// How many files the last choice skipped - not an image, or past the
+    /// cap - so the dialog can say so rather than drop them silently.
+    pub(crate) skipped:     usize,
     phase:                  Phase,
     services:               ReportServices,
     _subscriptions:         Vec<Subscription>,
@@ -220,6 +235,8 @@ impl BugReport {
                description,
                diagnostics,
                attached: Vec::new(),
+               screenshots: Vec::new(),
+               skipped: 0,
                phase: Phase::Editing,
                services,
                _subscriptions: subscriptions }
@@ -256,6 +273,39 @@ impl BugReport {
                 .sort_by_key(|chosen| LogKind::ALL.iter().position(|kind| kind == chosen));
         }
         cx.notify();
+    }
+
+    /// Adds the images among `picked` to the screenshots, noting how many
+    /// were skipped.
+    pub(crate) fn add_screenshots(&mut self, picked: Vec<PathBuf>, cx: &mut Context<Self>) {
+        self.skipped = screenshots::add(&mut self.screenshots, picked);
+        cx.notify();
+    }
+
+    /// Takes `path` off the screenshots. The skipped note goes with it: it
+    /// described a choice the list no longer reflects.
+    pub(crate) fn remove_screenshot(&mut self, path: &Path, cx: &mut Context<Self>) {
+        self.screenshots.retain(|chosen| chosen != path);
+        self.skipped = 0;
+        cx.notify();
+    }
+
+    /// Opens the native file picker, and adds what the user chooses.
+    fn choose_screenshots(&mut self, cx: &mut Context<Self>) {
+        let receiver = cx.prompt_for_paths(PathPromptOptions {
+            files:       true,
+            directories: false,
+            multiple:    true,
+            prompt:      Some(knot_core::l10n::t("bug_report.screenshots.add").into()),
+        });
+        cx.spawn(async move |this, cx| {
+              let Ok(Ok(Some(picked))) = receiver.await
+              else {
+                  return;
+              };
+              let _ = this.update(cx, |report, cx| report.add_screenshots(picked, cx));
+          })
+          .detach();
     }
 
     /// Fills the diagnostics pane off the main thread.
@@ -303,6 +353,8 @@ impl BugReport {
         else {
             Vec::new()
         };
+        let screenshots = self.screenshots.clone();
+        let handoff = Handoff::for_report(screenshots.len(), crate::open_in::can_reveal_files());
         let services = self.services.clone();
         cx.spawn_in(window, async move |this, cx| {
               let (diagnostics, outcome) =
@@ -316,30 +368,30 @@ impl BugReport {
                                               subject,
                                               description,
                                               diagnostics: diagnostics.text(),
-                                              attachments };
+                                              attachments,
+                                              screenshots };
                         let outcome = (services.submit)(&report, &diagnostics.forge);
                         (diagnostics, outcome)
                     })
                     .await;
               let _ = this.update_in(cx, |report, window, cx| {
                               report.show_diagnostics(&diagnostics, window, cx);
-                              report.finish(outcome, window, cx);
+                              report.finish(outcome, handoff, window, cx);
                           });
           })
           .detach();
     }
 
-    fn finish(&mut self, outcome: Outcome, window: &mut Window, cx: &mut Context<Self>) {
+    fn finish(&mut self, outcome: Outcome, handoff: Handoff, window: &mut Window,
+              cx: &mut Context<Self>) {
         self.phase = match outcome {
             Outcome::Filed(url) => {
                 window.close_dialog(cx);
-                window.push_notification(Notification::success(knot_core::l10n::t_with("bug_report.filed",
-                                                                                        &[("url", &url)])),
-                                         cx);
+                window.push_notification(Notification::success(filed_message(&url, handoff)), cx);
                 Phase::Editing
             }
             Outcome::FileFailed(error) => Phase::Failed(error),
-            Outcome::BrowserReady => Phase::BrowserReady,
+            Outcome::BrowserReady => Phase::BrowserReady(handoff),
             Outcome::BrowserFailed => Phase::BrowserFailed,
         };
         cx.notify();
@@ -410,6 +462,13 @@ fn dialog_content(entity: &Entity<BugReport>, app: &App) -> impl IntoElement {
                                                                 log_checkbox(entity, report, kind)
                                                             })))
             })
+            .child(label("bug_report.screenshots.label"))
+            .child(div().text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(knot_core::l10n::t_with("bug_report.screenshots.hint",
+                                                       &[("max",
+                                                          &BUG_REPORT_MAX_SCREENSHOTS.to_string())])))
+            .child(screenshots_section(entity, report, app))
             .children(report.phase.message().map(|message| {
                                                 div().text_sm()
                                                      .text_color(if report.phase.is_error() {
@@ -445,6 +504,59 @@ fn log_checkbox(entity: &Entity<BugReport>, report: &BugReport, kind: LogKind) -
                      .on_click(move |checked, _, app| {
                          entity.update(app, |report, cx| report.set_attached(kind, *checked, cx));
                      })
+}
+
+/// The chosen screenshots by name, each with a remove control, the add
+/// control, and a note when the last choice skipped files.
+fn screenshots_section(entity: &Entity<BugReport>, report: &BugReport, app: &App)
+                       -> impl IntoElement {
+    let muted = app.theme().muted_foreground;
+    let add = {
+        let entity = entity.clone();
+        Button::new("add-screenshots").icon(IconName::Plus)
+                                      .label(knot_core::l10n::t("bug_report.screenshots.add"))
+                                      .ghost()
+                                      .small()
+                                      .disabled(report.screenshots.len()
+                                                >= BUG_REPORT_MAX_SCREENSHOTS)
+                                      .on_click(move |_: &ClickEvent, _, app| {
+                                          entity.update(app, |report, cx| {
+                                                    report.choose_screenshots(cx)
+                                                });
+                                      })
+    };
+    let rows = report.screenshots.iter().enumerate().map(|(index, path)| {
+        let name = screenshots::file_name(path);
+        let label = knot_core::l10n::t_with("bug_report.screenshots.remove", &[("name", &name)]);
+        let entity = entity.clone();
+        let path = path.clone();
+        h_flex().gap_1()
+                .child(Button::new(SharedString::from(format!("remove-screenshot-{index}")))
+                           .icon(IconName::Close)
+                           .ghost()
+                           .xsmall()
+                           .accessibility_label(label.clone())
+                           .tooltip(label)
+                           .on_click(move |_: &ClickEvent, _, app| {
+                               entity.update(app, |report, cx| report.remove_screenshot(&path, cx));
+                           }))
+                .child(div().min_w_0().truncate().text_sm().child(name))
+    });
+    let skipped = (report.skipped > 0).then(|| {
+                                          let files = knot_core::l10n::pluralize(report.skipped
+                                                                                 as u64,
+                                                                                 "count.file",
+                                                                                 "count.files");
+                                          div().text_xs()
+             .text_color(muted)
+             .child(knot_core::l10n::t_with("bug_report.screenshots.skipped",
+                                            &[("files", &files),
+                                              ("max", &BUG_REPORT_MAX_SCREENSHOTS.to_string())]))
+                                      });
+    v_flex().gap_1()
+            .children(rows)
+            .child(h_flex().child(add))
+            .children(skipped)
 }
 
 /// Cancel and Report dispatch the host's own actions, so the buttons, Return
