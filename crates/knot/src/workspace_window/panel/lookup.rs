@@ -18,6 +18,7 @@ use gpui_kit::Entity;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
+use gpui_kit::ScrollHandle;
 use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
@@ -65,13 +66,17 @@ pub(in crate::workspace_window) struct PanelLookup {
     /// The token text Esc closed the popup on. While the token still reads
     /// this way the popup stays shut; editing the token reopens it.
     dismissed: Option<String>,
+    /// The popup list's scroll, so moving the selection by keyboard can
+    /// bring the selected row into view (#557) - the wheel alone used to.
+    scroll:    ScrollHandle,
 }
 
 impl PanelLookup {
     fn new(registry: LookupRegistry) -> Self {
         Self { registry,
                selected: 0,
-               dismissed: None }
+               dismissed: None,
+               scroll: ScrollHandle::new() }
     }
 }
 
@@ -187,6 +192,7 @@ impl WorkspaceWindow {
         let (token, matches) = self.panel_lookup_matches(id, input, cx)?;
         let trigger = token.trigger;
         let selected = self.panel_lookup(id).selected;
+        let scroll = self.panel_lookup(id).scroll.clone();
         let input = input.clone();
 
         let rows = matches.into_iter().enumerate().map(|(index, entry)| {
@@ -231,7 +237,9 @@ impl WorkspaceWindow {
         // The box is the outer element and does not scroll; the rows scroll
         // inside it. With the scrollbar wrapper on the box itself, its
         // border and background would sit on the scrolled content and
-        // scroll away with it.
+        // scroll away with it. The rows are the scrolled list's own
+        // children, so the selection's index is the row `scroll_to_item`
+        // brings into view.
         Some(div().w_full()
                   .min_w_0()
                   .rounded(px(6.))
@@ -239,7 +247,7 @@ impl WorkspaceWindow {
                   .border_color(cx.theme().border)
                   .bg(cx.theme().popover)
                   .overflow_hidden()
-                  .child(crate::capped_scroll::capped_scroll(
+                  .child(crate::capped_scroll::capped_scroll_list(
                       ("panel-lookup", element_key(id)),
                       px(LOOKUP_MAX_VISIBLE as f32 * 28.),
                       v_flex().w_full()
@@ -254,7 +262,7 @@ impl WorkspaceWindow {
                                  .text_xs()
                                  .text_color(cx.theme().muted_foreground)
                                  .child(knot_core::l10n::t("panel.lookup_hint"))),
-                  )))
+                  ).track(&scroll)))
     }
 
     /// Moves the selection by `delta` entries, stopping at either end.
@@ -265,6 +273,9 @@ impl WorkspaceWindow {
             delta if delta < 0 => lookup.selected.saturating_sub(delta.unsigned_abs()),
             delta => (lookup.selected + delta as usize).min(last),
         };
+        // Applied at the next prepaint, scrolling only as far as the row
+        // needs to be fully in view.
+        lookup.scroll.scroll_to_item(lookup.selected);
     }
 
     fn panel_lookup_select(&mut self, id: Uuid, index: usize) {
