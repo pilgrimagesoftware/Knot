@@ -38,7 +38,8 @@ fn report() -> Report {
              subject:     "  Crash on launch ".to_owned(),
              description: "It crashed.\nEvery time.".to_owned(),
              diagnostics: "App: Knot 1.0.0 (2026-09-25, abc)".to_owned(),
-             attachments: Vec::new(), }
+             attachments: Vec::new(),
+             screenshots: Vec::new(), }
 }
 
 fn report_with_log() -> Report {
@@ -52,11 +53,25 @@ fn never_opens(_: &str) -> bool {
     panic!("the browser must not open when gh can file the issue")
 }
 
+fn never_reveals(_: &std::path::Path) -> bool {
+    panic!("nothing is shown in Finder for a report without screenshots")
+}
+
+fn report_with_screenshots() -> Report {
+    Report { screenshots: vec!["/Users/me/Desktop/crash.png".into(),
+                               "/Users/me/Desktop/after.png".into()],
+             ..report() }
+}
+
 #[test]
 fn a_ready_forge_files_the_issue() {
     let gh = Gh::new(|| Ok(FILED.to_owned()));
 
-    let outcome = submit(&report(), &ForgeAvailability::Ready, &gh, never_opens);
+    let outcome = submit(&report(),
+                         &ForgeAvailability::Ready,
+                         &gh,
+                         never_opens,
+                         never_reveals);
 
     assert_eq!(outcome, Outcome::Filed(FILED.to_owned()));
     let calls = gh.calls.borrow();
@@ -82,8 +97,16 @@ fn a_failed_filing_says_why_and_can_be_retried() {
                                   code:    1, })
     });
 
-    let first = submit(&report(), &ForgeAvailability::Ready, &gh, never_opens);
-    let second = submit(&report(), &ForgeAvailability::Ready, &gh, never_opens);
+    let first = submit(&report(),
+                       &ForgeAvailability::Ready,
+                       &gh,
+                       never_opens,
+                       never_reveals);
+    let second = submit(&report(),
+                        &ForgeAvailability::Ready,
+                        &gh,
+                        never_opens,
+                        never_reveals);
 
     assert!(matches!(&first, Outcome::FileFailed(why) if why.contains("HTTP 403")),
             "{first:?}");
@@ -102,10 +125,14 @@ fn a_forge_that_is_not_ready_opens_the_compose_page() {
         let gh = Gh::new(|| panic!("gh must not run when it is not ready"));
         let opened = RefCell::new(None);
 
-        let outcome = submit(&report(), &forge, &gh, |url| {
-            *opened.borrow_mut() = Some(url.to_owned());
-            true
-        });
+        let outcome = submit(&report(),
+                             &forge,
+                             &gh,
+                             |url| {
+                                 *opened.borrow_mut() = Some(url.to_owned());
+                                 true
+                             },
+                             never_reveals);
 
         assert_eq!(outcome, Outcome::BrowserReady, "{forge:?}");
         assert_eq!(opened.into_inner(),
@@ -118,7 +145,11 @@ fn a_forge_that_is_not_ready_opens_the_compose_page() {
 fn a_browser_that_will_not_open_is_reported() {
     let gh = Gh::new(|| panic!("gh must not run when it is not ready"));
 
-    assert_eq!(submit(&report(), &ForgeAvailability::Missing, &gh, |_| false),
+    assert_eq!(submit(&report(),
+                      &ForgeAvailability::Missing,
+                      &gh,
+                      |_| false,
+                      never_reveals),
                Outcome::BrowserFailed);
 }
 
@@ -190,7 +221,11 @@ fn a_feature_request_is_filed_as_an_enhancement() {
     let request = Report { kind: IssueKind::FeatureRequest,
                            ..report() };
 
-    submit(&request, &ForgeAvailability::Ready, &gh, never_opens);
+    submit(&request,
+           &ForgeAvailability::Ready,
+           &gh,
+           never_opens,
+           never_reveals);
 
     let calls = gh.calls.borrow();
     assert_eq!(&calls[0][calls[0].len() - 2..], ["--label", "enhancement"]);
@@ -201,4 +236,90 @@ fn the_compose_url_carries_the_label() {
     let request = Report { kind: IssueKind::FeatureRequest,
                            ..report() };
     assert!(compose_url(&request).ends_with("&labels=enhancement"));
+}
+
+/// A filed report with screenshots names them in the body, then opens the
+/// filed issue and shows each file, so the user can drag them in (#566).
+#[test]
+fn a_filed_report_with_screenshots_opens_the_issue_and_shows_them() {
+    let gh = Gh::new(|| Ok(FILED.to_owned()));
+    let opened = RefCell::new(Vec::new());
+    let revealed = RefCell::new(Vec::new());
+
+    let outcome = submit(&report_with_screenshots(),
+                         &ForgeAvailability::Ready,
+                         &gh,
+                         |url| {
+                             opened.borrow_mut().push(url.to_owned());
+                             true
+                         },
+                         |path| {
+                             revealed.borrow_mut().push(path.to_path_buf());
+                             true
+                         });
+
+    assert_eq!(outcome, Outcome::Filed(FILED.to_owned()));
+    assert_eq!(opened.into_inner(), [FILED], "the filed issue's page opens");
+    assert_eq!(revealed.into_inner(), report_with_screenshots().screenshots);
+    let body = &gh.calls.borrow()[0];
+    let body = &body[body.iter().position(|arg| arg == "--body").unwrap() + 1];
+    assert!(body.contains("`crash.png`") && body.contains("`after.png`"),
+            "{body}");
+}
+
+/// The browser path names them on the compose page and shows them too.
+#[test]
+fn the_browser_path_names_and_shows_the_screenshots() {
+    let gh = Gh::new(|| panic!("gh must not run when it is not ready"));
+    let revealed = RefCell::new(Vec::new());
+
+    let outcome = submit(&report_with_screenshots(),
+                         &ForgeAvailability::Missing,
+                         &gh,
+                         |_| true,
+                         |path| {
+                             revealed.borrow_mut().push(path.to_path_buf());
+                             true
+                         });
+
+    assert_eq!(outcome, Outcome::BrowserReady);
+    assert_eq!(revealed.into_inner().len(), 2);
+    assert!(compose_body(&report_with_screenshots()).contains("`crash.png`"));
+}
+
+/// A browser that never opened leaves the report in the dialog to retry, so
+/// nothing is shown in Finder for a page that is not there.
+#[test]
+fn a_failed_browser_shows_nothing() {
+    let gh = Gh::new(|| panic!("gh must not run when it is not ready"));
+
+    assert_eq!(submit(&report_with_screenshots(),
+                      &ForgeAvailability::Missing,
+                      &gh,
+                      |_| false,
+                      never_reveals),
+               Outcome::BrowserFailed);
+}
+
+/// A failed filing has no issue to drag anything onto.
+#[test]
+fn a_failed_filing_shows_nothing() {
+    let gh = Gh::new(|| {
+        Err(ForgeError::Command { command: "issue create".to_owned(),
+                                  output:  "HTTP 403".to_owned(),
+                                  code:    1, })
+    });
+
+    let outcome = submit(&report_with_screenshots(),
+                         &ForgeAvailability::Ready,
+                         &gh,
+                         never_opens,
+                         never_reveals);
+
+    assert!(matches!(outcome, Outcome::FileFailed(_)), "{outcome:?}");
+}
+
+#[test]
+fn a_report_without_screenshots_has_no_section() {
+    assert!(!issue_body(&report()).contains(&knot_core::l10n::t("bug_report.screenshots.label")));
 }

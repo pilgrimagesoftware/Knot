@@ -63,6 +63,16 @@ fn bug_report_labels_resolve() {
                 "bug_report.failed",
                 "bug_report.browser_ready",
                 "bug_report.browser_failed",
+                "bug_report.filed_screenshots",
+                "bug_report.filed_screenshots_by_hand",
+                "bug_report.browser_ready_screenshots",
+                "bug_report.browser_ready_screenshots_by_hand",
+                "bug_report.screenshots.label",
+                "bug_report.screenshots.hint",
+                "bug_report.screenshots.add",
+                "bug_report.screenshots.remove",
+                "bug_report.screenshots.skipped",
+                "bug_report.screenshots.body_note",
                 "bug_report.cancel",
                 "bug_report.report"]
     {

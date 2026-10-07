@@ -265,6 +265,16 @@ pub(crate) const BUG_REPORT_LOG_TAIL_LINES: usize = 200;
 /// 65,536 characters, and two logs have to fit beside the description.
 pub(crate) const BUG_REPORT_LOG_TAIL_BYTES: usize = 24 * 1024;
 
+/// How many screenshots a report can name (#566). The ask is "a couple"; the
+/// cap keeps an accidental select-all in a screenshots folder from revealing
+/// dozens of files in Finder.
+pub(crate) const BUG_REPORT_MAX_SCREENSHOTS: usize = 5;
+
+/// The image types a report keeps as screenshots, lowercased: the ones
+/// GitHub renders inline in an issue. The file picker cannot filter, so
+/// everything else is skipped after the choice.
+pub(crate) const BUG_REPORT_SCREENSHOT_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif"];
+
 /// The application log, in `knot_core::log_dir()`: whatever the process
 /// wrote to stderr, when that was not a terminal (`app_log`).
 pub(crate) const APP_LOG_FILE_NAME: &str = "knot.log";

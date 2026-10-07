@@ -472,6 +472,12 @@ bug_report:
   failed: "The issue could not be filed: %{error}"
   browser_ready: "The report was not filed automatically. It is ready to post in your browser."
   browser_failed: "The browser could not be opened. Your report is still here."
+  # #566: what a filed or handed-off report says when it names screenshots.
+  # GitHub takes no upload with an issue, so the user drags them in.
+  filed_screenshots: "Issue filed: %{url}. Drag your screenshots from Finder onto the issue page to add them."
+  filed_screenshots_by_hand: "Issue filed: %{url}. Attach your screenshots to it on the issue page."
+  browser_ready_screenshots: "The report was not filed automatically. It is ready to post in your browser: drag your screenshots from Finder onto the page."
+  browser_ready_screenshots_by_hand: "The report was not filed automatically. It is ready to post in your browser: attach your screenshots on the page."
   cancel: "Cancel"
   report: "Report"
   logs:
@@ -482,6 +488,14 @@ bug_report:
     unreadable: "%{log}: nothing to attach at %{path}."
     attach_by_hand: "%{log}: please attach %{path} to this issue."
     no_directory: "(no log directory)"
+  # The screenshots a report names (#566).
+  screenshots:
+    label: "Screenshots"
+    hint: "PNG, JPEG or GIF, up to %{max}. GitHub cannot upload them with the issue, so Knot names them in the report and shows them in Finder for you to drag in."
+    add: "Add Screenshots…"
+    remove: "Remove %{name}"
+    skipped: "Skipped %{files}: only PNG, JPEG and GIF images are kept, up to %{max}."
+    body_note: "The reporter is adding these screenshots to the issue:"
 
 agent_editor:
   title_new: "New Agent"

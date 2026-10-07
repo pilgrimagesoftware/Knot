@@ -335,3 +335,42 @@ fn switching_the_kind_keeps_what_was_typed(cx: &mut TestAppContext) {
     assert_eq!((subject.as_str(), description.as_str()),
                ("Tabs", "Let agents live in tabs."));
 }
+
+/// Screenshots (#566) go with a feature request as well as a bug - unlike
+/// the logs. Only images are kept, the rest are counted as skipped, and one
+/// removed before filing is not sent.
+#[gpui_kit::test]
+fn chosen_screenshots_ride_along_and_a_removed_one_does_not(cx: &mut TestAppContext) {
+    let stub = Stub::answering(Outcome::BrowserReady);
+    let (mut cx, report) = open_dialog(cx, &stub);
+    fill(&mut cx, &report, "Tabs", "Let agents live in tabs.");
+    let shot = |name: &str| std::path::PathBuf::from(format!("/Users/me/Desktop/{name}"));
+    report.update_in(&mut cx, |report, window, cx| {
+              report.set_kind(IssueKind::FeatureRequest, window, cx);
+              report.add_screenshots(vec![shot("tabs.png"), shot("notes.txt"), shot("mock.jpg")],
+                                     cx);
+          });
+    let skipped = report.read_with(&cx, |report, _| report.skipped);
+    assert_eq!(skipped, 1,
+               "the text file is skipped, and the dialog says so");
+
+    report.update(&mut cx, |report, cx| {
+              report.remove_screenshot(&shot("mock.jpg"), cx)
+          });
+    submit(&mut cx, &report);
+
+    let submitted = stub.submitted.lock();
+    assert_eq!(submitted[0].kind, IssueKind::FeatureRequest);
+    assert_eq!(submitted[0].screenshots, [shot("tabs.png")]);
+}
+
+#[gpui_kit::test]
+fn a_report_starts_with_no_screenshots(cx: &mut TestAppContext) {
+    let stub = Stub::answering(Outcome::BrowserReady);
+    let (mut cx, report) = open_dialog(cx, &stub);
+    fill(&mut cx, &report, "Crash", "It crashed.");
+
+    submit(&mut cx, &report);
+
+    assert!(stub.submitted.lock()[0].screenshots.is_empty());
+}
