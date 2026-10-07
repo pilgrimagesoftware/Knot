@@ -200,7 +200,7 @@ fn the_snapshot_changes_with_what_the_menu_shows() {
     let selected = OwningWindow { selected_agent: Some(agents[0]),
                                   ..owning(ids[0]) };
     assert_ne!(view_menu_snapshot(&store, Some(selected)), base);
-    let panel = OwningWindow { view_mode: WorkspaceViewMode::PullRequests,
+    let panel = OwningWindow { view_mode: WorkspaceViewMode::Changes,
                                ..owning(ids[0]) };
     assert_ne!(view_menu_snapshot(&store, Some(panel)), base);
 

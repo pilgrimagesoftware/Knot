@@ -11,6 +11,7 @@ mod agents;
 pub(crate) mod artifact_panel;
 mod bench;
 mod bench_popover;
+mod changes_tab;
 mod chrome;
 mod creation;
 mod git_panel;
@@ -36,6 +37,8 @@ mod repaint;
 mod restart_tests;
 mod sessions;
 mod shortcuts;
+#[cfg(test)]
+mod send_prompt_tests;
 #[cfg(test)]
 mod shortcuts_tests;
 mod sidebar_layout;

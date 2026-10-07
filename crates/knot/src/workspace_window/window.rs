@@ -57,6 +57,8 @@ pub(crate) struct WorkspaceWindow {
     /// The Pull Requests view's search, filters and sort, for as long as the
     /// window is open. Never persisted: a relaunch opens the view clean.
     pub(super) pull_request_view:                super::pull_requests_actions::PullRequestViewState,
+    /// The Changes view's tab and the Issues and OpenSpec tabs' state.
+    pub(super) changes_view:                     super::changes_tab::ChangesViewState,
     /// Agents whose PTY process has exited, queued by the reader thread and
     /// drained by the repaint poll - the callback runs off the main thread
     /// and cannot touch the view directly.

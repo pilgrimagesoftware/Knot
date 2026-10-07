@@ -89,7 +89,7 @@ pub(crate) fn view_menu(snapshot: &ViewMenuSnapshot) -> Menu {
         MenuItem::action(knot_core::l10n::t("menu.view.dashboard"), ToggleDashboard)
             .checked(showing == Some(WorkspaceViewMode::Dashboard)),
         MenuItem::action(knot_core::l10n::t("menu.view.pull_requests"), TogglePullRequests)
-            .checked(showing == Some(WorkspaceViewMode::PullRequests)),
+            .checked(showing == Some(WorkspaceViewMode::Changes)),
         MenuItem::separator(),
         MenuItem::action(knot_core::l10n::t("menu.view.focus_agent_input"), FocusAgentInput),
         MenuItem::action(knot_core::l10n::t("menu.view.jump_to_bottom"), JumpToBottom),

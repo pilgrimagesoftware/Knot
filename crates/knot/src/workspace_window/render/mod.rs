@@ -62,14 +62,18 @@ use crate::workspace_window::with_agents_menu_actions;
 use crate::workspace_window::workspace_title;
 
 mod agent_sections;
+mod changes_tabs;
 mod content;
+mod issues_pane;
 pub(super) mod mcp_pane;
+mod openspec_pane;
 mod overview;
 mod processes_pane;
 mod processes_summary;
 pub(super) mod pull_requests_pane;
 mod pull_requests_row;
 mod pull_requests_toolbar;
+pub(super) mod send_prompt_menu;
 mod sidebar;
 mod sidebar_compact;
 mod status_dot;
@@ -454,7 +458,7 @@ impl Render for WorkspaceWindow {
             self.titled_as = window_title.clone();
         }
         let is_dashboard = self.view_mode == WorkspaceViewMode::Dashboard;
-        let is_pull_requests = self.view_mode == WorkspaceViewMode::PullRequests;
+        let is_changes = self.view_mode == WorkspaceViewMode::Changes;
         // Every takeover hides the selected agent's header and pane, so the
         // question the rest of this render asks is "is anything taking the
         // content over", not "is it the dashboard".
@@ -476,18 +480,15 @@ impl Render for WorkspaceWindow {
                                          compact,
                                          cx);
         let dashboard_row = self.dashboard_row(is_dashboard, compact, cx);
-        let pull_requests_row = self.pull_requests_row(compact, cx);
+        let pull_requests_row = Some(self.pull_requests_row(compact, cx));
 
         let selected_header = self.selected_agent_header();
 
         // One content slot: at most one takeover shows at a time, so the
         // first that claims it wins and `content_column` needs no third arm.
         let takeover_content =
-            self.dashboard_content(is_dashboard, cx).or_else(|| {
-                                                        self.pull_requests_content(is_pull_requests,
-                                                                                   window,
-                                                                                   cx)
-                                                    });
+            self.dashboard_content(is_dashboard, cx)
+                .or_else(|| self.changes_content(is_changes, window, cx));
 
         let title_bar_left = self.title_bar_left(is_takeover,
                                                  &selected_header,

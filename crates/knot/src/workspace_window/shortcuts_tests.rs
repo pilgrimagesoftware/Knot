@@ -137,7 +137,7 @@ fn select_agent_leaves_a_panel_for_the_agent_view(cx: &mut TestAppContext) {
 fn the_panel_toggles_show_switch_and_hide(cx: &mut TestAppContext) {
     let mut fixture = window_with_agents(1, cx);
     fixture.press(TogglePullRequests);
-    assert_eq!(fixture.view_mode(), WorkspaceViewMode::PullRequests);
+    assert_eq!(fixture.view_mode(), WorkspaceViewMode::Changes);
     fixture.press(ToggleDashboard);
     assert_eq!(fixture.view_mode(),
                WorkspaceViewMode::Dashboard,
@@ -308,7 +308,7 @@ fn the_shortcuts_stay_reachable_behind_a_panel(cx: &mut TestAppContext) {
 fn new_agent_opens_the_editor_even_behind_a_panel(cx: &mut TestAppContext) {
     let mut fixture = window_with_agents(1, cx);
     assert!(available(&mut fixture, &crate::app_bootstrap::NewAgent));
-    fixture.set_view_mode(WorkspaceViewMode::PullRequests);
+    fixture.set_view_mode(WorkspaceViewMode::Changes);
     let before = cx.update(|cx| cx.windows().len());
     fixture.press(crate::app_bootstrap::NewAgent);
     assert_eq!(cx.update(|cx| cx.windows().len()), before + 1);

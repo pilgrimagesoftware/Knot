@@ -5,7 +5,7 @@
 //! card: the question it answers is "what did this session produce", which is
 //! a cross-agent question, and a per-card popover buries exactly that.
 
-use gpui_kit::base::{StyledExt, h_flex, v_flex};
+use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
@@ -54,13 +54,10 @@ impl RowStatus {
 }
 
 impl WorkspaceWindow {
-    /// The Pull Requests pane, or `None` when the window is not showing it.
-    pub(super) fn pull_requests_content(&mut self, is_showing: bool, window: &mut Window,
-                                        cx: &mut Context<Self>)
-                                        -> Option<gpui_kit::AnyElement> {
-        if !is_showing {
-            return None;
-        }
+    /// The Changes view's Pull Requests tab: its notices, toolbar and list.
+    /// The view's title and tab bar are drawn above it by `changes_tabs`.
+    pub(super) fn pull_requests_body(&mut self, window: &mut Window, cx: &mut Context<Self>)
+                                     -> gpui_kit::AnyElement {
         let (groups, shown) = self.filtered_pull_request_groups(cx);
         let notice = self.forge_notice();
         // No toolbar over nothing: a workspace with no records has nothing to
@@ -69,16 +66,13 @@ impl WorkspaceWindow {
             (!groups.is_empty()).then(|| self.pull_requests_toolbar(&groups, &shown, window, cx));
         let empty = empty_message(groups.is_empty(), shown.is_empty());
 
-        Some(div().id("workspace-pull-requests")
+        div().id("workspace-pull-requests")
                   .flex_1()
                   .min_h_0()
                   .overflow_y_scrollbar()
                   .child(v_flex().min_h_full()
                                  .gap_4()
                                  .p_5()
-                                 .child(div().text_lg()
-                                             .font_semibold()
-                                             .child(knot_core::l10n::t("pull_requests.title")))
                                  .children(notice.map(|text| {
                                                      div().text_sm()
                                                           .text_color(cx.theme().muted_foreground)
@@ -94,7 +88,7 @@ impl WorkspaceWindow {
                                  .children(toolbar)
                                  .children(empty.map(|empty| render_empty(empty, cx)))
                                  .children(shown.into_iter().map(|group| render_group(group, cx))))
-                  .into_any_element())
+                  .into_any_element()
     }
 
     /// The one availability message for the whole view, or `None` when state
