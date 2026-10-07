@@ -68,9 +68,18 @@ as follows, applied before that agent's terminal session is launched:
 
 1. If the agent's persisted ACP session id is present, use it directly.
 2. Otherwise, if its persisted session id is present, use that.
-3. Otherwise, look up the most recent session for that agent's `(folder,
-   agent type)` via the conversation-history provider registry, and use its
-   id if found.
+3. Otherwise, if no other restored agent shares that agent's `(folder,
+   agent type)`, look up the most recent session for it via the
+   conversation-history provider registry, and use its id if found.
+
+A session id SHALL be resolved for at most one agent. When two restored
+agents' records name the same session, only the earlier agent in roster order
+SHALL resume it. The history lookup SHALL NOT be used for an agent that shares
+its folder and type with another restored agent, and SHALL NOT return a
+session another agent's record names: history is kept per folder, not per
+agent, so it cannot tell whose a session is, and resuming another agent's
+conversation hands the agent that agent's knot ID with no registration to
+correct it.
 
 A Panel-mode agent's connection SHALL load its live ACP session id when it
 has one, and otherwise the resolved resume-session id, so a conversation
@@ -204,6 +213,18 @@ id.
   and cost-tier fields
 - **THEN** it loads with an empty description, no capability tags, and cost
   tier `medium`, and nothing about how it launches changes
+
+#### Scenario: An agent is not given another agent's conversation
+
+- **WHEN** two agents share a folder and type, the first has a persisted
+  session and the second has none, and the history's newest session for that
+  folder is the first agent's
+- **THEN** the first agent resumes its session and the second launches fresh
+
+#### Scenario: A session two records name resumes once
+
+- **WHEN** two restored agents' records name the same session id
+- **THEN** only the earlier agent in roster order resumes it
 
 ### Requirement: Three distinct status fields
 
@@ -582,3 +603,31 @@ The Swift app has Save to Bench only; benching is new to the Rust port.
 - **WHEN** an owner with one companion is benched
 - **THEN** the bench holds one entry, for the owner, and both agents are
   removed
+
+### Requirement: A resumed agent is registered
+
+An agent whose Panel session resumes SHALL end up registered with the knot,
+including when its earlier registration turn failed. Registration does not
+survive a restart, and a resumed session is sent no first-launch registration
+turn. Where the agent's adapter keeps its MCP URL's `?agent=` query (checked:
+`claude`, `codex`), the connection SHALL register it, and the session SHALL be
+sent no turn. For any other type, while the MCP server is enabled, the resumed
+session SHALL be sent one turn: a single-line registration request, without the
+instructions (already in the system channel) and without the startup prompt.
+A session that fell back to a fresh one is registered as a fresh session is.
+
+#### Scenario: A Claude agent resumes with no new turn
+
+- **WHEN** a Claude agent's prior session loads after a restart
+- **THEN** it is sent no prompt, and its connection registers it
+
+#### Scenario: An agent on another adapter is asked once
+
+- **WHEN** a Gemini agent's prior session loads after a restart with MCP enabled
+- **THEN** it is sent exactly one prompt, the one-line registration request
+
+#### Scenario: A failed first registration is recovered
+
+- **WHEN** an agent whose first registration turn failed ("Not logged in") is
+  resumed after a restart
+- **THEN** it is registered, by its connection or by the one-line request
