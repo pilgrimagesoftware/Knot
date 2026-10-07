@@ -71,6 +71,7 @@ mod pull_requests_row;
 mod pull_requests_toolbar;
 mod sidebar;
 mod sidebar_compact;
+mod status_dot;
 mod title_bar;
 
 /// The rows `render` has already built by the time it hands the sidebar
@@ -116,6 +117,7 @@ impl WorkspaceWindow {
                                       name: agent.name.clone(),
                                       folder: agent.folder.clone(),
                                       state: agent.state,
+                                      idle_since: agent.idle_since,
                                       is_shell: agent.is_shell(),
                                       is_companion: agent.is_companion,
                                       header_title: agent.header_title().to_string(),

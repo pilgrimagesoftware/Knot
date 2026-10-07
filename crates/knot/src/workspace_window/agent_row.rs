@@ -16,6 +16,8 @@ pub(super) struct AgentRow {
     pub(super) name:         String,
     pub(super) folder:       String,
     pub(super) state:        knot_agents::AgentState,
+    /// When the agent last went idle, for its status dot's tooltip.
+    pub(super) idle_since:   Option<std::time::SystemTime>,
     pub(super) is_shell:     bool,
     pub(super) is_companion: bool,
     pub(super) header_title: String,

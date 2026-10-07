@@ -46,6 +46,10 @@ sidebar:
     remove_tooltip: "Remove from bench"
     confirm_remove_title: "Remove from Bench"
     confirm_remove_body: "Remove \"%{name}\" from your bench?"
+  # The status dot's tooltip on an idle agent that has finished a message
+  # in this run (#582). `state` is the header's status label, `when` the
+  # panel's relative time ("5m ago"), `at` the absolute moment.
+  status_idle_since: "%{state} · last message %{when} (%{at})"
 
 agent:
   companion: "Shell companion"

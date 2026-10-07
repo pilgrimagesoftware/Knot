@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::app_state::agent_selection_for_workspace;
 use crate::app_state::layout_model;
 use crate::app_state::state_label;
+use crate::app_state::state_tooltip;
 use crate::tests::workspace;
 use crate::workspace_window::runs_a_terminal_process;
 
@@ -142,4 +143,30 @@ fn layout_model_carries_agent_state_into_rows() {
     let model = layout_model(&store, None, &[], &BTreeMap::new());
     assert_eq!(model.selected_agent_rows[0].state,
                knot_agents::AgentState::Input);
+}
+
+/// The status dot's tooltip (#582) names the state as the header does. Only
+/// an idle agent that has finished a message adds when: a working agent's
+/// last message is not what the dot is reporting, and a fresh one has none.
+#[test]
+fn the_status_tooltip_is_the_state_unless_idle_after_a_message() {
+    let then = std::time::SystemTime::now() - std::time::Duration::from_secs(5 * 60);
+    for state in [knot_agents::AgentState::Running,
+                  knot_agents::AgentState::Input,
+                  knot_agents::AgentState::Error]
+    {
+        assert_eq!(state_tooltip(state, Some(then)), state_label(state));
+    }
+    assert_eq!(state_tooltip(knot_agents::AgentState::Idle, None),
+               state_label(knot_agents::AgentState::Idle),
+               "an idle agent that has said nothing yet has no last message");
+
+    let idle = state_tooltip(knot_agents::AgentState::Idle, Some(then));
+    assert_eq!(idle,
+               knot_core::l10n::t_with("sidebar.status_idle_since",
+                                       &[("state", state_label(knot_agents::AgentState::Idle)),
+                                         ("when", &crate::timestamp::relative_timestamp(then)),
+                                         ("at", &crate::timestamp::absolute_timestamp(then))]));
+    assert!(!idle.contains("%{"),
+            "a placeholder was left unsubstituted: {idle}");
 }

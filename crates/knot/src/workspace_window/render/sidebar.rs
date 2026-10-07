@@ -28,7 +28,7 @@ use gpui_kit::px;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::sidebar_compact::{CompactAgentRow, compact_agent_row_body};
-use crate::app_state::state_color;
+use super::status_dot::status_dot;
 use crate::app_support::single_line;
 use crate::consts;
 use crate::settings_window::SettingsWindow;
@@ -66,6 +66,7 @@ impl WorkspaceWindow {
                                 name,
                                 folder,
                                 state,
+                                idle_since,
                                 is_shell,
                                 is_companion,
                                 header_title,
@@ -142,8 +143,10 @@ impl WorkspaceWindow {
                                 }
                             })
                             .child(if compact {
-                                compact_agent_row_body(CompactAgentRow { avatar,
+                                compact_agent_row_body(CompactAgentRow { id,
+                                                                         avatar,
                                                                          state,
+                                                                         idle_since,
                                                                          is_shell,
                                                                          hint: hint.clone() },
                                                        cx).into_any_element()
@@ -257,13 +260,7 @@ impl WorkspaceWindow {
                             // stopped agent's row is dimmed as a whole
                             // (see `agent-list-ui`).
                             .children((!is_shell).then(|| {
-                                div()
-                                    .flex_shrink_0()
-                                    .w(px(8.))
-                                    .h(px(8.))
-                                    .mt_1()
-                                    .rounded_full()
-                                    .bg(state_color(state))
+                                status_dot(id, state, idle_since).mt_1()
                             }))
                             .into_any_element()
                             })

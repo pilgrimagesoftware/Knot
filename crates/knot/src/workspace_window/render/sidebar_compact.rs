@@ -18,7 +18,7 @@ use gpui_kit::base::h_flex;
 use gpui_kit::div;
 use gpui_kit::px;
 
-use crate::app_state::state_color;
+use super::status_dot::status_dot;
 use crate::workspace_window::key_hints::with_key_hint;
 
 /// What the compact row draws. A struct rather than three positional
@@ -27,12 +27,16 @@ use crate::workspace_window::key_hints::with_key_hint;
 /// name is not among these - it becomes the row frame's tooltip, which
 /// [`super::sidebar`] owns.
 pub(crate) struct CompactAgentRow {
+    /// The agent, which keys its state dot.
+    pub id:         uuid::Uuid,
     /// Already clamped to a single grapheme by the caller.
-    pub avatar:   String,
-    pub state:    knot_agents::AgentState,
-    pub is_shell: bool,
+    pub avatar:     String,
+    pub state:      knot_agents::AgentState,
+    /// When the agent last went idle, for the dot's tooltip.
+    pub idle_since: Option<std::time::SystemTime>,
+    pub is_shell:   bool,
     /// The row's key hint while ⌘ is held (`key_hints`).
-    pub hint:     Option<String>,
+    pub hint:       Option<String>,
 }
 
 /// The compact row's body: the avatar alone, centred, with the state dot
@@ -42,18 +46,16 @@ pub(crate) struct CompactAgentRow {
 /// beside is gone; it keeps its colour mapping and its "a shell agent has
 /// none" rule, so where it sits is the only thing that changes.
 pub(crate) fn compact_agent_row_body(row: CompactAgentRow, cx: &gpui_kit::App) -> impl IntoElement {
-    let CompactAgentRow { avatar,
+    let CompactAgentRow { id,
+                          avatar,
                           state,
+                          idle_since,
                           is_shell,
                           hint, } = row;
     let dot = (!is_shell).then(|| {
-                             div().absolute()
-                                  .bottom_0()
-                                  .right_0()
-                                  .w(px(8.))
-                                  .h(px(8.))
-                                  .rounded_full()
-                                  .bg(state_color(state))
+                             status_dot(id, state, idle_since).absolute()
+                                                              .bottom_0()
+                                                              .right_0()
                          });
     let tile = div().relative()
                     .w(px(40.))
