@@ -1,4 +1,40 @@
 
+## 1.24.0 - 2026-10-08
+
+### Added
+- Keep the agentInfo an agent reports on initialize
+- Show which ACP agent and version a session runs
+- Record when an agent last went idle
+- Show the state and last-message time on the status dot
+- Attach screenshots to a bug report or feature request
+- Reply to an agent response from its action bar
+- Offer Always Allow in the permission prompt
+- Send an issue or change to one agent as a prompt
+- Turn the Pull Requests view into a tabbed Changes view
+- Resolve a folder's toplevel, common dir and remote URL
+- Parse a GitHub repo slug and list open issues
+- Add issue filter for the Issues tab
+- Scan a working tree's un-archived OpenSpec changes
+- List a workspace's issues and OpenSpec changes in the Changes view
+- Shimmer a tool call's title while it runs
+
+
+### Fixed
+- Keep the gpui-terminal bump's lockfile change to one entry
+- Left-align the bench popover's rows
+- Stop the scroll-to-latest click reaching the row beneath it
+- Show a scrollbar on every scroll region
+- Rule off the agent header from the pane below
+- Start a deactivated agent a task is dispatched to
+- Scroll the slash lookup to follow the keyboard selection
+- Copy every setup field when duplicating an agent
+- Workspace shortcuts raise open windows only, from the Window menu
+- Answer permission requests by option kind, not position
+- Keep each benched agent rather than one per folder
+- Shimmer the compact tool-call summary while its run is live
+
+
+
 ## 1.23.0 - 2026-10-02
 
 ### Added
