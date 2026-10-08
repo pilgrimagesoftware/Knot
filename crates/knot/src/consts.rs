@@ -25,6 +25,14 @@ use gpui_kit::Rgba;
 /// actually moved.
 pub(crate) const REPAINT_POLL_INTERVAL: Duration = Duration::from_millis(33);
 
+/// The longest a closing workspace window waits for its runtime's blocking
+/// tasks before leaving them to finish on their own threads.
+///
+/// Long enough for the work that is nearly done - a `git` or `ps` call that
+/// just returned - to land; short enough that a close never reads as a hang.
+/// What it cuts off has nothing left to report to: the window is gone.
+pub(crate) const WINDOW_RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
+
 /// How stale a cached `git diff --numstat` may get before the next render
 /// asks for a fresh one.
 ///

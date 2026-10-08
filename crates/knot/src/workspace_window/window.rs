@@ -102,8 +102,9 @@ pub(crate) struct WorkspaceWindow {
     pub(super) panel_states: BTreeMap<Uuid, Arc<Mutex<panel_state::PanelState>>>,
     /// `TerminalSession::spawn_pty` runs `tokio::spawn` for the activity
     /// tracker; the UI thread has no tokio runtime of its own, so enter
-    /// this one around each spawn (see `ensure_session`).
-    pub(super) runtime:                          tokio::runtime::Runtime,
+    /// this one around each spawn (see `ensure_session`). Its drop is
+    /// bounded - see `window_runtime`.
+    pub(super) runtime:                          crate::window_runtime::WindowRuntime,
     /// Backs the divider between the sidebar and the content column.
     ///
     /// The window owns it rather than letting the group keep its own keyed

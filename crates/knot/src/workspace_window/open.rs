@@ -141,7 +141,7 @@ impl WorkspaceWindow {
                     sessions: BTreeMap::new(),
                     terminal_panes: BTreeMap::new(),
                     panel_states: BTreeMap::new(),
-                    runtime: tokio::runtime::Runtime::new()
+                    runtime: crate::window_runtime::WindowRuntime::new()
                         .expect("failed to start terminal session runtime"),
                     sidebar_resize,
                     root_focus: cx.focus_handle(),

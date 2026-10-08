@@ -60,6 +60,7 @@ mod window_actions;
 mod window_menu;
 mod window_options;
 mod window_registry;
+mod window_runtime;
 mod working_indicator;
 mod workspace_manager;
 mod workspace_repos;
