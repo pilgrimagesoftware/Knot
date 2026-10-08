@@ -23,9 +23,10 @@ library reference stays a reference and custom text stays custom text. A
 stored entry written before the startup prompt existed SHALL load with no
 startup prompt.
 
-#### Scenario: The same agent saved again is replaced
+#### Scenario: Same-folder bench entry replaced
 
-- **WHEN** a bench entry is added with the name and folder of an existing one
+- **WHEN** a bench entry is added for a folder that already has an entry with
+  the same name - the same agent saved again
 - **THEN** the old entry is removed and only the new one remains
 
 #### Scenario: Another agent from the same folder is kept
