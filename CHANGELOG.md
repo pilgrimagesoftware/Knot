@@ -17,6 +17,8 @@
 - Scan a working tree's un-archived OpenSpec changes
 - List a workspace's issues and OpenSpec changes in the Changes view
 - Shimmer a tool call's title while it runs
+- Add MIT terminal crate with a GPUI view
+- Check and install ACP adapter updates on demand
 
 
 ### Fixed
@@ -32,6 +34,16 @@
 - Answer permission requests by option kind, not position
 - Keep each benched agent rather than one per folder
 - Shimmer the compact tool-call summary while its run is live
+- Open Zed when not already running
+- Reformat open_in.rs to match the pinned rustfmt
+
+
+### Changed
+- Run Knot's terminal on gpui-terminal
+
+
+### Documentation
+- Supersede ADR-0002 with the 0.7.0-based gpui-base fork
 
 
 
