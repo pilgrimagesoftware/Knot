@@ -13,9 +13,10 @@
 
 use gpui_kit::base::{StyledExt, h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::{
     Context, InteractiveElement, IntoElement, ListAlignment, ListState, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb,
+    SharedString, Styled, Window, div, px, rgb,
 };
 use knot_git::{DiffLine, FileDiff, LineKind};
 
@@ -91,13 +92,21 @@ impl WorkspaceWindow {
                      .child(knot_core::l10n::t_with("git_panel.diff_truncated",
                                                     &[("count", &shown.to_string())]))
                                    }))
-                .child(div().id("git-diff-lines")
+                // The list scrolls vertically on its own state; the div
+                // around it scrolls long lines sideways. The vertical bar
+                // hangs off the outer, non-scrolling wrapper so it stays in
+                // view however far a line is scrolled sideways.
+                .child(div().relative()
                             .flex_1()
                             .min_h_0()
-                            .overflow_x_scroll()
-                            .child(gpui_kit::list(list, move |index, _window, cx| {
-                                       render_line(&shared[index], cx)
-                                   }).size_full()))
+                            .child(div().id("git-diff-lines")
+                                        .size_full()
+                                        .overflow_x_scrollbar()
+                                        .child(gpui_kit::list(list.clone(),
+                                                              move |index, _window, cx| {
+                                                                  render_line(&shared[index], cx)
+                                                              }).size_full()))
+                            .vertical_scrollbar(&list))
                 .into_any_element()
     }
 

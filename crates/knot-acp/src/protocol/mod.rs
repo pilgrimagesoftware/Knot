@@ -5,10 +5,16 @@
 //! passthrough), since the agent's response may carry ACP fields this
 //! client doesn't yet use.
 
+mod agent_info;
 mod json_rpc;
+mod permission;
 
+pub use agent_info::AgentInfo;
 pub use json_rpc::{
     IncomingMessage, JsonRpcErrorPayload, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
+};
+pub use permission::{
+    PermissionDecision, PermissionOption, PermissionOptionKind, PermissionRequest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -51,6 +57,13 @@ pub struct InitializeResult {
     /// the same way, since the stabilized spec allows either.
     #[serde(default, rename = "configOptions")]
     pub config_options:   Vec<ConfigOption>,
+    /// The agent's name and version, which it SHOULD send - see
+    /// [`AgentInfo`]. A missing or malformed one reads as `None` rather than
+    /// failing the handshake.
+    #[serde(default,
+            rename = "agentInfo",
+            deserialize_with = "agent_info::lenient")]
+    pub agent_info:       Option<AgentInfo>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -335,29 +348,6 @@ fn field_str(value: &Value, key: &str) -> String {
 /// omits `status` is leaving it unchanged, not clearing it.
 fn optional_str(value: &Value, key: &str) -> Option<String> {
     value.get(key).and_then(Value::as_str).map(str::to_owned)
-}
-
-/// A `session/request_permission` request from the agent, awaiting an
-/// allow/deny decision from the caller.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PermissionRequest {
-    pub rpc_id:          Value,
-    pub tool_call_id:    String,
-    pub tool_call_title: Option<String>,
-    pub options:         Vec<PermissionOption>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct PermissionOption {
-    #[serde(rename = "optionId")]
-    pub option_id: String,
-    pub name:      String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PermissionDecision {
-    Allow,
-    Deny,
 }
 
 #[cfg(test)]

@@ -36,6 +36,8 @@ use crate::panel_view::style::ERROR_COLOR;
 use crate::panel_view::style::MUTED;
 use crate::panel_view::style::PanelStyle;
 use crate::panel_view::tool_call::render_tool_call_card;
+use crate::timestamp::absolute_timestamp;
+use crate::timestamp::relative_timestamp;
 
 /// The hover group that reveals a prompt's copy control.
 ///
@@ -53,47 +55,6 @@ pub(super) struct Message<'a> {
     pub(super) is_last: bool,
     pub(super) style:   &'a PanelStyle,
     pub(super) list:    &'a ListState,
-}
-
-/// How long ago `sent_at` was, in words - the small label shown beside a
-/// prompt or response, per issue #577. Buckets widen as the conversation
-/// ages rather than ever showing a raw count of seconds, matching
-/// `workspace_window::render::mcp_pane::taken_ago_text`'s shape.
-fn relative_timestamp(sent_at: SystemTime) -> String {
-    let elapsed = SystemTime::now().duration_since(sent_at)
-                                   .unwrap_or_default();
-    let total = elapsed.as_secs();
-
-    if total < 60 {
-        knot_core::l10n::t("panel.timestamp.just_now")
-    }
-    else if total < 3600 {
-        knot_core::l10n::t_with("panel.timestamp.minutes_ago",
-                                &[("minutes", &(total / 60).to_string())])
-    }
-    else if total < 86400 {
-        knot_core::l10n::t_with("panel.timestamp.hours_ago",
-                                &[("hours", &(total / 3600).to_string())])
-    }
-    else {
-        knot_core::l10n::t_with("panel.timestamp.days_ago",
-                                &[("days", &(total / 86400).to_string())])
-    }
-}
-
-/// The absolute moment `sent_at` represents, for the timestamp's tooltip, in
-/// the user's own time zone. Not localized: it is a fixed-format instant,
-/// not a sentence. Falls back to UTC if the local offset cannot be read -
-/// `current_local_offset` is unsound to call from more than one thread,
-/// which a GPUI app always is, so a failure here is expected on some runs
-/// rather than a bug to chase.
-fn absolute_timestamp(sent_at: SystemTime) -> String {
-    const FORMAT: &[time::format_description::FormatItem<'_>] =
-        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
-    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-    time::OffsetDateTime::from(sent_at).to_offset(offset)
-                                       .format(FORMAT)
-                                       .unwrap_or_default()
 }
 
 /// The small, subtitle-colored relative-time label for one message, with a
@@ -239,7 +200,7 @@ pub(super) fn render_message(ctx: Message<'_>, message: &PanelMessage,
                         user_index,
                         index,
                         list,
-                        callbacks.on_manual_scroll.clone(),
+                        callbacks,
                     )
                 }))
                 .into_any_element()
@@ -317,8 +278,8 @@ pub(super) fn render_track_toggle(tracking: bool, on_toggle: Rc<dyn Fn()>) -> im
                                                     }))
 }
 
-/// A finalized response's action bar: copy, scroll to the user message that
-/// prompted it, and scroll to the top of the conversation.
+/// A finalized response's action bar: copy, reply, scroll to the user message
+/// that prompted it, and scroll to the top of the conversation.
 ///
 /// The two scroll buttons drive the `ListState` directly (rather than a
 /// `ScrollHandle`) so they also stop tail-following - `scroll_to` on an
@@ -327,12 +288,14 @@ pub(super) fn render_track_toggle(tracking: bool, on_toggle: Rc<dyn Fn()>) -> im
 /// pulling the view straight back to the tail. Button ids carry `index` so
 /// each response's bar is a distinct hit target under virtualization.
 pub(super) fn render_response_actions(text: String, user_index: Option<usize>, index: usize,
-                                      list: &ListState, on_manual_scroll: Rc<dyn Fn()>)
+                                      list: &ListState, callbacks: &PanelCallbacks)
                                       -> impl IntoElement {
     let scroll_to_user = list.clone();
     let scroll_to_top = list.clone();
-    let manual_to_user = on_manual_scroll.clone();
-    let manual_to_top = on_manual_scroll;
+    let manual_to_user = callbacks.on_manual_scroll.clone();
+    let manual_to_top = callbacks.on_manual_scroll.clone();
+    let on_reply = callbacks.on_reply.clone();
+    let reply_text = text.clone();
     h_flex()
         .gap_1()
         .child(
@@ -347,6 +310,16 @@ pub(super) fn render_response_actions(text: String, user_index: Option<usize>, i
                         Notification::info(knot_core::l10n::t("panel.copied_response")),
                         cx,
                     );
+                }),
+        )
+        .child(
+            Button::new(("panel-reply-response", index as u64))
+                .icon(IconName::Reply)
+                .tooltip(knot_core::l10n::t("panel.reply_to_response"))
+                .ghost()
+                .small()
+                .on_click(move |_: &ClickEvent, window, cx| {
+                    on_reply(reply_text.clone(), window, cx)
                 }),
         )
         .children(user_index.map(|user_index| {
@@ -377,28 +350,4 @@ pub(super) fn render_response_actions(text: String, user_index: Option<usize>, i
                     manual_to_top();
                 }),
         )
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use super::*;
-
-    /// The bucket boundaries in `relative_timestamp` - just now, minutes,
-    /// hours, days - per issue #577. Catalogue keys resolve regardless of
-    /// locale, so the test checks which bucket was chosen, not the copy.
-    #[test]
-    fn relative_timestamp_buckets_by_elapsed_time() {
-        let now = SystemTime::now();
-
-        assert_eq!(relative_timestamp(now),
-                   knot_core::l10n::t("panel.timestamp.just_now"));
-        assert_eq!(relative_timestamp(now - Duration::from_secs(90)),
-                   knot_core::l10n::t_with("panel.timestamp.minutes_ago", &[("minutes", "1")]));
-        assert_eq!(relative_timestamp(now - Duration::from_secs(3 * 3600)),
-                   knot_core::l10n::t_with("panel.timestamp.hours_ago", &[("hours", "3")]));
-        assert_eq!(relative_timestamp(now - Duration::from_secs(2 * 86400)),
-                   knot_core::l10n::t_with("panel.timestamp.days_ago", &[("days", "2")]));
-    }
 }

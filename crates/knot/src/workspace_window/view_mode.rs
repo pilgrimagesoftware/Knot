@@ -8,9 +8,11 @@ pub(crate) enum WorkspaceViewMode {
     #[default]
     Terminal,
     Dashboard,
-    /// The pull requests this workspace's agents have opened. Reached from
-    /// its own sidebar row, shaped like the dashboard's.
-    PullRequests,
+    /// The workspace's work in flight - its agents' pull requests, its
+    /// repositories' open issues and un-archived OpenSpec changes - one tab
+    /// each (#504). Reached from its own sidebar row, shaped like the
+    /// dashboard's.
+    Changes,
 }
 
 impl WorkspaceViewMode {
@@ -44,14 +46,14 @@ mod tests {
     fn only_the_terminal_is_not_a_takeover() {
         assert!(!WorkspaceViewMode::Terminal.is_takeover());
         assert!(WorkspaceViewMode::Dashboard.is_takeover());
-        assert!(WorkspaceViewMode::PullRequests.is_takeover());
+        assert!(WorkspaceViewMode::Changes.is_takeover());
     }
 
     #[test]
     fn a_row_toggles_its_own_view_and_switches_between_views() {
         let terminal = WorkspaceViewMode::Terminal;
         let dashboard = WorkspaceViewMode::Dashboard;
-        let pull_requests = WorkspaceViewMode::PullRequests;
+        let pull_requests = WorkspaceViewMode::Changes;
 
         assert_eq!(terminal.toggled(dashboard), dashboard);
         assert_eq!(dashboard.toggled(dashboard),

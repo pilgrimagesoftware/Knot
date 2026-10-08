@@ -55,6 +55,22 @@ user's side of a conversation during `session/load`. They SHALL be delivered
 as their own kind, not dropped as unknown, so a caller can show a restored
 conversation's prompts between its replies.
 
+A tool-call start and a tool-call update SHALL carry two things the client
+currently discards, when the agent sends them: the call's raw input, and the
+notification's metadata envelope. Both SHALL be delivered unparsed and
+unmodified.
+
+The protocol's own `kind` is an icon hint and its `title` is prose written for
+a human, so neither identifies what tool ran. Adapters therefore identify a
+call out of band — in the metadata envelope, and in vendor fields alongside it
+— and a client that cannot see those fields cannot recognize a particular tool
+call at all. Carrying them is what lets a caller recognize one, such as a
+delegation, rather than guess from a label it would also have to keep in step
+with the adapter's translations.
+
+A tool call carrying neither field SHALL be delivered with neither, and an
+absent field SHALL be distinguishable from an empty one.
+
 #### Scenario: Turn ends mid tool call
 - **WHEN** the agent reports a turn-end update while a tool call is still
   open
@@ -66,6 +82,27 @@ conversation's prompts between its replies.
   session
 - **THEN** the system SHALL deliver it as a user message chunk carrying its
   text
+
+#### Scenario: Raw input reaches the caller
+- **WHEN** the agent sends a tool-call start carrying raw input
+- **THEN** the caller receives that raw input unmodified alongside the call's
+  kind, title and status
+
+#### Scenario: The metadata envelope reaches the caller
+- **WHEN** the agent sends a tool-call start carrying a metadata envelope
+- **THEN** the caller receives that envelope unmodified, including any
+  vendor-specific keys within it
+
+#### Scenario: A tool call without either field
+- **WHEN** the agent sends a tool-call start carrying no raw input and no
+  metadata
+- **THEN** the caller receives the call with neither, distinguishably from a
+  call whose raw input or metadata was empty
+
+#### Scenario: An update does not blank what the start carried
+- **WHEN** a tool-call update arrives carrying only a status change
+- **THEN** the raw input and metadata the caller already holds for that call
+  are left intact
 
 ### Requirement: Permission requests
 When the agent sends a `session/request_permission` request, the system
@@ -99,3 +136,90 @@ as a panic.
 - **WHEN** the subprocess exits while a prompt turn is in progress
 - **THEN** the system reports the session as ended with the process exit code,
   and any pending prompt/permission futures resolve with an error
+
+### Requirement: A loaded session keeps the id it was loaded by
+
+A successful `session/load` SHALL identify the session by the `sessionId` its
+response carries when it carries one, and otherwise by the `sessionId` the
+request named. ACP's `LoadSessionResponse` defines no `sessionId`: a loaded
+session continues under the id it was asked for. A response without one SHALL
+NOT be treated as a failure.
+
+`codex-acp` 2.0.0 answers `session/load` with its models, modes and config
+options and no `sessionId`. Treating that as an error made every Codex load
+fall back to a fresh session.
+
+#### Scenario: A load response with no session id
+
+- **WHEN** the caller loads session `thread-7` and the agent's successful
+  response has no `sessionId`
+- **THEN** the loaded session is identified as `thread-7`
+
+#### Scenario: A load response naming its session
+
+- **WHEN** the agent's successful load response carries a `sessionId`
+- **THEN** the loaded session is identified by that id
+
+### Requirement: User message chunks keep their metadata
+
+A `user_message_chunk` SHALL be delivered with its `_meta` envelope, verbatim,
+alongside its text, or with none when the agent sent none. Not every replayed
+user message was typed by the user. An adapter may say who produced one: Claude
+Code's origin is `_claude/origin`. A caller can only tell the two apart if the
+metadata reaches it.
+
+#### Scenario: An origin tag reaches the caller
+
+- **WHEN** an agent sends a `user_message_chunk` whose `_meta` carries
+  `_claude/origin` with kind `task-notification`
+- **THEN** the delivered chunk carries that `_meta`
+
+#### Scenario: A chunk without metadata
+
+- **WHEN** an agent sends a `user_message_chunk` with no `_meta`
+- **THEN** the delivered chunk carries its text and no metadata
+
+### Requirement: Permission decisions resolve by option kind
+
+Each permission option SHALL be surfaced with its `kind` (`allow_once`,
+`allow_always`, `reject_once`, `reject_always`) when the agent sends a known
+one. An unknown or malformed kind SHALL leave that option without a kind,
+and SHALL NOT discard the request's other options.
+
+A decision SHALL be answered with the option of its own kind, never by the
+options' order or wording:
+
+- Allow SHALL answer with the `allow_once` option.
+- Always Allow SHALL answer with the `allow_always` option.
+- Deny SHALL answer with the `reject_once` option, else the `reject_always`
+  option.
+- A direct choice SHALL answer with the chosen option.
+
+A decision whose kind the request does not offer SHALL NOT be answered with
+some other option.
+
+When no option carries a kind, Allow SHALL answer with the first option and
+Deny with the first option whose id or name reads as a refusal, as before
+kinds were read.
+
+#### Scenario: Always Allow listed first
+
+- **WHEN** an agent offers Always Allow, Allow and Reject, in that order,
+  and the user allows
+- **THEN** the agent receives the Allow option's id, not Always Allow's
+
+#### Scenario: Always Allow chosen
+
+- **WHEN** the user chooses Always Allow on that request
+- **THEN** the agent receives the Always Allow option's id
+
+#### Scenario: Deny on a Reject option
+
+- **WHEN** the agent's refusal option is named "Reject" with kind
+  `reject_once`, and the user denies
+- **THEN** the agent receives that option's id
+
+#### Scenario: An unknown kind
+
+- **WHEN** one option carries a kind this client does not know
+- **THEN** the request still offers every option, that one without a kind

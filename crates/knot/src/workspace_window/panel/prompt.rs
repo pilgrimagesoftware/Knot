@@ -267,7 +267,9 @@ impl WorkspaceWindow {
 
     /// Resolves the selected agent's pending permission request (if any,
     /// and if it's a Panel-mode agent) and answers it with `decision` -
-    /// backs the allow/deny keybindings.
+    /// backs the allow / always-allow / deny keybindings. A decision the
+    /// request does not offer - Always Allow where the agent gave no such
+    /// option - leaves it pending rather than answering with something else.
     pub(in crate::workspace_window) fn answer_selected_permission(&self,
                                                                   decision: knot_acp::PermissionDecision)
     {
@@ -290,7 +292,7 @@ impl WorkspaceWindow {
             return;
         };
         let request = handle.state().lock().pending_permission.clone();
-        if let Some(request) = request {
+        if let Some(request) = request.filter(|request| request.offers(decision)) {
             handle.answer_permission(&request, decision);
         }
     }

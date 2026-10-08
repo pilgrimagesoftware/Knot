@@ -475,13 +475,30 @@ for the status SHALL be carried by the icon's tooltip.
 
 ### Requirement: Response action bar
 Each completed agent response SHALL display an action bar with: copy
-response, scroll to the user message that produced this response, and
-scroll to the top of the conversation history.
+response, reply to the response, scroll to the user message that produced
+this response, and scroll to the top of the conversation history.
+
+Reply SHALL quote the response into the prompt input as a Markdown block
+quote - every line prefixed with `>`, blank lines as a bare `>` - followed by
+a blank line, so text typed after it starts a new paragraph rather than
+continuing the quote. A draft already in the input SHALL be kept, with the
+quote appended a paragraph below it. The input SHALL take focus with the
+caret at the end, on the line below the quote.
 
 #### Scenario: Copy response
 - **WHEN** the user activates "copy response" on an agent response
 - **THEN** the full text of that response is placed on the system
   clipboard
+
+#### Scenario: Reply to a response
+- **WHEN** the user activates "reply" on an agent response and then types
+- **THEN** the prompt input holds the response as a block quote, and what
+  the user typed follows it on its own line, outside the quote
+
+#### Scenario: Reply keeps a draft
+- **WHEN** the prompt input already holds a draft and the user activates
+  "reply" on an agent response
+- **THEN** the draft is unchanged and the quote follows it a paragraph below
 
 #### Scenario: Scroll to originating user message
 - **WHEN** the user activates "scroll to user input" on an agent response
@@ -791,12 +808,27 @@ changes again — a window SHALL NOT pull focus back into the composer while the
 user is working somewhere else in it.
 
 Focus SHALL NOT be taken when the composer is not what the content area shows.
-That covers the window showing its dashboard rather than an agent, an open
-markdown or diagram pane holding the content area ahead of the conversation,
-and a deactivated agent whose pane shows the stopped placeholder. In each of
-those cases focus SHALL be left where it is. A Terminal-mode agent focuses its
+That covers the window showing its dashboard rather than an agent, and a
+deactivated agent whose pane shows the stopped placeholder. In each of those
+cases focus SHALL be left where it is. A Terminal-mode agent focuses its
 terminal surface instead, under `terminal-input`'s "Selecting a Terminal-mode
 agent focuses its terminal surface"; no composer is focused for it.
+
+An open artifact panel SHALL withhold focus only while it is expanded. Under
+`artifact-panel` an expanded panel takes the whole content area and the composer
+is not on screen, which is the case this exception is for. An unexpanded panel
+is a sibling of the content pane, so the composer is on screen beside a shown
+markdown file or diagram and SHALL be focused as it is for any other selected
+Panel-mode agent. Merely having an artifact open is not the condition.
+
+Expanding or collapsing the panel SHALL NOT itself take focus. The panel's
+expanded state decides whether focus can be taken for a selection, not whether
+a new selection has happened; a panel returning to its set width makes the
+composer visible again and SHALL leave focus wherever the user last put it,
+under the once-per-selection rule above. The state read SHALL be the panel's
+live expanded state, which the user's own toggle changes, and not the
+`maximized` argument last recorded for the agent — the two differ from the
+moment the user collapses a panel an agent maximized.
 
 Focus SHALL NOT be taken from a modal dialog while one is open.
 
@@ -853,9 +885,22 @@ placement included where the composer already preserves it.
 
 #### Scenario: A markdown pane holds the content area
 
-- **WHEN** the user selects a Panel-mode agent that has a markdown file open, so
-  the markdown pane takes the content area
+- **WHEN** the user selects a Panel-mode agent whose artifact panel is expanded,
+  so the panel holds the content area and the composer is not on screen
 - **THEN** focus is left where it was
+
+#### Scenario: An unexpanded artifact panel does not withhold focus
+
+- **WHEN** the user selects a Panel-mode agent that has a markdown file open in
+  an unexpanded panel, beside its conversation
+- **THEN** that agent's prompt input has keyboard focus
+
+#### Scenario: Collapsing an expanded panel does not pull focus
+
+- **WHEN** the user selects a Panel-mode agent whose panel is expanded, clicks a
+  control elsewhere in the window, and then collapses the panel
+- **THEN** focus stays on the control the user clicked, and the composer is
+  shown without being focused
 
 #### Scenario: A deactivated agent is selected
 
@@ -1310,3 +1355,73 @@ sent, and showing an echo would duplicate it.
 - **WHEN** the user sends a prompt and the agent echoes it as a user message
   chunk during the turn
 - **THEN** the prompt appears once
+
+### Requirement: Harness-injected messages are not shown as the user's
+
+A replayed user message chunk that the agent's harness injected, rather than
+the user typing it, SHALL NOT be shown as a user message.
+
+A chunk is injected when its `_meta["_claude/origin"].kind` is present and is
+anything other than `human` or `channel`. When no origin is present, a chunk
+is injected only if it consists entirely of one or more
+`<task-notification>…</task-notification>` or
+`<system-reminder>…</system-reminder>` blocks, with nothing but whitespace
+between and around them. An origin, when present, decides in both directions:
+a `human` or `channel` origin keeps a chunk the user's, whatever its text.
+
+An injected chunk SHALL be shown as follows:
+
+- A chunk holding a task notification SHALL become a compact notice row. Its
+  text is "Background task finished: <summary>", using the notification's
+  `<summary>` with its whitespace collapsed, or "Background task finished"
+  when it has none.
+- A chunk of `<system-reminder>` blocks only SHALL NOT be shown. The reminders
+  are written for the model, and the live stream never shows them either.
+- An origin-tagged chunk that is neither SHALL become a notice row reading
+  "Automated message". The event is noted, but text written for the model is
+  not shown as though someone had said it.
+
+A notice row SHALL be a single line, smaller than a message and muted, and
+SHALL be visually distinct from user, assistant, tool-call and error entries.
+Its text SHALL come from localization.
+
+An injected chunk SHALL NOT join the user message before it. This matters
+because Claude Code appends reminders to a prompt as their own block, and the
+prompt has to stay as the user typed it.
+
+The same rule for when chunks are ignored as for the user's own prompts
+applies: while a turn is in flight, a user message chunk is ignored.
+
+This diverges from what `claude-agent-acp` does. Live, it drops these
+messages; on replay, it sends them as the user's with no origin tag.
+
+#### Scenario: A background task finished between turns
+
+- **WHEN** a conversation that contains a `<task-notification>` user message
+  with the summary "Tests passed" is replayed
+- **THEN** no user message is shown for it, and a notice row reading
+  "Background task finished: Tests passed" is shown where it was
+
+#### Scenario: A prompt that mentions the tag
+
+- **WHEN** a replayed user message reads `what is a <task-notification>?`
+- **THEN** it is shown as the user's message
+
+#### Scenario: A reminder appended to a prompt
+
+- **WHEN** a replayed prompt arrives as a chunk of the user's text followed by
+  a chunk that is only a `<system-reminder>` block
+- **THEN** the prompt is shown as the user typed it, and the reminder is not
+  shown
+
+#### Scenario: The adapter tags the origin
+
+- **WHEN** a replayed user chunk carries `_claude/origin` kind
+  `task-notification`
+- **THEN** it is not shown as the user's message, whatever its text
+
+#### Scenario: A human origin wins over the text
+
+- **WHEN** a replayed user chunk carries `_claude/origin` kind `human` and its
+  text is a `<task-notification>` block
+- **THEN** it is shown as the user's message

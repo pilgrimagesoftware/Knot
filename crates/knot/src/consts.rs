@@ -173,6 +173,22 @@ pub(crate) const PULL_REQUEST_MERGED_RETENTION: Duration = Duration::from_secs(2
 /// does it.
 pub(crate) const FORGE_PROBE_MAX_AGE: Duration = Duration::from_secs(60);
 
+/// How often the Changes view re-reads which repositories the workspace's
+/// agents work in (#504). Cheap - three `git rev-parse`s per folder - and
+/// only while the Issues or OpenSpec tab is shown, so a moved or new agent
+/// folder is picked up within this.
+pub(crate) const WORKSPACE_REPOS_MAX_AGE: Duration = Duration::from_secs(30);
+
+/// How long a repository's open issues are shown before they are fetched
+/// again (`workspace-issues`): one `gh` call per repository, so slower than
+/// pull request state.
+pub(crate) const ISSUES_MAX_AGE: Duration = Duration::from_secs(5 * 60);
+
+/// How long a repository's OpenSpec change list is shown before it is read
+/// again (`workspace-openspec-changes`). A directory read, so cheap; Refresh
+/// now covers the change the user just made.
+pub(crate) const OPENSPEC_CHANGES_MAX_AGE: Duration = Duration::from_secs(30);
+
 /// How often the settings window drains the native font panel's selections.
 ///
 /// The panel is an AppKit window with no callback into GPUI, so its choice is
@@ -264,6 +280,16 @@ pub(crate) const BUG_REPORT_LOG_TAIL_LINES: usize = 200;
 /// ...and at most this many bytes of them. GitHub caps an issue body at
 /// 65,536 characters, and two logs have to fit beside the description.
 pub(crate) const BUG_REPORT_LOG_TAIL_BYTES: usize = 24 * 1024;
+
+/// How many screenshots a report can name (#566). The ask is "a couple"; the
+/// cap keeps an accidental select-all in a screenshots folder from revealing
+/// dozens of files in Finder.
+pub(crate) const BUG_REPORT_MAX_SCREENSHOTS: usize = 5;
+
+/// The image types a report keeps as screenshots, lowercased: the ones
+/// GitHub renders inline in an issue. The file picker cannot filter, so
+/// everything else is skipped after the choice.
+pub(crate) const BUG_REPORT_SCREENSHOT_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif"];
 
 /// The application log, in `knot_core::log_dir()`: whatever the process
 /// wrote to stderr, when that was not a terminal (`app_log`).

@@ -11,11 +11,11 @@ use gpui_kit::Context;
 use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::div;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
@@ -156,7 +156,7 @@ impl WorkspaceWindow {
                     .child(div().id("workspace-dashboard-grid")
                                 .size_full()
                                 .p_6()
-                                .overflow_y_scroll()
+                                .overflow_y_scrollbar()
                                 .child(dashboard::workspace_section(
                         dashboard_workspace,
                         false,

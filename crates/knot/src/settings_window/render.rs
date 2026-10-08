@@ -6,11 +6,11 @@ use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Render;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tab::Tab;
 use gpui_kit::component::tab::TabBar;
 use gpui_kit::div;
@@ -81,17 +81,21 @@ impl Render for SettingsWindow {
         // list scrolls; the title, blurb and action rows stay pinned) -
         // scrolling the body too would let both containers move at once and
         // make the group's title/border appear to drift.
-        let mut settings_body = div().id("settings-body").flex_1().min_h_0();
-        settings_body = if matches!(self.selected_tab,
-                                    SettingsTab::Personas
-                                    | SettingsTab::Prompts
-                                    | SettingsTab::Bench
-                                    | SettingsTab::Keyboard)
+        let settings_body = div().id("settings-body").flex_1().min_h_0();
+        let settings_body = if matches!(self.selected_tab,
+                                        SettingsTab::Personas
+                                        | SettingsTab::Prompts
+                                        | SettingsTab::Bench
+                                        | SettingsTab::Keyboard)
         {
             settings_body.overflow_hidden()
+                         .child(body)
+                         .into_any_element()
         }
         else {
-            settings_body.overflow_y_scroll()
+            settings_body.overflow_y_scrollbar()
+                         .child(body)
+                         .into_any_element()
         };
 
         v_flex().size_full()
@@ -99,6 +103,6 @@ impl Render for SettingsWindow {
                 .p_4()
                 .bg(cx.theme().background)
                 .child(self.render_tab_strip(cx))
-                .child(settings_body.child(body))
+                .child(settings_body)
     }
 }

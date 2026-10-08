@@ -3,8 +3,14 @@
 
 use std::rc::Rc;
 
+use gpui_kit::App;
+use gpui_kit::Window;
 use knot_acp::PermissionDecision;
 use uuid::Uuid;
+
+/// Quotes one finished response into the composer. Takes the window because
+/// it has to focus the composer.
+pub(crate) type ReplyCallback = Rc<dyn Fn(String, &mut Window, &mut App)>;
 
 /// The panel's interaction callbacks, grouped rather than threaded through
 /// the row renderer and message renderer as four separate parameters. Wrapped
@@ -24,6 +30,8 @@ pub(crate) struct PanelCallbacks {
     pub(crate) on_cancel_shell:        Rc<dyn Fn(Uuid)>,
     /// Drops one finished `!` command's pending result, by its card id.
     pub(crate) on_discard_shell:       Rc<dyn Fn(Uuid)>,
+    /// Quotes one finished response into the composer to reply to it.
+    pub(crate) on_reply:               ReplyCallback,
 }
 
 impl PanelCallbacks {
@@ -39,7 +47,8 @@ impl PanelCallbacks {
                on_toggle_tool_run:     Rc::new(on_toggle_tool_run),
                on_manual_scroll:       Rc::new(on_manual_scroll),
                on_cancel_shell:        Rc::new(|_| {}),
-               on_discard_shell:       Rc::new(|_| {}), }
+               on_discard_shell:       Rc::new(|_| {}),
+               on_reply:               Rc::new(|_, _, _| {}), }
     }
 
     /// Adds the `!` command controls.
@@ -53,6 +62,17 @@ impl PanelCallbacks {
                              -> Self {
         self.on_cancel_shell = Rc::new(on_cancel);
         self.on_discard_shell = Rc::new(on_discard);
+        self
+    }
+
+    /// Adds the response action bar's Reply control (#559).
+    ///
+    /// Chained for the same reason as [`Self::with_shell`], and a no-op by
+    /// default: a surface with no composer has nowhere to put the quote.
+    pub(crate) fn with_reply(mut self,
+                             on_reply: impl Fn(String, &mut Window, &mut App) + 'static)
+                             -> Self {
+        self.on_reply = Rc::new(on_reply);
         self
     }
 }

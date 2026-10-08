@@ -42,11 +42,24 @@ success it SHALL mark the agent registered, associate the session id when
 given, and return the unread-message count and the list of knot members
 visible to the caller.
 
+It SHALL fail with an error the agent sees, and change nothing, when `agentId`
+names an agent another live connection holds, or when the calling connection
+is bound to a different agent (see "A caller acts only as itself"). A
+successful registration from a connection bound to no agent SHALL bind it to
+the registered agent.
+
 #### Scenario: Register returns roster
 
 - **WHEN** a known agent calls `register-agent` with its id
 - **THEN** it is marked registered and the result includes the current knot
   members
+
+#### Scenario: A duplicate live registration is refused
+
+- **WHEN** one live connection holds an agent and a second session calls
+  `register-agent` with that agent's id
+- **THEN** the second call fails with an error saying another live session
+  holds the agent, and the first connection keeps it
 
 ### Requirement: list-agents
 
@@ -165,11 +178,57 @@ optional `title`. Each SHALL update the target agent's panel state and return a
 success indicator. `display-markdown` SHALL record a history of shown files,
 most recent first.
 
+`maximized` SHALL expand that agent's artifact panel, as `artifact-panel`
+defines: the panel takes the whole content area rather than its set width.
+Omitting it SHALL leave the panel at its set width.
+
+This SHALL apply to every call that says something new about the panel, not only
+the one that opens it: a call naming a different file, or the same file with a
+different `maximized`, SHALL take effect. A file shown with `maximized` into an
+already-open panel SHALL expand it, and a file shown without `maximized` into a
+panel an earlier call maximized SHALL return it to its set width.
+
+A call repeating both the file and the argument of the call before it SHALL
+change nothing, so an agent re-showing a file it has just edited SHALL NOT
+collapse a panel the user expanded by hand. Before this change the argument was
+recorded and read by nothing, so an agent that asked for a maximized file got
+the same panel as one that did not.
+
+The two tools SHALL be independent: calling one SHALL NOT close or replace the
+other's artifact. An agent that shows a file and then a diagram SHALL have both,
+each in its own section of the panel.
+
 #### Scenario: Show a markdown file
 
 - **WHEN** `display-markdown` is called with a valid `filePath`
 - **THEN** the agent's markdown panel targets that file and the file is
   prepended to its file history
+
+#### Scenario: A maximized file opens an expanded panel
+
+- **WHEN** `display-markdown` is called with `maximized` set
+- **THEN** that agent's artifact panel is expanded to the whole content area
+
+#### Scenario: A maximized file reaches an already-open panel
+
+- **WHEN** `display-markdown` is called without `maximized`, and then called
+  again for the same agent with it
+- **THEN** the panel is expanded, rather than keeping the state the first call
+  left it in
+
+#### Scenario: Re-showing a file leaves the user's panel alone
+
+- **WHEN** `display-markdown` is called without `maximized`, the user expands
+  the panel by hand, and the agent calls it again for the same file with
+  `maximized` still omitted
+- **THEN** the panel is still expanded
+
+#### Scenario: A diagram does not replace a file
+
+- **WHEN** `view-mermaid` is called for an agent that already has a markdown
+  file open
+- **THEN** the agent has both the file and the diagram, and neither tool's
+  result reports the other closed
 
 ### Requirement: describe-agents
 
@@ -270,3 +329,50 @@ ask before planning.
 
 - **WHEN** an agent with no committed graph calls `task-status`
 - **THEN** the result is an empty task list with `isError` false
+
+### Requirement: A caller acts only as itself
+
+Every tool names its caller in an argument: `from` for `send-message` and
+`broadcast-message`, `agentId` for every other tool. The server SHALL bind an
+MCP connection to the agent its URL names in an `agent` query parameter
+(`…/mcp?agent=<id>`), which Knot SHALL put in the URL it gives each agent it
+launches; a new connection for an agent SHALL replace that agent's previous
+one. A call whose caller argument does not resolve to the connection's bound
+agent SHALL fail with an error that names the bound agent and its id, and
+SHALL change nothing. On a connection bound to no agent, a call whose caller
+argument names an agent another live connection holds SHALL fail the same way.
+A call naming no caller, or naming an agent Knot does not know on a connection
+bound to none, SHALL be left to the tool.
+
+#### Scenario: A connection naming another agent is refused
+
+- **WHEN** a connection opened on Builder 1's URL calls `set-status` with the
+  orchestrator's id
+- **THEN** the call fails, the orchestrator's status is unchanged, and the
+  error gives Builder 1's id
+
+#### Scenario: A restarted agent takes over its connection
+
+- **WHEN** an agent is restarted and its new session connects on its URL
+- **THEN** the new connection holds the agent, and its registration succeeds
+
+### Requirement: A bound connection registers its agent
+
+A request on an MCP connection whose URL names an agent (`…/mcp?agent=<id>`,
+see `agent-id-mixup`'s "A caller acts only as itself") SHALL mark that agent
+registered, when Knot knows it and it is not registered already. That happens
+with no tool call and no model turn, and on every such request, so an agent
+the registry did not yet hold when it connected is registered as soon as the
+registry does. Nothing SHALL be persisted, since registration is runtime state.
+`register-agent` SHALL go on registering an agent from a connection whose URL
+names none, and SHALL keep refusing an agent another live connection holds.
+
+#### Scenario: A resumed agent is registered by its connection
+
+- **WHEN** Knot restarts and an agent's resumed session connects on its own URL
+- **THEN** `list-agents` shows it registered before it makes any tool call
+
+#### Scenario: An unbound connection registers nobody by connecting
+
+- **WHEN** a connection whose URL names no agent initializes
+- **THEN** no agent's registration changes

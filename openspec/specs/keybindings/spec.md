@@ -60,12 +60,12 @@ takes them first while it is focused.
 
 ### Requirement: Selecting a workspace by number
 
-Pressing the workspace modifier with digit N SHALL open the Nth workspace, in
-the order the workspace manager lists workspaces. If that workspace's window is
-already open, the window SHALL be raised and focused instead, so that one
-window per workspace is kept (`window-lifecycle`). The shortcut SHALL work from
-any Knot window, and with no Knot window focused. When there are fewer than N
-workspaces, it SHALL do nothing.
+Pressing the workspace modifier with digit N SHALL bring the Nth workspace's
+window - in the order the workspace manager lists workspaces - to the front
+and focus it, if that window is open. It SHALL NOT open a window: when the Nth
+workspace has no open window, or there are fewer than N workspaces, it SHALL do
+nothing. Opening a workspace is the workspace manager's. The shortcut SHALL
+work from any Knot window, and with no Knot window focused.
 
 #### Scenario: Raising an open workspace
 
@@ -74,10 +74,10 @@ workspaces, it SHALL do nothing.
 - **THEN** B's window comes to the front and is focused, and no second window
   for B opens
 
-#### Scenario: Opening a closed workspace
+#### Scenario: A closed workspace is not opened
 
 - **WHEN** workspace C has no open window and the user presses ⌥⌘3
-- **THEN** C's window opens
+- **THEN** nothing happens, and no window opens
 
 #### Scenario: Out of range
 
@@ -272,3 +272,32 @@ document must not leave Knot without its shortcuts.
   modifier and no agent modifier, and Knot launches
 - **THEN** the stored workspace modifier is ignored, ⌥⌘N selects workspace N,
   and ⌘N selects agent N
+
+### Requirement: Toggle Artifacts is a configurable shortcut
+
+The configurable shortcuts SHALL include **Toggle Artifacts**, default ⌥⌘A. It
+shows or hides the selected agent's artifact panel as `artifact-panel`'s "The
+panel can be shown and hidden from the menu bar and the keyboard" describes.
+
+It SHALL be a single-chord shortcut on the same terms as Jump to bottom:
+- It is listed in the Keyboard settings pane.
+- It is rebindable, and validated against every other configurable, fixed and
+  reserved chord.
+- It is stored only when customized, as `toggleArtifacts` in the preferences
+  document's keybindings.
+
+⌥⌘A puts A, for Artifacts, on the ⌥⌘ modifier the other panel toggles use. ⇧⌘A
+is not available: it is the permission prompt's fixed Allow.
+
+#### Scenario: The default toggles the panel
+
+- **WHEN** the user has not customized Toggle Artifacts and presses ⌥⌘A with an
+  agent's artifact panel shown
+- **THEN** the panel is hidden
+
+#### Scenario: A customization is stored and honoured
+
+- **WHEN** the user rebinds Toggle Artifacts to another free chord in the
+  Keyboard pane
+- **THEN** the new chord toggles the panel, ⌥⌘A no longer does, and the
+  preferences document stores it under `toggleArtifacts`

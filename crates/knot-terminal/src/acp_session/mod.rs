@@ -226,6 +226,13 @@ impl AcpSession {
         self.client.capabilities()
     }
 
+    /// The connected agent's name and version, as it reported them on
+    /// `initialize`, for showing the user which adapter and version a
+    /// session is running. `None` when the agent did not report them.
+    pub fn agent_info(&self) -> Option<&knot_acp::AgentInfo> {
+        self.client.agent_info()
+    }
+
     pub async fn prompt(&self, text: &str) -> AcpResult<()> {
         self.client.session_prompt(&self.session_id, text).await
     }

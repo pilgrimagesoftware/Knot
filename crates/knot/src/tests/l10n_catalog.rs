@@ -2,8 +2,8 @@
 //! keys - a missing entry renders the key, which is visible but easy to
 //! miss in review.
 
+use crate::agent_menu_entries::AgentMenuEntry;
 use crate::app_state::AgentListBackgroundEntry;
-use crate::app_state::AgentMenuEntry;
 use crate::app_state::SidebarMenuFacts;
 use crate::app_state::sidebar_background_menu_entries;
 use crate::settings_window::SettingsTab;
@@ -63,6 +63,16 @@ fn bug_report_labels_resolve() {
                 "bug_report.failed",
                 "bug_report.browser_ready",
                 "bug_report.browser_failed",
+                "bug_report.filed_screenshots",
+                "bug_report.filed_screenshots_by_hand",
+                "bug_report.browser_ready_screenshots",
+                "bug_report.browser_ready_screenshots_by_hand",
+                "bug_report.screenshots.label",
+                "bug_report.screenshots.hint",
+                "bug_report.screenshots.add",
+                "bug_report.screenshots.remove",
+                "bug_report.screenshots.skipped",
+                "bug_report.screenshots.body_note",
                 "bug_report.cancel",
                 "bug_report.report"]
     {
@@ -277,8 +287,7 @@ fn view_menu_labels_resolve() {
                 "menu.view.pull_requests",
                 "menu.view.focus_agent_input",
                 "menu.view.jump_to_bottom",
-                "menu.view.select_agent",
-                "menu.view.select_workspace"]
+                "menu.view.select_agent"]
     {
         let value = knot_core::l10n::t(key);
         assert_ne!(value, key, "{key} is missing from the catalog");
@@ -618,4 +627,61 @@ fn harness_notices_resolve_and_keep_their_summary() {
                                            &[("summary", "Tests passed")]);
     assert_ne!(finished, "panel.harness.task_finished");
     assert!(finished.contains("Tests passed"), "{finished}");
+}
+
+/// The sidebar status dot's idle tooltip (#582). A missing key would ship
+/// the key string itself as the tooltip.
+#[test]
+fn status_dot_tooltip_resolves() {
+    assert_ne!(knot_core::l10n::t("sidebar.status_idle_since"),
+               "sidebar.status_idle_since",
+               "sidebar.status_idle_since is missing from the catalog");
+}
+
+/// Every label and message of the Changes view's tabs (#504) - a missing key
+/// would ship the key string itself as a tab, a menu item or a notice.
+#[test]
+fn changes_view_labels_resolve() {
+    for key in ["changes_view.clear_filters",
+                "changes_view.list_actions",
+                "changes_view.no_pull_requests",
+                "changes_view.prompt.change",
+                "changes_view.prompt.issue",
+                "changes_view.refresh_now",
+                "changes_view.repo_all",
+                "changes_view.row_actions",
+                "changes_view.send_prompt_to",
+                "changes_view.tab.issues",
+                "changes_view.tab.openspec",
+                "changes_view.tab.pull_requests",
+                "changes_view.title",
+                "issues.checking",
+                "issues.copy_url",
+                "issues.copy_urls",
+                "issues.empty",
+                "issues.fetch_failed",
+                "issues.forge_failed",
+                "issues.forge_missing",
+                "issues.forge_unauthenticated",
+                "issues.no_github_repos",
+                "issues.no_match",
+                "issues.open_in_browser",
+                "issues.search_placeholder",
+                "issues.sort.newest",
+                "issues.sort.number",
+                "issues.sort.oldest",
+                "issues.sort.recently_updated",
+                "issues.truncated",
+                "issues.updated",
+                "openspec_changes.checking",
+                "openspec_changes.copy_name",
+                "openspec_changes.empty",
+                "openspec_changes.no_match",
+                "openspec_changes.reveal",
+                "openspec_changes.search_placeholder"]
+    {
+        assert_ne!(knot_core::l10n::t(key),
+                   key,
+                   "{key} is missing from the catalog");
+    }
 }

@@ -103,3 +103,49 @@ fn an_entry_saved_elsewhere_is_listed_on_the_next_draw(cx: &mut TestAppContext) 
           assert_eq!(rows[0].name, "Late");
       });
 }
+
+/// The popover's rows read from the left, as the Swift view's do (#599).
+/// `Button` centres its content, so a label or an entry that does not fill
+/// the button's row floats to the middle of the 260 px popover.
+///
+/// Measured against the button's own left edge: what may sit between them is
+/// the button's padding and, for Create, its icon and gap - about 35 px. A
+/// centred label starts well past that.
+#[gpui_kit::test]
+fn the_rows_start_at_the_left_edge(cx: &mut TestAppContext) {
+    let mut fixture = crate::workspace_window::shortcuts_tests::window_with(
+                                                                            0,
+                                                                            |settings| {
+                                                                                settings.add_bench_agent(BenchAgent::new(Uuid::new_v4(), "Reviewer",
+                                                     Some("🦀".into()), "/src/knot"))
+                    .expect("a fresh settings root takes a bench entry");
+                                                                            },
+                                                                            cx,
+    );
+    fixture.view.update(&mut fixture.window, |view, cx| {
+                    view.bench_popover_open = true;
+                    cx.notify();
+                });
+    fixture.window.run_until_parked();
+    let mut bounds = |selector: &'static str| {
+        fixture.window
+               .debug_bounds(selector)
+               .unwrap_or_else(|| panic!("`{selector}` was not drawn - is the popover open?"))
+    };
+
+    let create = bounds("bench-popover-create");
+    let create_label = bounds("bench-popover-create-label");
+    assert!(create_label.left() - create.left() < gpui_kit::px(40.),
+            "Create New Agent starts {:?} into its button: centred, not beside its icon",
+            create_label.left() - create.left());
+
+    let entry = bounds("bench-popover-entry");
+    let content = bounds("bench-popover-entry-content");
+    assert!(content.left() - entry.left() < gpui_kit::px(16.),
+            "the entry's avatar and name start {:?} into its button: centred, not at the left",
+            content.left() - entry.left());
+    assert!(entry.size.height >= content.size.height,
+            "the entry ({:?}) is shorter than its two lines ({:?}), so they are clipped",
+            entry.size.height,
+            content.size.height);
+}

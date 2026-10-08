@@ -8,6 +8,7 @@
 mod about_window;
 mod agent_editor;
 mod agent_menu;
+mod agent_menu_entries;
 mod agent_processes;
 mod app_bootstrap;
 mod app_log;
@@ -16,6 +17,7 @@ mod app_support;
 mod appearance;
 mod broadcast_sheet;
 mod bug_report;
+mod capped_scroll;
 mod command_center;
 mod commit_window;
 mod composer_scan;
@@ -34,6 +36,7 @@ mod mcp_lifetime;
 mod mcp_status;
 mod menu_bar;
 mod open_in;
+mod openspec_changes;
 mod panel_commands;
 mod panel_session;
 mod panel_state;
@@ -51,12 +54,15 @@ mod startup_choice;
 mod subagent_feed;
 #[cfg(test)]
 mod tests;
+mod timestamp;
 mod view_menu;
 mod window_actions;
+mod window_menu;
 mod window_options;
 mod window_registry;
 mod working_indicator;
 mod workspace_manager;
+mod workspace_repos;
 mod workspace_window;
 
 fn main() {

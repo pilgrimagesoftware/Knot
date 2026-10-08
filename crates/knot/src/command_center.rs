@@ -8,7 +8,6 @@ use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Render;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::h_flex;
@@ -16,6 +15,7 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Root;
 use gpui_kit::component::TitleBar;
+use gpui_kit::component::scroll::ScrollableElement;
 use knot_git::Repository;
 use parking_lot::Mutex;
 use unicode_segmentation::UnicodeSegmentation;
@@ -341,7 +341,7 @@ impl Render for CommandCenterWindow {
                     .min_h_0()
                     .gap_6()
                     .p_6()
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     .children(sections),
             )
     }

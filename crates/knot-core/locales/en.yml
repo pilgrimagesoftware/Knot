@@ -46,6 +46,10 @@ sidebar:
     remove_tooltip: "Remove from bench"
     confirm_remove_title: "Remove from Bench"
     confirm_remove_body: "Remove \"%{name}\" from your bench?"
+  # The status dot's tooltip on an idle agent that has finished a message
+  # in this run (#582). `state` is the header's status label, `when` the
+  # panel's relative time ("5m ago"), `at` the absolute moment.
+  status_idle_since: "%{state} · last message %{when} (%{at})"
 
 agent:
   companion: "Shell companion"
@@ -57,6 +61,17 @@ agent:
   duplicate_name: "%{name} %{number}"
 
 panel:
+  # Which ACP agent a Panel-mode session is running, from the `agentInfo`
+  # it reported on `initialize`. The header's info button shows the
+  # summary as its tooltip; the Agents menu's Agent Info shows it in a
+  # dialog. %{name} is the agent's own display name, %{version} its
+  # version string - both as the agent sent them, never translated.
+  agent_info:
+    title: "Agent Info"
+    reported: "%{name} %{version}"
+    reported_no_version: "%{name} (version not reported)"
+    unreported: "This agent did not report its name or version."
+    not_connected: "This agent is not connected."
   # Failures the panel records into the conversation itself, where the
   # user reads them beside the turn they belong to.
   error_first_turn: "The agent could not start its first turn: %{error}"
@@ -83,6 +98,7 @@ panel:
   copy_response: "Copy response"
   copied_prompt: "Copied prompt to clipboard"
   copied_response: "Copied response to clipboard"
+  reply_to_response: "Reply"
   copy_code: "Copy code"
   copied_code: "Copied code to clipboard"
   queued: "Queued"
@@ -300,7 +316,7 @@ keymap:
     select_agent: "Select agent 1–9"
     focus_agent_input: "Focus agent input"
     toggle_dashboard: "Toggle Dashboard"
-    toggle_pull_requests: "Toggle Pull Requests"
+    toggle_pull_requests: "Toggle Changes"
     open_command_center: "Open Command Center"
     jump_to_bottom: "Jump to bottom"
     toggle_artifacts: "Show or hide artifacts"
@@ -315,6 +331,7 @@ keymap:
     minimize: "Minimize"
     help: "Knot Help"
     permission_allow: "Allow permission"
+    permission_allow_always: "Always allow permission"
     permission_deny: "Deny permission"
     permission_selector: "Permission mode selector"
     undo: "Undo"
@@ -339,14 +356,13 @@ menu:
   # them.
   view:
     dashboard: "Dashboard"
-    pull_requests: "Pull Requests"
+    pull_requests: "Changes"
     focus_agent_input: "Focus Agent Input"
     jump_to_bottom: "Jump to Bottom"
     # Shows or hides the selected agent's artifact panel; checked while it is
     # shown.
     artifacts: "Artifacts"
     select_agent: "Select Agent"
-    select_workspace: "Select Workspace"
   # The Window menu's own items. macOS appends and maintains the list of
   # open windows below them.
   window:
@@ -365,6 +381,7 @@ menu:
     bench_agent: "Bench Agent…"
     open_in: "Open In…"
     markdown_files: "Markdown Files"
+    agent_info: "Agent Info…"
     register_agent: "Register Agent"
     deactivate: "Deactivate"
     restart_agent: "Restart Agent"
@@ -456,6 +473,12 @@ bug_report:
   failed: "The issue could not be filed: %{error}"
   browser_ready: "The report was not filed automatically. It is ready to post in your browser."
   browser_failed: "The browser could not be opened. Your report is still here."
+  # #566: what a filed or handed-off report says when it names screenshots.
+  # GitHub takes no upload with an issue, so the user drags them in.
+  filed_screenshots: "Issue filed: %{url}. Drag your screenshots from Finder onto the issue page to add them."
+  filed_screenshots_by_hand: "Issue filed: %{url}. Attach your screenshots to it on the issue page."
+  browser_ready_screenshots: "The report was not filed automatically. It is ready to post in your browser: drag your screenshots from Finder onto the page."
+  browser_ready_screenshots_by_hand: "The report was not filed automatically. It is ready to post in your browser: attach your screenshots on the page."
   cancel: "Cancel"
   report: "Report"
   logs:
@@ -466,6 +489,14 @@ bug_report:
     unreadable: "%{log}: nothing to attach at %{path}."
     attach_by_hand: "%{log}: please attach %{path} to this issue."
     no_directory: "(no log directory)"
+  # The screenshots a report names (#566).
+  screenshots:
+    label: "Screenshots"
+    hint: "PNG, JPEG or GIF, up to %{max}. GitHub cannot upload them with the issue, so Knot names them in the report and shows them in Finder for you to drag in."
+    add: "Add Screenshots…"
+    remove: "Remove %{name}"
+    skipped: "Skipped %{files}: only PNG, JPEG and GIF images are kept, up to %{max}."
+    body_note: "The reporter is adding these screenshots to the issue:"
 
 agent_editor:
   title_new: "New Agent"
@@ -562,6 +593,61 @@ import:
 plan:
   title: "Plan"
   empty: "No plan committed yet."
+
+# The Changes view (#504): pull requests, issues and OpenSpec changes, one
+# tab each. Its launcher row keeps counting pull requests only.
+changes_view:
+  title: "Changes"
+  no_pull_requests: "No pull requests"
+  tab:
+    pull_requests: "Pull Requests"
+    issues: "Issues"
+    openspec: "OpenSpec"
+  # "Send prompt to" on an issue or change row (#504): the submenu title and
+  # the one prompt each item sends.
+  send_prompt_to: "Send prompt to"
+  prompt:
+    issue: "Work on this issue: %{url}"
+    change: "Work on this OpenSpec change: %{name}"
+  # Shared by the Issues and OpenSpec tabs' toolbars and rows.
+  repo_all: "All repositories"
+  list_actions: "List actions"
+  refresh_now: "Refresh Now"
+  clear_filters: "Clear Search and Filters"
+  row_actions: "Actions"
+
+# The Changes view's Issues tab (#504): open issues of the workspace's GitHub
+# repositories.
+issues:
+  search_placeholder: "Search title, number, repository, URL or label"
+  checking: "Checking for open issues…"
+  forge_missing: "The GitHub CLI (gh) is not installed, so issues cannot be listed. Install it from cli.github.com."
+  forge_unauthenticated: "The GitHub CLI (gh) is not signed in, so issues cannot be listed. Run gh auth login."
+  forge_failed: "Issues could not be listed: %{reason}"
+  no_github_repos: "None of this workspace's repositories is on GitHub."
+  empty: "No open issues in this workspace's repositories."
+  no_match: "No issues match the search and filters."
+  fetch_failed: "The issues of %{repo} could not be fetched: %{reason}"
+  truncated: "Only the first %{count} open issues are shown."
+  updated: "updated %{when}"
+  open_in_browser: "Open in Browser"
+  copy_url: "Copy URL"
+  copy_urls: "Copy URLs"
+  sort:
+    recently_updated: "Recently updated"
+    newest: "Newest first"
+    oldest: "Oldest first"
+    number: "Number"
+
+# The Changes view's OpenSpec tab (#504): un-archived OpenSpec changes in the
+# workspace's repositories.
+openspec_changes:
+  search_placeholder: "Search name or repository"
+  checking: "Looking for OpenSpec changes…"
+  empty: "No OpenSpec changes in this workspace's repositories."
+  no_match: "No changes match the search and filters."
+  reveal: "Reveal in Finder"
+  copy_name: "Copy Name"
 
 pull_requests:
   title: "Pull Requests"

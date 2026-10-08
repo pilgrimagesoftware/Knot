@@ -15,6 +15,7 @@ mod dialog;
 mod form;
 mod kind;
 mod logs;
+mod screenshots;
 mod submit;
 
 #[cfg(test)]

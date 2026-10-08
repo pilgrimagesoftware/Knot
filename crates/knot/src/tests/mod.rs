@@ -5,8 +5,8 @@
 
 use uuid::Uuid;
 
-use crate::app_state::AgentMenuFacts;
-use crate::app_state::agent_context_menu_entries;
+use crate::agent_menu_entries::AgentMenuFacts;
+use crate::agent_menu_entries::agent_context_menu_entries;
 
 mod about_window;
 mod agent_context_menu;
@@ -35,6 +35,7 @@ mod plan_diagram;
 mod pull_request_records;
 mod pull_request_row_clicks;
 mod quit_warning;
+mod scrollbars;
 mod settings_font_preview;
 mod settings_global;
 mod settings_keyboard;
@@ -49,6 +50,7 @@ mod terminal_font;
 mod view_menu;
 mod window_actions;
 mod window_bounds;
+mod window_menu;
 mod window_registry;
 mod workspace_dialog;
 mod workspace_manager_drag;

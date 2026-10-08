@@ -273,10 +273,12 @@ governs it.
 
 ### Requirement: The workspace window lists its pull requests
 
-The workspace window SHALL offer a Pull Requests view listing the pull requests
-recorded against that workspace's agents, reached from a launcher row in the
-agent sidebar shaped like the Dashboard row described in `dashboard`, and shown
-in place of the window's content the way the dashboard view is.
+The workspace window SHALL offer a Changes view, reached from a launcher row
+labelled Changes in the agent sidebar shaped like the Dashboard row described in
+`dashboard`, and shown in place of the window's content the way the dashboard
+view is. The Changes view's Pull Requests tab SHALL list the pull requests
+recorded against that workspace's agents; this capability's references to the
+Pull Requests view mean that tab.
 
 The list SHALL group rows by the agent that opened them. Within each group,
 rows SHALL be ordered by the sort order the user has chosen, as "The user can
@@ -296,7 +298,8 @@ SHALL be ordered by the earliest time any of them first saw it.
 A workspace with no recorded pull requests SHALL say so rather than showing an
 empty list.
 
-The launcher row SHALL count each pull request once, however many agents
+The launcher row SHALL count pull requests only - not issues or OpenSpec
+changes - and SHALL count each pull request once, however many agents
 recorded it, and SHALL show how many of the workspace's recorded pull requests
 are open, how many are merged and how many are closed, so the state of the
 session's output is readable without opening the view. A draft pull request
@@ -315,20 +318,20 @@ the forge says does not exist SHALL be counted as not found - neither as a state
 nor as pending - and the not-found count SHALL be shown only when it is not
 zero.
 
-The row SHALL show a selected background while the Pull Requests view is the one
-being shown.
+The row SHALL show a selected background while the Changes view is the one being
+shown, whichever of its tabs is chosen.
 
 #### Scenario: The launcher sits in the sidebar
 
 - **WHEN** a workspace window is open
-- **THEN** a labelled Pull Requests row is visible in the agent sidebar,
-  shaped like the Dashboard row
+- **THEN** a row labelled Changes is visible in the agent sidebar, shaped like
+  the Dashboard row
 
 #### Scenario: Showing the list
 
-- **WHEN** the user clicks the Pull Requests row
-- **THEN** the window's content is replaced by the list, grouped by agent,
-  newest first
+- **WHEN** the user clicks the Changes row for the first time in a window
+- **THEN** the window's content is replaced by the Changes view on its Pull
+  Requests tab, grouped by agent, newest first
 - **AND** clicking the row again returns to the previous view
 
 #### Scenario: An empty workspace
@@ -357,8 +360,8 @@ being shown.
 
 #### Scenario: No state has been fetched yet
 
-- **WHEN** the workspace window is opened after a restart and the Pull Requests
-  view has not been shown
+- **WHEN** the workspace window is opened after a restart and the Changes view's
+  Pull Requests tab has not been shown
 - **THEN** the launcher row shows the total count of records rather than a
   breakdown
 
@@ -675,6 +678,13 @@ search does not hide a row only because its title has not arrived.
 
 The list SHALL narrow as the user types, without a separate submit.
 
+The search field SHALL look like a field while it does not have focus: it
+SHALL be outlined by a border in the window's separator color, distinguishable
+from the field's fill and from the toolbar behind it, in light and dark
+appearance. While it has focus it SHALL show the focus border every focused
+control shows. This styling belongs to the search field alone; other text
+fields keep their own appearance.
+
 #### Scenario: Searching by title
 
 - **WHEN** the list holds pull requests titled `Fix login redirect` and
@@ -708,6 +718,19 @@ The list SHALL narrow as the user types, without a separate submit.
 
 - **WHEN** the user empties the search field
 - **THEN** every row is shown again
+
+#### Scenario: The unfocused search field has a border
+
+- **WHEN** the Pull Requests view is shown on macOS, in light or in dark
+  appearance, and the search field does not have focus
+- **THEN** the search field is outlined by a separator-colored border that
+  stands out from its fill and the toolbar
+
+#### Scenario: The focused search field shows the focus border
+
+- **WHEN** the user clicks into the search field
+- **THEN** its border changes to the focus border, as any focused control's
+  does
 
 ### Requirement: The user can filter the Pull Requests view by status
 
@@ -948,3 +971,45 @@ A secondary click SHALL NOT itself open the pull request in the browser.
 
 - **WHEN** the user secondary-clicks a row and chooses Remove
 - **THEN** the same confirmation as the row's remove control is shown
+
+### Requirement: The Changes view is divided into tabs
+
+The Changes view SHALL show a tab bar above its content with three tabs, in this
+order: Pull Requests, Issues and OpenSpec. Choosing a tab SHALL replace the
+content below the bar with that tab's list and toolbar. Each tab SHALL keep its
+own search, filters and sort, so switching tabs neither clears nor shares
+them.
+
+The chosen tab SHALL be held per workspace window, like the view's search,
+filters and sort: leaving the view and returning to it SHALL show the same tab,
+and a relaunched window SHALL open the view on Pull Requests.
+
+Fetching SHALL follow the tab being shown: pull request state is fetched only
+while the Pull Requests tab is shown, as "A recorded pull request's state is
+fetched and refreshed" requires of the view, and the Issues and OpenSpec tabs
+fetch as `workspace-issues` and `workspace-openspec-changes` describe.
+
+The Swift reference has no such view.
+
+#### Scenario: Switching tabs
+
+- **WHEN** the Changes view is on Pull Requests and the user chooses Issues
+- **THEN** the issues list and its toolbar replace the pull request list
+
+#### Scenario: Each tab keeps its own search
+
+- **WHEN** the user searches the Pull Requests tab for `login`, switches to
+  Issues and back
+- **THEN** the Issues tab's search field is empty and the Pull Requests tab's
+  still holds `login`
+
+#### Scenario: Returning to the view keeps the tab
+
+- **WHEN** the user chooses OpenSpec, switches to an agent's pane and clicks the
+  Changes row again
+- **THEN** the view opens on OpenSpec
+
+#### Scenario: A relaunch opens on Pull Requests
+
+- **WHEN** the view was last on Issues and Knot is quit and relaunched
+- **THEN** the view opens on Pull Requests

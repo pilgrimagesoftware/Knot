@@ -124,6 +124,10 @@ impl WorkspaceWindow {
                     // something closed to reopen.
                     let reopen = self.selected_agent
                                      .and_then(|id| self.reopen_artifacts_button(id, cx));
+                    // Which agent and version the session is running
+                    // (#591). Only a connected Panel-mode agent has one.
+                    let info = self.selected_agent
+                                   .and_then(|id| self.agent_info_button(id));
                     let status =
                         v_flex().items_end()
                                 .gap_0p5()
@@ -166,6 +170,7 @@ impl WorkspaceWindow {
                                        });
                     h_flex().items_center()
                             .gap_3()
+                            .children(info)
                             .children(reopen)
                             .child(status)
                             .into_any_element()

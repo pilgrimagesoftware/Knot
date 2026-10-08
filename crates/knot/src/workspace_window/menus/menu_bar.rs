@@ -13,6 +13,7 @@ use gpui_kit::Context;
 use gpui_kit::InteractiveElement;
 
 use super::agent_row::{move_agent_to_workspace, run_agent_menu_action, show_agent_markdown_file};
+use crate::agent_menu::AgentMenuAgentInfo;
 use crate::agent_menu::AgentMenuBenchAgent;
 use crate::agent_menu::AgentMenuDeactivate;
 use crate::agent_menu::AgentMenuDuplicateAgent;
@@ -32,15 +33,17 @@ use crate::agent_menu::AgentMenuRestartWithNewConversation;
 use crate::agent_menu::AgentMenuSaveToBench;
 use crate::agent_menu::AgentMenuShowMarkdownFile;
 use crate::agent_menu::AgentMenuSnapshot;
+use crate::agent_menu_entries::AgentMenuEntry;
+use crate::agent_menu_entries::agent_context_menu_entries;
 use crate::app_bootstrap;
-use crate::app_state::AgentMenuEntry;
-use crate::app_state::agent_context_menu_entries;
 use crate::app_support::shorten_path;
 use crate::menu_bar::MenuBarSnapshot;
 use crate::menu_bar::MenuBarState;
 use crate::open_in;
 use crate::view_menu::OwningWindow;
 use crate::view_menu::view_menu_snapshot;
+use crate::window_menu::window_menu_snapshot;
+use crate::window_registry::WindowRegistry;
 use crate::workspace_window::AgentMenuTargets;
 use crate::workspace_window::WorkspaceWindow;
 use crate::workspace_window::agent_menu_facts;
@@ -109,14 +112,24 @@ impl WorkspaceWindow {
                                         view_mode: self.view_mode,
                                         selected_agent: self.selected_agent,
                                         artifacts_shown };
-            let view = view_menu_snapshot(&self.store.lock(), Some(window));
-            (Some(self.window_handle), MenuBarSnapshot { agents, view })
+            let open = WindowRegistry::open_workspaces(cx);
+            let store = self.store.lock();
+            let view = view_menu_snapshot(&store, Some(window));
+            let window = window_menu_snapshot(&store, &open, Some(self.workspace_id));
+            (Some(self.window_handle),
+             MenuBarSnapshot { agents,
+                               view,
+                               window })
         }
         else {
-            let view = view_menu_snapshot(&self.store.lock(), None);
+            let open = WindowRegistry::open_workspaces(cx);
+            let store = self.store.lock();
+            let view = view_menu_snapshot(&store, None);
+            let window = window_menu_snapshot(&store, &open, None);
             (None,
              MenuBarSnapshot { agents: AgentMenuSnapshot::default(),
-                               view })
+                               view,
+                               window })
         };
         let state = cx.global::<MenuBarState>();
         if state.owner == owner && state.snapshot == snapshot {
@@ -203,6 +216,7 @@ pub(in crate::workspace_window) fn with_agents_menu_actions(el: gpui_kit::Div,
                                     BenchAgent => AgentMenuBenchAgent,
                                     OpenIn => AgentMenuOpenIn,
                                     MarkdownFiles => AgentMenuMarkdownFiles,
+                                    AgentInfo => AgentMenuAgentInfo,
                                     RegisterAgent => AgentMenuRegisterAgent,
                                     Deactivate => AgentMenuDeactivate,
                                     RestartAgent => AgentMenuRestartAgent,

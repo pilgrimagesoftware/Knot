@@ -83,7 +83,7 @@ impl WorkspaceWindow {
                                     view.toggle_view(WorkspaceViewMode::Dashboard, cx)
                                 }))
                    .on_action(cx.listener(|view, _: &TogglePullRequests, _, cx| {
-                                    view.toggle_view(WorkspaceViewMode::PullRequests, cx)
+                                    view.toggle_view(WorkspaceViewMode::Changes, cx)
                                 }));
         let el = if available.focus_input {
             el.on_action(cx.listener(|view, _: &FocusAgentInput, _, cx| view.focus_agent_input(cx)))

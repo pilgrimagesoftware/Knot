@@ -35,6 +35,7 @@ use gpui_kit::component::Icon;
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::div;
 use gpui_kit::px;
 
@@ -283,20 +284,26 @@ impl Render for WorkspaceManager {
                     // rather than running past the window; the toolbar above
                     // it stays put. `min_h_0` here and on the parent is what
                     // lets it shrink below its content's height at all.
-                    .child(v_flex().on_children_prepainted(move |bounds, _window, _cx| {
-                                       *row_bounds.borrow_mut() = bounds;
-                                   })
-                                   .id("workspace-manager-list")
-                                   .debug_selector(|| "workspace-manager-list".into())
-                                   .flex_1()
-                                   .min_h_0()
-                                   .gap_2()
-                                   // Room above the first row and below the
-                                   // last for the drop line, which sits
-                                   // outside its row and would be clipped.
-                                   .py(px(6.))
-                                   .overflow_y_scroll()
-                                   .children(rows))
+                    //
+                    // The selector is on this viewport, not on the rows'
+                    // column: the scrollbar wrapper makes that column the
+                    // scrolled content, which is as tall as every row.
+                    .child(div().debug_selector(|| "workspace-manager-list".into())
+                                .flex_1()
+                                .min_h_0()
+                                .child(v_flex().on_children_prepainted(move |bounds, _window, _cx| {
+                                                   *row_bounds.borrow_mut() = bounds;
+                                               })
+                                               .id("workspace-manager-list")
+                                               .size_full()
+                                               .gap_2()
+                                               // Room above the first row and
+                                               // below the last for the drop
+                                               // line, which sits outside its
+                                               // row and would be clipped.
+                                               .py(px(6.))
+                                               .overflow_y_scrollbar()
+                                               .children(rows)))
                     .children(self.error.as_ref().map(|error| div().child(error.clone())))
             )
     }

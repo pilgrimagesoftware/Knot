@@ -2,6 +2,8 @@
 //! `openspec/specs/mcp-tools/spec.md` and the gate in
 //! `openspec/specs/task-graph/spec.md`.
 
+use std::sync::Arc;
+
 use knot_agents::{AgentStore, CreateOptions};
 use knot_core::CostTier;
 use knot_messaging::{MessageStore, NoopNotifier};
@@ -9,6 +11,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::*;
+use crate::ActivationQueue;
 use crate::tasks::dispatch::DispatchContext;
 
 /// Registered, because messaging rejects an unregistered sender.
@@ -24,11 +27,13 @@ fn agent(store: &mut AgentStore, name: &str, tags: &[&str], beside: Option<Uuid>
 }
 
 struct Fixture {
-    agents:   AgentStore,
-    graphs:   GraphStore,
-    messages: MessageStore,
-    lead:     Uuid,
-    worker:   Uuid,
+    agents:     AgentStore,
+    graphs:     GraphStore,
+    messages:   MessageStore,
+    /// What a dispatch queued to be started, as the app's queue would.
+    activation: ActivationQueue,
+    lead:       Uuid,
+    worker:     Uuid,
 }
 
 fn fixture() -> Fixture {
@@ -38,6 +43,7 @@ fn fixture() -> Fixture {
     Fixture { agents,
               graphs: GraphStore::new(),
               messages: MessageStore::new(),
+              activation: Arc::new(parking_lot::Mutex::new(Vec::new())),
               lead,
               worker }
 }
@@ -51,11 +57,12 @@ impl Fixture {
 
     fn dispatch(&mut self, task_id: &str) -> ToolCallResult {
         let bench = Vec::new();
-        dispatch_task(DispatchContext { agents:   &mut self.agents,
-                                        graphs:   &mut self.graphs,
-                                        messages: &mut self.messages,
-                                        notifier: &NoopNotifier,
-                                        bench:    &bench, },
+        dispatch_task(DispatchContext { agents:     &mut self.agents,
+                                        graphs:     &mut self.graphs,
+                                        messages:   &mut self.messages,
+                                        notifier:   &NoopNotifier,
+                                        bench:      &bench,
+                                        activation: Some(&self.activation), },
                       &json!({"agentId": self.lead.to_string(), "taskId": task_id}))
     }
 
@@ -282,6 +289,62 @@ fn a_delivery_the_messaging_rules_reject_leaves_the_task_ready() {
     assert_eq!(result.is_error, Some(true));
     assert_eq!(states(&f.status()),
                vec![("a".to_string(), "ready".to_string())]);
+}
+
+/// #563: a dispatch is a direct message to one agent, so it starts a
+/// deactivated assignee the way `send-message` does (`task-graph`,
+/// "Dispatch to a deactivated assignee starts it").
+#[test]
+fn a_dispatch_queues_a_deactivated_assignee_to_be_started() {
+    let mut f = fixture();
+    // `create` leaves an agent deactivated until something starts it.
+    assert!(!f.agents.agent(f.worker).unwrap().activated);
+    f.plan(json!([{"id": "a", "goal": "x", "assignee": "worker"}]));
+
+    let result = f.dispatch("a");
+
+    assert_eq!(result.is_error, None);
+    assert_eq!(&*f.activation.lock(), &[f.worker]);
+}
+
+/// A capability assignee resolves to an agent first, and that agent is the
+/// one started.
+#[test]
+fn a_dispatch_by_capability_queues_the_agent_it_resolved_to() {
+    let mut f = fixture();
+    f.plan(json!([{"id": "a", "goal": "x", "capabilities": ["rust"]}]));
+
+    let result = f.dispatch("a");
+
+    assert_eq!(result.is_error, None);
+    assert_eq!(&*f.activation.lock(), &[f.worker]);
+}
+
+#[test]
+fn a_dispatch_to_an_activated_assignee_queues_nothing() {
+    let mut f = fixture();
+    f.agents.set_activated(f.worker, true);
+    f.plan(json!([{"id": "a", "goal": "x", "assignee": "worker"}]));
+
+    let result = f.dispatch("a");
+
+    assert_eq!(result.is_error, None);
+    assert!(f.activation.lock().is_empty());
+}
+
+/// A rejected dispatch delivers nothing, so it starts nobody - the same
+/// rule as a rejected direct send.
+#[test]
+fn a_dispatch_the_messaging_rules_reject_queues_nothing() {
+    let mut f = fixture();
+    let companion = f.agents.create_shell_companion(f.lead).unwrap();
+    f.agents.set_registered(companion, true);
+    f.plan(json!([{"id": "a", "goal": "x", "assignee": companion.to_string()}]));
+
+    let result = f.dispatch("a");
+
+    assert_eq!(result.is_error, Some(true));
+    assert!(f.activation.lock().is_empty());
 }
 
 #[test]

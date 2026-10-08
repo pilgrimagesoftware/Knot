@@ -47,6 +47,7 @@ use crate::workspace_window::panel::prompt::enter_sends;
 use crate::workspace_window::panel::prompt::new_panel_input;
 use crate::workspace_window::panel::prompt::panel_input_max_rows;
 use crate::workspace_window::panel::prompt::sends_on;
+use crate::workspace_window::panel::reply::insert_reply_quote;
 
 /// A window holding just the composer, plus the `PressEnter` events it
 /// emitted.
@@ -455,4 +456,39 @@ fn an_appearance_switch_repaints_without_rescanning(cx: &mut TestAppContext) {
     assert_eq!(styling.spans(),
                before,
                "the spans do not depend on the theme, so a repaint must not have moved them");
+}
+
+/// Reply (#559): the quote goes in, and what the user types next lands on
+/// the line below it - the caret is at the end and the composer has focus.
+/// Typed rather than read off `cursor()`, because typing is what the
+/// requirement is about.
+#[gpui_kit::test]
+fn a_reply_quotes_the_response_and_types_below_it(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+
+    input.update_in(&mut cx, |state, window, cx| {
+             insert_reply_quote(state, "first line\nsecond line", window, cx);
+         });
+    cx.run_until_parked();
+    cx.simulate_input("my reply");
+    cx.run_until_parked();
+
+    assert_eq!(value(&mut cx, &input),
+               "> first line\n> second line\n\nmy reply");
+}
+
+/// A draft the user had begun is kept, with the quote a paragraph below it.
+#[gpui_kit::test]
+fn a_reply_keeps_the_draft_already_in_the_composer(cx: &mut TestAppContext) {
+    let (mut cx, input, _) = composer(cx, false);
+
+    input.update_in(&mut cx, |state, window, cx| {
+             state.set_value("a draft", window, cx);
+             insert_reply_quote(state, "the response", window, cx);
+         });
+    cx.run_until_parked();
+    cx.simulate_input("reply");
+    cx.run_until_parked();
+
+    assert_eq!(value(&mut cx, &input), "a draft\n\n> the response\n\nreply");
 }

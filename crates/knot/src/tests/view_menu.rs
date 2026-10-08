@@ -11,8 +11,6 @@ use gpui_kit::MenuItem;
 use uuid::Uuid;
 
 use crate::keymap::*;
-use crate::menu_bar::MenuBarState;
-use crate::menu_bar::refresh_menu_bar_workspaces;
 use crate::tests::workspace;
 use crate::view_menu::OwningWindow;
 use crate::view_menu::ViewMenuSnapshot;
@@ -95,7 +93,6 @@ fn the_items_are_in_the_specified_order() {
                 t("menu.view.artifacts"),
                 "-".to_string(),
                 t("menu.view.select_agent"),
-                t("menu.view.select_workspace"),
                 "-".to_string()]);
 }
 
@@ -141,12 +138,10 @@ fn the_showing_panel_is_checked() {
 }
 
 #[test]
-fn no_workspace_window_disables_select_agent_but_not_select_workspace() {
+fn no_workspace_window_disables_select_agent() {
     let (store, _) = store_with(2, 3);
     let menu = view_menu(&view_menu_snapshot(&store, None));
     assert!(item(&menu, "menu.view.select_agent").is_disabled());
-    assert!(!item(&menu, "menu.view.select_workspace").is_disabled());
-    assert_eq!(submenu(&menu, "menu.view.select_workspace").items.len(), 2);
 }
 
 #[test]
@@ -187,15 +182,10 @@ fn select_agent_lists_the_sidebar_in_order_on_the_numbered_actions() {
 }
 
 #[test]
-fn the_submenus_stop_at_nine() {
-    let (store, ids) = store_with(12, 12);
+fn select_agent_stops_at_nine() {
+    let (store, ids) = store_with(1, 12);
     let menu = view_menu(&view_menu_snapshot(&store, Some(owning(ids[0]))));
     assert_eq!(submenu(&menu, "menu.view.select_agent").items.len(), 9);
-    let workspaces = submenu(&menu, "menu.view.select_workspace");
-    assert_eq!(workspaces.items.len(), 9);
-    assert!(action_of(&workspaces.items[8]).partial_eq(&SelectWorkspace9));
-    assert!(workspaces.items[0].is_checked(),
-            "the owning window's workspace is checked");
 }
 
 /// The comparison the menu bar's rebuild hangs off: every change the View
@@ -210,7 +200,7 @@ fn the_snapshot_changes_with_what_the_menu_shows() {
     let selected = OwningWindow { selected_agent: Some(agents[0]),
                                   ..owning(ids[0]) };
     assert_ne!(view_menu_snapshot(&store, Some(selected)), base);
-    let panel = OwningWindow { view_mode: WorkspaceViewMode::PullRequests,
+    let panel = OwningWindow { view_mode: WorkspaceViewMode::Changes,
                                ..owning(ids[0]) };
     assert_ne!(view_menu_snapshot(&store, Some(panel)), base);
 
@@ -219,30 +209,6 @@ fn the_snapshot_changes_with_what_the_menu_shows() {
                                               ..Default::default() });
     let added = view_menu_snapshot(&store, Some(owning(ids[0])));
     assert_ne!(added, base, "an added agent");
-
-    assert!(store.rename_workspace(ids[1], "Backend"));
-    assert_ne!(view_menu_snapshot(&store, Some(owning(ids[0]))),
-               added,
-               "a renamed workspace");
-}
-
-/// The workspace manager has no poll, and while it is focused no workspace
-/// window owns the bar, so its own changes have to reach the menu directly.
-#[gpui_kit::test]
-fn a_workspace_change_reaches_the_menu_bar(cx: &mut gpui_kit::TestAppContext) {
-    let (store, ids) = store_with(2, 0);
-    let store = parking_lot::Mutex::new(store);
-    cx.update(|cx| {
-          cx.set_global(MenuBarState::default());
-          refresh_menu_bar_workspaces(&store, cx);
-          assert_eq!(cx.global::<MenuBarState>().snapshot.view.workspaces.len(),
-                     2);
-
-          assert!(store.lock().rename_workspace(ids[1], "Backend"));
-          refresh_menu_bar_workspaces(&store, cx);
-          let listed = &cx.global::<MenuBarState>().snapshot.view.workspaces;
-          assert_eq!(listed[1], (ids[1], "Backend".to_string()));
-      });
 }
 
 /// Artifacts is checked while the selected agent's panel is shown, the way

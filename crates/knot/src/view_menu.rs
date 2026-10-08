@@ -12,9 +12,9 @@
 //! answers from the focused window's dispatch tree and overrides any
 //! `disabled` flag. The workspace window registers each shortcut's handler
 //! only while it applies (`WorkspaceWindow::with_shortcut_actions`), so the
-//! items follow on their own. The two submenus' parents carry no action and
-//! are never validated, so their state comes from the snapshot - as do the
-//! checkmarks, which AppKit never computes.
+//! items follow on their own. The Select Agent submenu's parent carries no
+//! action and is never validated, so its state comes from the snapshot - as do
+//! the checkmarks, which AppKit never computes.
 
 use gpui_kit::Action;
 use gpui_kit::Menu;
@@ -28,14 +28,13 @@ use crate::workspace_window::workspace_agent_ids;
 
 /// What the View menu lists and checks, compared against the last one built
 /// to decide whether the menu bar needs rebuilding.
+///
+/// The Select Workspace items are the Window menu's (`window_menu`), which
+/// lists them by open window.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct ViewMenuSnapshot {
     /// The workspace window that owns the menu bar; `None` when none does.
-    pub(crate) window:     Option<WorkspaceViewFacts>,
-    /// The first nine workspaces, in the manager's order - listed whether or
-    /// not a workspace window owns the bar, since Select workspace N works
-    /// from anywhere.
-    pub(crate) workspaces: Vec<(Uuid, String)>,
+    pub(crate) window: Option<WorkspaceViewFacts>,
 }
 
 /// The owning workspace window's side of [`ViewMenuSnapshot`].
@@ -62,23 +61,13 @@ pub(crate) struct OwningWindow {
 /// Reads the snapshot from `store`, for `window` or for no workspace window.
 pub(crate) fn view_menu_snapshot(store: &knot_agents::AgentStore, window: Option<OwningWindow>)
                                  -> ViewMenuSnapshot {
-    let workspaces = numbered_workspaces(store);
     let window = window.map(|window| WorkspaceViewFacts { workspace_id:    window.workspace_id,
                                                     view_mode:       window.view_mode,
                                                     agents:
                                                         sidebar_agents(store, window.workspace_id),
                                                     selected_agent:  window.selected_agent,
                                                     artifacts_shown: window.artifacts_shown, });
-    ViewMenuSnapshot { window, workspaces }
-}
-
-/// The first nine workspaces, in the manager's order.
-pub(crate) fn numbered_workspaces(store: &knot_agents::AgentStore) -> Vec<(Uuid, String)> {
-    store.workspaces()
-         .iter()
-         .take(NUMBERED_SHORTCUTS)
-         .map(|workspace| (workspace.id, workspace.name.clone()))
-         .collect()
+    ViewMenuSnapshot { window }
 }
 
 /// The first nine agents in `workspace_id`'s sidebar, top to bottom.
@@ -100,7 +89,7 @@ pub(crate) fn view_menu(snapshot: &ViewMenuSnapshot) -> Menu {
         MenuItem::action(knot_core::l10n::t("menu.view.dashboard"), ToggleDashboard)
             .checked(showing == Some(WorkspaceViewMode::Dashboard)),
         MenuItem::action(knot_core::l10n::t("menu.view.pull_requests"), TogglePullRequests)
-            .checked(showing == Some(WorkspaceViewMode::PullRequests)),
+            .checked(showing == Some(WorkspaceViewMode::Changes)),
         MenuItem::separator(),
         MenuItem::action(knot_core::l10n::t("menu.view.focus_agent_input"), FocusAgentInput),
         MenuItem::action(knot_core::l10n::t("menu.view.jump_to_bottom"), JumpToBottom),
@@ -111,7 +100,6 @@ pub(crate) fn view_menu(snapshot: &ViewMenuSnapshot) -> Menu {
             .checked(snapshot.window.as_ref().is_some_and(|window| window.artifacts_shown)),
         MenuItem::separator(),
         select_agent_submenu(snapshot.window.as_ref()),
-        select_workspace_submenu(snapshot),
         // Sets off the Enter Full Screen item macOS appends after the last
         // item, which would otherwise read as part of the submenu group.
         MenuItem::separator(),
@@ -128,14 +116,6 @@ fn select_agent_submenu(window: Option<&WorkspaceViewFacts>) -> MenuItem {
               .unwrap_or_default();
     let disabled = items.is_empty();
     MenuItem::submenu(Menu::new(knot_core::l10n::t("menu.view.select_agent")).items(items))
-        .disabled(disabled)
-}
-
-fn select_workspace_submenu(snapshot: &ViewMenuSnapshot) -> MenuItem {
-    let current = snapshot.window.as_ref().map(|window| window.workspace_id);
-    let items = numbered_items(&snapshot.workspaces, current, SELECT_WORKSPACE_ACTIONS);
-    let disabled = items.is_empty();
-    MenuItem::submenu(Menu::new(knot_core::l10n::t("menu.view.select_workspace")).items(items))
         .disabled(disabled)
 }
 
@@ -163,14 +143,3 @@ const SELECT_AGENT_ACTIONS: [fn() -> Box<dyn Action>; NUMBERED_SHORTCUTS] =
      || Box::new(SelectAgent7),
      || Box::new(SelectAgent8),
      || Box::new(SelectAgent9)];
-
-const SELECT_WORKSPACE_ACTIONS: [fn() -> Box<dyn Action>; NUMBERED_SHORTCUTS] =
-    [|| Box::new(SelectWorkspace1),
-     || Box::new(SelectWorkspace2),
-     || Box::new(SelectWorkspace3),
-     || Box::new(SelectWorkspace4),
-     || Box::new(SelectWorkspace5),
-     || Box::new(SelectWorkspace6),
-     || Box::new(SelectWorkspace7),
-     || Box::new(SelectWorkspace8),
-     || Box::new(SelectWorkspace9)];

@@ -113,8 +113,20 @@ fn bench_popover_content(entity: &gpui_kit::Entity<WorkspaceWindow>, app: &mut A
     let muted = app.theme().muted_foreground;
     let create = {
         let entity = entity.clone();
+        let label = knot_core::l10n::t("sidebar.bench_popover.create");
+        // As a child rather than `.label(..)`: `Button` centres its content,
+        // and only a child that fills the rest of the row - the Swift view's
+        // `Spacer()` - puts the label on the left, beside its icon (#599).
         Button::new("bench-popover-create").icon(IconName::Plus)
-                                           .label(knot_core::l10n::t("sidebar.bench_popover.create"))
+                                           .accessibility_label(label.clone())
+                                           .child(div().debug_selector(|| {
+                                                           "bench-popover-create-label".into()
+                                                       })
+                                                       .flex_1()
+                                                       .min_w_0()
+                                                       .truncate()
+                                                       .child(label))
+                                           .debug_selector(|| "bench-popover-create".into())
                                            .ghost()
                                            .w_full()
                                            .on_click(move |_, _, app| {
@@ -139,10 +151,9 @@ fn bench_popover_content(entity: &gpui_kit::Entity<WorkspaceWindow>, app: &mut A
              .into_any_element()
     }
     else {
-        div().id("bench-popover-list")
-             .max_h(px(300.))
-             .overflow_y_scroll()
-             .child(v_flex().children(rows.into_iter().map(|row| {
+        crate::capped_scroll::capped_scroll("bench-popover-list",
+                                            px(300.),
+                                            v_flex().children(rows.into_iter().map(|row| {
                                                           let entry =
                                                               bench.iter()
                                                                    .find(|entry| entry.id == row.id)
@@ -171,11 +182,20 @@ fn bench_row(entity: &gpui_kit::Entity<WorkspaceWindow>, row: BenchRow,
     let (muted, highlight) = (theme.muted_foreground, theme.accent);
     let deploy = {
         let entity = entity.clone();
+        // `Button` centres its content and sizes a labelled button to a
+        // single line. The content fills the row so it starts at the left
+        // edge (#599), and the height follows the two lines it holds, with
+        // the Swift view's vertical padding.
         Button::new(SharedString::from(format!("bench-entry-{id}")))
             .accessibility_label(row.name.clone())
+            .debug_selector(|| "bench-popover-entry".into())
             .ghost()
             .flex_1()
-            .child(h_flex().gap_2()
+            .h_auto()
+            .py_1p5()
+            .child(h_flex().debug_selector(|| "bench-popover-entry-content".into())
+                           .flex_1()
+                           .gap_2()
                            .min_w_0()
                            .child(div().text_lg().child(row.avatar.clone()))
                            .child(v_flex().min_w_0()

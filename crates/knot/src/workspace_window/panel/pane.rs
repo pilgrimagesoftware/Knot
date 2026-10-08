@@ -9,6 +9,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use gpui_kit::App;
 use gpui_kit::ClickEvent;
 use gpui_kit::Context;
 use gpui_kit::Focusable;
@@ -18,15 +19,13 @@ use gpui_kit::IntoElement;
 use gpui_kit::ListAlignment;
 use gpui_kit::ListState;
 use gpui_kit::ParentElement;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::div;
 use gpui_kit::px;
 use gpui_kit::rgb;
@@ -77,7 +76,11 @@ impl WorkspaceWindow {
                             .min_h_0()
                             .w_full()
                             .min_w_0()
-                            .overflow_scroll()
+                            .overflow_scrollbar()
+                            // Per agent, as the element id is: the
+                            // wrapper otherwise keys its scroll position by
+                            // call site, which every agent shares.
+                            .id(("mermaid-pane-scroll", id.as_u128() as u64))
                             .p_4()
                             .child(body))
                 .into_any_element()
@@ -117,7 +120,8 @@ impl WorkspaceWindow {
                             .min_h_0()
                             .w_full()
                             .min_w_0()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
+                            .id(("markdown-pane-scroll", id.as_u128() as u64))
                             .p_4()
                             // The same constructor the panel's assistant
                             // messages use, with the same families and body
@@ -289,6 +293,17 @@ impl WorkspaceWindow {
                         handle.discard_shell_result(card_id);
                     }
                 };
+                // Quotes a response into this agent's own composer. Weak, as
+                // every closure the list keeps across frames must be: the
+                // panel's rows outlive no window.
+                let reply_window = cx.entity().downgrade();
+                let on_reply = move |response: String, window: &mut Window, app: &mut App| {
+                    if let Some(view) = reply_window.upgrade() {
+                        view.update(app, |view, cx| {
+                                view.reply_to_response(id, &response, window, cx);
+                            });
+                    }
+                };
                 let follow_slot = Arc::clone(slot);
                 let list_slot = Arc::clone(slot);
                 let should_follow = state.turn_active && state.tracking;
@@ -381,28 +396,25 @@ impl WorkspaceWindow {
                                     on_toggle_tool_run,
                                     on_manual_scroll,
                                 )
-                                .with_shell(on_cancel_shell, on_discard_shell),
+                                .with_shell(on_cancel_shell, on_discard_shell)
+                                .with_reply(on_reply),
                             ))
+                            // Shown while scrolling, per the user's macOS
+                            // scroll bar setting (#583). Before the jump
+                            // control, so the control paints over it.
+                            .vertical_scrollbar(&list)
                             .children(scrolled_up.then(|| {
-                                div().absolute().bottom_3().right_4().child(
-                                    Button::new("panel-scroll-to-bottom")
-                                        .icon(IconName::ChevronDown)
-                                        .tooltip(knot_core::l10n::t("panel.scroll_to_latest"))
-                                        .small()
-                                        .on_click(move |_: &ClickEvent, _, _| {
-                                            list_to_bottom.scroll_to_end();
-                                            // Jumping to the end also
-                                            // resumes following new
-                                            // output, which is what the
-                                            // control implies.
-                                            if let panel_session::PanelSessionSlot::Ready(
-                                                handle,
-                                            ) = &*follow_slot.lock()
-                                            {
-                                                handle.set_tracking(true);
-                                            }
-                                        }),
-                                )
+                                super::scroll_to_latest::scroll_to_latest(move |_| {
+                                    list_to_bottom.scroll_to_end();
+                                    // Jumping to the end also resumes
+                                    // following new output, which is what
+                                    // the control implies.
+                                    if let panel_session::PanelSessionSlot::Ready(handle) =
+                                        &*follow_slot.lock()
+                                    {
+                                        handle.set_tracking(true);
+                                    }
+                                })
                             })),
                     )
                     .child(self.render_panel_input_area(

@@ -9,7 +9,6 @@ use gpui_kit::InteractiveElement;
 use gpui_kit::IntoElement;
 use gpui_kit::ParentElement;
 use gpui_kit::Render;
-use gpui_kit::StatefulInteractiveElement;
 use gpui_kit::Styled;
 use gpui_kit::Window;
 use gpui_kit::base::Disableable;
@@ -23,6 +22,7 @@ use gpui_kit::component::group_box::GroupBoxVariants;
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::div;
 use gpui_kit::px;
@@ -389,7 +389,7 @@ impl Render for AgentEditor {
                 div()
                     .id("new-agent-content")
                     .flex_1()
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     .child(
                         v_flex()
                             .gap_3()
