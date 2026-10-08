@@ -24,6 +24,7 @@ use gpui_kit::component::Icon;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::shimmer::ShimmerText;
 use gpui_kit::div;
 use gpui_kit::rgb;
 
@@ -44,6 +45,11 @@ use crate::panel_view::style::card_outline;
 /// the panel's own word for the call and stays proportional. The outline
 /// is coloured by `card_outline`.
 ///
+/// While the call has not finished its title shimmers (#499), the same
+/// moving highlight that says "still working" elsewhere in the kit - so a
+/// running call reads as live at a glance, beside the status icon that also
+/// says so.
+///
 /// `collapsed` comes from `PanelState::is_collapsed`, so a succeeded call
 /// folds to just this header. The whole header row is the toggle's hit
 /// target, not only the chevron: a 12px icon is a poor one and the header
@@ -59,6 +65,8 @@ pub(super) fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, col
         card.title.clone()
     };
     let id = card.id.clone();
+    let shimmers = title_shimmers(card);
+    let shimmer_id = element_id(&card.id);
     v_flex().w_full()
             .min_w_0()
             .gap_2()
@@ -84,21 +92,38 @@ pub(super) fn render_tool_call_card(card: &ToolCallCard, style: &PanelStyle, col
                                                 .font_family(style.mono_font_family.clone())
                                                 .text_xs()
                                                 .text_color(rgb(MUTED));
+                               // Joined when collapsed, before it is handed
+                               // over: the style flags below only stop
+                               // *soft* wrapping, so a title carrying line
+                               // breaks - a heredoc command, say - would
+                               // otherwise draw one line per break and fill
+                               // the pane. Expanded keeps `label` verbatim.
+                               let text = if collapsed {
+                                   single_line(&label)
+                               }
+                               else {
+                                   label
+                               };
+                               // The shimmer inherits the title's font,
+                               // colour, wrapping and truncation from this
+                               // wrapper, so a running title looks like a
+                               // finished one with a highlight passing over.
+                               let text = if shimmers {
+                                   ShimmerText::new(text).id(("tool-call-title-shimmer",
+                                                              shimmer_id))
+                                                         .into_any_element()
+                               }
+                               else {
+                                   text.into_any_element()
+                               };
                                if collapsed {
-                                   // Joined before it is handed over: the
-                                   // style flags below only stop *soft*
-                                   // wrapping, so a title carrying line
-                                   // breaks - a heredoc command, say - would
-                                   // otherwise draw one line per break and
-                                   // fill the pane. Expanded keeps `label`
-                                   // verbatim.
                                    title.overflow_hidden()
                                         .whitespace_nowrap()
                                         .text_ellipsis()
-                                        .child(single_line(&label))
+                                        .child(text)
                                }
                                else {
-                                   title.child(label)
+                                   title.child(text)
                                }
                            })
                            .children(status_icon(&card.status).map(|icon| {
@@ -130,7 +155,16 @@ pub(super) fn render_tool_call_body(card: &ToolCallCard, style: &PanelStyle) -> 
                 .iter()
                 .map(|content| render_tool_call_content(content, style)),
         )
-        .children((card.content.is_empty() && !card.is_finished()).then(in_progress_placeholder))
+        .children((card.content.is_empty() && !card.is_finished()).then(|| {
+                                                                       in_progress_placeholder(&card.id)
+                                                                   }))
+}
+
+/// Whether a card's title shimmers: while the call has not finished - pending,
+/// running, or a status Knot does not know yet - and never once it has, so a
+/// done or failed call stops moving.
+pub(super) fn title_shimmers(card: &ToolCallCard) -> bool {
+    !card.is_finished()
 }
 
 /// The disclosure chevron for a card in either state: pointing right at a
@@ -220,10 +254,15 @@ pub(super) fn tool_call_icon(kind: &str) -> IconName {
     }
 }
 
-pub(super) fn in_progress_placeholder() -> impl IntoElement {
+/// "Running…" under a call that has produced nothing yet, shimmering like
+/// the title above it (#499). Keyed by the call, since every running card's
+/// placeholder reads the same and the shimmer's animation is keyed by its
+/// text otherwise.
+pub(super) fn in_progress_placeholder(tool_call_id: &str) -> impl IntoElement {
     div().text_xs()
          .text_color(rgb(MUTED))
-         .child(knot_core::l10n::t("panel.running"))
+         .child(ShimmerText::new(knot_core::l10n::t("panel.running"))
+                    .id(("tool-call-running-shimmer", element_id(tool_call_id))))
 }
 
 /// A file-edit diff as an added/removed line view rather than raw text,
