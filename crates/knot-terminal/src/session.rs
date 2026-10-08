@@ -6,6 +6,8 @@ use knot_agent_launch::{LaunchRequest, build_agent_command, build_initialization
 use knot_agents::Agent;
 use knot_core::{Persona, Settings};
 
+use crate::AgentShell;
+
 /// `persona`/`plugin_root` are unused now that the terminal path only
 /// launches shell agents (they mattered to the removed non-shell
 /// registration/persona-injection arguments); kept on the struct so
@@ -16,6 +18,8 @@ pub struct SessionConfig<'a> {
     pub agent:       &'a Agent,
     pub persona:     Option<&'a Persona>,
     pub plugin_root: Option<&'a Path>,
+    /// What the PTY runs. [`AgentShell::User`] for every real agent.
+    pub shell:       AgentShell,
 }
 
 pub struct SessionPlan {

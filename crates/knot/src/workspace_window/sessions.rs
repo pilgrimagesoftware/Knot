@@ -13,6 +13,7 @@ use gpui_kit::App;
 use gpui_kit::Context;
 use knot_activity::EventSink;
 use knot_git::Repository;
+use knot_terminal::AgentShell;
 use knot_terminal::SessionConfig;
 use knot_terminal::SessionPlan;
 use knot_terminal::TerminalSession;
@@ -71,7 +72,8 @@ impl WorkspaceWindow {
         let config = SessionConfig { settings: &settings,
                                      agent: &agent,
                                      persona,
-                                     plugin_root: None };
+                                     plugin_root: None,
+                                     shell: AgentShell::User };
         let status_store = Arc::clone(&self.store);
         let status_sink =
             EventSink { on_status: Some(Box::new(move |event| {
