@@ -1,9 +1,9 @@
 # Tasks
 
-> Implemented 2026-10-07 (#504). `make` is green. Not done: the manual parts
-> of 4.2 (returning to the view keeps the tab, checked here by unit test
-> only) and 8.2 (a live two-repository workspace), which need the running
-> app. Notes: the Changes launcher row is now always shown - the delta's
+> Implemented 2026-10-07 (#504). `make` is green. 8.2 was verified by the
+> user in a running build on 2026-10-07 with two repos. The manual part of
+> 4.2 (returning to the view keeps the tab) is checked here by unit test
+> only. Notes: the Changes launcher row is now always shown - the delta's
 > "a row labelled Changes is visible" has no exception for a workspace with
 > no pull requests, and its issues and changes would otherwise be
 > unreachable. `IssueFilter::is_active` was dropped as unused.
@@ -51,4 +51,4 @@
 ## 8. Localization and integration
 
 - [x] 8.1 Add every new `changes_view.*`, `issues.*` and `openspec_changes.*` key and the renamed launcher/menu keys to `crates/knot-core/locales/en.yml`, touch `knot-core` so the build picks them up, and assert each resolves; verify `make test`
-- [ ] 8.2 Run `make` and manually verify against a workspace with two repositories (one with worktrees) that issues and changes are listed once per repository and that sending an issue and a change to an agent delivers the specified prompts
+- [x] 8.2 Run `make` and manually verify against a workspace with two repositories (one with worktrees) that issues and changes are listed once per repository and that sending an issue and a change to an agent delivers the specified prompts - verified by the user in a running build on 2026-10-07 with two repos

@@ -275,7 +275,10 @@ de-duplicates.
 The system SHALL store bench agents (reusable templates: id, name, avatar,
 folder, agent type, optional shell command, optional persona id, description,
 capabilities, cost tier, optional startup prompt). Adding a bench entry SHALL
-replace any existing entry with the same folder.
+replace an existing entry only when it has both the same name and the same
+folder - the same agent saved again. An entry for a different agent in the
+same folder SHALL be added beside it, not replace it: several agents commonly
+work in one repository folder (#500).
 
 Description, capabilities and cost tier are the registry fields defined by
 `agent-registry`, and they SHALL round-trip: saving an agent to the bench
@@ -290,8 +293,15 @@ startup prompt.
 
 #### Scenario: Same-folder bench entry replaced
 
-- **WHEN** a bench entry is added for a folder that already has one
+- **WHEN** a bench entry is added for a folder that already has an entry with
+  the same name - the same agent saved again
 - **THEN** the old entry is removed and only the new one remains
+
+#### Scenario: Another agent from the same folder is kept
+
+- **WHEN** the bench holds `Reviewer` for `/repo` and `Tester` for `/repo` is
+  saved
+- **THEN** the bench holds both `Reviewer` and `Tester`
 
 #### Scenario: Registry fields round-trip through the bench
 
