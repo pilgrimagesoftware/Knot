@@ -369,16 +369,49 @@ fn recent_repos_moves_to_front_and_caps() {
     assert_eq!(s.recent_repos[0], "f");
 }
 
+/// Two agents working in one repository are two bench entries (#500): the
+/// second save must not overwrite the first.
 #[test]
-fn bench_replaces_same_folder() {
+fn bench_keeps_different_agents_from_one_folder() {
     let dir = tempdir().unwrap();
     let mut s = Settings::with_store_root(dir.path());
-    s.add_bench_agent(BenchAgent::new(agent_id(), "old", None, "/repo"))
+    s.add_bench_agent(BenchAgent::new(agent_id(), "Reviewer", None, "/repo"))
      .unwrap();
-    s.add_bench_agent(BenchAgent::new(agent_id(), "new", None, "/repo"))
+    s.add_bench_agent(BenchAgent::new(agent_id(), "Tester", None, "/repo"))
      .unwrap();
+    let names: Vec<_> = s.bench_agents
+                         .iter()
+                         .map(|entry| entry.name.as_str())
+                         .collect();
+    assert_eq!(names, ["Reviewer", "Tester"]);
+}
+
+/// Saving the same agent again replaces its entry rather than piling up
+/// copies.
+#[test]
+fn bench_replaces_the_same_agent_saved_again() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    let mut first = BenchAgent::new(agent_id(), "Reviewer", None, "/repo");
+    first.description = "before".to_owned();
+    let mut again = BenchAgent::new(agent_id(), "Reviewer", None, "/repo");
+    again.description = "after".to_owned();
+    s.add_bench_agent(first).unwrap();
+    s.add_bench_agent(again).unwrap();
     assert_eq!(s.bench_agents.len(), 1);
-    assert_eq!(s.bench_agents[0].name, "new");
+    assert_eq!(s.bench_agents[0].description, "after");
+}
+
+/// An agent of the same name in another folder is another agent.
+#[test]
+fn bench_keeps_same_name_in_another_folder() {
+    let dir = tempdir().unwrap();
+    let mut s = Settings::with_store_root(dir.path());
+    s.add_bench_agent(BenchAgent::new(agent_id(), "Reviewer", None, "/repo"))
+     .unwrap();
+    s.add_bench_agent(BenchAgent::new(agent_id(), "Reviewer", None, "/other"))
+     .unwrap();
+    assert_eq!(s.bench_agents.len(), 2);
 }
 
 fn persona(name: &str, persona_type: PersonaType, state: PersonaState) -> Persona {
