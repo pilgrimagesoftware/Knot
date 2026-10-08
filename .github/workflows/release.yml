@@ -22,11 +22,18 @@ jobs:
     uses: pilgrimagesoftware/github-actions/.github/workflows/rust-release.yaml@master
     with:
       tag: ${{ inputs.tag }}
-      # The reusable workflow tests on ubuntu-latest without the system
-      # libraries gpui needs (fontconfig, wayland, webkit, xkbcommon), so the
-      # `knot` binary crate cannot build there. ci.yml already runs the whole
-      # workspace on both Linux and macOS for every push and PR.
+      # `--exclude knot` keeps the test *binary* for the `knot` crate from
+      # building, but its workspace dependencies (gpui and friends) still
+      # need to compile to resolve the workspace graph, and gpui's system
+      # libraries (fontconfig, wayland, webkit, xkbcommon) aren't on the
+      # reusable workflow's runner by default. ci.yml already runs the whole
+      # workspace, including `knot`, on both Linux and macOS for every push
+      # and PR, so this list only needs to satisfy the build, not the test.
       test-args: "--workspace --exclude knot"
+      linux-packages: >-
+        gcc g++ clang libfontconfig-dev libwayland-dev
+        libwebkit2gtk-4.1-dev libxkbcommon-x11-dev libx11-xcb-dev
+        libssl-dev libzstd-dev
       publish-to-crates-io: false
       release-branch: main
       merge-back-branch: develop
