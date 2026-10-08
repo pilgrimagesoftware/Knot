@@ -1,4 +1,10 @@
 
+## 1.24.1 - 2026-10-08
+
+### Fixed
+- Stop kill reading a negative group id as an option
+
+
 ## 1.24.0 - 2026-10-08
 
 ### Added
