@@ -625,3 +625,27 @@ fn an_adapter_without_kinds_keeps_allow_and_deny() {
                    .all(|choice| !choice.label.starts_with("panel.")),
             "a label rendered its key");
 }
+
+fn tool_call(status: &str) -> crate::panel_state::ToolCallCard {
+    crate::panel_state::ToolCallCard { id:        "tc1".to_owned(),
+                                       kind:      "execute".to_owned(),
+                                       title:     "cargo test".to_owned(),
+                                       status:    status.to_owned(),
+                                       content:   Vec::new(),
+                                       raw_input: None,
+                                       meta:      None, }
+}
+
+/// A call's title shimmers while it has not finished - pending, running, or
+/// a status Knot does not know - and stops once it is done or failed (#499).
+#[test]
+fn a_tool_call_title_shimmers_until_it_finishes() {
+    for status in ["pending", "in_progress", "some-future-status"] {
+        assert!(title_shimmers(&tool_call(status)),
+                "{status} should shimmer");
+    }
+    for status in ["completed", "failed"] {
+        assert!(!title_shimmers(&tool_call(status)),
+                "{status} should be still");
+    }
+}
