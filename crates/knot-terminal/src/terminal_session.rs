@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use gpui_terminal::{ExitReport, PtyCommand, PtyTransport, Terminal, TerminalBuilder, Transport};
+use gpui_terminal::{ExitReport, PtyTransport, Terminal, TerminalBuilder, Transport};
 use knot_activity::{EventSink, KeyEvent, Tracker, TrackerConfig, tracking_for};
 use knot_agent_launch::{registration_prompt, supports_inline_registration};
 use parking_lot::Mutex;
@@ -81,9 +81,17 @@ impl<T: Transport> TerminalSession<T> {
         self.pull_requests.lock().take()
     }
 
+    /// Stops the tracker and ends the shell.
+    ///
+    /// A shell that already exited is left alone: killing it again fails with
+    /// "No such process", which made every exit-driven agent removal log a
+    /// failed shutdown. A shell that exits between the check and the kill
+    /// still reports that error; it is the same harmless race, now narrow.
     pub fn shutdown(&mut self) -> Result<()> {
         self.tracker.shutdown();
-        self.terminal.terminate()?;
+        if self.terminal.exit_report().is_none() {
+            self.terminal.terminate()?;
+        }
         self.started = false;
         Ok(())
     }
@@ -94,7 +102,8 @@ impl<T: Transport> TerminalSession<T> {
 }
 
 impl TerminalSession<PtyTransport> {
-    /// Starts the user's shell, interactive, in the agent's folder.
+    /// Starts the agent's shell - [`SessionConfig::shell`], the user's own
+    /// unless a test chose otherwise - in the agent's folder.
     ///
     /// `on_output` sees every chunk and `on_exit` the exit, both on the PTY
     /// reader thread, after the tracker has.
@@ -107,7 +116,7 @@ impl TerminalSession<PtyTransport> {
         // tracker through a slot filled once both exist.
         let tracker_slot: Arc<Mutex<Option<Arc<Tracker>>>> = Arc::default();
         let pull_requests: Arc<Mutex<PullRequestTap>> = Arc::default();
-        let command = PtyCommand::user_shell().arg("-i").cwd(&config.agent.folder);
+        let command = config.shell.command(&config.agent.folder);
         let terminal = TerminalBuilder::new().on_output({
                                                  let tracker_slot = Arc::clone(&tracker_slot);
                                                  let pull_requests = Arc::clone(&pull_requests);

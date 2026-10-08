@@ -8,6 +8,8 @@
 //! instead ([`AcpSession`]).
 
 mod acp_session;
+mod agent_shell;
+mod consts;
 mod pull_requests;
 mod session;
 mod terminal_session;
@@ -16,6 +18,7 @@ pub use acp_session::{
     AcpSession, AdapterUpdateStatus, ConnectProgress, ConnectStep, SessionTarget,
     check_adapter_update, update_adapter,
 };
+pub use agent_shell::AgentShell;
 pub use session::{SessionConfig, SessionPlan};
 pub use terminal_session::TerminalSession;
 use thiserror::Error;

@@ -328,7 +328,7 @@ async fn starting_and_stopping_an_acp_session_never_touches_the_terminal_transpo
     use knot_agents::{Agent, AgentStore, CreateOptions};
     use knot_core::Settings;
 
-    use crate::{SessionConfig, TerminalSession};
+    use crate::{AgentShell, SessionConfig, TerminalSession};
 
     let mut store = AgentStore::new();
     let agent_id = store.create("/tmp/project", CreateOptions::default());
@@ -337,7 +337,8 @@ async fn starting_and_stopping_an_acp_session_never_touches_the_terminal_transpo
     let config = SessionConfig { settings:    &settings,
                                  agent:       &agent,
                                  persona:     None,
-                                 plugin_root: None, };
+                                 plugin_root: None,
+                                 shell:       AgentShell::posix_sh(), };
     let sent = Arc::new(Mutex::new(Vec::new()));
     let mut terminal_session = TerminalSession::new(&config,
                                                     FakeTransport { sent: Arc::clone(&sent), },

@@ -11,6 +11,7 @@ use knot_core::Settings;
 use parking_lot::Mutex;
 
 use super::*;
+use crate::AgentShell;
 
 /// Failsafe for the tests that drive a real PTY subprocess. Deliberately far
 /// longer than the work normally takes (milliseconds), because its only job
@@ -55,10 +56,13 @@ fn agent() -> Agent {
 }
 
 fn config<'a>(settings: &'a Settings, agent: &'a Agent) -> SessionConfig<'a> {
+    // `/bin/sh`, not the user's `$SHELL -i`: a test must not depend on - or
+    // start - whatever the machine's dotfiles do.
     SessionConfig { settings,
                     agent,
                     persona: None,
-                    plugin_root: None }
+                    plugin_root: None,
+                    shell: AgentShell::posix_sh() }
 }
 
 /// An agent whose folder is a fresh temp dir, kept alive by the guard.
@@ -86,6 +90,10 @@ async fn start_sends_the_initialization_command_and_its_return() {
     assert!(plan.initialization_command.contains("/tmp/project"));
     assert_eq!(log.lock().written,
                format!("{}\r", plan.initialization_command).into_bytes());
+
+    // Explicit, not left to `Drop`: a test that ends with its shell still
+    // running should say so, and a teardown that fails should fail the test.
+    session.shutdown().unwrap();
 }
 
 #[tokio::test]
@@ -146,6 +154,11 @@ async fn pty_session_forwards_output_and_exit_to_the_caller() {
     assert_eq!(exit_rx.recv_timeout(PTY_TIMEOUT), Ok(Some(0)));
     let output = output_rx.try_iter().flatten().collect::<Vec<_>>();
     assert!(String::from_utf8_lossy(&output).contains("ready"));
+
+    // The shell has already exited, which is exactly the exit-driven removal
+    // path: shutting it down must not fail on the dead child.
+    session.shutdown()
+           .expect("shutting down a session whose shell already exited");
 }
 
 #[tokio::test]
@@ -171,6 +184,10 @@ async fn pty_session_output_is_reflected_in_its_grid() {
                 "grid never showed the expected output");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+
+    // Explicit, not left to `Drop`: a test that ends with its shell still
+    // running should say so, and a teardown that fails should fail the test.
+    session.shutdown().unwrap();
 }
 
 /// The scan rides the output hook, ahead of the parse - so a URL is found
@@ -198,4 +215,48 @@ async fn pty_session_output_is_scanned_for_pull_requests() {
         urls = session.take_pull_request_urls();
     }
     assert_eq!(urls, ["https://github.com/acme/widget/pull/42"]);
+
+    // Explicit, not left to `Drop`: a test that ends with its shell still
+    // running should say so, and a teardown that fails should fail the test.
+    session.shutdown().unwrap();
+}
+
+/// Dotfiles opt out of prompt daemons by testing `KNOT_AGENT`
+/// (`docs/agent-shells.md`), so it has to reach the agent's shell. The
+/// format string keeps the echoed command from matching: only the output
+/// can contain the value.
+#[tokio::test]
+async fn the_agent_shell_is_marked_as_a_knot_agent() {
+    use crate::consts::{KNOT_AGENT_ENV, KNOT_AGENT_VALUE};
+
+    let (agent, _folder) = agent_in_temp_dir();
+    let settings = Settings::default();
+    let config = config(&settings, &agent);
+    let (output_tx, output_rx) = mpsc::channel();
+    let mut session = TerminalSession::spawn_pty(&config,
+                                                 EventSink::default(),
+                                                 move |bytes| {
+                                                     let _ = output_tx.send(bytes.to_vec());
+                                                 },
+                                                 |_| {}).unwrap();
+
+    session.start(&SessionPlan { agent_command:          String::new(),
+                                 initialization_command:
+                                     format!("printf 'agent=[%s]\\n' \"${KNOT_AGENT_ENV}\""), })
+           .unwrap();
+
+    let expected = format!("agent=[{KNOT_AGENT_VALUE}]");
+    let deadline = Instant::now() + PTY_TIMEOUT;
+    let mut output = Vec::new();
+    while !String::from_utf8_lossy(&output).contains(&expected) {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let chunk =
+            output_rx.recv_timeout(remaining).unwrap_or_else(|_| {
+                                                 panic!("{expected} never appeared in: {:?}",
+                                                        String::from_utf8_lossy(&output))
+                                             });
+        output.extend(chunk);
+    }
+
+    session.shutdown().unwrap();
 }
