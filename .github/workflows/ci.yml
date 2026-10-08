@@ -77,19 +77,14 @@ jobs:
       - name: Clippy
         run: make lint
 
-      # Split per-crate (rather than one `cargo test --workspace`) so a hang or
-      # failure names the crate directly in the job summary instead of a
-      # single opaque "Test" step.
-      - name: Test (knot-core)
-        run: cargo test -p knot-core
-      - name: Test (knot-git)
-        run: cargo test -p knot-git
-      - name: Test (knot-discovery)
-        run: cargo test -p knot-discovery
-      - name: Test (knot-history)
-        run: cargo test -p knot-history
-      - name: Test (knot)
-        run: cargo test -p knot
+      # Every workspace crate, one at a time, so a hang or failure names its
+      # crate - in a log group per crate and an error annotation per failing
+      # one. The list comes from `cargo metadata`: a hand-kept list of steps
+      # here covered five crates of nineteen, and knot-processes - whose
+      # `kill` reached every process the user owns on Linux - was one of the
+      # fourteen that never ran (hotfix 1.24.1).
+      - name: Test (every crate)
+        run: scripts/test-each-crate.sh
 
       - name: Build
         run: make build
