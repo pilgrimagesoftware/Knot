@@ -39,7 +39,8 @@ pub(crate) fn bench_entry_for(agent: &Agent) -> BenchAgent {
 }
 
 impl WorkspaceWindow {
-    /// Save agent `id` to the bench, replacing any entry for its folder.
+    /// Save agent `id` to the bench, replacing its own earlier entry - the
+    /// same name and folder - but no other agent's (#500).
     pub(in crate::workspace_window) fn save_to_bench(&self, id: Uuid, cx: &App)
                                                      -> knot_core::Result<()> {
         let Some(entry) = self.store.lock().agent(id).map(bench_entry_for)

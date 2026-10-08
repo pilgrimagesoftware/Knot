@@ -15,9 +15,17 @@ impl Settings {
         documents::write_collection(&self.resolved_paths()?.bench(), &self.bench_agents)
     }
 
-    /// Add a bench template, replacing any existing entry for the same folder.
+    /// Add a bench template, replacing an existing entry only when it is the
+    /// same agent saved again - same name and same folder.
+    ///
+    /// Not the folder alone, which is where the Swift reference stopped:
+    /// Knot's agents commonly share a repository folder, and keying on it
+    /// made saving a second agent from that repository overwrite the first
+    /// (#500). A name is unique among the agents sharing a folder, so name and
+    /// folder together tell a re-save from a different agent.
     pub fn add_bench_agent(&mut self, entry: BenchAgent) -> Result<()> {
-        self.bench_agents.retain(|b| b.folder != entry.folder);
+        self.bench_agents
+            .retain(|b| !(b.folder == entry.folder && b.name == entry.name));
         self.bench_agents.push(entry);
         self.persist_bench()
     }
