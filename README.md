@@ -92,6 +92,8 @@ xattr -d com.apple.quarantine "/Applications/Knot.app"
 codesign --force --deep --sign - "/Applications/Knot.app"
 ```
 
+Shell agents run your own shell with your dotfiles. If your prompt theme starts a daemon per shell (powerlevel10k's `gitstatusd` does), see [docs/agent-shells.md](docs/agent-shells.md) to turn it off in agent terminals.
+
 ## Architecture
 
 The Rust workspace keeps the UI, terminal runtime, MCP server, messaging, discovery, Git, and persistence concerns in separate crates. Contracts under `openspec/specs/` define the behavior being ported from Swift.
