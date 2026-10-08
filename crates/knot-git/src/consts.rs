@@ -2,6 +2,14 @@ use std::time::Duration;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How often a running `git` is checked for exit.
+pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+/// The least time allowed for `git`'s output to finish draining once it has
+/// exited, even past the timeout, so a command that exits a moment before its
+/// deadline is not reported as timed out for want of a moment to flush.
+pub const OUTPUT_DRAIN_FLOOR: Duration = Duration::from_millis(100);
+
 /// The binary this crate runs, until the application names another through
 /// [`crate::program::configure`].
 pub const GIT_PROGRAM: &str = "git";

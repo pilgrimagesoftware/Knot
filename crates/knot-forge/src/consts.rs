@@ -11,6 +11,13 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 /// How often the timeout loop checks whether the child has exited.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
+/// The least time allowed for a command's output to finish draining once it
+/// has exited, even past the timeout, so one that exits a moment before its
+/// deadline is not reported as timed out for want of a moment to flush. Past
+/// it, a background process the command left holding its output pipes open
+/// no longer holds the call open with them.
+pub const OUTPUT_DRAIN_FLOOR: Duration = Duration::from_millis(100);
+
 /// The fields `gh pr view` is asked for. Everything the view renders and
 /// nothing else: asking for less would mean a second call, asking for more
 /// would mean paying for data no row shows.

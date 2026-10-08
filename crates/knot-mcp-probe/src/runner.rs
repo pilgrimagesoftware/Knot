@@ -15,10 +15,11 @@ use std::ffi::OsString;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::consts::{POLL_INTERVAL, PROBE_TIMEOUT};
+use crate::consts::{OUTPUT_DRAIN_FLOOR, POLL_INTERVAL, PROBE_TIMEOUT};
 use crate::error::{ProbeError, Result};
 
 /// One invocation: what to run, where, and with what environment.
@@ -123,8 +124,8 @@ impl McpRunner for CommandRunner {
 
         let mut stdout_pipe = child.stdout.take().expect("stdout piped");
         let mut stderr_pipe = child.stderr.take().expect("stderr piped");
-        let stdout_reader = thread::spawn(move || read_to_string(&mut stdout_pipe));
-        let stderr_reader = thread::spawn(move || read_to_string(&mut stderr_pipe));
+        let stdout_reader = drain(move || read_to_string(&mut stdout_pipe));
+        let stderr_reader = drain(move || read_to_string(&mut stderr_pipe));
 
         let deadline = Instant::now() + self.timeout;
         let status = loop {
@@ -150,8 +151,12 @@ impl McpRunner for CommandRunner {
             thread::sleep(POLL_INTERVAL);
         };
 
-        let stdout = stdout_reader.join().unwrap_or_default();
-        let stderr = stderr_reader.join().unwrap_or_default();
+        let (Some(stdout), Some(stderr)) =
+            (collect(&stdout_reader, deadline), collect(&stderr_reader, deadline))
+        else {
+            return Err(ProbeError::TimedOut { program: command.label(),
+                                              seconds: self.timeout.as_secs(), });
+        };
 
         if status.success() {
             // Not every CLI writes its listing to stdout. `gemini mcp list`
@@ -222,6 +227,27 @@ fn prefer_nonempty(stdout: String, stderr: String) -> String {
     }
 
     stdout
+}
+
+/// Reads a stream to its end on a thread of its own, handing the text back
+/// through the returned channel. The thread is detached: one still blocked
+/// when [`collect`] gives up ends when the stream finally closes.
+fn drain(read: impl FnOnce() -> String + Send + 'static) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(read());
+    });
+    rx
+}
+
+/// A drained stream's text, or `None` if it has not ended by `deadline` -
+/// with at least [`OUTPUT_DRAIN_FLOOR`] allowed, so a child that exits just
+/// before the deadline is not reported as timed out for want of a moment to
+/// flush.
+fn collect(reader: &mpsc::Receiver<String>, deadline: Instant) -> Option<String> {
+    let wait = deadline.saturating_duration_since(Instant::now())
+                       .max(OUTPUT_DRAIN_FLOOR);
+    reader.recv_timeout(wait).ok()
 }
 
 fn read_to_string(pipe: &mut impl Read) -> String {

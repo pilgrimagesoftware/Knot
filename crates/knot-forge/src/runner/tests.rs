@@ -128,3 +128,20 @@ fn write_script(dir: &std::path::Path, name: &str, _body: &str) -> std::path::Pa
     std::fs::write(&path, b"").expect("write");
     path
 }
+
+/// `gh` exits, but a helper it started (a git or credential daemon) keeps
+/// stdout open far past the timeout - `sh` stands in for `gh`. The call must
+/// end at the timeout, not when the helper does.
+#[test]
+fn a_helper_holding_the_output_does_not_outlast_the_timeout() {
+    let runner = GhRunner::new().with_program("sh")
+                                .with_timeout(Duration::from_millis(200));
+
+    let started = std::time::Instant::now();
+    let err = runner.run(&["-c", "sleep 30 & echo started"]).unwrap_err();
+
+    assert!(started.elapsed() < Duration::from_secs(5),
+            "waited {:?} on a pipe the helper held",
+            started.elapsed());
+    assert!(matches!(err, ForgeError::Timeout { .. }), "got {err:?}");
+}

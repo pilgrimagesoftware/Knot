@@ -2,19 +2,24 @@ use std::ffi::OsString;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::consts::DEFAULT_TIMEOUT;
+use crate::consts::{DEFAULT_TIMEOUT, OUTPUT_DRAIN_FLOOR, POLL_INTERVAL};
 use crate::error::{GitError, Result};
 use crate::program::configured;
-
-const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Runs `git` in a fixed working directory with a wall-clock timeout.
 ///
 /// Output streams drain on worker threads so a full pipe buffer never wedges
 /// the child; the main thread polls for exit and kills on timeout.
+///
+/// The timeout bounds the whole call, output included. git can exit and
+/// leave a helper it started - a credential cache daemon, an fsmonitor, an
+/// ssh control master - holding the output pipes open; the streams only end
+/// when the last holder closes them, so waiting on the drain threads without
+/// a bound made the call last as long as that helper.
 #[derive(Debug, Clone)]
 pub struct Runner {
     cwd:         PathBuf,
@@ -84,8 +89,8 @@ impl Runner {
 
         let mut stdout_pipe = child.stdout.take().expect("stdout piped");
         let mut stderr_pipe = child.stderr.take().expect("stderr piped");
-        let stdout_reader = thread::spawn(move || read_to_string(&mut stdout_pipe));
-        let stderr_reader = thread::spawn(move || read_to_string(&mut stderr_pipe));
+        let stdout_reader = drain(move || read_to_string(&mut stdout_pipe));
+        let stderr_reader = drain(move || read_to_string(&mut stderr_pipe));
 
         let deadline = Instant::now() + self.timeout;
         let status = loop {
@@ -104,8 +109,11 @@ impl Runner {
             thread::sleep(POLL_INTERVAL);
         };
 
-        let stdout = stdout_reader.join().unwrap_or_default();
-        let stderr = stderr_reader.join().unwrap_or_default();
+        let (Some(stdout), Some(stderr)) =
+            (collect(&stdout_reader, deadline), collect(&stderr_reader, deadline))
+        else {
+            return Err(GitError::Timeout { command: label });
+        };
 
         if status.success() {
             return Ok(stdout);
@@ -124,6 +132,27 @@ impl Runner {
     }
 }
 
+/// Reads a stream to its end on a thread of its own, handing the text back
+/// through the returned channel. The thread is detached: one still blocked
+/// when [`collect`] gives up ends when the stream finally closes.
+fn drain(read: impl FnOnce() -> String + Send + 'static) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(read());
+    });
+    rx
+}
+
+/// A drained stream's text, or `None` if it has not ended by `deadline` -
+/// with at least [`OUTPUT_DRAIN_FLOOR`] allowed, so a child that exits just
+/// before the deadline is not reported as timed out for want of a moment to
+/// flush.
+fn collect(reader: &mpsc::Receiver<String>, deadline: Instant) -> Option<String> {
+    let wait = deadline.saturating_duration_since(Instant::now())
+                       .max(OUTPUT_DRAIN_FLOOR);
+    reader.recv_timeout(wait).ok()
+}
+
 fn read_to_string(pipe: &mut impl Read) -> String {
     let mut buf = String::new();
     let _ = pipe.read_to_string(&mut buf);
@@ -140,6 +169,24 @@ mod tests {
 
     use super::Runner;
     use crate::error::GitError;
+
+    /// git exits, but a helper it started keeps stdout open far past the
+    /// timeout - `sh` stands in for git here. The call must end at the
+    /// timeout, not when the helper does.
+    #[test]
+    fn a_helper_holding_the_output_does_not_outlast_the_timeout() {
+        let dir = tempfile::tempdir().unwrap();
+        let runner = Runner::new(dir.path()).with_program("sh")
+                                            .with_timeout(Duration::from_millis(200));
+
+        let started = std::time::Instant::now();
+        let err = runner.run(&["-c", "sleep 30 & echo started"]).unwrap_err();
+
+        assert!(started.elapsed() < Duration::from_secs(5),
+                "waited {:?} on a pipe the helper held",
+                started.elapsed());
+        assert!(matches!(err, GitError::Timeout { .. }), "got {err:?}");
+    }
 
     #[test]
     fn timeout_kills_process_and_names_command() {

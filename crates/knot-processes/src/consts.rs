@@ -5,6 +5,15 @@ use std::time::Duration;
 /// sampling interval.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// How often a running command is checked for exit.
+pub const POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+/// The least time allowed for a command's output to finish draining once it
+/// has exited, even if that runs past the timeout. Without it a command that
+/// exits a moment before its deadline would be reported as timed out because
+/// its streams had not been read to the end yet.
+pub const OUTPUT_DRAIN_FLOOR: Duration = Duration::from_millis(100);
+
 pub const PS_PROGRAM: &str = "ps";
 
 /// Every process, six columns, no headers. `command` is last because it is the

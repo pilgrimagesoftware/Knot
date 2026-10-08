@@ -176,3 +176,21 @@ fn a_label_names_the_whole_command() {
     assert_eq!(ProbeCommand::new("claude", vec![], dir.path()).label(),
                "claude");
 }
+
+/// An agent CLI that health-checks as it lists can exit and leave a server it
+/// started holding stdout open. The probe must end at the timeout, not when
+/// that server does.
+#[test]
+fn a_server_holding_the_output_does_not_outlast_the_timeout() {
+    let dir = TempDir::new().unwrap();
+    let started = Instant::now();
+
+    let err = runner_with(Duration::from_millis(200)).run(&sh("sleep 30 & echo listed",
+                                                              dir.path()))
+                                                     .unwrap_err();
+
+    assert!(started.elapsed() < Duration::from_secs(5),
+            "waited {:?} on a pipe the server held",
+            started.elapsed());
+    assert!(matches!(err, ProbeError::TimedOut { .. }), "got {err:?}");
+}

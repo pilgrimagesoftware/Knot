@@ -4,10 +4,11 @@
 use std::ffi::{OsStr, OsString};
 use std::io::Read;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::consts::{DEFAULT_TIMEOUT, GH_PROGRAM, POLL_INTERVAL};
+use crate::consts::{DEFAULT_TIMEOUT, GH_PROGRAM, OUTPUT_DRAIN_FLOOR, POLL_INTERVAL};
 use crate::error::{ForgeError, Result};
 
 /// Runs a forge command and hands back its stdout.
@@ -105,8 +106,8 @@ impl ForgeRunner for GhRunner {
 
         let mut stdout_pipe = child.stdout.take().expect("stdout piped");
         let mut stderr_pipe = child.stderr.take().expect("stderr piped");
-        let stdout_reader = thread::spawn(move || read_to_string(&mut stdout_pipe));
-        let stderr_reader = thread::spawn(move || read_to_string(&mut stderr_pipe));
+        let stdout_reader = drain(move || read_to_string(&mut stdout_pipe));
+        let stderr_reader = drain(move || read_to_string(&mut stderr_pipe));
 
         let deadline = Instant::now() + self.timeout;
         let status = loop {
@@ -125,8 +126,11 @@ impl ForgeRunner for GhRunner {
             thread::sleep(POLL_INTERVAL);
         };
 
-        let stdout = stdout_reader.join().unwrap_or_default();
-        let stderr = stderr_reader.join().unwrap_or_default();
+        let (Some(stdout), Some(stderr)) =
+            (collect(&stdout_reader, deadline), collect(&stderr_reader, deadline))
+        else {
+            return Err(ForgeError::Timeout { command: label });
+        };
 
         if status.success() {
             return Ok(stdout.trim().to_owned());
@@ -157,6 +161,27 @@ fn locate_gh(search_path: &str) -> OsString {
                                                                      .unwrap_or_else(|| {
                                                                          OsString::from(GH_PROGRAM)
                                                                      })
+}
+
+/// Reads a stream to its end on a thread of its own, handing the text back
+/// through the returned channel. The thread is detached: one still blocked
+/// when [`collect`] gives up ends when the stream finally closes.
+fn drain(read: impl FnOnce() -> String + Send + 'static) -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(read());
+    });
+    rx
+}
+
+/// A drained stream's text, or `None` if it has not ended by `deadline` -
+/// with at least [`OUTPUT_DRAIN_FLOOR`] allowed, so a child that exits just
+/// before the deadline is not reported as timed out for want of a moment to
+/// flush.
+fn collect(reader: &mpsc::Receiver<String>, deadline: Instant) -> Option<String> {
+    let wait = deadline.saturating_duration_since(Instant::now())
+                       .max(OUTPUT_DRAIN_FLOOR);
+    reader.recv_timeout(wait).ok()
 }
 
 fn read_to_string(pipe: &mut impl Read) -> String {
