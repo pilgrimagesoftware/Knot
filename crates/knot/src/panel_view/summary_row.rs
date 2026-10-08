@@ -19,6 +19,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Icon;
 use gpui_kit::component::Sizable;
+use gpui_kit::component::shimmer::ShimmerText;
 use gpui_kit::{ClickEvent, IntoElement, div, rgb};
 use knot_core::l10n::{t, t_with};
 
@@ -74,6 +75,11 @@ pub(super) fn compact_row(message_index: usize, state: &PanelState, compact: boo
 /// the run back into cards, matching the tool-call header's own "the
 /// whole header toggles" behaviour rather than introducing a second
 /// interaction idiom.
+///
+/// While any call in the run is unfinished its words shimmer, as a running
+/// card's title does (#499). Compact mode is where a running call is
+/// usually seen - it draws this line in place of the cards - so a shimmer
+/// on the cards alone never showed for anyone who has compact mode on.
 pub(super) fn render_tool_run_summary(summary: ToolRunSummary, head_id: String,
                                       style: &PanelStyle, on_expand: Rc<dyn Fn(String)>)
                                       -> impl IntoElement {
@@ -111,7 +117,23 @@ pub(super) fn render_tool_run_summary(summary: ToolRunSummary, head_id: String,
                         .font_family(style.ui_font_family.clone())
                         .text_xs()
                         .text_color(rgb(MUTED))
-                        .child(summary_text(summary)))
+                        .child(if summary_shimmers(summary) {
+                                   // Keyed by the run, so two live runs'
+                                   // identical
+                                   // words do not share one animation.
+                                   ShimmerText::new(summary_text(summary))
+                                .id(("tool-run-summary-shimmer", element_key))
+                                .into_any_element()
+                               }
+                               else {
+                                   summary_text(summary).into_any_element()
+                               }))
+}
+
+/// Whether a run's summary line shimmers: while any of its calls has yet to
+/// finish, the same rule a card's title follows.
+pub(super) fn summary_shimmers(summary: ToolRunSummary) -> bool {
+    summary.running
 }
 
 /// The line's words: the call count always, then whichever activity
