@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Knot app bugs and ideas
+    url: https://github.com/pilgrimagesoftware/Knot-App/issues
+    about: The macOS app lives in Knot-App. File app issues there.
+  - name: Knot MCP server
+    url: https://github.com/pilgrimagesoftware/Knot-MCP/issues
+    about: The shared MCP server.
+  - name: Knot Library
+    url: https://github.com/pilgrimagesoftware/Knot-Library/issues
+    about: Personas and shareable data.

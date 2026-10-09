@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Advance each submodule's pinned commit to the tip of the branch it tracks.
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly

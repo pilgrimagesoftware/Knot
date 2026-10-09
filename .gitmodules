@@ -1,0 +1,12 @@
+[submodule "Knot-App"]
+	path = Knot-App
+	url = ../Knot-App.git
+	branch = develop
+[submodule "Knot-MCP"]
+	path = Knot-MCP
+	url = ../Knot-MCP.git
+	branch = develop
+[submodule "Knot-Library"]
+	path = Knot-Library
+	url = ../Knot-Library.git
+	branch = master
